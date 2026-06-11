@@ -104,8 +104,37 @@ def deploy():
     print("\n==> Connecting to Linux SSH...")
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    
+    # Try SSH keys first, then fallback to password
+    pkey = None
+    key_files = [
+        os.path.expanduser("~/.ssh/id_ed25519"),
+        os.path.expanduser("~/.ssh/id_rsa"),
+        os.path.expanduser("~/.ssh/sakura_cloud_ed25519"),
+        os.path.expanduser("~/.ssh/sakura_cloud_rsa")
+    ]
+    for kf in key_files:
+        if os.path.exists(kf):
+            try:
+                if "ed25519" in kf:
+                    pkey = paramiko.Ed25519Key.from_private_key_file(kf)
+                else:
+                    pkey = paramiko.RSAKey.from_private_key_file(kf)
+                print(f"Loaded SSH key: {kf}")
+                break
+            except Exception as key_load_err:
+                continue
+
     try:
-        ssh.connect(HOSTNAME, username=USERNAME, password=PASSWORD, timeout=15)
+        if pkey:
+            try:
+                ssh.connect(HOSTNAME, username=USERNAME, pkey=pkey, timeout=15)
+                print("SSH connection authenticated with key.")
+            except Exception as key_err:
+                print(f"Key authentication failed, trying password: {key_err}")
+                ssh.connect(HOSTNAME, username=USERNAME, password=PASSWORD, timeout=15)
+        else:
+            ssh.connect(HOSTNAME, username=USERNAME, password=PASSWORD, timeout=15)
     except Exception as e:
         print(f"SSH connection failed: {e}")
         return
@@ -122,7 +151,18 @@ def deploy():
     print("\n==> Connecting to Linux SFTP...")
     transport = paramiko.Transport((HOSTNAME, 22))
     try:
-        transport.connect(username=USERNAME, password=PASSWORD)
+        try:
+            if pkey:
+                transport.connect(username=USERNAME, pkey=pkey)
+                print("SFTP connection authenticated with key.")
+            else:
+                transport.connect(username=USERNAME, password=PASSWORD)
+        except Exception as key_err:
+            if pkey:
+                print(f"SFTP key authentication failed, trying password: {key_err}")
+                transport.connect(username=USERNAME, password=PASSWORD)
+            else:
+                raise key_err
         sftp = paramiko.SFTPClient.from_transport(transport)
     except Exception as e:
         print(f"SFTP connection failed: {e}")
@@ -146,10 +186,11 @@ def deploy():
             ignore_dirs=ignore_dirs
         )
         
-        # 3.5. Upload root configuration files (Dockerfile, docker-compose.yml)
+        # 3.5. Upload root configuration files and frontend nginx config.
         print("\n==> Syncing Root Configuration Files...")
         sftp.put(os.path.join(script_dir, "Dockerfile"), f"{REMOTE_ROOT}/Dockerfile")
         sftp.put(os.path.join(script_dir, "docker-compose.yml"), f"{REMOTE_ROOT}/docker-compose.yml")
+        sftp.put(os.path.join(frontend_dir, "nginx.conf"), f"{REMOTE_ROOT}/frontend/nginx.conf")
         
         print("\nSync completed successfully!")
     except Exception as e:
