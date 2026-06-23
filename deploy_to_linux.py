@@ -29,8 +29,8 @@ def load_env():
 _env = load_env()
 HOSTNAME = _env["DEPLOY_HOST"]
 USERNAME = _env["DEPLOY_USER"]
-PASSWORD = _env["DEPLOY_PASSWORD"]
-REMOTE_ROOT = "/opt/stacks/he-manager"
+PASSWORD = _env.get("DEPLOY_PASSWORD", "")
+REMOTE_ROOT = _env.get("REMOTE_ROOT", "/opt/stacks/he-manager")
 
 def run_local_build(frontend_dir):
     print("==> Running local Vite build in Windows...")
@@ -186,11 +186,12 @@ def deploy():
             ignore_dirs=ignore_dirs
         )
         
-        # 3.5. Upload root configuration files and frontend nginx config.
+        # 3.5. Upload root configuration files, frontend nginx config, and backend requirements.
         print("\n==> Syncing Root Configuration Files...")
         sftp.put(os.path.join(script_dir, "Dockerfile"), f"{REMOTE_ROOT}/Dockerfile")
         sftp.put(os.path.join(script_dir, "docker-compose.yml"), f"{REMOTE_ROOT}/docker-compose.yml")
         sftp.put(os.path.join(frontend_dir, "nginx.conf"), f"{REMOTE_ROOT}/frontend/nginx.conf")
+        sftp.put(os.path.join(script_dir, "backend", "requirements.txt"), f"{REMOTE_ROOT}/backend/requirements.txt")
         
         print("\nSync completed successfully!")
     except Exception as e:

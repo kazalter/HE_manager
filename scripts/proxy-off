@@ -1,6 +1,4 @@
 #!/bin/bash
-unset http_proxy
-unset https_proxy
-unset all_proxy
-unset no_proxy
+unset http_proxy https_proxy all_proxy no_proxy
+unset HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY
 echo "Proxy OFF"

@@ -1,6 +1,20 @@
 #!/bin/bash
-export http_proxy="http://127.0.0.1:7890"
-export https_proxy="http://127.0.0.1:7890"
-export all_proxy="socks5://127.0.0.1:7890"
-export no_proxy="localhost,127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+PROXY_ADDR="127.0.0.1:7890"
+
+# 统一小写环境变量
+export http_proxy="http://$PROXY_ADDR"
+export https_proxy="http://$PROXY_ADDR"
+export all_proxy="socks5h://$PROXY_ADDR" # socks5h 确保 DNS 在代理端解析
+
+# 统一大写环境变量（兼容 Docker, Go, Python, Java 等）
+export HTTP_PROXY="http://$PROXY_ADDR"
+export HTTPS_PROXY="http://$PROXY_ADDR"
+export ALL_PROXY="socks5h://$PROXY_ADDR"
+
+# 兼容性更强的 no_proxy 配置，排除常见局域网段和域名后缀
+# 针对不支持网段(CIDR)的工具，补充了 .local, .lan, *.localdomain 等通配符
+NO_PROXY_LIST="localhost,127.0.0.1,local,.local,*.local,*.lan,*.localdomain,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+export no_proxy="$NO_PROXY_LIST"
+export NO_PROXY="$NO_PROXY_LIST"
+
 echo "Proxy ON (127.0.0.1:7890)"
