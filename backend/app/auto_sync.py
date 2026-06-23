@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import re
+import errno
 import threading
 import time
 import traceback
@@ -60,12 +61,23 @@ def _try_lock_file(path: str) -> Optional[IO[str]]:
         os.makedirs(lock_dir, exist_ok=True)
     lock_file = open(path, "a+", encoding="utf-8")
     try:
-        import fcntl
+        if os.name == "nt":
+            import msvcrt
 
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
+            lock_file.seek(0)
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (BlockingIOError, PermissionError):
         lock_file.close()
         return None
+    except OSError as exc:
+        lock_file.close()
+        if os.name == "nt" and exc.errno in (errno.EACCES, errno.EDEADLK):
+            return None
+        raise
     except Exception:
         lock_file.close()
         raise
@@ -78,9 +90,15 @@ def _try_lock_file(path: str) -> Optional[IO[str]]:
 
 def _release_lock_file(lock_file: IO[str]) -> None:
     try:
-        import fcntl
+        if os.name == "nt":
+            import msvcrt
 
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            lock_file.seek(0)
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
     finally:
         lock_file.close()
 
