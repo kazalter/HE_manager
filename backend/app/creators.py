@@ -18,14 +18,29 @@ so counts match what the user actually sees.
 """
 from __future__ import annotations
 
+import time
 from typing import Optional
 
-from sqlalchemy import func
+from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session
 
 from . import models
 
 HIDDEN_DUP_STATUSES = ("checking", "strong_duplicate", "suspected_duplicate")
+CREATOR_CACHE_TTL_SECONDS = 30.0
+_CREATOR_LIST_CACHE: dict[tuple[int, str], tuple[float, list[dict]]] = {}
+
+
+def clear_creator_cache() -> None:
+    _CREATOR_LIST_CACHE.clear()
+
+
+def _copy_creators(creators: list[dict]) -> list[dict]:
+    return [dict(creator) for creator in creators]
+
+
+def _creator_cache_key(db: Session, media_type: str) -> tuple[int, str]:
+    return (id(db.get_bind()), media_type)
 
 
 # ---------------------------------------------------------------------------
@@ -48,18 +63,44 @@ def _visible_media_q(db: Session, media_type: Optional[str] = None):
 
 def _display_names(db: Session) -> dict:
     """Latest non-null display name per screen_name (handles handle renames)."""
-    rows = (
-        db.query(models.XPost.author_screen_name, models.XPost.author_name)
+    latest_name_ids = (
+        db.query(
+            models.XPost.author_screen_name.label("screen_name"),
+            func.max(models.XPost.id).label("post_id"),
+        )
         .filter(models.XPost.author_screen_name.isnot(None))
         .filter(models.XPost.author_name.isnot(None))
-        .order_by(models.XPost.id.desc())
+        .filter(models.XPost.author_name != "")
+        .group_by(models.XPost.author_screen_name)
+        .subquery()
+    )
+    rows = (
+        db.query(latest_name_ids.c.screen_name, models.XPost.author_name)
+        .join(models.XPost, models.XPost.id == latest_name_ids.c.post_id)
         .all()
     )
-    out: dict = {}
-    for sn, name in rows:
-        if sn not in out and name:
-            out[sn] = name
-    return out
+    return {sn: name for sn, name in rows if name}
+
+
+def _visible_media_condition(media_type: Optional[str] = None):
+    conditions = [
+        models.Media.id.isnot(None),
+        models.Media.duplicate_status.notin_(HIDDEN_DUP_STATUSES),
+    ]
+    if media_type:
+        conditions.append(models.Media.media_type == media_type)
+    return and_(*conditions)
+
+
+def _cover_paths_for_media_ids(db: Session, media_ids: set[int]) -> dict:
+    if not media_ids:
+        return {}
+    rows = (
+        db.query(models.Media.id, models.Media.cover_path)
+        .filter(models.Media.id.in_(media_ids))
+        .all()
+    )
+    return {media_id: cover for media_id, cover in rows if cover}
 
 
 def _covers(db: Session, media_type: Optional[str] = None) -> dict:
@@ -135,13 +176,50 @@ def _build_x(sn: str, counts, names, covers, known, in_lib) -> dict:
 
 
 def _x_creators(db: Session, media_type: Optional[str] = None) -> list:
-    counts = _media_counts(db, media_type)
+    visible_media = _visible_media_condition(media_type)
+    cover_media = and_(visible_media, models.Media.cover_path.isnot(None))
+    rows = (
+        db.query(
+            models.XPost.author_screen_name,
+            func.count(func.distinct(models.XPost.id)),
+            func.count(
+                func.distinct(
+                    case((models.XMediaItem.library_media_id.isnot(None), models.XPost.id))
+                )
+            ),
+            func.count(func.distinct(case((visible_media, models.Media.id)))),
+            func.max(case((cover_media, models.Media.id))),
+        )
+        .outerjoin(models.XMediaItem, models.XMediaItem.post_id == models.XPost.id)
+        .outerjoin(models.Media, models.Media.id == models.XMediaItem.library_media_id)
+        .filter(models.XPost.author_screen_name.isnot(None))
+        .group_by(models.XPost.author_screen_name)
+        .all()
+    )
+
+    counts: dict = {}
+    known: dict = {}
+    in_lib: dict = {}
+    cover_media_ids: dict = {}
+    for sn, posts_known, posts_in_library, media_count, cover_media_id in rows:
+        if not media_count:
+            continue
+        counts[sn] = media_count
+        known[sn] = posts_known or 0
+        in_lib[sn] = posts_in_library or 0
+        if cover_media_id:
+            cover_media_ids[sn] = cover_media_id
+
     if not counts:
         return []
+
     names = _display_names(db)
-    covers = _covers(db, media_type)
-    known = _posts_known(db)
-    in_lib = _posts_in_library(db)
+    cover_paths = _cover_paths_for_media_ids(db, set(cover_media_ids.values()))
+    covers = {
+        sn: cover_paths[media_id]
+        for sn, media_id in cover_media_ids.items()
+        if media_id in cover_paths
+    }
     return [_build_x(sn, counts, names, covers, known, in_lib) for sn in counts]
 
 
@@ -175,15 +253,31 @@ def _artist_covers(db: Session) -> dict:
 
 
 def _artist_creators(db: Session) -> list:
-    counts = dict(
+    rows = (
         _artist_media_q(db)
-        .with_entities(models.Media.artist, func.count(func.distinct(models.Media.id)))
+        .with_entities(
+            models.Media.artist,
+            func.count(func.distinct(models.Media.id)),
+            func.max(case((models.Media.cover_path.isnot(None), models.Media.id))),
+        )
         .group_by(models.Media.artist)
         .all()
     )
+    counts: dict = {}
+    cover_media_ids: dict = {}
+    for artist, media_count, cover_media_id in rows:
+        counts[artist] = media_count
+        if cover_media_id:
+            cover_media_ids[artist] = cover_media_id
+
     if not counts:
         return []
-    covers = _artist_covers(db)
+    cover_paths = _cover_paths_for_media_ids(db, set(cover_media_ids.values()))
+    covers = {
+        artist: cover_paths[media_id]
+        for artist, media_id in cover_media_ids.items()
+        if media_id in cover_paths
+    }
     return [
         {
             "kind": "artist",
@@ -203,6 +297,26 @@ def _artist_creators(db: Session) -> list:
 # Unified API
 # ---------------------------------------------------------------------------
 
+def _base_creators(db: Session, media_type: str) -> list:
+    if media_type == "manga":
+        return _artist_creators(db)
+    if media_type in ("image", "video"):
+        return _x_creators(db, media_type)
+    return _x_creators(db) + _artist_creators(db)
+
+
+def _cached_base_creators(db: Session, media_type: str) -> list:
+    cache_key = _creator_cache_key(db, media_type)
+    now = time.monotonic()
+    cached = _CREATOR_LIST_CACHE.get(cache_key)
+    if cached and now - cached[0] < CREATOR_CACHE_TTL_SECONDS:
+        return _copy_creators(cached[1])
+
+    creators = _base_creators(db, media_type)
+    _CREATOR_LIST_CACHE[cache_key] = (now, _copy_creators(creators))
+    return creators
+
+
 def list_creators(
     db: Session,
     search: Optional[str] = None,
@@ -210,12 +324,7 @@ def list_creators(
     media_type: Optional[str] = None,
 ) -> list:
     mt = (media_type or "").strip().lower()
-    if mt == "manga":
-        creators = _artist_creators(db)
-    elif mt in ("image", "video"):
-        creators = _x_creators(db, mt)
-    else:  # "all" / "" / None -> everything
-        creators = _x_creators(db) + _artist_creators(db)
+    creators = _cached_base_creators(db, mt)
 
     if search:
         q = search.strip().lower().lstrip("@")

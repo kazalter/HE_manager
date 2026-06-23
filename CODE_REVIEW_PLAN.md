@@ -1,7 +1,7 @@
 # HE Manager 代码审查报告与优化计划书
 
 > 审查日期：2026-06-23
-> 审查范围：`backend/app/**`（FastAPI）、`frontend/src/**`（Vue 3）、`Dockerfile`、`docker-compose.yml`、`nginx.conf`、部署脚本
+> 审查范围：`backend/app/**`（FastAPI）、`frontend/src/**`（Vue 3）、`Dockerfile`、`docker-compose.yml`、`frontend/nginx.conf`、部署脚本
 > 审查方法：通读核心文件 + 静态分析（路由清单、模块依赖、依赖版本、并发模型）
 
 ---
@@ -165,11 +165,11 @@ THUMBNAIL_SEMAPHORE = threading.BoundedSemaphore(value=2)  # 2 并发，按 CPU 
 
 ---
 
-### 🟡 P2 — `creators.py` 多次全表扫描
+### 🟡 P2 — `creators.py` 多次全表扫描（✅ 已处理）
 
-**现状**：`_x_creators()` 内部连调 `_media_counts` / `_display_names` / `_covers` / `_posts_known` / `_posts_in_library`，**每个都是一次独立的全表 GROUP BY 查询**。`stats._top_creators` 又会调 `_x_creators + _artist_creators`，所以一次 `/stats/highlights` = 至少 6 次 SQL。
+**当前**：`list_creators()` 已加入 30s TTL 缓存；`_x_creators()` 和 `_artist_creators()` 已把列表页需要的计数、pending、封面候选合并进聚合查询，再用小查询补 display name / cover path。
 
-**建议**：合并成 1~2 次查询（用 `with_entities` + 多列聚合），或给 creators 加 30s TTL 缓存（对齐 stats 的做法）。库当前才几百条影响不大，但 highlights 和 creators 页面是高频访问。
+**验证**：`creators.list_creators()` smoke test 覆盖 all/image/video/manga；完整后端测试通过。
 
 ---
 
@@ -251,11 +251,11 @@ def downloader_callback(payload: dict, item_id: int, source_type: str = "wnacg",
 
 ## 4. 代码质量 / 可维护性
 
-### 🟢 P3 — Pydantic v1 风格的 `Config` 类
+### 🟢 P3 — Pydantic v1 风格的 `Config` 类（✅ 已处理）
 
-**现状**：所有 schema 用 `class Config: from_attributes = True`（`schemas.py`）。Pydantic v2（项目用 `pydantic==2.13.3`）推荐 `model_config = ConfigDict(from_attributes=True)`。当前写法仍兼容（v2 有兼容层），但 v3 会移除。
+**当前**：`schemas.py` 已统一改为 `model_config = ConfigDict(from_attributes=True)`。
 
-**建议**：批量替换为 `model_config = ConfigDict(from_attributes=True)`。低优先级。
+**验证**：完整后端测试通过；Pydantic v2 class-based config deprecation warning 已消失。
 
 ---
 
@@ -313,20 +313,20 @@ app = FastAPI(lifespan=lifespan, ...)
 
 ---
 
-### 🟢 P3 — `nginx.conf` 把所有非静态请求 fallback 到 backend
+### 🟢 P3 — `frontend/nginx.conf` 把所有非静态请求 fallback 到 backend（✅ 已处理）
 
-**现状**（`nginx.conf:13`）：`try_files $uri $uri/ @backend;`。SPA 的路由（如 `/stats`）刷新会先找文件找不到，回退 backend，backend 又 mount 了 `frontend/dist`（`main.py:5126`）。链路绕一圈。
+**当前**：`frontend/nginx.conf` 已显式把 API/媒体前缀反代到 FastAPI，并让 Vue history 路由通过 `try_files $uri $uri/ /index.html` 在 nginx 内回落。
 
-**建议**：nginx 里显式处理 SPA fallback：
+当前形态：
 ```nginx
+location ~ ^/(auth|users|search-folder|folders|media|mobile|system|tags|ai|recommend|external|stream|audio|manga|x|dedup|stats|creators|bd2|auto-sync|thumbnails)(/|$) {
+    proxy_pass http://backend:8010;
+}
 location / {
     try_files $uri $uri/ /index.html;
 }
-location ~ ^/(api|media|stream|audio|thumbnails|mobile|bd2|external|x|dedup|auto-sync|auth|users|folders|recommend|stats|creators|ai) {
-    proxy_pass http://he-manager:8010;
-}
 ```
-（需要先确认 nginx 前端容器是否在同网络能直接访问 backend——当前 `networks: npm-network` 共享，OK。）
+（frontend 容器和 backend 服务同属 Compose 默认网络，`backend:8010` 可直连；frontend 另接 NPM 外部网络给反代入口。）
 
 ---
 
@@ -342,11 +342,11 @@ location ~ ^/(api|media|stream|audio|thumbnails|mobile|bd2|external|x|dedup|auto
 | | `/external/downloader/callback` 加 schema + token + 路径校验（P2） | **✅ 已完成** | Token校验与 realpath 防越权已上 |
 | **第 3-4 周** | **拆分 main.py** 到 routers/services（P0） | ⏳ **待 Code X 完成** | 本次暂未拆分，移交给 Code X |
 | | 视频缩略图改信号量（P2） | **✅ 已完成** | 已替换为 BoundedSemaphore(2) |
-| | `creators.py` 加 TTL 缓存 + 合并查询（P2） | ⏳ **待完成** | 可作为后续微调 |
+| | `creators.py` 加 TTL 缓存 + 合并查询（P2） | **✅ 已完成** | 已加 30s TTL 缓存，并合并列表统计查询 |
 | **长期** | 引入 Alembic 替代手写 ALTER（P1） | 🚫 **已取消** | 经负责人确认，保持 zero-tool 约定，但已将手写 SQL 归置到 migrations.py 并改为 lifespan 启动 |
 | | lifespan 替代 on_event（P3） | **✅ 已完成** | 已引入 lifespan 并在启动时运行 metadata 创建与 migrations |
-| | Pydantic v2 model_config（P3） | ⏳ **待完成** | 维持现状兼容层即可，后续可逐步替换 |
-| | nginx SPA fallback 优化（P3） | ⏳ **待完成** | 视部署暴露情况按需调整 |
+| | Pydantic v2 model_config（P3） | **✅ 已完成** | 已替换为 ConfigDict(from_attributes=True) |
+| | nginx SPA fallback 优化（P3） | **✅ 已完成** | `frontend/nginx.conf` 已由 API 前缀反代后端，Vue history 路由回落 /index.html |
 
 
 ---

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 from typing import List, Optional
 
@@ -32,8 +32,7 @@ class UserRead(BaseModel):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AuthToken(BaseModel):
@@ -47,8 +46,7 @@ class TagBase(BaseModel):
 
 class Tag(TagBase):
     id: int
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class MediaBase(BaseModel):
     title: str
@@ -79,8 +77,7 @@ class MediaBase(BaseModel):
 class Media(MediaBase):
     id: int
     tags: List[Tag] = []
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class MediaUpdate(BaseModel):
     title: Optional[str] = None
@@ -194,8 +191,7 @@ class Folder(FolderBase):
     id: int
     status: str
     last_scanned_at: Optional[datetime] = None
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ExternalFavoriteSource(BaseModel):
@@ -217,8 +213,7 @@ class ExternalFavoriteSource(BaseModel):
     proxy: Optional[str] = None
 
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ExternalFavoriteItem(BaseModel):
@@ -235,8 +230,7 @@ class ExternalFavoriteItem(BaseModel):
     last_seen_at: Optional[datetime] = None
     local_media_id: Optional[int] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ExternalFavoriteSyncRequest(BaseModel):
@@ -333,8 +327,7 @@ class XImportSource(BaseModel):
     proxy: Optional[str] = None
 
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class XImportSourceUpdate(BaseModel):
@@ -448,8 +441,7 @@ class DedupMediaSummary(BaseModel):
     source_url: Optional[str] = None
     source_site: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DuplicateCandidatePair(BaseModel):
@@ -491,8 +483,7 @@ class XPost(BaseModel):
     completed_at: Optional[datetime] = None
     discovered_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AutoSyncConfigUpdate(BaseModel):
@@ -537,5 +528,4 @@ class AutoSyncLogEntry(BaseModel):
     finished_at: Optional[datetime] = None
     duration_seconds: Optional[int] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
