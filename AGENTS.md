@@ -1,96 +1,77 @@
-# AGENTS.md — HE Manager
+# AGENTS.md - HE Manager
 
-个人自用媒体库（视频/漫画/图片/ASMR音频）。后端 FastAPI + 前端 Vue。
-本文件是常驻索引，避免每次重进逐个翻文件。路线图见 `FEATURE_PLANS.md`。
+个人自用媒体库：FastAPI 后端、Vue 3 Web 前端、Android 客户端。路线图见 `FEATURE_PLANS.md`，代码审查/优化计划见 `CODE_REVIEW_PLAN.md`。
 
-## ⚠️ 硬规则 — 防数据/代码丢失（任何 Codex 接手都必须遵守）
+## 核心原则
 
-**触发条件**：要执行 `git reset --hard` / `git checkout -- <path>` / `git checkout <branch>`
-（在脏工作区切分支）/ `git stash drop` / `git clean -fd*` / `git branch -D`（删未合并分支）
-/ `git worktree remove --force` 之前。
+- **一个代码库，一条 `main`。不要拆 Win/Linux 两套代码或长期分支。**
+- 代码必须跨平台可运行：Windows 本地开发和测试不能被 Linux-only 依赖打断；Linux 部署差异放在配置、脚本和 Docker 文件里。
+- 运行画像分开维护：
+  - **Windows 开发/测试画像**：PowerShell 7、`he.ps1`、`he-server.ps1`、本机 Python、Vite、Android 构建脚本。
+  - **Linux 部署画像**：`docker-compose.yml`、`frontend/nginx.conf`、`deploy_to_linux.py`、NPM 外层反代、服务器数据卷。
+- 修改后端或网页前端时，若用户没特别说明，默认最终目标是 Linux 服务器 `/opt/stacks/he-manager/` 的 Docker 化服务；先本地改和验证，再按需部署。
 
-**强制流程**（不能跳）：
-1. **先跑 `git status`**——不要凭"我以为工作区干净"做判断，永远显式确认一次。
-2. **如有任何工作区改动**（含 modified tracked + untracked source）：
-   - 修改类（`M`）→ 先 `git commit`（即便起名 `WIP: ...` 也行，重点是入仓）。
-   - 未追踪源码（`??` 含 .py / .vue / .ts / .kt / .java / .md / .ps1 等）→ 评估应 commit 还是
-     应 ignore，逐个分类处理。**不允许"它好像没用就放着"**——已经被覆盖一次了。
-3. 如果用户压时间不想 commit，至少 `git stash push -u -m "preflight"`，记下 stash 编号。
-4. **完成 commit / stash 之后才能跑那条破坏性命令。**
+## Git 硬规则
 
-**反面教材**（这条规则的由来）：上一次会话上下文压缩之后，Codex 不知道工作区有 910 行
-未提交的 ASMR/audio 后端代码，直接 `git reset --hard` 把 main 切到 integration 分支，
-导致用户的真实功能"看似消失"——花了大半天追查才发现是 reset 偷偷覆盖了 tracked 文件。
-完整复盘见本会话历史（5/21-5/22）。
+### 防丢改动
 
-## ⚠️ 硬规则 — 防把不相关改动夹带进 commit（任何 Codex 接手都必须遵守）
+在执行 `git reset --hard`、`git checkout -- <path>`、脏工作区切分支、`git stash drop`、`git clean -fd*`、删未合并分支、强制移除 worktree 前：
 
-**触发条件**：要执行 `git add <file>` / `git add .` / `git add -A` / `git commit -a` 之前。
+1. 先跑 `git status`。
+2. 如有 `M` 或源码类 `??`，先 commit；用户不想 commit 时至少 `git stash push -u -m "preflight"` 并记录 stash。
+3. 工作区被保护好后再做破坏性操作。
 
-**强制流程**（不能跳）：
-1. **先跑 `git status`**——看清你**这次**改的文件之前**有没有 M / ?? 标记**（说明上次会话或别处已经留了改动）。
-2. **如果目标文件已有 pre-existing 改动**（你来之前它就 M 了）：
-   - **不许直接 `git add <file>`**——`git add` 的最小颗粒是整文件，会把别人留的 hunk 一锅端走，
-     使本次 commit 包含**你没刻意挑的代码**（可能是未完成的草稿、未验证的改动，或半截 feature）。
-   - 走以下任一路：
-     - **路 A（推荐）**：先把 pre-existing 改动 `commit`（`WIP: ...` 也行）或 `stash` 出去，
-       让工作区变干净，再做你自己的活，再 commit。
-     - **路 B（要硬上）**：把目标 hunks 写到 `.patch` 文件，用 `git apply --cached <patch>`
-       只 stage 自己的 hunks。`git add -p` 因为是交互式的不能用。
-3. **commit 前必须看一眼 `git diff --cached`**——验证**真正**要进 commit 的 diff 就是你这次干的活，
-   多一行少一行都得说得清。
-4. **会话结束前要留干净工作区**——所有 M / ?? 要么 commit（含 `WIP: ...`）、要么 stash、要么
-   加 .gitignore，**不允许把混合状态文件留给下一次会话**。这是预防"下次 Codex 进来踩这条规则"
-   的源头治理。
+### 防夹带无关改动
 
-**反面教材**（这条规则的由来）：上次会话留了 4 个 uncommitted 文件（含 `main.py` 里 3 个属于
-"目录字节统计"功能的 hunk）；下次 Codex 进来改 `main.py` 修 ASMR 封面 bug，`git add backend/app/main.py`
-顺手把那 3 个无关 hunk 一起带进了"封面修复"commit（`606b377`）。后果：
-- commit 标题与内容不符（log 误导）；
-- 那 3 个 hunk 调用的 `scanner.directory_size()` 函数定义还在未提交的 scanner.py 里——
-  **那个 commit 的代码快照是坏的**，`git checkout 606b377` 会 `AttributeError`；
-- "目录字节统计"功能被偷偷出货了一半，用户都没意识到。
+在 `git add` / `git commit` 前：
 
-后来用 `git reset --soft HEAD~1` + 手动剔除 hunk + 重新 commit（`3a672ed`）才修复，完整复盘
-见本会话历史（5/24）。
+1. 先跑 `git status`，确认哪些文件是本轮已有改动。
+2. 目标文件若来之前已是 `M`，不要直接整文件 `git add`；先把已有改动 commit/stash，或用 patch 只 stage 自己的 hunk。
+3. commit 前必须看 `git diff --cached`。
+4. 会话结束前保持工作区干净：改动要么 commit，要么 stash，要么明确忽略。
 
-## ⚠️ 部署与环境修改规则
+这些规则来自两次事故：一次 `reset --hard` 覆盖了未提交 ASMR/audio 代码；一次 `git add backend/app/main.py` 把无关 hunk 混进提交。
 
-- **改动环境目标**：当用户要求“修改后端”或“修改网页前端（如 EmbedSpine 等）”时，若未特别指明，默认都是指**修改并部署到 Linux 服务器（192.168.50.1）上的 Docker 化服务**。
-  - 需要在本地 Windows 对应仓库中修改代码，如涉及前端需本地执行 `npm run build` 编译。
-  - 之后利用 Python SFTP/SSH 脚本（如 paramiko）将修改后的文件（或编译后的 `dist/` 目录）上传并覆盖到 Linux 服务器上的 `/opt/stacks/he-manager/` 对应路径。
-  - 上传完成后，需通过 SSH 执行 `cd /opt/stacks/he-manager && docker compose restart` 重新启动容器使其生效。
+## 常用命令
 
-## 跑 / 构建 / 测试
+Windows 开发优先用 PowerShell 7。
 
-- **Web 栈启动**：两个脚本，逻辑都在 `he.ps1`。
-  - `he.ps1` — 全栈（后端 `--reload` + vite + 自动开浏览器），desktop 日常开发用。
-  - `he-server.ps1` — 仅后端 LAN 服务（无 vite、无浏览器、无 reload），手机 / 安卓 App 用。3 行 wrapper 调 `he.ps1 -Server`，**改启动逻辑只动 he.ps1**。
-  - 启动前自动备份 `library.db` → `backend/backups/`，保留最近 7 份。
-  - 关闭走优雅退出（taskkill 不带 /F，给 uvicorn 4 秒清理 WAL checkpoint），4 秒未退才强杀。
-  - 改后端代码后：watchfiles 在含空格路径上热重载**常抖**，必要时 Q 退出 → 确认 8010 无僵尸 uvicorn → 重启。
-- **后端测试**：解释器只有 `C:\Users\25768\AppData\Local\Programs\Python\Python312\python.exe`
-  装了后端依赖+pytest。在 `backend\`：`python -m pytest tests -q`（基线 36 通过）。
-  `D:\Hermes\venv` 有 pytest 但无后端依赖，别用。
+```powershell
+.\he.ps1                 # Web 全栈开发：后端 reload + Vite + 浏览器
+.\he-server.ps1          # 仅后端 LAN 服务，给手机/Android 用
+cd backend; python -m pytest tests -q
+cd frontend; npm run build
+.\android_preview.ps1
+.\android_release.ps1
+```
 
+后端测试解释器优先用：
 
-## 改动边界（重要）
+```text
+C:\Users\25768\AppData\Local\Programs\Python\Python312\python.exe
+```
 
-- **后端**：`/mobile/*` 是手机专用命名空间，可独立优化；web 走 `/media` `/stream`，别混改。
+`D:\Hermes\venv` 有 pytest 但缺后端依赖，别用。
 
-## 架构关键事实（省得重新探索）
+## 部署边界
 
-- 后端音频接口（无鉴权，web 端依赖此）：`/audio/{id}/tracks`、`/audio/{id}/track/{i}`(206 ranged)、
-  `/audio/{id}/track/{i}/lyrics`。手机列表 `/mobile/media`（带 `limit` 走分页信封，否则数组）。
-- 已建迁移用幂等 `ALTER TABLE`（对标 `sync_position` 写法），零结构迁移惯例。
+- Linux 服务器：`192.168.50.1`。
+- 远端目录：`/opt/stacks/he-manager/`。
+- 前端容器内部 nginx 配置：`frontend/nginx.conf`。
+- Nginx Proxy Manager 是外层入口，不在本仓库直接维护。
+- `deploy_to_linux.py` 会构建前端、上传 `frontend/dist`、后端源码、`docker-compose.yml`、`frontend/nginx.conf`、后端 requirements，并执行 `docker compose up -d --build`。
 
-## 坑
+## 改动边界
 
-- **Kotlin 块注释会嵌套**：KDoc 里写 `/audio/*` 这类含 `/*` 的文本会开未闭合嵌套注释，整文件编译失败。
-- 前端路由组件必须单根（App.vue transition out-in + dev 注释 vnode → 导航空白页）。
-- gzip 中间件只压 JSON，故意放行流式/206（守 web `<video>` Range + Media3 identity）。
+- `/mobile/*` 是手机专用命名空间，可独立优化；Web 走 `/media`、`/stream`、`/audio`，不要混改。
+- Android 主列表是 `LibraryScreenV2`；老 `LibraryScreen` 基本是死代码。
+- Android 播放器/漫画页改动风险高，除非任务明确，不碰 `MangaActivity` 和 `player/PlayerActivity`。
+- 结构迁移继续用幂等 `ALTER TABLE` + `migrations.py`，不引入 Alembic，除非用户重新拍板。
 
-## 记忆文件（需要时再读，平时不必）
+## 已知坑
 
-`memory/MEMORY.md` 是索引。重点：`feedback_android_scope`、`project_android_library_screen`、
-`project_run_scripts`、`project_asmr_mobile_player`、`feedback_collaboration`（分阶段交付、复用优先）。
+- Windows 本地测试不能依赖 Linux-only 模块；需要平台适配，例如文件锁在 Linux 用 `fcntl`，Windows 用 `msvcrt`。
+- watchfiles 在含空格路径上热重载容易抖；必要时退出脚本，确认 8010 无僵尸 uvicorn，再重启。
+- Kotlin/KDoc 里不要写会形成嵌套注释的 `/audio/*`。
+- 前端路由组件必须单根；App.vue transition 遇到 dev 注释 vnode 可能导致空白页。
+- gzip 中间件只压 JSON，故意放行流式/206，保护 Web `<video>` Range 和 Media3 identity。

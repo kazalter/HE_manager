@@ -1,5 +1,19 @@
-# Vue 3 + TypeScript + Vite
+# HE Manager Frontend
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+Vue 3 + TypeScript + Vite 前端。
 
-Learn more about the recommended Project Setup and IDE Support in the [Vue Docs TypeScript Guide](https://vuejs.org/guide/typescript/overview.html#project-setup).
+## 本地开发
+
+```powershell
+npm install
+npm run dev
+npm run build
+```
+
+本地开发通常由根目录 `he.ps1` 同时启动后端和 Vite。
+
+## 部署说明
+
+- `frontend/dist` 由 Vite build 生成。
+- `frontend/nginx.conf` 是前端容器内部 nginx 配置：服务静态文件，把 API/媒体路径转发到 Compose 服务 `backend:8010`，并让 Vue history 路由回落到 `/index.html`。
+- 外层 Nginx Proxy Manager 配置不在本仓库维护。
