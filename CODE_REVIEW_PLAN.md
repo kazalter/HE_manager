@@ -332,21 +332,22 @@ location ~ ^/(api|media|stream|audio|thumbnails|mobile|bd2|external|x|dedup|auto
 
 ## 6. 优化路线图（建议执行顺序）
 
-| 阶段 | 任务 | 工作量 | 风险 | 收益 |
-|------|------|--------|------|------|
-| **第 1 周** | 补 `sentence-transformers` 依赖（P1） | 10 min | 极低 | 修复潜在 ImportError |
-| | `/media` 加分页 + selectinload 消除 N+1（P0） | 1 天 | 低（接口契约变） | 库一大就救场 |
-| | `/auto-sync` 加入 ADMIN_PREFIXES（P2 安全） | 5 min | 极低 | 闭合权限漏洞 |
-| **第 2 周** | 修复重复的 `cleanup_orphaned_thumbnails` 定义（P1） | 30 min | 低 | 消除迷惑 |
-| | 前端路由全量懒加载（P2） | 30 min | 低 | 首屏减包 |
-| | `/external/downloader/callback` 加 schema + token + 路径校验（P2） | 半天 | 低 | 安全 + 健壮 |
-| **第 3-4 周** | **拆分 main.py** 到 routers/services（P0） | 1.5 天 | 中（机械重构） | 长期可维护性 |
-| | 视频缩略图改信号量（P2） | 半天 | 中（cv2 竞态） | 扫描提速 |
-| | `creators.py` 加 TTL 缓存 + 合并查询（P2） | 半天 | 低 | highlights 提速 |
-| **长期** | 引入 Alembic 替代手写 ALTER（P1） | 1 天 | 中（改约定） | 迁移可追溯 |
-| | lifespan 替代 on_event（P3） | 1 小时 | 低 | 消除 DeprecationWarning |
-| | Pydantic v2 model_config（P3） | 1 小时 | 低 | 前瞻性 |
-| | nginx SPA fallback 优化（P3） | 半天 | 低 | 请求链路清晰 |
+| 阶段 | 任务 | 状态 | 备注 |
+|------|------|------|------|
+| **第 1 周** | 补 `sentence-transformers` 依赖（P1） | **✅ 已完成** | 已添加到 requirements.txt |
+| | `/media` 加分页 + selectinload 消除 N+1（P0） | **✅ 已完成** | selectinload 已上，且完成前端滚动加载 |
+| | `/auto-sync` 加入 ADMIN_PREFIXES（P2 安全） | **✅ 已完成** | 已纳入 ADMIN_PREFIXES 拦截 |
+| **第 2 周** | 修复重复的 `cleanup_orphaned_thumbnails` 定义（P1） | **✅ 已完成** | 移至 lifespan 启动钩子内执行 |
+| | 前端路由全量懒加载（P2） | **✅ 已完成** | 已转换路由为动态 import() |
+| | `/external/downloader/callback` 加 schema + token + 路径校验（P2） | **✅ 已完成** | Token校验与 realpath 防越权已上 |
+| **第 3-4 周** | **拆分 main.py** 到 routers/services（P0） | ⏳ **待 Code X 完成** | 本次暂未拆分，移交给 Code X |
+| | 视频缩略图改信号量（P2） | **✅ 已完成** | 已替换为 BoundedSemaphore(2) |
+| | `creators.py` 加 TTL 缓存 + 合并查询（P2） | ⏳ **待完成** | 可作为后续微调 |
+| **长期** | 引入 Alembic 替代手写 ALTER（P1） | 🚫 **已取消** | 经负责人确认，保持 zero-tool 约定，但已将手写 SQL 归置到 migrations.py 并改为 lifespan 启动 |
+| | lifespan 替代 on_event（P3） | **✅ 已完成** | 已引入 lifespan 并在启动时运行 metadata 创建与 migrations |
+| | Pydantic v2 model_config（P3） | ⏳ **待完成** | 维持现状兼容层即可，后续可逐步替换 |
+| | nginx SPA fallback 优化（P3） | ⏳ **待完成** | 视部署暴露情况按需调整 |
+
 
 ---
 
