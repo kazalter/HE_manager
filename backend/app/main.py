@@ -11,6 +11,7 @@ import threading
 import time
 import uuid
 import zipfile
+from contextlib import asynccontextmanager
 from typing import List, Optional
 from urllib.parse import urlencode, urljoin, urlparse
 
@@ -19,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from . import (
     asmr_source,
@@ -47,8 +48,6 @@ from .x_import import importer as x_importer
 from .x_import import storage as x_storage
 from .x_import import sync as x_sync
 
-
-models.Base.metadata.create_all(bind=engine)
 
 
 def get_ranged_file_response(request: Request, file_path: str):
@@ -512,204 +511,16 @@ def parse_lyrics_file(path: str) -> List[dict]:
     return lines
 
 
-def ensure_folder_option_columns():
-    inspector = inspect(engine)
-    columns = {column["name"] for column in inspector.get_columns("folders")}
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Run DB schema migrations
+    models.Base.metadata.create_all(bind=engine)
+    from .migrations import run_schema_migrations
+    run_schema_migrations()
 
-    with engine.begin() as conn:
-        if "thumbnail_enabled" not in columns:
-            conn.execute(text("ALTER TABLE folders ADD COLUMN thumbnail_enabled BOOLEAN NOT NULL DEFAULT 1"))
-        if "thumbnail_interval" not in columns:
-            conn.execute(text("ALTER TABLE folders ADD COLUMN thumbnail_interval INTEGER NOT NULL DEFAULT 1"))
-
-
-def ensure_media_option_columns():
-    inspector = inspect(engine)
-    columns = {column["name"] for column in inspector.get_columns("media")}
-    definitions = {
-        "duration": "INTEGER",
-        "width": "INTEGER",
-        "height": "INTEGER",
-        "page_count": "INTEGER",
-        "rating": "INTEGER NOT NULL DEFAULT 0",
-        "favorite": "BOOLEAN NOT NULL DEFAULT 0",
-        "view_status": "VARCHAR NOT NULL DEFAULT 'unviewed'",
-        "progress": "INTEGER NOT NULL DEFAULT 0",
-        "last_opened_at": "DATETIME",
-        "source_url": "VARCHAR",
-        "source_site": "VARCHAR",
-        "is_missing": "BOOLEAN NOT NULL DEFAULT 0",
-        "missing_since": "DATETIME",
-        # Manga artist parsed from doujin-style title (see manga_artist.py +
-        # creators._artist_creators). Backfill is opportunistic — happens
-        # next time the row is rescanned or imported; old rows stay NULL
-        # until then, which creators.py treats as "no artist".
-        "artist": "VARCHAR",
-    }
-
-    with engine.begin() as conn:
-        for name, definition in definitions.items():
-            if name not in columns:
-                conn.execute(text(f"ALTER TABLE media ADD COLUMN {name} {definition}"))
-
-
-ensure_folder_option_columns()
-ensure_media_option_columns()
-
-
-def ensure_external_source_columns():
-    inspector = inspect(engine)
-    if not inspector.has_table("external_favorite_sources"):
-        return
-    columns = {column["name"] for column in inspector.get_columns("external_favorite_sources")}
-
-    # ASMR-only columns; NULL for legacy wnacg sources. See models.py for the
-    # rationale (polymorphic single table over a sibling table).
-    asmr_columns = {
-        "api_mirrors": "TEXT",
-        "audio_format_filter": "VARCHAR",
-        "audio_version_filter": "VARCHAR",
-        "username": "VARCHAR",
-        "playlist_url": "VARCHAR",
-    }
-
-    auto_sync_columns = {
-        "auto_sync_enabled": "BOOLEAN DEFAULT 0",
-        "auto_sync_interval_hours": "INTEGER DEFAULT 24",
-        "auto_sync_last_run_at": "DATETIME",
-        "auto_sync_next_run_at": "DATETIME",
-        "auto_sync_last_status": "VARCHAR",
-        "auto_sync_last_message": "TEXT",
-        "proxy": "VARCHAR",
-    }
-
-    with engine.begin() as conn:
-        if "download_root_path" not in columns:
-            conn.execute(text("ALTER TABLE external_favorite_sources ADD COLUMN download_root_path VARCHAR"))
-        for name, definition in asmr_columns.items():
-            if name not in columns:
-                conn.execute(text(f"ALTER TABLE external_favorite_sources ADD COLUMN {name} {definition}"))
-        for name, definition in auto_sync_columns.items():
-            if name not in columns:
-                conn.execute(text(f"ALTER TABLE external_favorite_sources ADD COLUMN {name} {definition}"))
-
-
-ensure_external_source_columns()
-
-
-def ensure_x_import_auto_sync_columns():
-    inspector = inspect(engine)
-    if not inspector.has_table("x_import_sources"):
-        return
-    columns = {column["name"] for column in inspector.get_columns("x_import_sources")}
-    auto_sync_columns = {
-        "auto_sync_enabled": "BOOLEAN DEFAULT 0",
-        "auto_sync_interval_hours": "INTEGER DEFAULT 24",
-        "auto_sync_last_run_at": "DATETIME",
-        "auto_sync_next_run_at": "DATETIME",
-        "auto_sync_last_status": "VARCHAR",
-        "auto_sync_last_message": "TEXT",
-        "proxy": "VARCHAR",
-    }
-    with engine.begin() as conn:
-        for name, definition in auto_sync_columns.items():
-            if name not in columns:
-                conn.execute(text(f"ALTER TABLE x_import_sources ADD COLUMN {name} {definition}"))
-
-
-ensure_x_import_auto_sync_columns()
-
-
-def ensure_external_favorite_item_columns():
-    inspector = inspect(engine)
-    if not inspector.has_table("external_favorite_items"):
-        return
-    columns = {column["name"] for column in inspector.get_columns("external_favorite_items")}
-
-    with engine.begin() as conn:
-        if "sync_position" not in columns:
-            conn.execute(text("ALTER TABLE external_favorite_items ADD COLUMN sync_position INTEGER"))
-
-
-ensure_external_favorite_item_columns()
-
-
-def ensure_media_indexes():
-    with engine.begin() as conn:
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_media_folder_id ON media (folder_id)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_media_media_type ON media (media_type)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_media_folder_missing ON media (folder_id, is_missing)"))
-
-
-def ensure_media_cover_info_columns():
-    inspector = inspect(engine)
-    columns = {column["name"] for column in inspector.get_columns("media")}
-    with engine.begin() as conn:
-        if "cover_time_ms" not in columns:
-            conn.execute(text("ALTER TABLE media ADD COLUMN cover_time_ms INTEGER"))
-        if "cover_source" not in columns:
-            conn.execute(text("ALTER TABLE media ADD COLUMN cover_source VARCHAR"))
-
-
-def ensure_manga_ai_profile_columns():
-    """Phase 2: add the dense-embedding columns to manga_ai_profiles.
-
-    The table itself is created by Base.metadata.create_all on first boot, but
-    `create_all` never adds columns to an already-existing table, so we still
-    need this idempotent ALTER for installs that came up before the
-    embedding/embedding_model columns existed.
-    """
-    inspector = inspect(engine)
-    if not inspector.has_table("manga_ai_profiles"):
-        return
-    columns = {column["name"] for column in inspector.get_columns("manga_ai_profiles")}
-    with engine.begin() as conn:
-        if "embedding" not in columns:
-            conn.execute(text("ALTER TABLE manga_ai_profiles ADD COLUMN embedding BLOB"))
-        if "embedding_model" not in columns:
-            conn.execute(text("ALTER TABLE manga_ai_profiles ADD COLUMN embedding_model VARCHAR"))
-
-
-ensure_media_indexes()
-ensure_media_cover_info_columns()
-ensure_manga_ai_profile_columns()
-
-
-def ensure_x_import_indexes():
-    inspector = inspect(engine)
-    if not inspector.has_table("x_posts"):
-        return
-    with engine.begin() as conn:
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_x_posts_source_status ON x_posts (source_id, status)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_x_media_items_post ON x_media_items (post_id)"))
-
-
-ensure_x_import_indexes()
-
-
-def ensure_dedup_columns():
-    inspector = inspect(engine)
-    columns = {column["name"] for column in inspector.get_columns("media")}
-    with engine.begin() as conn:
-        if "normalized_title" not in columns:
-            conn.execute(text("ALTER TABLE media ADD COLUMN normalized_title VARCHAR"))
-        if "duplicate_status" not in columns:
-            conn.execute(text("ALTER TABLE media ADD COLUMN duplicate_status VARCHAR NOT NULL DEFAULT 'unique'"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_media_normalized_title ON media (normalized_title)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_media_duplicate_status ON media (duplicate_status)"))
-
-
-def ensure_dedup_indexes():
-    inspector = inspect(engine)
-    if not inspector.has_table("duplicate_candidates"):
-        return
-    with engine.begin() as conn:
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_dup_candidates_status ON duplicate_candidates (status)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_dup_candidates_level ON duplicate_candidates (level)"))
-
-
-ensure_dedup_columns()
-ensure_dedup_indexes()
+    # Startup tasks
+    cleanup_orphaned_thumbnails()
+    yield
 
 _docs_enabled = os.getenv("HE_ENABLE_DOCS", "").lower() in {"1", "true", "yes", "on"}
 app = FastAPI(
@@ -717,6 +528,7 @@ app = FastAPI(
     docs_url="/docs" if _docs_enabled else None,
     redoc_url="/redoc" if _docs_enabled else None,
     openapi_url="/openapi.json" if _docs_enabled else None,
+    lifespan=lifespan,
 )
 
 
@@ -1409,6 +1221,7 @@ ADMIN_PREFIXES = (
     "/external",
     "/x",
     "/dedup",
+    "/auto-sync",
 )
 ADMIN_EXACT_PATHS = {
     "/ai/recommendations/config",
@@ -2691,7 +2504,6 @@ def get_manga_image_files(media: models.Media):
     return result
 
 
-@app.on_event("startup")
 def cleanup_orphaned_thumbnails():
     db = database.SessionLocal()
     try:
@@ -2998,9 +2810,11 @@ def list_media(
     include_hidden_duplicates: bool = False,
     source_site: Optional[str] = None,
     sort: str = "date",
+    limit: Optional[int] = None,
+    offset: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
-    query = db.query(models.Media)
+    query = db.query(models.Media).options(selectinload(models.Media.tags))
     if media_type:
         query = query.filter(models.Media.media_type == media_type)
     if search:
@@ -3034,6 +2848,11 @@ def list_media(
     else:
         query = query.order_by(models.Media.id.desc())
 
+    if limit is not None:
+        query = query.limit(limit)
+    if offset is not None:
+        query = query.offset(offset)
+
     return query.all()
 
 
@@ -3045,7 +2864,7 @@ def list_mobile_media(
     _: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(models.Media).filter(models.Media.is_missing == False)
+    query = db.query(models.Media).filter(models.Media.is_missing == False).options(selectinload(models.Media.tags))
     if media_type:
         query = query.filter(models.Media.media_type == media_type)
     if search:
@@ -5024,7 +4843,16 @@ def _push_external_items(payload, db, build):
 
 
 @app.post("/external/downloader/callback")
-def downloader_callback(payload: dict, item_id: int, source_type: str = "wnacg", db: Session = Depends(get_db)):
+def downloader_callback(
+    payload: dict,
+    item_id: int,
+    source_type: str = "wnacg",
+    token: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    if HE_CALLBACK_TOKEN and token != HE_CALLBACK_TOKEN:
+        raise HTTPException(status_code=401, detail="Unauthorized callback token")
+
     event = (payload or {}).get("event")
     if event != "complete":
         return {"ok": True, "skipped": event}
@@ -5039,6 +4867,12 @@ def downloader_callback(payload: dict, item_id: int, source_type: str = "wnacg",
     download_root_path = _download_root_from_item_dir(item_dir, source)
     if not download_root_path:
         raise HTTPException(status_code=400, detail="未设置下载位置")
+
+    # Path traversal validation: ensure item_dir is within download_root_path
+    real_root = os.path.realpath(download_root_path).lower()
+    real_dir = os.path.realpath(item_dir).lower()
+    if not (real_dir.startswith(real_root + os.sep) or real_dir == real_root):
+        raise HTTPException(status_code=400, detail="非法下载路径 (Path Traversal Detected)")
 
     if (source.source_type or source_type or "") == "asmr":
         files = job.get("files") or []

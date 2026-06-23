@@ -12,3 +12,5 @@ numpy==2.4.4
 curl_cffi==0.15.0
 python-multipart==0.0.27
 jieba==0.42.1
+sentence-transformers==5.4.1
+

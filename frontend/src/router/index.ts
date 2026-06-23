@@ -1,13 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
-import SettingsView from '../views/SettingsView.vue'
-import ExternalFavoritesView from '../views/ExternalFavoritesView.vue'
-import DedupView from '../views/DedupView.vue'
-import UsersView from '../views/UsersView.vue'
-import StatsView from '../views/StatsView.vue'
-import CreatorsView from '../views/CreatorsView.vue'
-import MangaRecommendView from '../views/MangaRecommendView.vue'
-import Bd2SpineView from '../views/Bd2SpineView.vue'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -26,51 +18,51 @@ const router = createRouter({
     {
       path: '/settings',
       name: 'settings',
-      component: SettingsView
+      component: () => import('../views/SettingsView.vue')
     },
     {
       path: '/external',
       name: 'external-favorites',
-      component: ExternalFavoritesView
+      component: () => import('../views/ExternalFavoritesView.vue')
     },
     {
       path: '/dedup',
       name: 'dedup',
-      component: DedupView
+      component: () => import('../views/DedupView.vue')
     },
     {
       path: '/users',
       name: 'users',
-      component: UsersView
+      component: () => import('../views/UsersView.vue')
     },
     {
       // Dashboard stats: chart-heavy overview, distribution, activity, attention.
       path: '/stats',
       name: 'stats',
-      component: StatsView
+      component: () => import('../views/StatsView.vue')
     },
     {
       // Unified creators list (X authors + manga artists).
       path: '/creators',
       name: 'creators',
-      component: CreatorsView
+      component: () => import('../views/CreatorsView.vue')
     },
     {
       // Creator detail (same view, branches on route.params.screenName).
       path: '/creators/:screenName',
       name: 'creator-detail',
-      component: CreatorsView,
+      component: () => import('../views/CreatorsView.vue'),
       props: true
     },
     {
       path: '/recommend',
       name: 'manga-recommend',
-      component: MangaRecommendView
+      component: () => import('../views/MangaRecommendView.vue')
     },
     {
       path: '/bd2-spine',
       name: 'bd2-spine',
-      component: Bd2SpineView
+      component: () => import('../views/Bd2SpineView.vue')
     },
     {
       path: '/bd2-spine/embed',

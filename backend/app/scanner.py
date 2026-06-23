@@ -26,8 +26,8 @@ AUDIO_EXTENSIONS = {'.mp3', '.wav', '.flac', '.m4a', '.aac', '.ogg', '.opus'}
 # Folders to skip (case-insensitive)
 SKIP_FOLDERS = {'mask', 'result', 'inpainted', '.thumbnails', '.he_cover', 'node_modules', '.git', '.vite'}
 
-# Global lock for video thumbnail generation to limit concurrency to 1
-THUMBNAIL_LOCK = threading.Lock()
+# Global semaphore for video thumbnail generation to limit concurrency to 2
+THUMBNAIL_SEMAPHORE = threading.BoundedSemaphore(value=2)
 
 
 def directory_size(root: str) -> int:
@@ -90,7 +90,7 @@ def get_video_thumbnail(video_path, thumb_path):
     best_fallback_frame = None
     best_fallback_time = 0
     
-    with THUMBNAIL_LOCK:
+    with THUMBNAIL_SEMAPHORE:
         try:
             cap = cv2.VideoCapture(video_path)
             if not cap.isOpened():

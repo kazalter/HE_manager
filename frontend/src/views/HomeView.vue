@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { ChevronDown, Filter, Search, SortAsc, Star } from 'lucide-vue-next'
@@ -26,6 +26,13 @@ const selectedTag = ref('')
 const tagDropdownOpen = ref(false)
 const favoriteOnly = ref(false)
 const sourceFilter = ref<'' | 'x' | 'wnacg' | 'local'>('')
+
+const limit = 80
+const offset = ref(0)
+const hasMore = ref(true)
+const loadingMore = ref(false)
+const loadMoreRef = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 
 const pageTitle = computed(() => {
   if (props.mediaType === 'video') return '所有视频'
@@ -55,19 +62,28 @@ const fetchTags = async () => {
 const fetchMedia = async () => {
   loading.value = true
   mediaError.value = ''
+  offset.value = 0
+  hasMore.value = true
   try {
-    const params: Record<string, string | boolean> = { sort: sortBy.value }
-    if (props.mediaType) params.media_type = props.mediaType
-    if (searchQuery.value.trim()) params.search = searchQuery.value.trim()
-    if (selectedTag.value) params.tag = selectedTag.value
-    if (favoriteOnly.value) params.favorite = true
-    if (sourceFilter.value) params.source_site = sourceFilter.value
-
+    const params: Record<string, string | number | boolean | undefined> = {
+      media_type: props.mediaType,
+      search: searchQuery.value.trim() || undefined,
+      tag: selectedTag.value || undefined,
+      favorite: favoriteOnly.value ? true : undefined,
+      source_site: sourceFilter.value || undefined,
+      sort: sortBy.value,
+      limit,
+      offset: 0,
+    }
     const res = await axios.get(`${API_BASE_URL}/media`, { params })
     mediaList.value = res.data
+    if (res.data.length < limit) {
+      hasMore.value = false
+    }
   } catch (err: any) {
     console.error('Failed to fetch media:', err)
     mediaList.value = []
+    hasMore.value = false
     const status = err?.response?.status
     mediaError.value = status === 401
       ? '登录状态已失效，请重新登录。'
@@ -78,6 +94,52 @@ const fetchMedia = async () => {
     loading.value = false
   }
 }
+
+const loadMore = async () => {
+  if (loading.value || loadingMore.value || !hasMore.value) return
+  loadingMore.value = true
+  const nextOffset = offset.value + limit
+  try {
+    const params: Record<string, string | number | boolean | undefined> = {
+      media_type: props.mediaType,
+      search: searchQuery.value || undefined,
+      tag: selectedTag.value || undefined,
+      favorite: favoriteOnly.value ? true : undefined,
+      source_site: sourceFilter.value || undefined,
+      sort: sortBy.value,
+      limit,
+      offset: nextOffset,
+    }
+    const res = await axios.get(`${API_BASE_URL}/media`, { params })
+    mediaList.value.push(...res.data)
+    offset.value = nextOffset
+    if (res.data.length < limit) {
+      hasMore.value = false
+    }
+  } catch (err) {
+    console.error('Failed to load more media:', err)
+  } finally {
+    loadingMore.value = false
+  }
+}
+
+watch(loadMoreRef, (el) => {
+  if (observer) observer.disconnect()
+  if (el) {
+    observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && hasMore.value && !loading.value && !loadingMore.value) {
+        loadMore()
+      }
+    }, { rootMargin: '200px' })
+    observer.observe(el)
+  }
+})
+
+onUnmounted(() => {
+  if (observer) {
+    observer.disconnect()
+  }
+})
 
 const updateMediaInList = (media: Media) => {
   const index = mediaList.value.findIndex(item => item.id === media.id)
@@ -344,14 +406,30 @@ onMounted(async () => {
 
       <div
         v-else-if="mediaList.length > 0"
-        class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 md:gap-7"
+        class="flex flex-col gap-8"
       >
-        <MediaCard
-          v-for="item in mediaList"
-          :key="item.id"
-          :media="item"
-          @click="openMedia(item)"
-        />
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 md:gap-7">
+          <MediaCard
+            v-for="item in mediaList"
+            :key="item.id"
+            :media="item"
+            @click="openMedia(item)"
+          />
+        </div>
+
+        <div ref="loadMoreRef" class="w-full py-4 flex justify-center">
+          <div v-if="loadingMore" class="text-white/45 flex items-center gap-2">
+            <div class="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
+            <span>加载中...</span>
+          </div>
+          <button
+            v-else-if="hasMore"
+            @click="loadMore"
+            class="px-6 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm font-bold text-white transition-all"
+          >
+            加载更多
+          </button>
+        </div>
       </div>
 
       <div v-else class="flex flex-col items-center justify-center py-32 text-white/35 text-center">
