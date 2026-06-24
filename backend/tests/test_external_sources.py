@@ -8,7 +8,9 @@ from unittest.mock import patch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app import external_sources, main as app_main, models, schemas
+from app import external_sources, models, schemas
+from app.routers import external as external_routes
+from app.services import external_runtime
 
 
 class ExternalSourcesTest(unittest.TestCase):
@@ -183,7 +185,7 @@ class ExternalSourcesTest(unittest.TestCase):
                 patch.object(external_sources, "fetch_file_to_path", fake_fetch_file_to_path),
                 patch.object(external_sources, "fetch_binary", side_effect=AssertionError("image fallback should not run")),
             ):
-                result = app_main.download_wnacg_item(item, source, plan, job)
+                result = external_runtime.download_wnacg_item(item, source, plan, job)
 
             self.assertEqual(result["method"], "archive")
             self.assertTrue(os.path.exists(os.path.join(item_dir, "001.jpg")))
@@ -214,9 +216,9 @@ class ExternalSourcesTest(unittest.TestCase):
             with (
                 patch.object(external_sources, "fetch_file_to_path", side_effect=RuntimeError("expired")),
                 patch.object(external_sources, "fetch_binary", return_value=(b"jpg", "image/jpeg")),
-                patch.object(app_main.time, "sleep", lambda _: None),
+                patch.object(external_runtime.time, "sleep", lambda _: None),
             ):
-                result = app_main.download_wnacg_item(item, source, plan, job=None)
+                result = external_runtime.download_wnacg_item(item, source, plan, job=None)
 
             self.assertEqual(result["method"], "images")
             self.assertTrue(os.path.exists(os.path.join(item_dir, "001.jpg")))
@@ -297,7 +299,7 @@ class ExternalSourcesTest(unittest.TestCase):
                 raise AssertionError(f"unexpected fetch: {url}")
 
             with patch.object(external_sources, "fetch_html", fake_fetch_html):
-                result = app_main.sync_wnacg_favorites(
+                result = external_routes.sync_wnacg_favorites(
                     schemas.ExternalFavoriteSyncRequest(
                         source_id=source.id,
                         favorites_url=external_sources.WNACG_DEFAULT_URL,

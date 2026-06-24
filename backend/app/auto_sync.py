@@ -22,6 +22,7 @@ from datetime import datetime, timedelta
 from typing import IO, List, Optional, Set
 
 from . import database, models
+from .services.thumbnails import THUMBNAIL_DIR
 
 # ---------------------------------------------------------------------------
 # Scheduler singleton
@@ -343,11 +344,11 @@ def _run_wnacg(source_id: int) -> None:
         db.commit()
 
         # --- Phase 1: sync favourites list ---
-        # Lazy import to avoid circular dependency (these live in main.py)
-        from . import main as _main, external_sources
+        from . import external_sources
+        from .services import external_runtime
 
         cookie = source.cookie
-        base_url = _main.get_url_base(source.favorites_url)
+        base_url = external_runtime.get_url_base(source.favorites_url)
         first_html = external_sources.fetch_html(source.favorites_url, cookie, proxy=source.proxy)
         categories = external_sources.parse_wnacg_categories(first_html)
 
@@ -441,7 +442,7 @@ def _run_wnacg(source_id: int) -> None:
         download_root = source.download_root_path
         to_download = []
         for fav_item in all_items:
-            local_media = _main.find_local_media_for_external_item(fav_item, db)
+            local_media = external_runtime.find_local_media_for_external_item(fav_item, db)
             if not local_media:
                 to_download.append(fav_item)
 
@@ -458,23 +459,23 @@ def _run_wnacg(source_id: int) -> None:
             source.auto_sync_last_message = message
             db.commit()
 
-            _main.ensure_external_manga_library(source, download_root, db)
+            external_runtime.ensure_external_manga_library(source, download_root, db)
 
             for fav_item in download_batch:
                 try:
-                    plan = _main.prepare_wnacg_download_plan(
+                    plan = external_runtime.prepare_wnacg_download_plan(
                         fav_item, source, download_root
                     )
-                    result = _main.download_wnacg_item(
+                    result = external_runtime.download_wnacg_item(
                         fav_item, source, plan, job=None
                     )
-                    _main.upsert_external_downloaded_media(
+                    external_runtime.upsert_external_downloaded_media(
                         fav_item, source, result["path"], download_root, db
                     )
                     downloaded_count += 1
                 except Exception as exc:
                     failed_count += 1
-                    _main.log_wnacg_download_failure(
+                    external_runtime.log_wnacg_download_failure(
                         download_root,
                         fav_item.title,
                         fav_item.url,
@@ -646,14 +647,12 @@ def _run_x(source_id: int) -> None:
             message = f"同步新增 {synced_count} 条，无需下载"
             return
 
-        from . import main as _main
-
         job_id = str(uuid.uuid4())
         import_job = x_importer.start_job(
             job_id=job_id,
             source_id=source.id,
             download_root=source.download_root_path,
-            thumbnail_dir=_main.THUMBNAIL_DIR,
+            thumbnail_dir=THUMBNAIL_DIR,
             post_ids=post_ids,
             cookie=source.cookie,
         )
