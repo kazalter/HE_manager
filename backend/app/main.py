@@ -42,11 +42,13 @@ from .x_import import importer as x_importer
 from .x_import import storage as x_storage
 from .x_import import sync as x_sync
 from .routers import auth as auth_routes
+from .routers import audio as audio_routes
 from .routers import auto_sync as auto_sync_routes
 from .routers import creators as creators_routes
 from .routers import dedup as dedup_routes
 from .routers import media as media_routes
 from .routers import stats as stats_routes
+from .services.audio_tracks import AUDIO_TRACK_EXTS, LYRIC_EXTS, parse_lyrics_file, scan_audio_tracks
 from .services.manga_pages import get_manga_image_files
 from .services.media_access import get_media_or_404, get_source_or_404
 from .services.range_response import get_ranged_file_response
@@ -62,19 +64,6 @@ _client_ip = login_throttle._client_ip
 _login_failure_key = login_throttle._login_failure_key
 _pruned_login_failures = login_throttle._pruned_login_failures
 _record_login_failure = login_throttle._record_login_failure
-
-
-# ============================================================================
-# Audio (ASMR) — track scan + lyrics parsing
-# ============================================================================
-# An "audio" Media row points at a folder of audio files (the work) instead of
-# a single file like video/manga do. /audio/{id}/tracks lists the files in
-# deterministic 1-based order; /audio/{id}/track/{i} streams one of them;
-# /audio/{id}/track/{i}/lyrics returns the timed lines from a sidecar LRC/VTT/
-# SRT next to it. The Android client (AudioRepository.kt) is the consumer.
-
-AUDIO_TRACK_EXTS = {".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".opus"}
-LYRIC_EXTS = (".lrc", ".vtt", ".srt")
 
 
 # ============================================================================
@@ -346,131 +335,6 @@ def _bd2_atlas_with_spine41_aliases(text: str) -> str:
     return "".join(out)
 
 
-def scan_audio_tracks(item_dir: str) -> List[dict]:
-    """Walk an ASMR work folder and return tracks in stable display order.
-
-    Order is folder-then-filename across the whole tree (`os.walk` ordered by
-    `sorted()`), so re-runs produce identical indices. Each entry carries the
-    absolute path (for streaming) and a sibling lyric path if a same-stem
-    .lrc/.vtt/.srt exists next to the audio file."""
-    if not item_dir or not os.path.isdir(item_dir):
-        return []
-
-    tracks: List[dict] = []
-    for root, dirs, files in os.walk(item_dir):
-        dirs.sort()
-        for fname in sorted(files):
-            ext = os.path.splitext(fname)[1].lower()
-            if ext not in AUDIO_TRACK_EXTS:
-                continue
-            abs_path = os.path.join(root, fname)
-            rel_path = os.path.relpath(abs_path, item_dir).replace(os.sep, "/")
-            stem = os.path.splitext(fname)[0]
-            lyrics_abs = None
-            for lyric_ext in LYRIC_EXTS:
-                candidate = os.path.join(root, stem + lyric_ext)
-                if os.path.exists(candidate):
-                    lyrics_abs = candidate
-                    break
-            tracks.append({
-                "title": fname,
-                "rel": rel_path,
-                "abs_path": abs_path,
-                "lyrics_abs": lyrics_abs,
-            })
-
-    for index, track in enumerate(tracks, start=1):
-        track["index"] = index
-    return tracks
-
-
-_LRC_LINE_RE = re.compile(r"\[(\d+):(\d+(?:\.\d+)?)\](.*)")
-_VTT_SRT_TIME_RE = re.compile(r"(\d+):(\d+):(\d+(?:[.,]\d+)?)")
-
-
-def _hms_to_seconds(h: str, m: str, s: str) -> float:
-    return int(h) * 3600 + int(m) * 60 + float(s.replace(",", "."))
-
-
-def _parse_lrc(text: str) -> List[dict]:
-    """LRC: one or more `[mm:ss.xx]` tags followed by lyric text per line.
-    A single line can carry multiple timestamps (repeats); we expand each."""
-    lines: List[dict] = []
-    for raw in text.splitlines():
-        # Strip metadata tags like [ti:...], [ar:...] — they have non-numeric
-        # first chars, so the regex naturally skips them.
-        stamps = []
-        rest = raw
-        while True:
-            m = _LRC_LINE_RE.match(rest)
-            if not m:
-                break
-            stamps.append(int(m.group(1)) * 60 + float(m.group(2)))
-            rest = m.group(3)
-            # multiple stamps may be back-to-back: "[00:01.20][00:05.40]text"
-            if not rest.startswith("["):
-                break
-        if not stamps:
-            continue
-        body = rest.strip()
-        if not body:
-            continue
-        for t in stamps:
-            lines.append({"t": t, "text": body})
-    return lines
-
-
-def _parse_vtt_or_srt(text: str) -> List[dict]:
-    """VTT and SRT have similar cue blocks: a time line `HH:MM:SS[.,]xxx -->
-    HH:MM:SS[.,]xxx` followed by 1+ text lines, blocks separated by blank
-    lines. We only need the start time + concatenated text."""
-    lines: List[dict] = []
-    blocks = re.split(r"\r?\n\s*\r?\n", text.strip())
-    for block in blocks:
-        block_lines = [ln for ln in block.splitlines() if ln.strip()]
-        time_line = None
-        body_lines: List[str] = []
-        for ln in block_lines:
-            if "-->" in ln and time_line is None:
-                time_line = ln
-            elif time_line is not None:
-                body_lines.append(ln)
-        if time_line is None or not body_lines:
-            continue
-        m = _VTT_SRT_TIME_RE.search(time_line)
-        if not m:
-            continue
-        start = _hms_to_seconds(m.group(1), m.group(2), m.group(3))
-        body = " ".join(body_lines).strip()
-        if body:
-            lines.append({"t": start, "text": body})
-    return lines
-
-
-def parse_lyrics_file(path: str) -> List[dict]:
-    """Normalise an LRC/VTT/SRT file to [{t: seconds, text: str}], sorted by
-    start time. Returns [] on any parse / encoding failure — the endpoint is
-    meant to be a guaranteed 200 with empty lines for tracks that don't have
-    real lyrics."""
-    if not path or not os.path.exists(path):
-        return []
-    ext = os.path.splitext(path)[1].lower()
-    try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            text = f.read()
-    except OSError:
-        return []
-    # Some LRCs ship as UTF-8 with BOM; the open() above already handles it.
-    if ext == ".lrc":
-        lines = _parse_lrc(text)
-    elif ext in (".vtt", ".srt"):
-        lines = _parse_vtt_or_srt(text)
-    else:
-        lines = []
-    lines.sort(key=lambda item: item["t"])
-    return lines
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Run DB schema migrations
@@ -515,6 +379,7 @@ app.include_router(dedup_routes.router)
 app.include_router(auto_sync_routes.router)
 app.include_router(auth_routes.router)
 app.include_router(media_routes.router)
+app.include_router(audio_routes.router)
 
 app.mount("/thumbnails", StaticFiles(directory=THUMBNAIL_DIR), name="thumbnails")
 
@@ -2904,156 +2769,6 @@ def get_external_download_job(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="Download job not found")
     return job
-
-
-# ============================================================================
-# /audio/{id}/* — ASMR audio player endpoints
-# ============================================================================
-# Consumer: android-app/audio/AudioRepository.kt. Web has no audio view yet.
-# Auth: kept open per AudioRepository's contract ("the audio streaming
-# endpoints are unauthenticated server-side ... we still pass the token in
-# the stream URL ... ignored harmlessly today"). The token query param is
-# ignored because the route signatures don't declare it.
-
-def _get_audio_media_or_404(media_id: int, db: Session) -> models.Media:
-    media = get_media_or_404(media_id, db)
-    if media.media_type != "audio":
-        raise HTTPException(status_code=400, detail="This media is not an audio work")
-    if not os.path.exists(media.absolute_path):
-        if not media.is_missing:
-            media.is_missing = True
-            media.missing_since = datetime.utcnow()
-            db.commit()
-        raise HTTPException(status_code=404, detail="Audio file/folder not found on disk")
-    return media
-
-
-def _resolve_audio_tracks(media: models.Media) -> List[dict]:
-    """Return the in-display-order track list for an audio Media row.
-
-    Two shapes are supported under the same `media_type='audio'`:
-      - work folder (`extension='.dir'`, ASMR downloads or audio_work scans):
-        prefer the tracks.json manifest at the work root (canonical order,
-        clean titles, per-track durations); fall back to a directory walk if
-        the manifest is missing.
-      - single file (scanner's `scan_mode='audio'` route): the row IS the
-        track — synthesize a one-entry list with its sidecar lyrics, if any.
-
-    Keeping both shapes behind one resolver lets /audio/{id}/track/{i} and
-    /audio/{id}/track/{i}/lyrics stay symmetric for the consumer
-    (AudioRepository.kt / MediaDetail.vue) without branching them."""
-    if os.path.isdir(media.absolute_path):
-        manifest = scanner.read_tracks_json(media.absolute_path)
-        if manifest and isinstance(manifest.get("tracks"), list):
-            # The work directory is the security boundary. Anything resolved
-            # from manifest entries must stay inside it — otherwise a tampered
-            # tracks.json could turn /audio/{id}/track/{i} into an arbitrary
-            # file reader (the streaming response doesn't care what it serves).
-            work_root_abs = os.path.realpath(media.absolute_path)
-            out: List[dict] = []
-            for entry in manifest["tracks"]:
-                if not isinstance(entry, dict):
-                    continue
-                rel = entry.get("rel") or ""
-                if not rel:
-                    continue
-                abs_path = os.path.realpath(os.path.join(media.absolute_path, *rel.split("/")))
-                # Path traversal guard: realpath() resolves "..", symlinks,
-                # double-separators etc. Reject anything that doesn't sit
-                # under work_root_abs (the +sep prevents the classic
-                # "/work_root_evil" sibling-prefix bypass).
-                if not (abs_path == work_root_abs or abs_path.startswith(work_root_abs + os.sep)):
-                    continue
-                if not os.path.exists(abs_path):
-                    continue
-                stem, _ = os.path.splitext(abs_path)
-                lyrics_abs = None
-                for lyric_ext in LYRIC_EXTS:
-                    candidate = stem + lyric_ext
-                    if os.path.exists(candidate):
-                        lyrics_abs = candidate
-                        break
-                out.append({
-                    "index": entry.get("index") if isinstance(entry.get("index"), int) else (len(out) + 1),
-                    "title": entry.get("title") or os.path.basename(abs_path),
-                    "rel": rel,
-                    "abs_path": abs_path,
-                    "lyrics_abs": lyrics_abs,
-                    "duration": entry.get("duration") if isinstance(entry.get("duration"), (int, float)) else None,
-                })
-            if out:
-                return out
-        # Manifest missing or empty / all entries unresolved — fall back.
-        return scan_audio_tracks(media.absolute_path)
-
-    parent = os.path.dirname(media.absolute_path)
-    stem = os.path.splitext(os.path.basename(media.absolute_path))[0]
-    lyrics_abs = None
-    for lyric_ext in LYRIC_EXTS:
-        candidate = os.path.join(parent, stem + lyric_ext)
-        if os.path.exists(candidate):
-            lyrics_abs = candidate
-            break
-    return [{
-        "index": 1,
-        "title": os.path.basename(media.absolute_path),
-        "rel": os.path.basename(media.absolute_path),
-        "abs_path": media.absolute_path,
-        "lyrics_abs": lyrics_abs,
-        "duration": None,
-    }]
-
-
-def _audio_lyrics_rel(track: dict, media: models.Media) -> Optional[str]:
-    """Resolve a track's lyrics path into a path relative to whichever anchor
-    makes sense (the work folder, or the parent dir for single-file audio)."""
-    if not track.get("lyrics_abs"):
-        return None
-    anchor = media.absolute_path if os.path.isdir(media.absolute_path) else os.path.dirname(media.absolute_path)
-    return os.path.relpath(track["lyrics_abs"], anchor).replace(os.sep, "/")
-
-
-@app.get("/audio/{media_id}/tracks")
-def get_audio_tracks(media_id: int, db: Session = Depends(get_db)):
-    media = _get_audio_media_or_404(media_id, db)
-    tracks = _resolve_audio_tracks(media)
-    return {
-        "tracks": [
-            {
-                "index": t["index"],
-                "title": t["title"],
-                "rel": t["rel"],
-                # Duration comes from tracks.json when present; otherwise null
-                # and the client probes it on load (HTML5 audio / ExoPlayer
-                # both tolerate null gracefully).
-                "duration": t.get("duration"),
-                # Client only checks isNotBlank(); the rel path doubles as a
-                # human-readable marker.
-                "lyrics": _audio_lyrics_rel(t, media),
-            }
-            for t in tracks
-        ],
-    }
-
-
-@app.get("/audio/{media_id}/track/{index}")
-def stream_audio_track(media_id: int, index: int, request: Request, db: Session = Depends(get_db)):
-    media = _get_audio_media_or_404(media_id, db)
-    tracks = _resolve_audio_tracks(media)
-    if index < 1 or index > len(tracks):
-        raise HTTPException(status_code=404, detail="Track index out of range")
-    return get_ranged_file_response(request, tracks[index - 1]["abs_path"])
-
-
-@app.get("/audio/{media_id}/track/{index}/lyrics")
-def get_audio_track_lyrics(media_id: int, index: int, db: Session = Depends(get_db)):
-    media = _get_audio_media_or_404(media_id, db)
-    tracks = _resolve_audio_tracks(media)
-    if index < 1 or index > len(tracks):
-        raise HTTPException(status_code=404, detail="Track index out of range")
-    lyrics_path = tracks[index - 1]["lyrics_abs"]
-    # Guaranteed 200 with empty `lines` when no sidecar exists.
-    return {"lines": parse_lyrics_file(lyrics_path) if lyrics_path else []}
 
 
 # ----- X (Twitter) one-click import -----
