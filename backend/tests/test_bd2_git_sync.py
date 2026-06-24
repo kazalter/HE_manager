@@ -13,7 +13,7 @@ import subprocess
 import tempfile
 import unittest
 
-from app import main as main_mod
+from app.services import bd2_runtime as main_mod
 
 
 SAMPLE_CHARINFO = """

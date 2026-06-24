@@ -13,7 +13,7 @@ isolated from the real library.db.
 import time
 import unittest
 
-from app import main
+from app.services import login_throttle
 
 
 class _StubClient:
@@ -30,18 +30,18 @@ class _StubRequest:
 
 class LoginThrottleTest(unittest.TestCase):
     def setUp(self):
-        main.LOGIN_FAILURES.clear()
+        login_throttle.LOGIN_FAILURES.clear()
 
     def tearDown(self):
-        main.LOGIN_FAILURES.clear()
+        login_throttle.LOGIN_FAILURES.clear()
 
     def test_client_ip_ignores_forwarded_for_by_default(self):
         # A public caller can set any X-Forwarded-For it likes; with trust off
         # (the default) we must fall back to the real peer so the forged header
         # can't mint a fresh throttle bucket.
-        self.assertFalse(main._TRUST_FORWARDED_FOR)
+        self.assertFalse(login_throttle._TRUST_FORWARDED_FOR)
         req = _StubRequest(headers={"x-forwarded-for": "9.9.9.9"}, client_host="127.0.0.1")
-        self.assertEqual(main._client_ip(req), "127.0.0.1")
+        self.assertEqual(login_throttle._client_ip(req), "127.0.0.1")
 
     def test_per_username_backstop_survives_ip_rotation(self):
         # Simulate an attacker rotating the source IP every attempt: each lands
@@ -49,27 +49,27 @@ class LoginThrottleTest(unittest.TestCase):
         # yet the per-username backstop keeps counting and ultimately blocks.
         username = "victim"
         user_key = f"user:{username.lower()}"
-        for i in range(main.LOGIN_MAX_FAILURES_PER_USER):
+        for i in range(login_throttle.LOGIN_MAX_FAILURES_PER_USER):
             ip_key = f"10.0.0.{i}:{username}"
-            main._record_login_failure(ip_key)
-            main._record_login_failure(user_key)
+            login_throttle._record_login_failure(ip_key)
+            login_throttle._record_login_failure(user_key)
             self.assertLess(
-                len(main._pruned_login_failures(ip_key)),
-                main.LOGIN_MAX_FAILURES,
+                len(login_throttle._pruned_login_failures(ip_key)),
+                login_throttle.LOGIN_MAX_FAILURES,
                 "per-IP bucket should never trip under IP rotation",
             )
         self.assertGreaterEqual(
-            len(main._pruned_login_failures(user_key)),
-            main.LOGIN_MAX_FAILURES_PER_USER,
+            len(login_throttle._pruned_login_failures(user_key)),
+            login_throttle.LOGIN_MAX_FAILURES_PER_USER,
             "per-username backstop must reach its limit despite IP rotation",
         )
 
     def test_old_failures_outside_window_are_pruned(self):
         key = "10.0.0.1:victim"
-        stale = time.time() - (main.LOGIN_FAILURE_WINDOW_SECONDS + 10)
-        main.LOGIN_FAILURES[key] = [stale, stale]
-        self.assertEqual(main._pruned_login_failures(key), [])
-        self.assertNotIn(key, main.LOGIN_FAILURES)
+        stale = time.time() - (login_throttle.LOGIN_FAILURE_WINDOW_SECONDS + 10)
+        login_throttle.LOGIN_FAILURES[key] = [stale, stale]
+        self.assertEqual(login_throttle._pruned_login_failures(key), [])
+        self.assertNotIn(key, login_throttle.LOGIN_FAILURES)
 
 
 if __name__ == "__main__":
