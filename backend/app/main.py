@@ -17,10 +17,10 @@ from urllib.parse import urlencode, urljoin, urlparse
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from . import (
     asmr_source,
@@ -29,7 +29,6 @@ from . import (
     database,
     downloader_push,
     external_sources,
-    media_cleanup,
     manga_metadata,
     manga_profiles,
     models,
@@ -46,7 +45,12 @@ from .routers import auth as auth_routes
 from .routers import auto_sync as auto_sync_routes
 from .routers import creators as creators_routes
 from .routers import dedup as dedup_routes
+from .routers import media as media_routes
 from .routers import stats as stats_routes
+from .services.manga_pages import get_manga_image_files
+from .services.media_access import get_media_or_404, get_source_or_404
+from .services.range_response import get_ranged_file_response
+from .services.thumbnails import THUMBNAIL_DIR, cleanup_orphaned_thumbnails
 from .services import login_throttle
 
 LOGIN_FAILURES = login_throttle.LOGIN_FAILURES
@@ -58,61 +62,6 @@ _client_ip = login_throttle._client_ip
 _login_failure_key = login_throttle._login_failure_key
 _pruned_login_failures = login_throttle._pruned_login_failures
 _record_login_failure = login_throttle._record_login_failure
-
-
-
-def get_ranged_file_response(request: Request, file_path: str):
-    file_size = os.stat(file_path).st_size
-    range_header = request.headers.get("range")
-    media_type = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
-    
-    headers = {
-        "Accept-Ranges": "bytes",
-        "Content-Length": str(file_size),
-        "Content-Type": media_type,
-    }
-
-    if not range_header:
-        def file_iterator():
-            with open(file_path, "rb") as f:
-                while chunk := f.read(1024 * 1024):
-                    yield chunk
-        return StreamingResponse(file_iterator(), headers=headers, media_type=media_type)
-    
-    try:
-        range_match = re.match(r"bytes=(\d+)-(\d*)", range_header)
-        start = int(range_match.group(1))
-        end = range_match.group(2)
-        end = int(end) if end else file_size - 1
-    except Exception:
-        start = 0
-        end = file_size - 1
-
-    start = max(0, start)
-    end = min(file_size - 1, end)
-    content_length = end - start + 1
-
-    headers["Content-Length"] = str(content_length)
-    headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
-
-    def ranged_file_iterator():
-        with open(file_path, "rb") as f:
-            f.seek(start)
-            bytes_to_read = content_length
-            chunk_size = 1024 * 1024  # 1MB chunk
-            while bytes_to_read > 0:
-                chunk = f.read(min(chunk_size, bytes_to_read))
-                if not chunk:
-                    break
-                bytes_to_read -= len(chunk)
-                yield chunk
-
-    return StreamingResponse(
-        ranged_file_iterator(),
-        status_code=206,
-        headers=headers,
-        media_type=media_type
-    )
 
 
 # ============================================================================
@@ -565,9 +514,8 @@ app.include_router(creators_routes.router)
 app.include_router(dedup_routes.router)
 app.include_router(auto_sync_routes.router)
 app.include_router(auth_routes.router)
+app.include_router(media_routes.router)
 
-THUMBNAIL_DIR = os.path.join(os.getcwd(), ".thumbnails")
-os.makedirs(THUMBNAIL_DIR, exist_ok=True)
 app.mount("/thumbnails", StaticFiles(directory=THUMBNAIL_DIR), name="thumbnails")
 
 
@@ -2455,20 +2403,6 @@ def run_asmr_download_job(job_id: str, item_ids: List[int], download_root_path: 
         db.close()
 
 
-def get_media_or_404(media_id: int, db: Session):
-    media = db.query(models.Media).filter(models.Media.id == media_id).first()
-    if not media:
-        raise HTTPException(status_code=404, detail="Media not found")
-    return media
-
-
-def get_source_or_404(source_id: int, db: Session):
-    source = db.query(models.ExternalFavoriteSource).filter(models.ExternalFavoriteSource.id == source_id).first()
-    if not source:
-        raise HTTPException(status_code=404, detail="External source not found")
-    return source
-
-
 def get_url_base(url: str) -> str:
     parsed = urlparse(url)
     if not parsed.scheme or not parsed.netloc:
@@ -2476,386 +2410,9 @@ def get_url_base(url: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}/"
 
 
-_MANGA_FILES_CACHE: dict[int, tuple[float, list[str]]] = {}
-
-
-def get_manga_image_files(media: models.Media):
-    image_exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".avif"}
-    try:
-        mtime = os.path.getmtime(media.absolute_path)
-    except OSError:
-        mtime = 0.0
-    cached = _MANGA_FILES_CACHE.get(media.id)
-    if cached and cached[0] == mtime:
-        return cached[1]
-
-    if media.extension == ".dir":
-        files = []
-        for root, _, filenames in os.walk(media.absolute_path):
-            for filename in filenames:
-                if any(filename.lower().endswith(ext) for ext in image_exts):
-                    files.append(os.path.join(root, filename))
-        result = sorted(files)
-    else:
-        with zipfile.ZipFile(media.absolute_path, "r") as archive:
-            result = sorted(
-                name for name in archive.namelist()
-                if any(name.lower().endswith(ext) for ext in image_exts)
-            )
-
-    _MANGA_FILES_CACHE[media.id] = (mtime, result)
-    return result
-
-
-def cleanup_orphaned_thumbnails():
-    db = database.SessionLocal()
-    try:
-        valid_bases = [
-            row[0].rsplit(".", 1)[0]
-            for row in db.query(models.Media.cover_path).filter(models.Media.cover_path != None).all()
-            if row[0]
-        ]
-
-        if os.path.exists(THUMBNAIL_DIR):
-            for filename in os.listdir(THUMBNAIL_DIR):
-                if any(filename.startswith(base) for base in valid_bases):
-                    continue
-                try:
-                    os.remove(os.path.join(THUMBNAIL_DIR, filename))
-                except Exception:
-                    pass
-    except Exception as e:
-        print(f"Error cleaning up thumbnails: {e}")
-    finally:
-        db.close()
-
-
 @app.get("/")
 def read_root():
     return {"message": "Welcome to HE Manager API"}
-
-
-@app.get("/search-folder")
-def search_folder(name: str):
-    import string
-
-    results = []
-    search_roots = []
-
-    for letter in string.ascii_uppercase:
-        drive = f"{letter}:\\"
-        if os.path.exists(drive):
-            search_roots.append(drive)
-
-    search_roots.append(os.path.expanduser("~"))
-
-    for root in search_roots:
-        try:
-            for entry in os.listdir(root):
-                full = os.path.join(root, entry)
-                if os.path.isdir(full) and entry.lower() == name.lower():
-                    results.append(full)
-        except (PermissionError, OSError):
-            continue
-
-    return {"results": results}
-
-
-@app.post("/folders", response_model=schemas.Folder)
-def create_folder(folder: schemas.FolderCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    if not os.path.exists(folder.path):
-        raise HTTPException(status_code=400, detail="指定的文件夹路径不存在，请检查路径是否正确。")
-
-    if not os.path.isdir(folder.path):
-        raise HTTPException(status_code=400, detail="指定的路径不是一个目录。")
-
-    db_folder = db.query(models.Folder).filter(models.Folder.path == folder.path).first()
-    if db_folder:
-        db_folder.scan_mode = folder.scan_mode
-        db_folder.thumbnail_enabled = folder.thumbnail_enabled
-        db_folder.thumbnail_interval = folder.thumbnail_interval
-        db.commit()
-        db.refresh(db_folder)
-        background_tasks.add_task(scanner.scan_folder, db_folder.id)
-        return db_folder
-
-    new_folder = models.Folder(
-        path=folder.path,
-        scan_mode=folder.scan_mode,
-        thumbnail_enabled=folder.thumbnail_enabled,
-        thumbnail_interval=folder.thumbnail_interval,
-    )
-    db.add(new_folder)
-    db.commit()
-    db.refresh(new_folder)
-
-    background_tasks.add_task(scanner.scan_folder, new_folder.id)
-    return new_folder
-
-
-@app.post("/folders/{folder_id}/scan", response_model=schemas.Folder)
-def scan_folder(folder_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    db_folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()
-    if not db_folder:
-        raise HTTPException(status_code=404, detail="Folder not found")
-
-    background_tasks.add_task(scanner.scan_folder, folder_id)
-    return db_folder
-
-
-@app.get("/folders", response_model=List[schemas.Folder])
-def list_folders(db: Session = Depends(get_db)):
-    return db.query(models.Folder).all()
-
-
-@app.delete("/folders/{folder_id}")
-def delete_folder(folder_id: int, db: Session = Depends(get_db)):
-    db_folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()
-    if not db_folder:
-        raise HTTPException(status_code=404, detail="Folder not found")
-
-    associated_media = db.query(models.Media).filter(models.Media.folder_id == folder_id).all()
-    media_cleanup.detach_media_references(db, [media.id for media in associated_media])
-    for media in associated_media:
-        if not media.cover_path:
-            continue
-        thumb_base = media.cover_path.rsplit(".", 1)[0]
-        for filename in os.listdir(THUMBNAIL_DIR):
-            if not filename.startswith(thumb_base):
-                continue
-            thumb_path = os.path.join(THUMBNAIL_DIR, filename)
-            if os.path.exists(thumb_path):
-                try:
-                    os.remove(thumb_path)
-                except Exception:
-                    pass
-
-    db.delete(db_folder)
-    db.commit()
-    return {"message": "Folder and associated media deleted from library"}
-
-
-@app.get("/media", response_model=List[schemas.Media])
-def list_media(
-    media_type: Optional[str] = None,
-    search: Optional[str] = None,
-    tag: Optional[str] = None,
-    favorite: Optional[bool] = None,
-    view_status: Optional[str] = None,
-    is_missing: Optional[bool] = None,
-    duplicate_status: Optional[str] = None,
-    include_hidden_duplicates: bool = False,
-    source_site: Optional[str] = None,
-    sort: str = "date",
-    limit: Optional[int] = None,
-    offset: Optional[int] = None,
-    db: Session = Depends(get_db),
-):
-    query = db.query(models.Media).options(selectinload(models.Media.tags))
-    if media_type:
-        query = query.filter(models.Media.media_type == media_type)
-    if search:
-        query = query.filter(models.Media.title.ilike(f"%{search}%"))
-    if tag:
-        query = query.join(models.Media.tags).filter(models.Tag.name == tag)
-    if favorite is not None:
-        query = query.filter(models.Media.favorite == favorite)
-    if view_status:
-        query = query.filter(models.Media.view_status == view_status)
-    if is_missing is not None:
-        query = query.filter(models.Media.is_missing == is_missing)
-    if source_site:
-        if source_site == "local":
-            query = query.filter(models.Media.source_site.is_(None))
-        else:
-            query = query.filter(models.Media.source_site == source_site)
-    if duplicate_status:
-        query = query.filter(models.Media.duplicate_status == duplicate_status)
-    elif not include_hidden_duplicates:
-        query = query.filter(
-            models.Media.duplicate_status.notin_(["checking", "strong_duplicate", "suspected_duplicate"])
-        )
-
-    if sort == "title":
-        query = query.order_by(models.Media.title.asc())
-    elif sort == "rating":
-        query = query.order_by(models.Media.rating.desc(), models.Media.id.desc())
-    elif sort == "opened":
-        query = query.order_by(models.Media.last_opened_at.desc(), models.Media.id.desc())
-    else:
-        query = query.order_by(models.Media.id.desc())
-
-    if limit is not None:
-        query = query.limit(limit)
-    if offset is not None:
-        query = query.offset(offset)
-
-    return query.all()
-
-
-@app.get("/mobile/media", response_model=List[schemas.Media])
-def list_mobile_media(
-    media_type: Optional[str] = None,
-    search: Optional[str] = None,
-    sort: str = "date",
-    _: models.User = Depends(auth.get_current_user),
-    db: Session = Depends(get_db),
-):
-    query = db.query(models.Media).filter(models.Media.is_missing == False).options(selectinload(models.Media.tags))
-    if media_type:
-        query = query.filter(models.Media.media_type == media_type)
-    if search:
-        query = query.filter(models.Media.title.ilike(f"%{search}%"))
-
-    if sort == "title":
-        query = query.order_by(models.Media.title.asc())
-    elif sort == "rating":
-        query = query.order_by(models.Media.rating.desc(), models.Media.id.desc())
-    elif sort == "opened":
-        query = query.order_by(models.Media.last_opened_at.desc(), models.Media.id.desc())
-    else:
-        query = query.order_by(models.Media.id.desc())
-
-    return query.all()
-
-
-@app.get("/mobile/media/{media_id}", response_model=schemas.Media)
-def get_mobile_media(media_id: int, _: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
-    return get_media_or_404(media_id, db)
-
-
-@app.get("/mobile/thumbnails/{filename}")
-def get_mobile_thumbnail(filename: str, _: models.User = Depends(auth.get_current_user)):
-    safe_name = os.path.basename(filename)
-    thumb_path = os.path.join(THUMBNAIL_DIR, safe_name)
-    if not os.path.exists(thumb_path):
-        raise HTTPException(status_code=404, detail="Thumbnail not found")
-    return FileResponse(thumb_path)
-
-
-@app.get("/media/{media_id}", response_model=schemas.Media)
-def get_media(media_id: int, db: Session = Depends(get_db)):
-    media = get_media_or_404(media_id, db)
-    
-    # Auto-heal missing flag if file is back
-    if media.is_missing and os.path.exists(media.absolute_path):
-        media.is_missing = False
-        media.missing_since = None
-
-    media.last_opened_at = datetime.utcnow()
-    if media.view_status == "unviewed":
-        media.view_status = "viewing"
-    db.commit()
-    db.refresh(media)
-    return media
-
-
-@app.patch("/media/{media_id}", response_model=schemas.Media)
-def update_media(media_id: int, payload: schemas.MediaUpdate, db: Session = Depends(get_db)):
-    media = get_media_or_404(media_id, db)
-    data = payload.dict(exclude_unset=True)
-    if "view_status" in data and data["view_status"] not in {"unviewed", "viewing", "viewed"}:
-        raise HTTPException(status_code=400, detail="view_status must be unviewed, viewing, or viewed")
-
-    for key, value in data.items():
-        setattr(media, key, value)
-
-    if "progress" in data:
-        progress = int(media.progress or 0)
-        if media.media_type == "video":
-            if progress <= 0:
-                media.view_status = "unviewed"
-            elif media.duration:
-                ratio = progress / max(1, int(media.duration))
-                media.view_status = "viewed" if ratio >= 0.95 else "viewing"
-            else:
-                media.view_status = "viewing"
-        elif media.media_type == "manga" and media.page_count:
-            if progress >= int(media.page_count) - 1:
-                media.view_status = "viewed"
-            elif progress > 0:
-                media.view_status = "viewing"
-            else:
-                media.view_status = "unviewed"
-
-    db.commit()
-    db.refresh(media)
-    return media
-
-
-@app.delete("/media/{media_id}")
-def delete_media(media_id: int, db: Session = Depends(get_db)):
-    media = get_media_or_404(media_id, db)
-    if media.cover_path:
-        thumb_base = media.cover_path.rsplit(".", 1)[0]
-        try:
-            for filename in os.listdir(THUMBNAIL_DIR):
-                if not filename.startswith(thumb_base):
-                    continue
-                thumb_path = os.path.join(THUMBNAIL_DIR, filename)
-                if os.path.exists(thumb_path):
-                    try:
-                        os.remove(thumb_path)
-                    except Exception:
-                        pass
-        except FileNotFoundError:
-            pass
-
-    # Clean up FK references that don't cascade automatically. SQLite enforces
-    # foreign_keys=ON so leaving these would block the delete with a 500.
-    media_cleanup.detach_media_references(db, [media.id])
-
-    db.delete(media)
-    db.commit()
-    return {"message": "Media removed from library"}
-
-
-@app.post("/media/{media_id}/recheck", response_model=schemas.Media)
-def recheck_media(media_id: int, db: Session = Depends(get_db)):
-    media = get_media_or_404(media_id, db)
-    
-    if os.path.exists(media.absolute_path):
-        media.is_missing = False
-        media.missing_since = None
-        media.last_opened_at = datetime.utcnow()
-        try:
-            # Optionally update file size
-            media.file_size = os.path.getsize(media.absolute_path)
-        except OSError:
-            pass
-        db.commit()
-        db.refresh(media)
-        return media
-    else:
-        if not media.is_missing:
-            media.is_missing = True
-            media.missing_since = datetime.utcnow()
-            db.commit()
-            db.refresh(media)
-        raise HTTPException(status_code=404, detail="File still missing")
-
-
-@app.post("/system/recheck-missing")
-def recheck_all_missing(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    # This checks all missing files. Since checking os.path.exists is fast, we can do it synchronously,
-    # but to be totally safe we just do it right here and return the count of recovered items.
-    missing_items = db.query(models.Media).filter(models.Media.is_missing == True).all()
-    recovered_count = 0
-    for media in missing_items:
-        if os.path.exists(media.absolute_path):
-            media.is_missing = False
-            media.missing_since = None
-            recovered_count += 1
-    
-    if recovered_count > 0:
-        db.commit()
-    
-    return {"message": "Recheck completed", "total_missing_checked": len(missing_items), "recovered": recovered_count}
-
-
-@app.get("/tags", response_model=List[schemas.Tag])
-def list_tags(db: Session = Depends(get_db)):
-    return db.query(models.Tag).order_by(models.Tag.name.asc()).all()
 
 
 @app.get("/ai/recommendations/status", response_model=schemas.AiRecommendationStatus)
@@ -3063,39 +2620,6 @@ def recommend_manga(payload: schemas.MangaRecommendationRequest, db: Session = D
         avoid_tags=payload.avoid_tags,
         preferred_tags=payload.preferred_tags,
     )
-
-
-@app.post("/media/{media_id}/tags", response_model=schemas.Media)
-def add_media_tag(media_id: int, payload: schemas.TagCreate, db: Session = Depends(get_db)):
-    media = get_media_or_404(media_id, db)
-    tag_name = payload.name.strip()
-    if not tag_name:
-        raise HTTPException(status_code=400, detail="Tag name cannot be empty")
-
-    tag = db.query(models.Tag).filter(models.Tag.name == tag_name).first()
-    if not tag:
-        tag = models.Tag(name=tag_name)
-        db.add(tag)
-        db.flush()
-
-    if tag not in media.tags:
-        media.tags.append(tag)
-    db.commit()
-    db.refresh(media)
-    return media
-
-
-@app.delete("/media/{media_id}/tags/{tag_id}", response_model=schemas.Media)
-def remove_media_tag(media_id: int, tag_id: int, db: Session = Depends(get_db)):
-    media = get_media_or_404(media_id, db)
-    tag = db.query(models.Tag).filter(models.Tag.id == tag_id).first()
-    if not tag:
-        raise HTTPException(status_code=404, detail="Tag not found")
-    if tag in media.tags:
-        media.tags.remove(tag)
-    db.commit()
-    db.refresh(media)
-    return media
 
 
 @app.get("/external/sources", response_model=List[schemas.ExternalFavoriteSource])
@@ -3382,41 +2906,6 @@ def get_external_download_job(job_id: str):
     return job
 
 
-@app.get("/stream/{media_id}")
-def stream_media(request: Request, media_id: int, db: Session = Depends(get_db)):
-    media = get_media_or_404(media_id, db)
-
-    if not os.path.exists(media.absolute_path):
-        if not media.is_missing:
-            media.is_missing = True
-            media.missing_since = datetime.utcnow()
-            db.commit()
-        raise HTTPException(status_code=404, detail="File not found on disk")
-    elif media.is_missing:
-        media.is_missing = False
-        media.missing_since = None
-        db.commit()
-
-    return get_ranged_file_response(request, media.absolute_path)
-
-
-@app.get("/mobile/stream/{media_id}")
-def stream_mobile_media(request: Request, media_id: int, _: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
-    media = get_media_or_404(media_id, db)
-    if not os.path.exists(media.absolute_path):
-        if not media.is_missing:
-            media.is_missing = True
-            media.missing_since = datetime.utcnow()
-            db.commit()
-        raise HTTPException(status_code=404, detail="File not found on disk")
-    elif media.is_missing:
-        media.is_missing = False
-        media.missing_since = None
-        db.commit()
-
-    return get_ranged_file_response(request, media.absolute_path)
-
-
 # ============================================================================
 # /audio/{id}/* — ASMR audio player endpoints
 # ============================================================================
@@ -3565,135 +3054,6 @@ def get_audio_track_lyrics(media_id: int, index: int, db: Session = Depends(get_
     lyrics_path = tracks[index - 1]["lyrics_abs"]
     # Guaranteed 200 with empty `lines` when no sidecar exists.
     return {"lines": parse_lyrics_file(lyrics_path) if lyrics_path else []}
-
-
-@app.get("/manga/{media_id}/pages")
-def get_manga_pages_count(media_id: int, db: Session = Depends(get_db)):
-    media = get_media_or_404(media_id, db)
-    if media.media_type != "manga":
-        return {"total_pages": 0}
-
-    try:
-        total_pages = len(get_manga_image_files(media))
-        media.page_count = total_pages
-        db.commit()
-        return {"total_pages": total_pages}
-    except Exception:
-        return {"total_pages": media.page_count or 0}
-
-
-@app.get("/mobile/manga/{media_id}/pages")
-def get_mobile_manga_pages_count(media_id: int, _: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
-    return get_manga_pages_count(media_id, db)
-
-
-@app.get("/manga/{media_id}/page/{page_index}")
-def get_manga_page(
-    media_id: int,
-    page_index: int,
-    track_progress: bool = False,
-    db: Session = Depends(get_db),
-):
-    media = get_media_or_404(media_id, db)
-    if media.media_type != "manga":
-        raise HTTPException(status_code=404, detail="Manga not found")
-
-    if media.is_missing and os.path.exists(media.absolute_path):
-        media.is_missing = False
-        media.missing_since = None
-        db.commit()
-
-    try:
-        files = get_manga_image_files(media)
-        if not 0 <= page_index < len(files):
-            raise HTTPException(status_code=404, detail="Page not found")
-
-        if track_progress:
-            media.last_opened_at = datetime.utcnow()
-            media.progress = page_index
-            if page_index >= len(files) - 1:
-                media.view_status = "viewed"
-            elif page_index > 0:
-                media.view_status = "viewing"
-            elif media.view_status == "unviewed":
-                media.view_status = "viewing"
-            db.commit()
-
-        if media.extension == ".dir":
-            img_path = files[page_index]
-            with open(img_path, "rb") as f:
-                content = f.read()
-            mime, _ = mimetypes.guess_type(img_path)
-            return Response(content=content, media_type=mime or "application/octet-stream")
-
-        with zipfile.ZipFile(media.absolute_path, "r") as archive:
-            filename = files[page_index]
-            with archive.open(filename) as f:
-                content = f.read()
-            mime, _ = mimetypes.guess_type(filename)
-            return Response(content=content, media_type=mime or "application/octet-stream")
-    except HTTPException:
-        raise
-    except Exception as e:
-        # Don't echo the raw exception — it can carry absolute filesystem paths
-        # (zip member names, on-disk locations) that we deliberately keep out of
-        # the API surface. Log server-side, return a generic message.
-        print(f"  ! Failed to serve manga page {media_id}/{page_index}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to read page")
-
-
-@app.post("/media/{media_id}/regenerate-thumbnail")
-def regenerate_thumbnail(media_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    media = get_media_or_404(media_id, db)
-    if media.media_type != "video":
-        raise HTTPException(status_code=400, detail="Only videos support thumbnail regeneration")
-
-    background_tasks.add_task(do_regenerate_thumbnail, media.id)
-    return {"message": "Thumbnail regeneration task started"}
-
-
-def do_regenerate_thumbnail(media_id: int):
-    db = database.SessionLocal()
-    try:
-        media = db.query(models.Media).filter(models.Media.id == media_id).first()
-        if not media:
-            return
-
-        thumbnail_dir = os.path.join(os.getcwd(), ".thumbnails")
-        file_hash = hashlib.md5(media.absolute_path.encode()).hexdigest()[:12]
-        base_name = f"thumb_v_{file_hash}_{datetime.now().timestamp()}".replace(' ', '_')
-        thumb_name = f"{base_name}.jpg"
-        thumb_path = os.path.join(thumbnail_dir, thumb_name)
-
-        success, t_ms, source = scanner.get_video_thumbnail(media.absolute_path, thumb_path)
-        if success:
-            # Delete old thumbnail if it exists
-            if media.cover_path:
-                old_path = os.path.join(thumbnail_dir, media.cover_path)
-                if os.path.exists(old_path):
-                    try:
-                        os.remove(old_path)
-                    except Exception:
-                        pass
-
-            media.cover_path = thumb_name
-            media.cover_time_ms = t_ms
-            media.cover_source = source
-            db.commit()
-    finally:
-        db.close()
-
-
-
-@app.get("/mobile/manga/{media_id}/page/{page_index}")
-def get_mobile_manga_page(
-    media_id: int,
-    page_index: int,
-    track_progress: bool = False,
-    _: models.User = Depends(auth.get_current_user),
-    db: Session = Depends(get_db),
-):
-    return get_manga_page(media_id, page_index, track_progress, db)
 
 
 # ----- X (Twitter) one-click import -----
