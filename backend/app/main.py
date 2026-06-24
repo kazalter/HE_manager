@@ -25,9 +25,7 @@ from sqlalchemy.orm import Session, selectinload
 from . import (
     asmr_source,
     auth,
-    auto_sync,
     ai_config,
-    creators as creators_mod,
     database,
     downloader_push,
     external_sources,
@@ -38,15 +36,16 @@ from . import (
     recommendations,
     schemas,
     scanner,
-    stats as stats_mod,
 )
 from .database import engine, get_db
-from .dedup import merge as dedup_merge
-from .dedup import worker as dedup_worker
 from .x_import import archive as x_archive
 from .x_import import importer as x_importer
 from .x_import import storage as x_storage
 from .x_import import sync as x_sync
+from .routers import auto_sync as auto_sync_routes
+from .routers import creators as creators_routes
+from .routers import dedup as dedup_routes
+from .routers import stats as stats_routes
 
 
 
@@ -519,6 +518,7 @@ async def lifespan(app: FastAPI):
     run_schema_migrations()
 
     # Startup tasks
+    auto_sync_routes.init_scheduler()
     cleanup_orphaned_thumbnails()
     yield
 
@@ -547,6 +547,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(stats_routes.router)
+app.include_router(creators_routes.router)
+app.include_router(dedup_routes.router)
+app.include_router(auto_sync_routes.router)
 
 THUMBNAIL_DIR = os.path.join(os.getcwd(), ".thumbnails")
 os.makedirs(THUMBNAIL_DIR, exist_ok=True)
@@ -4137,284 +4142,6 @@ def cancel_x_sync_job(job_id: str):
     return job.to_dict()
 
 
-# ----- Local-file deduplication -----
-
-
-def _serialize_dedup_media(media: models.Media) -> dict:
-    return {
-        "id": media.id,
-        "title": media.title,
-        "display_path": media.relative_path or media.title,
-        "media_type": media.media_type,
-        "extension": media.extension,
-        "file_size": media.file_size,
-        "cover_path": media.cover_path,
-        "duration": media.duration,
-        "width": media.width,
-        "height": media.height,
-        "page_count": media.page_count,
-        "is_missing": bool(media.is_missing),
-        "duplicate_status": media.duplicate_status or "unique",
-        "favorite": bool(media.favorite),
-        "rating": media.rating or 0,
-        "source_url": media.source_url,
-        "source_site": media.source_site,
-    }
-
-
-def _serialize_pair(pair: models.DuplicateCandidate, db: Session) -> Optional[dict]:
-    existing = db.query(models.Media).filter(models.Media.id == pair.existing_media_id).first()
-    candidate = db.query(models.Media).filter(models.Media.id == pair.candidate_media_id).first()
-    if not existing or not candidate:
-        return None
-    return {
-        "id": pair.id,
-        "level": pair.level,
-        "similarity": pair.similarity or 0,
-        "reason": pair.reason,
-        "status": pair.status,
-        "created_at": pair.created_at,
-        "resolved_at": pair.resolved_at,
-        "resolution_note": pair.resolution_note,
-        "existing": _serialize_dedup_media(existing),
-        "candidate": _serialize_dedup_media(candidate),
-    }
-
-
-@app.get("/dedup/summary", response_model=schemas.DedupSummary)
-def dedup_summary(db: Session = Depends(get_db)):
-    pending_pairs = (
-        db.query(models.DuplicateCandidate)
-        .filter(models.DuplicateCandidate.status == "pending")
-        .count()
-    )
-    base = db.query(models.Media)
-    return {
-        "pending_pairs": pending_pairs,
-        "strong_duplicate": base.filter(models.Media.duplicate_status == "strong_duplicate").count(),
-        "suspected_duplicate": base.filter(models.Media.duplicate_status == "suspected_duplicate").count(),
-        "weak_suspected": base.filter(models.Media.duplicate_status == "weak_suspected").count(),
-        "checking": base.filter(models.Media.duplicate_status == "checking").count(),
-        "queue_size": dedup_worker.queue_size(),
-        "worker_running": dedup_worker.is_running(),
-    }
-
-
-@app.get("/dedup/candidates", response_model=List[schemas.DuplicateCandidatePair])
-def list_duplicate_candidates(
-    level: Optional[str] = None,
-    status: str = "pending",
-    media_type: Optional[str] = None,
-    limit: int = 200,
-    db: Session = Depends(get_db),
-):
-    query = db.query(models.DuplicateCandidate)
-    if status and status != "all":
-        query = query.filter(models.DuplicateCandidate.status == status)
-    if level:
-        query = query.filter(models.DuplicateCandidate.level == level)
-    pairs = (
-        query.order_by(
-            models.DuplicateCandidate.status.asc(),
-            models.DuplicateCandidate.similarity.desc(),
-            models.DuplicateCandidate.id.desc(),
-        )
-        .limit(max(1, min(limit, 500)))
-        .all()
-    )
-    out: List[dict] = []
-    for pair in pairs:
-        serialized = _serialize_pair(pair, db)
-        if not serialized:
-            continue
-        if media_type and serialized["existing"]["media_type"] != media_type:
-            continue
-        out.append(serialized)
-    return out
-
-
-@app.get("/dedup/candidates/{pair_id}", response_model=schemas.DuplicateCandidatePair)
-def get_duplicate_candidate(pair_id: int, db: Session = Depends(get_db)):
-    pair = db.query(models.DuplicateCandidate).filter(models.DuplicateCandidate.id == pair_id).first()
-    if not pair:
-        raise HTTPException(status_code=404, detail="重复条目不存在")
-    serialized = _serialize_pair(pair, db)
-    if not serialized:
-        raise HTTPException(status_code=404, detail="对应媒体已不存在")
-    return serialized
-
-
-_DEDUP_ACTIONS = {
-    dedup_merge.ACTION_KEEP_EXISTING,
-    dedup_merge.ACTION_REPLACE_PATH,
-    dedup_merge.ACTION_KEEP_BOTH,
-    dedup_merge.ACTION_IGNORE,
-}
-
-
-@app.post("/dedup/candidates/{pair_id}/resolve", response_model=schemas.DuplicateCandidatePair)
-def resolve_duplicate_candidate(
-    pair_id: int,
-    payload: schemas.DedupActionRequest,
-    db: Session = Depends(get_db),
-):
-    if payload.action not in _DEDUP_ACTIONS:
-        raise HTTPException(status_code=400, detail="不支持的合并动作")
-    pair = db.query(models.DuplicateCandidate).filter(models.DuplicateCandidate.id == pair_id).first()
-    if not pair:
-        raise HTTPException(status_code=404, detail="重复条目不存在")
-    if pair.status != "pending":
-        raise HTTPException(status_code=409, detail="该条目已被处理过")
-
-    pair = dedup_merge.apply_action(db, pair, payload.action, note=payload.note)
-    db.refresh(pair)
-    serialized = _serialize_pair(pair, db)
-    if not serialized:
-        raise HTTPException(status_code=404, detail="处理后媒体已不存在")
-    return serialized
-
-
-@app.post("/dedup/media/{media_id}/recheck")
-def recheck_media_dedup(media_id: int, db: Session = Depends(get_db)):
-    media = db.query(models.Media).filter(models.Media.id == media_id).first()
-    if not media:
-        raise HTTPException(status_code=404, detail="Media not found")
-    media.duplicate_status = "checking"
-    db.commit()
-    dedup_worker.enqueue([media.id])
-    return {"queued": True, "media_id": media.id}
-
-
-@app.delete("/dedup/media/{media_id}/file")
-def delete_media_file(
-    media_id: int,
-    payload: schemas.DedupDeleteFileRequest,
-    db: Session = Depends(get_db),
-):
-    if not payload.confirm:
-        raise HTTPException(status_code=400, detail="请通过 confirm=true 二次确认")
-    media = db.query(models.Media).filter(models.Media.id == media_id).first()
-    if not media:
-        raise HTTPException(status_code=404, detail="Media not found")
-
-    file_deleted = False
-    target_path = media.absolute_path
-    if target_path and os.path.exists(target_path):
-        try:
-            if os.path.isdir(target_path):
-                shutil.rmtree(target_path)
-            else:
-                os.remove(target_path)
-            file_deleted = True
-        except OSError as exc:
-            raise HTTPException(status_code=500, detail=f"文件删除失败：{exc}")
-
-    # Same FK cleanup as DELETE /media/{id}: SQLite foreign_keys=ON would otherwise
-    # block deletion when x_media_items or duplicate_candidates still reference this row.
-    media_cleanup.detach_media_references(db, [media.id])
-
-    fp = db.query(models.MediaFingerprint).filter(models.MediaFingerprint.media_id == media.id).first()
-    if fp:
-        db.delete(fp)
-    db.delete(media)
-    db.commit()
-    return {"file_deleted": file_deleted, "media_id": media_id}
-
-
-# ============================================================================
-# Dashboard statistics — backed by app/stats.py (pure read-only aggregations)
-# ============================================================================
-# Frontend: StatsView.vue fetches all four on mount + on refresh click. Each
-# function below is a thin wrapper around stats.<name>(db); no Pydantic model
-# because the response is already a dict that FastAPI auto-JSON-encodes, and
-# the shape evolves with the dashboard (formalising it would create churn).
-
-@app.get("/stats/overview")
-def stats_overview(db: Session = Depends(get_db)):
-    return stats_mod.overview(db)
-
-
-@app.get("/stats/distribution")
-def stats_distribution(db: Session = Depends(get_db)):
-    return stats_mod.distribution(db)
-
-
-@app.get("/stats/activity")
-def stats_activity(days: int = 365, db: Session = Depends(get_db)):
-    # Default 365 matches StatsView's heatmap which renders a year's worth of
-    # buckets. Cap upper bound so a stray ?days=99999 can't lock the table.
-    days = max(1, min(days, 730))
-    return stats_mod.activity(db, days=days)
-
-
-@app.get("/stats/attention")
-def stats_attention(db: Session = Depends(get_db)):
-    return stats_mod.attention(db)
-
-
-@app.get("/stats/highlights")
-def stats_highlights(limit: int = 10, db: Session = Depends(get_db)):
-    # Bundles top creators / longest videos / hottest tags so the dashboard
-    # only needs one extra request for the "highlights" row.
-    return stats_mod.highlights(db, limit=limit)
-
-
-# ============================================================================
-# Creators — unified X authors + manga artists, backed by app/creators.py
-# ============================================================================
-# Frontend: CreatorsView.vue lists via /creators and opens detail via
-# /creators/{screen_name}. The vue-only detail path assumes X authors
-# (manga artists have no `screen_name`, so they aren't clickable in the UI).
-# Android (Wave 5 of the structural refactor) uses /mobile/creators and
-# /mobile/creators/detail?key=... which support both kinds via the unified
-# `key` ("x:<sn>" or "a:<artist>").
-
-@app.get("/creators")
-def list_creators(
-    search: Optional[str] = None,
-    sort: str = "count",
-    media_type: Optional[str] = None,
-    db: Session = Depends(get_db),
-):
-    return creators_mod.list_creators(db, search=search, sort=sort, media_type=media_type)
-
-
-@app.get("/creators/{screen_name}")
-def creator_detail_by_sn(screen_name: str, db: Session = Depends(get_db)):
-    # The vue UI only routes here for X authors (its <router-link> uses
-    # creator.screen_name). Manga-artist detail goes through /mobile/creators/detail.
-    detail = creators_mod.creator_detail(db, f"x:{screen_name}")
-    if detail is None:
-        raise HTTPException(status_code=404, detail="creator not found")
-    return detail
-
-
-@app.get("/mobile/creators")
-def mobile_list_creators(
-    kind: Optional[str] = None,
-    search: Optional[str] = None,
-    sort: str = "count",
-    db: Session = Depends(get_db),
-):
-    # Android client sends `kind` ('all'/'manga'/'image'/'video'/'audio'); the
-    # module's list_creators takes `media_type`. 'all' or empty → no filter;
-    # 'manga' → manga artists only (X authors will return zero); 'image'/'video'
-    # → X authors filtered by that media_type. ('audio' currently has no creator
-    # source, so returns empty — kept in the enum for forward compatibility.)
-    media_type = None if not kind or kind == "all" else kind
-    return creators_mod.list_creators(db, search=search, sort=sort, media_type=media_type)
-
-
-@app.get("/mobile/creators/detail")
-def mobile_creator_detail(key: str, db: Session = Depends(get_db)):
-    # Android sends the full unified key ("x:<sn>" or "a:<artist>") so this is
-    # a direct passthrough — no x:-prefix assumption like the vue endpoint above.
-    detail = creators_mod.creator_detail(db, key)
-    if detail is None:
-        raise HTTPException(status_code=404, detail="creator not found")
-    return detail
-
-
 # ============================================================================
 # ASMR.one — mirror probe, favorites sync, downloads
 # ============================================================================
@@ -4972,166 +4699,6 @@ def push_wnacg_to_downloader(payload: schemas.ExternalDownloadRequest, db: Sessi
         return item_dir, files
 
     return _push_external_items(payload, db, build)
-
-
-# ============================================================================
-# Auto-sync scheduling endpoints
-# ============================================================================
-
-auto_sync.init()
-
-
-@app.get("/auto-sync/status", response_model=schemas.AutoSyncStatus)
-def get_auto_sync_status(db: Session = Depends(get_db)):
-    sources_status = []
-
-    # WNACG sources
-    for source in (
-        db.query(models.ExternalFavoriteSource)
-        .filter(models.ExternalFavoriteSource.source_type == "wnacg")
-        .all()
-    ):
-        sources_status.append(schemas.AutoSyncSourceStatus(
-            source_type="wnacg",
-            source_id=source.id,
-            source_name=source.name,
-            enabled=source.auto_sync_enabled or False,
-            interval_hours=source.auto_sync_interval_hours or 24,
-            last_run_at=source.auto_sync_last_run_at,
-            next_run_at=source.auto_sync_next_run_at,
-            last_status=source.auto_sync_last_status,
-            last_message=source.auto_sync_last_message,
-            running=auto_sync.is_source_active("wnacg", source.id),
-        ))
-
-    # X sources
-    for source in db.query(models.XImportSource).all():
-        sources_status.append(schemas.AutoSyncSourceStatus(
-            source_type="x",
-            source_id=source.id,
-            source_name=source.name,
-            enabled=source.auto_sync_enabled or False,
-            interval_hours=source.auto_sync_interval_hours or 24,
-            last_run_at=source.auto_sync_last_run_at,
-            next_run_at=source.auto_sync_next_run_at,
-            last_status=source.auto_sync_last_status,
-            last_message=source.auto_sync_last_message,
-            running=auto_sync.is_source_active("x", source.id),
-        ))
-
-    return {"scheduler_running": auto_sync.is_running(), "sources": sources_status}
-
-
-@app.patch("/auto-sync/wnacg/{source_id}", response_model=schemas.ExternalFavoriteSource)
-def update_wnacg_auto_sync(
-    source_id: int,
-    payload: schemas.AutoSyncConfigUpdate,
-    db: Session = Depends(get_db),
-):
-    source = get_source_or_404(source_id, db)
-    if source.source_type != "wnacg":
-        raise HTTPException(status_code=400, detail="不是 WNACG 数据源")
-
-    if payload.auto_sync_enabled is True:
-        if not source.cookie:
-            raise HTTPException(status_code=400, detail="请先保存 Cookie 再启用自动同步")
-        if not source.download_root_path:
-            raise HTTPException(status_code=400, detail="请先设置下载路径再启用自动同步")
-
-    data = payload.dict(exclude_unset=True)
-    if "proxy" in data:
-        source.proxy = (data["proxy"] or "").strip() or None
-        db.commit()
-
-    enabled = data.get("auto_sync_enabled", source.auto_sync_enabled or False)
-    interval = data.get("auto_sync_interval_hours", source.auto_sync_interval_hours or 24)
-
-    auto_sync.update_schedule("wnacg", source_id, enabled, interval)
-
-    db.refresh(source)
-    return source
-
-
-@app.patch("/auto-sync/x/{source_id}", response_model=schemas.XImportSource)
-def update_x_auto_sync(
-    source_id: int,
-    payload: schemas.AutoSyncConfigUpdate,
-    db: Session = Depends(get_db),
-):
-    source = _x_source_or_404(source_id, db)
-
-    if payload.auto_sync_enabled is True:
-        if not source.cookie:
-            raise HTTPException(status_code=400, detail="请先保存 Cookie 再启用自动同步")
-        if not source.download_root_path:
-            raise HTTPException(status_code=400, detail="请先设置下载路径再启用自动同步")
-
-    data = payload.dict(exclude_unset=True)
-    if "proxy" in data:
-        source.proxy = (data["proxy"] or "").strip() or None
-        db.commit()
-
-    enabled = data.get("auto_sync_enabled", source.auto_sync_enabled or False)
-    interval = data.get("auto_sync_interval_hours", source.auto_sync_interval_hours or 24)
-
-    auto_sync.update_schedule("x", source_id, enabled, interval)
-
-    db.refresh(source)
-    return source
-
-
-@app.post("/auto-sync/wnacg/{source_id}/trigger")
-def trigger_wnacg_auto_sync(source_id: int, db: Session = Depends(get_db)):
-    source = get_source_or_404(source_id, db)
-    if source.source_type != "wnacg":
-        raise HTTPException(status_code=400, detail="不是 WNACG 数据源")
-    if not source.cookie:
-        raise HTTPException(status_code=400, detail="请先保存 Cookie")
-    if not source.download_root_path:
-        raise HTTPException(status_code=400, detail="请先设置下载路径")
-    if not auto_sync.trigger_now("wnacg", source_id):
-        raise HTTPException(status_code=409, detail="该数据源正在自动同步中")
-    return {"message": "已触发自动同步+下载"}
-
-
-@app.post("/auto-sync/x/{source_id}/trigger")
-def trigger_x_auto_sync(source_id: int, db: Session = Depends(get_db)):
-    source = _x_source_or_404(source_id, db)
-    if not source.cookie:
-        raise HTTPException(status_code=400, detail="请先保存 Cookie")
-    if not source.download_root_path:
-        raise HTTPException(status_code=400, detail="请先设置下载路径")
-    if not auto_sync.trigger_now("x", source_id):
-        raise HTTPException(status_code=409, detail="该数据源正在自动同步中")
-    return {"message": "已触发自动同步+下载"}
-
-
-@app.get("/auto-sync/logs", response_model=List[schemas.AutoSyncLogEntry])
-def get_auto_sync_logs(
-    source_type: Optional[str] = None,
-    source_id: Optional[int] = None,
-    limit: int = 50,
-    db: Session = Depends(get_db),
-):
-    query = db.query(models.AutoSyncLog)
-    if source_type:
-        query = query.filter(models.AutoSyncLog.source_type == source_type)
-    if source_id:
-        query = query.filter(models.AutoSyncLog.source_id == source_id)
-    return query.order_by(models.AutoSyncLog.id.desc()).limit(min(limit, 200)).all()
-
-
-@app.get("/auto-sync/proxy")
-def get_auto_sync_global_proxy():
-    from app.external_config import get_global_proxy
-    return {"proxy": get_global_proxy()}
-
-
-@app.patch("/auto-sync/proxy")
-def update_auto_sync_global_proxy(payload: schemas.GlobalProxyUpdate):
-    from app.external_config import update_global_proxy
-    new_proxy = update_global_proxy(payload.proxy)
-    return {"proxy": new_proxy}
 
 
 # Mount frontend build directory (SPA) at the root
