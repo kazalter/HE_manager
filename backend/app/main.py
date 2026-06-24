@@ -42,10 +42,22 @@ from .x_import import archive as x_archive
 from .x_import import importer as x_importer
 from .x_import import storage as x_storage
 from .x_import import sync as x_sync
+from .routers import auth as auth_routes
 from .routers import auto_sync as auto_sync_routes
 from .routers import creators as creators_routes
 from .routers import dedup as dedup_routes
 from .routers import stats as stats_routes
+from .services import login_throttle
+
+LOGIN_FAILURES = login_throttle.LOGIN_FAILURES
+LOGIN_FAILURE_WINDOW_SECONDS = login_throttle.LOGIN_FAILURE_WINDOW_SECONDS
+LOGIN_MAX_FAILURES = login_throttle.LOGIN_MAX_FAILURES
+LOGIN_MAX_FAILURES_PER_USER = login_throttle.LOGIN_MAX_FAILURES_PER_USER
+_TRUST_FORWARDED_FOR = login_throttle._TRUST_FORWARDED_FOR
+_client_ip = login_throttle._client_ip
+_login_failure_key = login_throttle._login_failure_key
+_pruned_login_failures = login_throttle._pruned_login_failures
+_record_login_failure = login_throttle._record_login_failure
 
 
 
@@ -552,6 +564,7 @@ app.include_router(stats_routes.router)
 app.include_router(creators_routes.router)
 app.include_router(dedup_routes.router)
 app.include_router(auto_sync_routes.router)
+app.include_router(auth_routes.router)
 
 THUMBNAIL_DIR = os.path.join(os.getcwd(), ".thumbnails")
 os.makedirs(THUMBNAIL_DIR, exist_ok=True)
@@ -1195,21 +1208,6 @@ os.makedirs(EXTERNAL_COVERS_DIR, exist_ok=True)
 DOWNLOAD_JOBS = {}
 MANGA_PROFILE_JOBS = {}
 MANGA_METADATA_JOBS = {}
-LOGIN_FAILURES: dict[str, list[float]] = {}
-
-LOGIN_FAILURE_WINDOW_SECONDS = int(os.getenv("HE_LOGIN_FAILURE_WINDOW_SECONDS", "300"))
-LOGIN_MAX_FAILURES = int(os.getenv("HE_LOGIN_MAX_FAILURES", "5"))
-# Per-username backstop independent of client IP. The IP+username bucket above
-# can be defeated by an attacker who rotates a forged X-Forwarded-For on every
-# request (each forged IP gets its own bucket); this counter keys on the
-# username alone so it survives that, while staying loose enough not to lock a
-# legitimate user out from fat-fingering the password a few times.
-LOGIN_MAX_FAILURES_PER_USER = int(os.getenv("HE_LOGIN_MAX_FAILURES_PER_USER", "15"))
-# Only honour X-Forwarded-For when explicitly told to (i.e. a trusted reverse
-# proxy sets it). Off by default so a public client cannot spoof its source IP
-# to escape the throttle — under a raw FRP tunnel every request then shares the
-# frpc loopback peer, which is exactly the conservative behaviour we want.
-_TRUST_FORWARDED_FOR = os.getenv("HE_TRUST_FORWARDED_FOR", "").lower() in {"1", "true", "yes", "on"}
 HE_PUBLIC_URL = os.getenv("HE_PUBLIC_URL", "").strip().rstrip("/")
 HE_CALLBACK_TOKEN = os.getenv("HE_CALLBACK_TOKEN", "").strip()
 
@@ -2535,172 +2533,6 @@ def cleanup_orphaned_thumbnails():
 @app.get("/")
 def read_root():
     return {"message": "Welcome to HE Manager API"}
-
-
-@app.get("/auth/status", response_model=schemas.AuthStatus)
-def auth_status(db: Session = Depends(get_db)):
-    return {"has_users": db.query(models.User).first() is not None}
-
-
-def _client_ip(request: Request) -> str:
-    # X-Forwarded-For is client-controllable over a raw FRP tunnel, so only
-    # trust it when a known reverse proxy is in front (HE_TRUST_FORWARDED_FOR).
-    # Otherwise use the direct peer — under FRP that collapses every public
-    # caller onto the frpc loopback peer, which means the throttle can't be
-    # sidestepped by forging a fresh source IP per request.
-    if _TRUST_FORWARDED_FOR:
-        forwarded = (request.headers.get("x-forwarded-for") or "").split(",", 1)[0].strip()
-        if forwarded:
-            return forwarded
-    return request.client.host if request.client else "unknown"
-
-
-def _login_failure_key(request: Request, username: str) -> str:
-    return f"{_client_ip(request)}:{username.strip().lower()}"
-
-
-def _pruned_login_failures(key: str) -> list[float]:
-    now = time.time()
-    failures = [ts for ts in LOGIN_FAILURES.get(key, []) if now - ts <= LOGIN_FAILURE_WINDOW_SECONDS]
-    if failures:
-        LOGIN_FAILURES[key] = failures
-    else:
-        LOGIN_FAILURES.pop(key, None)
-    return failures
-
-
-def _record_login_failure(key: str) -> None:
-    failures = _pruned_login_failures(key)
-    failures.append(time.time())
-    LOGIN_FAILURES[key] = failures
-
-
-@app.post("/auth/bootstrap", response_model=schemas.AuthToken)
-def bootstrap_first_user(payload: schemas.UserCreate, db: Session = Depends(get_db)):
-    if db.query(models.User).first():
-        raise HTTPException(status_code=409, detail="Users already exist")
-
-    user = models.User(
-        username=payload.username.strip(),
-        password_hash=auth.hash_password(payload.password),
-        is_admin=True,
-        is_active=True,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    token = auth.create_access_token(db, user)
-    return {"access_token": token, "user": user}
-
-
-@app.post("/auth/login", response_model=schemas.AuthToken)
-def login(payload: schemas.UserLogin, request: Request, db: Session = Depends(get_db)):
-    failure_key = _login_failure_key(request, payload.username)
-    # Per-username key has no IP component, so a forged X-Forwarded-For can't
-    # spawn a fresh bucket to dodge it.
-    user_key = f"user:{payload.username.strip().lower()}"
-    if (
-        len(_pruned_login_failures(failure_key)) >= LOGIN_MAX_FAILURES
-        or len(_pruned_login_failures(user_key)) >= LOGIN_MAX_FAILURES_PER_USER
-    ):
-        raise HTTPException(status_code=429, detail="登录失败次数过多，请稍后再试")
-
-    user = db.query(models.User).filter(models.User.username == payload.username.strip()).first()
-    if not user or not user.is_active or not auth.verify_password(payload.password, user.password_hash):
-        _record_login_failure(failure_key)
-        _record_login_failure(user_key)
-        raise HTTPException(status_code=401, detail="用户名或密码错误")
-
-    LOGIN_FAILURES.pop(failure_key, None)
-    LOGIN_FAILURES.pop(user_key, None)
-    token = auth.create_access_token(db, user)
-    return {"access_token": token, "user": user}
-
-
-@app.post("/auth/logout")
-def logout(request: Request, db: Session = Depends(get_db)):
-    raw_token = auth.extract_token(
-        authorization=request.headers.get("authorization"),
-        query_token=request.query_params.get("token"),
-    )
-    if raw_token:
-        auth.revoke_access_token(db, raw_token)
-    return {"message": "Logged out"}
-
-
-@app.get("/auth/me", response_model=schemas.UserRead)
-def get_me(user: models.User = Depends(auth.get_current_user)):
-    return user
-
-
-@app.get("/users", response_model=List[schemas.UserRead])
-def list_users(_: models.User = Depends(auth.require_admin), db: Session = Depends(get_db)):
-    return db.query(models.User).order_by(models.User.id.asc()).all()
-
-
-@app.post("/users", response_model=schemas.UserRead)
-def create_user(payload: schemas.UserCreate, _: models.User = Depends(auth.require_admin), db: Session = Depends(get_db)):
-    username = payload.username.strip()
-    if db.query(models.User).filter(models.User.username == username).first():
-        raise HTTPException(status_code=409, detail="用户名已存在")
-
-    user = models.User(
-        username=username,
-        password_hash=auth.hash_password(payload.password),
-        is_admin=payload.is_admin,
-        is_active=True,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
-
-
-@app.put("/users/{user_id}", response_model=schemas.UserRead)
-def update_user(user_id: int, payload: schemas.UserUpdate, current_user: models.User = Depends(auth.require_admin), db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if payload.username is not None:
-        username = payload.username.strip()
-        existing = db.query(models.User).filter(models.User.username == username).first()
-        if existing and existing.id != user_id:
-            raise HTTPException(status_code=409, detail="用户名已存在")
-        user.username = username
-
-    if payload.password is not None:
-        user.password_hash = auth.hash_password(payload.password)
-
-    if payload.is_admin is not None:
-        # Prevent self-demotion to avoid losing admin access
-        if current_user.id == user_id and payload.is_admin is False:
-            raise HTTPException(status_code=400, detail="不能撤销自己的管理员权限")
-        user.is_admin = payload.is_admin
-
-    if payload.is_active is not None:
-        # Prevent deactivating oneself
-        if current_user.id == user_id and payload.is_active is False:
-            raise HTTPException(status_code=400, detail="不能停用自己的账号")
-        user.is_active = payload.is_active
-
-    db.commit()
-    db.refresh(user)
-    return user
-
-
-@app.delete("/users/{user_id}")
-def delete_user(user_id: int, current_user: models.User = Depends(auth.require_admin), db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if current_user.id == user_id:
-        raise HTTPException(status_code=400, detail="不能删除自己的账号")
-
-    db.delete(user)
-    db.commit()
-    return {"message": "User deleted"}
 
 
 @app.get("/search-folder")
