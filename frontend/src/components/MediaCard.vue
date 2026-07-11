@@ -83,7 +83,8 @@ const hoverShadowClass = (type: Media['media_type']) => {
 <template>
   <button
     :style="{ animationDelay: `${Math.min(24, index) * 35}ms` }"
-    class="lazy-card animate-fluid-entrance tap-active group relative text-left flex flex-col cursor-pointer rounded-2xl focus:outline-none focus:ring-2 focus:ring-accent/40"
+    :class="{ 'animate-fluid-entrance': index < 16 }"
+    class="lazy-card tap-active group relative text-left flex flex-col cursor-pointer rounded-2xl focus:outline-none focus:ring-2 focus:ring-accent/40"
     style="transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
   >
     <div
@@ -93,6 +94,7 @@ const hoverShadowClass = (type: Media['media_type']) => {
       <img
         :src="getThumb(media.cover_path)"
         :alt="media.title"
+        :loading="eager || index < 12 ? 'eager' : 'lazy'"
         decoding="async"
         class="w-full h-full object-cover group-hover:scale-[1.04]"
         style="transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)"
@@ -112,7 +114,7 @@ const hoverShadowClass = (type: Media['media_type']) => {
       </div>
 
       <!-- Type Badge -->
-      <div class="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-black/65 backdrop-blur-md border border-white/10 flex items-center gap-1 z-20">
+      <div class="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-black/75 border border-white/10 flex items-center gap-1 z-20">
         <Film v-if="media.media_type === 'video'" :size="9" class="text-accent" />
         <Book v-else-if="media.media_type === 'manga'" :size="9" class="text-purple-300" />
         <Headphones v-else-if="media.media_type === 'audio'" :size="9" class="text-cyan-300" />
@@ -121,12 +123,12 @@ const hoverShadowClass = (type: Media['media_type']) => {
       </div>
 
       <!-- Favorite Badge -->
-      <div v-if="media.favorite" class="absolute top-2 left-2 w-6 h-6 rounded-md bg-black/65 backdrop-blur-md border border-white/10 flex items-center justify-center text-amber-300 z-20">
+      <div v-if="media.favorite" class="absolute top-2 left-2 w-6 h-6 rounded-md bg-black/75 border border-white/10 flex items-center justify-center text-amber-300 z-20">
         <Star :size="11" fill="currentColor" />
       </div>
 
       <!-- Progress Badge (Manga) -->
-      <div v-if="media.media_type === 'manga' && media.page_count && progressPercent(media) > 0" class="absolute left-2 bottom-3 rounded-md bg-black/65 backdrop-blur-md border border-white/10 px-1.5 py-0.5 z-20">
+      <div v-if="media.media_type === 'manga' && media.page_count && progressPercent(media) > 0" class="absolute left-2 bottom-3 rounded-md bg-black/75 border border-white/10 px-1.5 py-0.5 z-20">
         <span class="text-[9px] font-black text-white/90">{{ mangaProgressText(media) }}</span>
       </div>
 

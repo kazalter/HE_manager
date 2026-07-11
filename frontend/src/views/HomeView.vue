@@ -530,9 +530,10 @@ onMounted(async () => {
       >
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 md:gap-7">
           <MediaCard
-            v-for="item in mediaList"
+            v-for="(item, index) in mediaList"
             :key="item.id"
             :media="item"
+            :index="index"
             @click="openMedia(item)"
           />
         </div>

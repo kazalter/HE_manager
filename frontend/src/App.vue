@@ -117,8 +117,8 @@ const isEmbed = computed(() => {
 .glow-sphere {
   position: absolute;
   border-radius: 50%;
-  filter: blur(120px);
-  opacity: 0.12;
+  filter: blur(90px);
+  opacity: 0.09;
   pointer-events: none;
   will-change: transform;
   backface-visibility: hidden;
@@ -184,6 +184,25 @@ const isEmbed = computed(() => {
 .page-fade-leave-to {
   opacity: 0;
   transform: translateY(-12px) scale(0.995);
+}
+
+@media (max-width: 1100px) {
+  .sphere-3 {
+    display: none;
+  }
+}
+
+@media (max-width: 700px), (prefers-reduced-motion: reduce) {
+  .glow-sphere {
+    filter: blur(70px);
+    opacity: 0.06;
+    animation: none !important;
+  }
+
+  .page-fade-enter-active,
+  .page-fade-leave-active {
+    transition-duration: 0.15s;
+  }
 }
 
 .custom-scrollbar::-webkit-scrollbar {
