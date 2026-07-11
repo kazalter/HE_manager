@@ -34,52 +34,109 @@ const submit = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen w-full bg-background text-white flex items-center justify-center px-6">
-    <div class="fixed inset-0 pointer-events-none bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.07),transparent_32%),linear-gradient(135deg,rgba(255,255,255,0.03),transparent_45%)]"></div>
+  <div class="min-h-screen w-full bg-background text-white flex items-center justify-center px-6 relative overflow-hidden">
+    <!-- Apple-style Dynamic Ambient Glow -->
+    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
+      <div class="glow-sphere sphere-1"></div>
+      <div class="glow-sphere sphere-2"></div>
+      <div class="glow-sphere sphere-3"></div>
+    </div>
+
     <form
       @submit.prevent="submit"
-      class="relative z-10 w-full max-w-sm bg-white/[0.04] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-5"
+      class="relative z-10 w-full max-w-sm bg-white/[0.02] backdrop-blur-3xl border border-white/8 rounded-3xl p-8 shadow-[inset_0_1px_1px_rgba(255,255,255,0.08),0_24px_50px_-12px_rgba(0,0,0,0.5)] space-y-6"
     >
-      <div>
-        <div class="w-11 h-11 rounded-xl bg-accent text-white font-black flex items-center justify-center mb-4">HE</div>
-        <h1 class="text-2xl font-black tracking-tight">{{ modeText }}</h1>
-        <p class="text-sm text-white/45 mt-1">{{ hintText }}</p>
+      <div class="text-center sm:text-left">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-accent to-indigo-400 text-white font-black flex items-center justify-center mx-auto sm:mx-0 mb-5 shadow-lg shadow-accent/25">
+          <span class="text-base tracking-wide">HE</span>
+        </div>
+        <h1 class="text-2xl font-black tracking-tight text-white/95">{{ modeText }}</h1>
+        <p class="text-xs text-white/45 mt-1.5 font-medium leading-relaxed">{{ hintText }}</p>
       </div>
 
-      <p v-if="startupError" class="text-sm text-amber-100 bg-amber-400/10 border border-amber-300/20 rounded-xl px-3 py-2">
+      <div v-if="startupError" class="text-xs text-amber-200 bg-amber-500/10 border border-amber-500/20 rounded-2xl px-4 py-3 leading-relaxed shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
         {{ startupError }}
-      </p>
+      </div>
 
-      <label class="block space-y-2">
-        <span class="text-xs font-bold text-white/55">用户名</span>
-        <input
-          v-model="username"
-          autocomplete="username"
-          class="w-full bg-black/25 border border-white/10 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-accent/50"
-        />
-      </label>
+      <div class="space-y-4">
+        <label class="block space-y-2">
+          <span class="text-xs font-bold text-white/55 tracking-wider uppercase">用户名</span>
+          <input
+            v-model="username"
+            autocomplete="username"
+            placeholder="请输入用户名"
+            class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:bg-white/10 focus:border-accent/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.15)] transition-all duration-300"
+          />
+        </label>
 
-      <label class="block space-y-2">
-        <span class="text-xs font-bold text-white/55">密码</span>
-        <input
-          v-model="password"
-          type="password"
-          autocomplete="current-password"
-          class="w-full bg-black/25 border border-white/10 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-accent/50"
-        />
-      </label>
+        <label class="block space-y-2">
+          <span class="text-xs font-bold text-white/55 tracking-wider uppercase">密码</span>
+          <input
+            v-model="password"
+            type="password"
+            autocomplete="current-password"
+            placeholder="请输入密码"
+            class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:bg-white/10 focus:border-accent/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.15)] transition-all duration-300"
+          />
+        </label>
+      </div>
 
-      <p v-if="errorMessage" class="text-sm text-red-200 bg-red-400/10 border border-red-400/20 rounded-xl px-3 py-2">
+      <div v-if="errorMessage" class="text-xs text-red-200 bg-red-500/10 border border-red-500/20 rounded-2xl px-4 py-3 leading-relaxed shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
         {{ errorMessage }}
-      </p>
+      </div>
 
       <button
         type="submit"
         :disabled="loading || !username.trim() || !password"
-        class="w-full h-12 rounded-xl bg-accent text-white font-black hover:brightness-110 disabled:opacity-45 disabled:cursor-not-allowed transition-all"
+        class="w-full h-12 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 text-white font-black hover:opacity-95 active:scale-[0.98] disabled:opacity-40 disabled:scale-100 disabled:cursor-not-allowed shadow-lg shadow-indigo-600/20 transition-all duration-300 cursor-pointer"
       >
-        {{ loading ? '处理中' : modeText }}
+        <span v-if="loading" class="flex items-center justify-center gap-2">
+          <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          正在安全连接
+        </span>
+        <span v-else>{{ modeText }}</span>
       </button>
     </form>
   </div>
 </template>
+
+<style>
+.glow-sphere {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(140px);
+  opacity: 0.15;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.sphere-1 {
+  top: -20%;
+  left: -10%;
+  width: 60%;
+  height: 60%;
+  background: radial-gradient(circle, #6366f1 0%, transparent 70%);
+  animation: float-slow 25s infinite alternate ease-in-out;
+}
+
+.sphere-2 {
+  bottom: -15%;
+  right: -10%;
+  width: 55%;
+  height: 55%;
+  background: radial-gradient(circle, #8b5cf6 0%, transparent 70%);
+  animation: float-slow-reverse 20s infinite alternate ease-in-out;
+}
+
+.sphere-3 {
+  top: 30%;
+  right: 15%;
+  width: 40%;
+  height: 40%;
+  background: radial-gradient(circle, #06b6d4 0%, transparent 70%);
+  animation: float-slow-alt 30s infinite alternate ease-in-out;
+}
+</style>

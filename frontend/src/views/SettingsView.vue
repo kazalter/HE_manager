@@ -24,6 +24,10 @@ const modes: Array<{ id: Folder['scan_mode']; label: string; description: string
   { id: 'audio_work', label: '音频作品', description: '把每个文件夹识别为一个音频作品（ASMR 等，含 tracks.json 时优先读取）' },
 ]
 
+const scanModeLabel = (mode: Folder['scan_mode']) => {
+  return modes.find(item => item.id === mode)?.label || mode
+}
+
 const selectTheme = (themeId: string) => {
   selectedTheme.value = themeId
   applyTheme(themeId)
@@ -141,7 +145,7 @@ onMounted(fetchFolders)
     </header>
 
     <div class="space-y-8">
-      <section class="border border-white/10 bg-sidebar/45 backdrop-blur-xl rounded-2xl p-6 md:p-8 shadow-2xl">
+      <section class="border border-white/6 bg-white/[0.02] backdrop-blur-3xl rounded-3xl p-6 md:p-8 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)]">
         <div class="flex items-center gap-3 mb-6">
           <Palette class="text-accent" />
           <div>
@@ -154,11 +158,13 @@ onMounted(fetchFolders)
           <button
             v-for="theme in themes"
             :key="theme.id"
+            type="button"
             @click="selectTheme(theme.id)"
-            :class="selectedTheme === theme.id ? 'border-accent bg-accent/10 text-white' : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/10'"
-            class="relative text-left rounded-xl border p-4 transition-all min-h-[136px]"
+            :aria-pressed="selectedTheme === theme.id"
+            :class="selectedTheme === theme.id ? 'border-accent bg-accent/15 text-white shadow-lg shadow-accent/5' : 'border-white/8 bg-white/3 text-white/75 hover:bg-white/8 hover:border-white/15'"
+            class="relative text-left rounded-xl border p-4 transition-all min-h-[136px] cursor-pointer"
           >
-            <span v-if="selectedTheme === theme.id" class="absolute right-3 top-3 w-7 h-7 rounded-lg bg-accent text-white flex items-center justify-center">
+            <span v-if="selectedTheme === theme.id" class="absolute right-3 top-3 w-7 h-7 rounded-lg bg-accent text-white flex items-center justify-center shadow-md shadow-accent/10">
               <Check :size="16" />
             </span>
 
@@ -176,7 +182,7 @@ onMounted(fetchFolders)
 
           <!-- Custom Theme Picker -->
           <label
-            :class="selectedTheme.startsWith('#') ? 'border-accent bg-accent/10 text-white' : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/10'"
+            :class="selectedTheme.startsWith('#') ? 'border-accent bg-accent/15 text-white shadow-lg shadow-accent/5' : 'border-white/8 bg-white/3 text-white/75 hover:bg-white/8 hover:border-white/15'"
             class="relative text-left rounded-xl border p-4 transition-all min-h-[136px] block cursor-pointer"
           >
             <input 
@@ -187,7 +193,7 @@ onMounted(fetchFolders)
               title="选择自定义颜色"
             />
 
-            <span v-if="selectedTheme.startsWith('#')" class="absolute right-3 top-3 w-7 h-7 rounded-lg bg-accent text-white flex items-center justify-center pointer-events-none">
+            <span v-if="selectedTheme.startsWith('#')" class="absolute right-3 top-3 w-7 h-7 rounded-lg bg-accent text-white flex items-center justify-center shadow-md shadow-accent/10 pointer-events-none">
               <Check :size="16" />
             </span>
 
@@ -206,30 +212,30 @@ onMounted(fetchFolders)
         </div>
       </section>
 
-      <section class="border border-white/10 bg-sidebar/45 backdrop-blur-xl rounded-2xl p-6 md:p-8 shadow-2xl">
-        <h2 class="text-xl font-bold flex items-center gap-3 mb-6 text-white/90">
-          <HardDrive class="text-green-400" />
+      <section class="border border-white/6 bg-white/[0.02] backdrop-blur-3xl rounded-3xl p-6 md:p-8 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)]">
+        <h2 class="text-xs font-black tracking-wider uppercase text-white/55 mb-6 flex items-center gap-3">
+          <HardDrive class="text-green-400" :size="18" />
           已挂载目录
         </h2>
 
-        <div v-if="folders.length === 0" class="text-center py-12 border-2 border-dashed border-white/10 rounded-xl">
-          <p class="text-white/35 font-medium">尚未添加任何扫描来源</p>
+        <div v-if="folders.length === 0" class="text-center py-12 border border-dashed border-white/10 rounded-xl bg-white/[0.01]">
+          <p class="text-white/35 font-medium text-sm">尚未添加任何扫描来源</p>
         </div>
 
         <div v-else class="space-y-4">
           <div
             v-for="folder in folders"
             :key="folder.id"
-            class="group flex flex-wrap items-center justify-between gap-4 p-5 bg-black/20 hover:bg-black/35 border border-white/10 rounded-xl transition-all"
+            class="group flex flex-wrap items-center justify-between gap-4 p-5 bg-white/[0.01] hover:bg-white/5 border border-white/8 rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] transition-all duration-300"
           >
-            <div class="min-w-0">
-              <p class="font-mono text-base md:text-lg text-white/90 break-all">{{ folder.path }}</p>
+            <div class="min-w-0 flex-1">
+              <p class="font-mono text-sm md:text-base text-white/90 break-all" :title="folder.path">{{ folder.path }}</p>
               <div class="flex flex-wrap items-center gap-3 mt-2">
-                <span class="text-[10px] font-black uppercase bg-white/10 px-2 py-0.5 rounded border border-white/10 text-white/65">
-                  {{ folder.scan_mode }}
+                <span class="text-[10px] font-black bg-white/10 px-2 py-0.5 rounded border border-white/10 text-white/65">
+                  {{ scanModeLabel(folder.scan_mode) }}
                 </span>
-                <span v-if="folder.scan_mode === 'video' || folder.scan_mode === 'auto'" class="text-[10px] font-black uppercase bg-white/10 px-2 py-0.5 rounded border border-white/10 text-white/65">
-                  {{ folder.thumbnail_enabled ? `THUMB ${folder.thumbnail_interval}s` : 'THUMB OFF' }}
+                <span v-if="folder.scan_mode === 'video' || folder.scan_mode === 'auto'" class="text-[10px] font-black bg-white/10 px-2 py-0.5 rounded border border-white/10 text-white/65">
+                  {{ folder.thumbnail_enabled ? `预览间隔 ${folder.thumbnail_interval} 秒` : '进度预览关闭' }}
                 </span>
                 <p class="text-sm flex items-center gap-2" :class="folder.status === 'scanning' ? 'text-accent animate-pulse' : 'text-white/80'">
                   <span class="w-1.5 h-1.5 rounded-full" :class="folder.status === 'scanning' ? 'bg-accent shadow-[0_0_8px_rgba(129,140,248,0.8)]' : 'bg-green-500'"></span>
@@ -241,22 +247,24 @@ onMounted(fetchFolders)
               </div>
             </div>
 
-            <div class="flex gap-2">
+            <div class="flex gap-2 shrink-0">
               <button
                 @click="scanFolder(folder.id)"
                 :disabled="folder.status === 'scanning'"
-                class="w-11 h-11 rounded-xl bg-white/5 hover:bg-accent/20 hover:text-accent flex items-center justify-center transition-all disabled:opacity-50 active:scale-90"
+                class="h-11 px-3 rounded-xl bg-white/5 hover:bg-accent/20 hover:text-accent flex items-center justify-center gap-2 transition-all disabled:opacity-50 active:scale-95"
                 title="重新扫描"
               >
                 <RefreshCw :class="{ 'animate-spin text-accent': folder.status === 'scanning' }" :size="20" />
+                <span class="hidden lg:inline text-xs font-bold">{{ folder.status === 'scanning' ? '扫描中' : '重新扫描' }}</span>
               </button>
 
               <button
                 @click="removeFolder(folder.id)"
-                class="w-11 h-11 rounded-xl bg-white/5 hover:bg-red-500/10 hover:text-red-400 flex items-center justify-center transition-all active:scale-90"
+                class="h-11 px-3 rounded-xl bg-red-500/5 border border-red-400/10 text-red-300/70 hover:bg-red-500/15 hover:text-red-200 hover:border-red-400/25 flex items-center justify-center gap-2 transition-all active:scale-95"
                 title="从库中移除"
               >
                 <Trash2 :size="20" />
+                <span class="hidden lg:inline text-xs font-bold">移除</span>
               </button>
             </div>
           </div>

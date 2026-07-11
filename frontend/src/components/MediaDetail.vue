@@ -46,6 +46,81 @@ let lastMangaWheelAt = 0
 let mangaProgressTimer: number | undefined
 let lastSavedMangaProgress = -1
 
+let longPressTimer: number | undefined
+let longPressDirection: 'forward' | 'rewind' | null = null
+let originalPlaybackRate = 1
+let rewindInterval: number | undefined
+let rewoundSeconds = 0
+
+const VIDEO_SEEK_STEP_SECONDS = 10
+const LONG_PRESS_DELAY_MS = 400
+const REWIND_REPEAT_INTERVAL_MS = 250
+
+// --- Play Mode Configuration ---
+type PlayMode = 'stop' | 'loop' | 'order' | 'shuffle'
+
+const PLAY_MODES: PlayMode[] = ['stop', 'loop', 'order', 'shuffle']
+const PLAY_MODE_LABELS: Record<PlayMode, string> = {
+  stop: '播放完暂停',
+  loop: '单片循环',
+  order: '顺序播放',
+  shuffle: '随机播放',
+}
+
+const savedPlayMode = localStorage.getItem('he_play_mode') as PlayMode | null
+const playMode = ref<PlayMode>(savedPlayMode && PLAY_MODES.includes(savedPlayMode) ? savedPlayMode : 'stop')
+
+const togglePlayMode = () => {
+  const idx = PLAY_MODES.indexOf(playMode.value)
+  const nextMode = PLAY_MODES[(idx + 1) % PLAY_MODES.length]
+  playMode.value = nextMode
+  localStorage.setItem('he_play_mode', nextMode)
+  if (artInstance) {
+    artInstance.option.loop = nextMode === 'loop'
+  }
+}
+
+const playModeLabel = computed(() => PLAY_MODE_LABELS[playMode.value])
+
+const getPlayModeIconHtml = (mode: PlayMode) => {
+  let icon = ''
+  if (mode === 'loop') {
+    icon = '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 10h1v4"/>'
+  } else if (mode === 'order') {
+    icon = '<path d="M4 6h8"/><path d="M4 12h5"/><path d="M4 18h8"/><path d="m15 9 5 3-5 3Z"/>'
+  } else if (mode === 'shuffle') {
+    icon = '<path d="M3 6h3c5 0 5 12 10 12h5"/><path d="m18 15 3 3-3 3"/><path d="M3 18h3c2.1 0 3.3-2.1 4.5-4.5"/><path d="M13.5 8.5C14.7 6.6 16 6 18 6h3"/><path d="m18 3 3 3-3 3"/>'
+  } else {
+    icon = '<rect x="7" y="7" width="10" height="10" rx="2"/>'
+  }
+
+  return `<span data-play-mode="${mode}" aria-hidden="true" style="display:flex;align-items:center;justify-content:center;width:22px;height:22px;color:inherit"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icon}</svg></span>`
+}
+
+const updatePlayModeControl = (control: HTMLElement) => {
+  control.innerHTML = getPlayModeIconHtml(playMode.value)
+  // Artplayer's tooltip is rendered from aria-label (hint.css), not title/data-tooltip.
+  control.setAttribute('aria-label', playModeLabel.value)
+  control.setAttribute('title', playModeLabel.value)
+}
+
+// --- Manga thumbnail strip (virtual scroll + drag) ---
+const thumbStripRef = ref<HTMLDivElement | null>(null)
+const thumbStripScroll = ref(0)
+const hoverThumbIndex = ref(-1)
+const hoverThumbX = ref(0)
+const hoverThumbY = ref(0)
+let isDragging = false
+let dragStartX = 0
+let dragScrollStart = 0
+let dragMoved = false
+
+const THUMB_W = 110
+const THUMB_H = 148
+const THUMB_GAP = 12
+const THUMB_PAD = 24
+const THUMB_BUFFER = 5
+
 const VOLUME_WHEEL_STEP = 0.05
 const PROGRESS_SAVE_INTERVAL_MS = 5000
 const MANGA_WHEEL_INTERVAL_MS = 320
@@ -216,9 +291,18 @@ const applyMediaPatch = (media: Media) => {
   emit('updated', { ...currentMedia.value })
 }
 
-const updateMedia = async (payload: Partial<Pick<Media, 'duration' | 'favorite' | 'rating' | 'view_status' | 'progress' | 'title' | 'source_url' | 'source_site'>>) => {
-  const res = await axios.patch(`${API_BASE_URL}/media/${currentMedia.value.id}`, payload)
-  applyMediaPatch(res.data)
+const updateMedia = async (
+  payload: Partial<Pick<Media, 'duration' | 'favorite' | 'rating' | 'view_status' | 'progress' | 'title' | 'source_url' | 'source_site'>>,
+  mediaId = currentMedia.value.id,
+) => {
+  const res = await axios.patch(`${API_BASE_URL}/media/${mediaId}`, payload)
+  if (currentMedia.value.id === mediaId) {
+    applyMediaPatch(res.data)
+  } else {
+    // A progress request may finish after playback already moved to another item.
+    // Keep the parent list fresh without replacing the newly selected media.
+    emit('updated', { ...res.data })
+  }
 }
 
 const setRating = async (score: number) => {
@@ -351,11 +435,12 @@ const inferredStatus = (progress: number, duration: number | null): Media['view_
   return 'viewing'
 }
 
-const saveVideoProgress = async (force = false) => {
+const saveVideoProgress = async (force = false, progressOverride?: number) => {
   const video = progressVideoElement
   if (!video || !isVideo.value) return
 
-  const progress = Math.max(0, Math.floor(video.currentTime || 0))
+  const mediaId = currentMedia.value.id
+  const progress = Math.max(0, Math.floor(progressOverride ?? (video.currentTime || 0)))
   const duration = Number.isFinite(video.duration) && video.duration > 0
     ? Math.floor(video.duration)
     : currentMedia.value.duration
@@ -375,7 +460,7 @@ const saveVideoProgress = async (force = false) => {
   emit('updated', { ...currentMedia.value })
 
   try {
-    await updateMedia({ progress, duration: duration ?? undefined })
+    await updateMedia({ progress, duration: duration ?? undefined }, mediaId)
   } catch (err) {
     console.error('Failed to save video progress:', err)
   }
@@ -425,10 +510,27 @@ const handleVideoLoadedMetadata = () => {
 
 const handleVideoEnded = () => {
   const video = progressVideoElement
-  if (video && video.duration) {
-    video.currentTime = video.duration
+  const completedAt = video && Number.isFinite(video.duration) ? video.duration : undefined
+
+  // Artplayer has already restarted from zero in loop mode by the time this
+  // listener runs. Persist completion without seeking the live video back to
+  // the end, otherwise it gets trapped in an ended/replay flicker loop.
+  void saveVideoProgress(true, completedAt)
+
+  if (playMode.value === 'order') {
+    nextMedia()
+  } else if (playMode.value === 'shuffle') {
+    if (props.allMedia && props.allMedia.length > 1) {
+      let randIndex = Math.floor(Math.random() * props.allMedia.length)
+      if (randIndex === currentIndex.value) {
+        randIndex = (randIndex + 1) % props.allMedia.length
+      }
+      const next = props.allMedia[randIndex]
+      currentMedia.value = next
+      currentPage.value = 0
+      emit('navigate', next)
+    }
   }
-  saveVideoProgress(true)
 }
 
 const handleVideoTimeUpdate = () => {
@@ -528,6 +630,7 @@ const initArtplayer = async () => {
     url: videoUrl.value,
     volume: 0.5,
     autoplay: true,
+    loop: playMode.value === 'loop',
     pip: true,
     autoSize: true,
     autoMini: true,
@@ -544,6 +647,23 @@ const initArtplayer = async () => {
     autoPlayback: true,
     airplay: true,
     theme: '#818cf8',
+    controls: [
+      {
+        name: 'playMode',
+        position: 'right',
+        index: 10,
+        html: getPlayModeIconHtml(playMode.value),
+        tooltip: playModeLabel.value,
+        click: function (art: any, event: Event) {
+          togglePlayMode()
+          const btnEl = event.currentTarget as HTMLElement | null
+          if (btnEl) {
+            updatePlayModeControl(btnEl)
+          }
+          art.notice.show = `播放模式: ${playModeLabel.value}`
+        }
+      }
+    ],
     plugins,
   })
 
@@ -563,10 +683,14 @@ watch(
 
     if (newVal.media_type === 'manga') {
       totalMangaPages.value = null
+      hoverThumbIndex.value = -1
       if (!newVal.is_missing) {
         try {
           const res = await axios.get(`${API_BASE_URL}/manga/${newVal.id}/pages`)
           totalMangaPages.value = res.data.total_pages
+          scrollThumbStripToPage(currentPage.value, false)
+          // Trigger batch thumbnail generation in background
+          axios.post(`${API_BASE_URL}/manga/${newVal.id}/thumbnails/generate`).catch(() => {})
         } catch {
           totalMangaPages.value = null
         }
@@ -589,8 +713,107 @@ watch(
   { immediate: true },
 )
 
+const getMangaPageThumbnailUrl = (pageIndex: number) => {
+  return authUrl(`${API_BASE_URL}/manga/${currentMedia.value.id}/page/${pageIndex}?thumbnail=true`)
+}
+
+const jumpToPage = (pageIndex: number) => {
+  currentPage.value = pageIndex
+}
+
+// --- Virtual scroll helpers ---
+const thumbStripTotalWidth = computed(() => {
+  if (!totalMangaPages.value) return 0
+  return THUMB_PAD * 2 + totalMangaPages.value * THUMB_W + (totalMangaPages.value - 1) * THUMB_GAP
+})
+
+const visibleThumbnails = computed(() => {
+  if (!totalMangaPages.value || !thumbStripRef.value) return []
+  const containerW = thumbStripRef.value.clientWidth || 800
+  const scrollLeft = thumbStripScroll.value
+  const startIdx = Math.max(0, Math.floor((scrollLeft - THUMB_PAD) / (THUMB_W + THUMB_GAP)) - THUMB_BUFFER)
+  const endIdx = Math.min(
+    totalMangaPages.value - 1,
+    Math.ceil((scrollLeft + containerW - THUMB_PAD) / (THUMB_W + THUMB_GAP)) + THUMB_BUFFER
+  )
+  const items: { index: number; left: number }[] = []
+  for (let i = startIdx; i <= endIdx; i++) {
+    items.push({ index: i, left: THUMB_PAD + i * (THUMB_W + THUMB_GAP) })
+  }
+  return items
+})
+
+const scrollThumbStripToPage = (page: number, smooth = true) => {
+  nextTick(() => {
+    const el = thumbStripRef.value
+    if (!el) return
+    const targetLeft = THUMB_PAD + page * (THUMB_W + THUMB_GAP) - el.clientWidth / 2 + THUMB_W / 2
+    el.scrollTo({ left: Math.max(0, targetLeft), behavior: smooth ? 'smooth' : 'instant' })
+  })
+}
+
+const onThumbStripScroll = () => {
+  if (thumbStripRef.value) {
+    thumbStripScroll.value = thumbStripRef.value.scrollLeft
+  }
+}
+
+// --- Drag-to-scroll ---
+const onThumbDragStart = (e: MouseEvent) => {
+  const el = thumbStripRef.value
+  if (!el) return
+  isDragging = true
+  dragMoved = false
+  dragStartX = e.clientX
+  dragScrollStart = el.scrollLeft
+  el.style.cursor = 'grabbing'
+  el.style.scrollBehavior = 'auto'
+  window.addEventListener('mousemove', onThumbDragMove)
+  window.addEventListener('mouseup', onThumbDragEnd)
+}
+
+const onThumbDragMove = (e: MouseEvent) => {
+  if (!isDragging || !thumbStripRef.value) return
+  const dx = e.clientX - dragStartX
+  if (Math.abs(dx) > 3) dragMoved = true
+  thumbStripRef.value.scrollLeft = dragScrollStart - dx
+}
+
+const onThumbDragEnd = () => {
+  isDragging = false
+  if (thumbStripRef.value) {
+    thumbStripRef.value.style.cursor = 'grab'
+    thumbStripRef.value.style.scrollBehavior = ''
+  }
+  window.removeEventListener('mousemove', onThumbDragMove)
+  window.removeEventListener('mouseup', onThumbDragEnd)
+}
+
+const onThumbClick = (pageIndex: number) => {
+  if (!dragMoved) jumpToPage(pageIndex)
+}
+
+// --- Shared hover preview ---
+const onThumbMouseEnter = (pageIndex: number, e: MouseEvent) => {
+  if (isDragging) return
+  hoverThumbIndex.value = pageIndex
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  const stripRect = thumbStripRef.value?.parentElement?.getBoundingClientRect()
+  if (stripRect) {
+    hoverThumbX.value = rect.left + rect.width / 2 - stripRect.left
+    hoverThumbY.value = rect.top - stripRect.top - 8
+  }
+}
+
+const onThumbMouseLeave = () => {
+  hoverThumbIndex.value = -1
+}
+
 watch(currentPage, () => {
-  if (isManga.value) scheduleMangaProgressSave()
+  if (isManga.value) {
+    scheduleMangaProgressSave()
+    scrollThumbStripToPage(currentPage.value)
+  }
 })
 
 const nextPage = () => {
@@ -620,10 +843,180 @@ const handleMangaWheel = (e: WheelEvent) => {
   }
 }
 
+const clearPendingLongPress = () => {
+  if (longPressTimer) {
+    window.clearTimeout(longPressTimer)
+    longPressTimer = undefined
+  }
+}
+
+const beginVideoLongPress = (direction: 'forward' | 'rewind') => {
+  const video = progressVideoElement
+  if (!video || longPressTimer || longPressDirection) return
+
+  longPressTimer = window.setTimeout(() => {
+    longPressTimer = undefined
+    const activeVideo = progressVideoElement
+    if (!activeVideo) return
+
+    longPressDirection = direction
+    if (direction === 'forward') {
+      originalPlaybackRate = activeVideo.playbackRate || 1
+      activeVideo.playbackRate = 2
+      if (artInstance) artInstance.notice.show = '2.0x 快进中'
+      return
+    }
+
+    // Douyin-style rewind: keep the current play/pause state and repeatedly
+    // jump backward in fixed chunks instead of simulating reverse playback.
+    rewoundSeconds = 0
+    const rewindOneStep = () => {
+      const rewindVideo = progressVideoElement
+      if (!rewindVideo || longPressDirection !== 'rewind') return true
+
+      const previousTime = rewindVideo.currentTime
+      const nextTime = Math.max(0, previousTime - VIDEO_SEEK_STEP_SECONDS)
+      rewindVideo.currentTime = nextTime
+      rewoundSeconds += previousTime - nextTime
+
+      if (artInstance) {
+        artInstance.notice.show = `连续快退 ${Math.round(rewoundSeconds)} 秒`
+      }
+      return nextTime === 0
+    }
+
+    if (!rewindOneStep()) {
+      rewindInterval = window.setInterval(() => {
+        if (rewindOneStep() && rewindInterval) {
+          window.clearInterval(rewindInterval)
+          rewindInterval = undefined
+        }
+      }, REWIND_REPEAT_INTERVAL_MS)
+    }
+  }, LONG_PRESS_DELAY_MS)
+}
+
+const finishVideoLongPress = (showNotice = true) => {
+  clearPendingLongPress()
+
+  const video = progressVideoElement
+  const direction = longPressDirection
+  if (!direction) return false
+
+  if (direction === 'forward' && video) {
+    video.playbackRate = originalPlaybackRate
+    if (showNotice && artInstance) {
+      artInstance.notice.show = `恢复播放 (${originalPlaybackRate}x)`
+    }
+  }
+
+  if (direction === 'rewind') {
+    if (rewindInterval) {
+      window.clearInterval(rewindInterval)
+      rewindInterval = undefined
+    }
+    if (video) {
+      void saveVideoProgress(true)
+      if (showNotice && artInstance) {
+        artInstance.notice.show = `已快退 ${Math.round(rewoundSeconds)} 秒`
+      }
+    }
+  }
+
+  longPressDirection = null
+  return true
+}
+
 const handleKeydown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape') emit('close')
-  if (e.key === 'ArrowRight') isManga.value ? nextPage() : nextMedia()
-  if (e.key === 'ArrowLeft') isManga.value ? prevPage() : prevMedia()
+  const target = e.target as HTMLElement | null
+  if (
+    target &&
+    (target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.isContentEditable)
+  ) {
+    return
+  }
+
+  if (e.key === 'Escape') {
+    emit('close')
+    e.preventDefault()
+    e.stopImmediatePropagation()
+  }
+
+  if (e.key === 'ArrowRight') {
+    if (isManga.value) {
+      nextPage()
+      e.preventDefault()
+      e.stopImmediatePropagation()
+    } else if (isVideo.value && progressVideoElement) {
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      if (!e.repeat) beginVideoLongPress('forward')
+    } else {
+      nextMedia()
+      e.preventDefault()
+      e.stopImmediatePropagation()
+    }
+  }
+
+  if (e.key === 'ArrowLeft') {
+    if (isManga.value) {
+      prevPage()
+      e.preventDefault()
+      e.stopImmediatePropagation()
+    } else if (isVideo.value && progressVideoElement) {
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      if (!e.repeat) beginVideoLongPress('rewind')
+    } else {
+      prevMedia()
+      e.preventDefault()
+      e.stopImmediatePropagation()
+    }
+  }
+}
+
+const handleKeyup = (e: KeyboardEvent) => {
+  const target = e.target as HTMLElement | null
+  if (
+    target &&
+    (target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.isContentEditable)
+  ) {
+    return
+  }
+
+  if (e.key === 'ArrowRight') {
+    if (isVideo.value && progressVideoElement) {
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      if (!finishVideoLongPress()) {
+        progressVideoElement.currentTime = Math.min(
+          progressVideoElement.duration || 0,
+          progressVideoElement.currentTime + VIDEO_SEEK_STEP_SECONDS
+        )
+      }
+    }
+  }
+
+  if (e.key === 'ArrowLeft') {
+    if (isVideo.value && progressVideoElement) {
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      if (!finishVideoLongPress()) {
+        progressVideoElement.currentTime = Math.max(
+          0,
+          progressVideoElement.currentTime - VIDEO_SEEK_STEP_SECONDS
+        )
+      }
+    }
+  }
+}
+
+const handleWindowBlur = () => {
+  finishVideoLongPress(false)
 }
 
 const toggleFullscreen = () => {
@@ -647,7 +1040,9 @@ const onFullscreenChange = () => {
 
 onMounted(() => {
   document.body.style.overflow = 'hidden'
-  window.addEventListener('keydown', handleKeydown)
+  window.addEventListener('keydown', handleKeydown, { capture: true })
+  window.addEventListener('keyup', handleKeyup, { capture: true })
+  window.addEventListener('blur', handleWindowBlur)
   window.addEventListener('mousemove', resetTimer)
   document.addEventListener('fullscreenchange', onFullscreenChange)
   resetTimer()
@@ -655,10 +1050,13 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.clearTimeout(mangaProgressTimer)
+  finishVideoLongPress(false)
   saveMangaProgress(true)
   saveVideoProgress(true)
   document.body.style.overflow = 'auto'
-  window.removeEventListener('keydown', handleKeydown)
+  window.removeEventListener('keydown', handleKeydown, { capture: true })
+  window.removeEventListener('keyup', handleKeyup, { capture: true })
+  window.removeEventListener('blur', handleWindowBlur)
   window.removeEventListener('mousemove', resetTimer)
   document.removeEventListener('fullscreenchange', onFullscreenChange)
   window.clearTimeout(controlTimer)
@@ -720,8 +1118,12 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div v-else-if="isVideo" class="relative flex-1 min-h-0 bg-black">
-            <div ref="artRef" class="media-detail-player w-full h-full outline-none"></div>
+          <div v-else-if="isVideo" class="relative flex-1 min-h-0 bg-black overflow-hidden">
+            <div v-if="coverUrl" class="absolute inset-0 pointer-events-none" aria-hidden="true">
+              <img :src="coverUrl" class="w-full h-full object-cover scale-110 blur-3xl opacity-25" alt="" />
+              <div class="absolute inset-0 bg-black/60"></div>
+            </div>
+            <div ref="artRef" class="media-detail-player relative z-10 w-full h-full outline-none"></div>
           </div>
 
           <div v-else-if="isAudio" class="relative flex-1 min-h-0 bg-black overflow-hidden flex flex-col">
@@ -831,7 +1233,87 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div v-if="isVideo" class="shrink-0 border-t border-white/10 bg-background/95 px-6 py-4">
+          <!-- Manga Thumbnail Strip: Virtual Scroll + Drag -->
+          <div
+            v-if="isManga && totalMangaPages && totalMangaPages > 0"
+            :class="[
+              showControls || !clickOnlyViewerControls
+                ? 'translate-y-0 opacity-100 max-h-[220px] border-t'
+                : 'translate-y-full opacity-0 pointer-events-none max-h-0 overflow-hidden border-t-0'
+            ]"
+            class="shrink-0 border-white/10 bg-[#0c0c0e]/95 relative z-30 transition-all duration-500 ease-in-out flex flex-col"
+            @click.stop
+          >
+            <div class="flex items-center justify-between text-xs font-semibold px-6 py-2 text-white/50">
+              <span>预览目录 (共 {{ totalMangaPages }} 页)</span>
+              <span>当前第 {{ currentPage + 1 }} 页</span>
+            </div>
+
+            <!-- Shared Hover Preview (single DOM element) -->
+            <div
+              v-if="hoverThumbIndex >= 0"
+              class="absolute z-50 pointer-events-none rounded-xl border border-white/15 bg-black/95 p-1 shadow-2xl"
+              :style="{
+                width: '200px',
+                height: '268px',
+                left: `${hoverThumbX}px`,
+                top: `${hoverThumbY}px`,
+                transform: 'translate(-50%, -100%)',
+              }"
+            >
+              <img
+                :src="getMangaPageThumbnailUrl(hoverThumbIndex)"
+                class="w-full h-full object-contain rounded-lg"
+                alt="Preview"
+              />
+              <div class="absolute bottom-1 inset-x-1 bg-black/70 rounded-b-lg py-0.5 text-[10px] font-black text-center text-white/90">
+                第 {{ hoverThumbIndex + 1 }} 页
+              </div>
+            </div>
+
+            <!-- Virtual scroll container with drag -->
+            <div
+              ref="thumbStripRef"
+              class="overflow-x-auto py-2 custom-scrollbar select-none"
+              style="cursor: grab;"
+              @scroll="onThumbStripScroll"
+              @mousedown.prevent="onThumbDragStart"
+            >
+              <div :style="{ width: `${thumbStripTotalWidth}px`, height: `${THUMB_H + 4}px`, position: 'relative' }">
+                <div
+                  v-for="item in visibleThumbnails"
+                  :key="item.index"
+                  class="absolute top-0 cursor-pointer rounded-xl border-2 transition-all duration-200"
+                  :class="[
+                    item.index === currentPage
+                      ? 'border-accent shadow-[0_0_16px_rgba(129,140,248,0.5)] bg-accent/10 scale-105 z-10'
+                      : 'border-white/8 hover:border-white/25 bg-white/5'
+                  ]"
+                  :style="{ left: `${item.left}px`, width: `${THUMB_W}px`, height: `${THUMB_H}px` }"
+                  @click="onThumbClick(item.index)"
+                  @mouseenter="onThumbMouseEnter(item.index, $event)"
+                  @mouseleave="onThumbMouseLeave"
+                >
+                  <img
+                    :src="getMangaPageThumbnailUrl(item.index)"
+                    loading="lazy"
+                    class="w-full h-full object-cover rounded-[10px] transition-all duration-200"
+                    :class="item.index === currentPage ? 'brightness-110' : 'hover:brightness-110'"
+                    draggable="false"
+                    alt="Page thumbnail"
+                  />
+                  <div
+                    class="absolute bottom-0 inset-x-0 rounded-b-[10px] py-0.5 text-[10px] font-black text-center"
+                    :class="item.index === currentPage ? 'bg-accent/80 text-white' : 'bg-black/60 text-white/75'"
+                  >
+                    {{ item.index + 1 }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="isVideo" class="min-[1100px]:hidden shrink-0 border-t border-white/10 bg-background/95 px-4 sm:px-6 py-4">
             <div class="flex items-start justify-between gap-6">
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2 mb-2">
@@ -862,7 +1344,7 @@ onUnmounted(() => {
           </div>
         </section>
 
-        <aside v-if="!isFullscreen" class="hidden xl:flex w-[360px] shrink-0 border-l border-white/10 bg-background/95 p-5 flex-col gap-5 overflow-y-auto">
+        <aside v-if="!isFullscreen" class="hidden min-[1100px]:flex w-[340px] 2xl:w-[380px] shrink-0 border-l border-white/10 bg-background/95 p-5 flex-col gap-5 overflow-y-auto custom-scrollbar">
           <div class="flex gap-4">
             <div class="w-24 h-24 rounded-xl bg-white/5 border border-white/10 overflow-hidden shrink-0">
               <img v-if="coverUrl" :src="coverUrl" class="w-full h-full object-cover" :alt="currentMedia.title" />
@@ -891,6 +1373,11 @@ onUnmounted(() => {
               <p class="text-white/35 text-xs mb-1">尺寸</p>
               <p class="font-semibold">{{ currentMedia.width && currentMedia.height ? `${currentMedia.width} x ${currentMedia.height}` : '-' }}</p>
             </div>
+          </div>
+
+          <div v-if="isVideo" class="rounded-xl border border-white/8 bg-white/[0.025] px-3.5 py-3 text-[11px] leading-relaxed text-white/45">
+            <p class="font-bold text-white/65 mb-1.5">快捷播放</p>
+            <p><kbd class="text-white/75">←</kbd> / <kbd class="text-white/75">→</kbd> 短按跳转 10 秒，长按快退 / 2× 快进</p>
           </div>
 
           <div v-if="isManga && mangaPageTotal" class="rounded-2xl bg-white/5 border border-white/10 p-4">
@@ -960,3 +1447,9 @@ onUnmounted(() => {
     </div>
   </Teleport>
 </template>
+
+<style>
+.media-detail-player .art-video-player {
+  background-color: transparent !important;
+}
+</style>

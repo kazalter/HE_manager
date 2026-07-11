@@ -3,9 +3,14 @@ import { Book, Eye, Film, Headphones, Image as ImageIcon, Play, Star } from 'luc
 import { thumbnailUrl } from '../config'
 import type { Media } from '../types'
 
-defineProps<{
+withDefaults(defineProps<{
   media: Media
-}>()
+  index?: number
+  eager?: boolean
+}>(), {
+  index: 0,
+  eager: false
+})
 
 const getThumb = (path: string | null) => {
   if (!path) return 'https://via.placeholder.com/400x600?text=No+Cover'
@@ -66,65 +71,90 @@ const typeLabel = (type: Media['media_type']) => {
   if (type === 'audio') return '音频'
   return '杂图'
 }
+
+const hoverShadowClass = (type: Media['media_type']) => {
+  if (type === 'video') return 'group-hover:shadow-[0_20px_40px_-15px_rgba(129,140,248,0.35)]'
+  if (type === 'manga') return 'group-hover:shadow-[0_20px_40px_-15px_rgba(192,132,252,0.35)]'
+  if (type === 'audio') return 'group-hover:shadow-[0_20px_40px_-15px_rgba(34,211,238,0.35)]'
+  return 'group-hover:shadow-[0_20px_40px_-15px_rgba(74,222,128,0.25)]'
+}
 </script>
 
 <template>
-  <button class="group relative text-left flex flex-col cursor-pointer transition-all duration-300 hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-accent/50 rounded-2xl">
-    <div class="aspect-[3/4.5] relative overflow-hidden bg-sidebar/70 rounded-2xl border border-white/10 shadow-lg group-hover:shadow-2xl group-hover:shadow-accent/10 group-hover:border-white/20 transition-all duration-300">
+  <button
+    :style="{ animationDelay: `${Math.min(24, index) * 35}ms` }"
+    class="lazy-card animate-fluid-entrance tap-active group relative text-left flex flex-col cursor-pointer rounded-2xl focus:outline-none focus:ring-2 focus:ring-accent/40"
+    style="transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
+  >
+    <div
+      class="aspect-[3/4.5] w-full relative overflow-hidden bg-gradient-to-b from-white/5 to-white/[0.01] rounded-2xl border border-white/8 shadow-md group-hover:border-white/20 transition-all duration-300 ease-out"
+      :class="hoverShadowClass(media.media_type)"
+    >
       <img
         :src="getThumb(media.cover_path)"
         :alt="media.title"
-        class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-        loading="lazy"
+        decoding="async"
+        class="w-full h-full object-cover group-hover:scale-[1.04]"
+        style="transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)"
       />
 
-      <div class="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/25 transition-colors duration-300">
-        <div class="opacity-0 group-hover:opacity-100 w-12 h-12 rounded-full bg-black/45 backdrop-blur-md border border-white/20 flex items-center justify-center scale-90 group-hover:scale-100 transition-all duration-300">
-          <Play v-if="media.media_type === 'video'" :size="24" fill="white" class="ml-1 text-white" />
-          <Book v-else-if="media.media_type === 'manga'" :size="22" class="text-white" />
-          <Headphones v-else-if="media.media_type === 'audio'" :size="22" class="text-white" />
-          <ImageIcon v-else :size="22" class="text-white" />
+      <!-- Subtle overlay gradient on hover -->
+      <div class="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/5 opacity-70 group-hover:opacity-85 pointer-events-none transition-opacity duration-300"></div>
+
+      <!-- Play / Action Overlay Icon -->
+      <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-250">
+        <div class="w-11 h-11 rounded-full bg-black/60 backdrop-blur-md border border-white/25 shadow-lg flex items-center justify-center scale-90 group-hover:scale-100 hover:scale-105 active:scale-95 transition-transform duration-250">
+          <Play v-if="media.media_type === 'video'" :size="18" fill="white" class="ml-0.5 text-white" />
+          <Book v-else-if="media.media_type === 'manga'" :size="18" class="text-white" />
+          <Headphones v-else-if="media.media_type === 'audio'" :size="18" class="text-white" />
+          <ImageIcon v-else :size="18" class="text-white" />
         </div>
       </div>
 
-      <div class="absolute top-2 right-2 px-2 py-1 rounded-lg bg-black/65 backdrop-blur-md border border-white/10 flex items-center gap-1.5 z-20">
-        <Film v-if="media.media_type === 'video'" :size="12" class="text-accent" />
-        <Book v-else-if="media.media_type === 'manga'" :size="12" class="text-purple-300" />
-        <Headphones v-else-if="media.media_type === 'audio'" :size="12" class="text-cyan-300" />
-        <ImageIcon v-else :size="12" class="text-green-300" />
-        <span class="text-[10px] font-bold text-white/90">{{ typeLabel(media.media_type) }}</span>
+      <!-- Type Badge -->
+      <div class="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-black/65 backdrop-blur-md border border-white/10 flex items-center gap-1 z-20">
+        <Film v-if="media.media_type === 'video'" :size="9" class="text-accent" />
+        <Book v-else-if="media.media_type === 'manga'" :size="9" class="text-purple-300" />
+        <Headphones v-else-if="media.media_type === 'audio'" :size="9" class="text-cyan-300" />
+        <ImageIcon v-else :size="9" class="text-green-300" />
+        <span class="text-[9px] font-black text-white/90 uppercase tracking-wider">{{ typeLabel(media.media_type) }}</span>
       </div>
 
-      <div v-if="media.favorite" class="absolute top-2 left-2 w-8 h-8 rounded-lg bg-black/65 backdrop-blur-md border border-white/10 flex items-center justify-center text-amber-300">
-        <Star :size="15" fill="currentColor" />
+      <!-- Favorite Badge -->
+      <div v-if="media.favorite" class="absolute top-2 left-2 w-6 h-6 rounded-md bg-black/65 backdrop-blur-md border border-white/10 flex items-center justify-center text-amber-300 z-20">
+        <Star :size="11" fill="currentColor" />
       </div>
 
-      <div v-if="media.media_type === 'manga' && media.page_count && progressPercent(media) > 0" class="absolute left-2 bottom-3 rounded-lg bg-black/65 backdrop-blur-md border border-white/10 px-2 py-1 z-20">
-        <span class="text-[10px] font-black text-white/85">{{ mangaProgressText(media) }}</span>
+      <!-- Progress Badge (Manga) -->
+      <div v-if="media.media_type === 'manga' && media.page_count && progressPercent(media) > 0" class="absolute left-2 bottom-3 rounded-md bg-black/65 backdrop-blur-md border border-white/10 px-1.5 py-0.5 z-20">
+        <span class="text-[9px] font-black text-white/90">{{ mangaProgressText(media) }}</span>
       </div>
 
-      <div v-if="progressPercent(media) > 0" class="absolute inset-x-0 bottom-0 h-1 bg-black/50">
+      <!-- Progress Bar -->
+      <div v-if="progressPercent(media) > 0" class="absolute inset-x-0 bottom-0 h-1 bg-black/40">
         <div
-          class="h-full transition-all"
-          :class="media.media_type === 'manga' ? 'bg-purple-300' : 'bg-accent'"
+          class="h-full rounded-full transition-all duration-300"
+          :class="media.media_type === 'manga' ? 'bg-purple-400' : 'bg-accent'"
           :style="{ width: `${progressPercent(media)}%` }"
         ></div>
       </div>
 
-      <div v-if="media.is_missing" class="absolute inset-x-2 bottom-2 rounded-lg bg-red-500/85 px-2 py-1 text-center text-xs font-bold text-white">
+      <!-- Missing File Overlay -->
+      <div v-if="media.is_missing" class="absolute inset-x-2 bottom-2 rounded-md bg-red-500/90 border border-red-400/20 px-1.5 py-1 text-center text-[10px] font-black text-white z-20 shadow-md">
         文件丢失
       </div>
     </div>
 
-    <div class="mt-3 px-1 tracking-tight min-w-0 w-full">
-      <h3 class="text-[15px] font-bold text-white/90 group-hover:text-accent transition-colors line-clamp-1 leading-tight mb-1.5" :title="media.title">
+    <!-- Title and Meta -->
+    <div class="mt-2.5 px-0.5 tracking-tight min-w-0 w-full">
+      <h3 class="text-xs font-bold text-white/85 group-hover:text-accent line-clamp-1 leading-snug mb-1 transition-colors duration-300" :title="media.title">
         {{ media.title }}
       </h3>
-      <div class="flex items-center gap-2 text-[11px] text-white/45 font-medium tracking-wide min-w-0">
-        <span class="px-1.5 py-0.5 rounded bg-white/10 uppercase font-black text-white/65 shrink-0">{{ media.extension.replace('.', '') || 'DIR' }}</span>
+      <div class="flex items-center gap-1.5 text-[10px] text-white/40 font-semibold tracking-wide min-w-0">
+        <span class="px-1 py-0.2 rounded bg-white/5 border border-white/8 font-bold text-white/50 shrink-0 text-[8px] uppercase">{{ media.extension.replace('.', '') || 'DIR' }}</span>
         <span class="truncate">{{ formatMeta(media) }}</span>
-        <span v-if="media.view_status === 'viewed'" class="ml-auto text-green-300 shrink-0" title="已看">
-          <Eye :size="13" />
+        <span v-if="media.view_status === 'viewed'" class="ml-auto text-green-400 shrink-0" title="已看">
+          <Eye :size="11" />
         </span>
       </div>
     </div>

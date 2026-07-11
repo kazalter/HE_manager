@@ -2,8 +2,8 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import { ChevronDown, Filter, Search, SortAsc, Star } from 'lucide-vue-next'
-import { API_BASE_URL } from '../config'
+import { Book, ChevronDown, ChevronLeft, ChevronRight, Filter, History, Play, Search, SortAsc, Star, X } from 'lucide-vue-next'
+import { API_BASE_URL, thumbnailUrl } from '../config'
 import { authState } from '../auth'
 import type { Media, Tag } from '../types'
 import MediaCard from '../components/MediaCard.vue'
@@ -26,6 +26,45 @@ const selectedTag = ref('')
 const tagDropdownOpen = ref(false)
 const favoriteOnly = ref(false)
 const sourceFilter = ref<'' | 'x' | 'wnacg' | 'local'>('')
+const filtersExpanded = ref(false)
+const continueScrollRef = ref<HTMLElement | null>(null)
+
+const activeFilterCount = computed(() => {
+  return Number(Boolean(selectedTag.value)) + Number(Boolean(sourceFilter.value)) + Number(sortBy.value !== 'date')
+})
+
+const clearFilters = () => {
+  selectedTag.value = ''
+  sourceFilter.value = ''
+  sortBy.value = 'date'
+}
+
+const scrollContinue = (direction: -1 | 1) => {
+  const el = continueScrollRef.value
+  if (!el) return
+  el.scrollBy({ left: direction * Math.max(220, el.clientWidth * 0.72), behavior: 'smooth' })
+}
+
+const progressPercent = (media: Media) => {
+  if (media.media_type === 'video' && media.duration && media.progress > 0) {
+    return Math.min(100, Math.max(0, Math.round((media.progress / media.duration) * 100)))
+  }
+  if (media.media_type === 'manga' && media.page_count && media.progress >= 0) {
+    return Math.min(100, Math.max(0, Math.round(((media.progress + 1) / media.page_count) * 100)))
+  }
+  return 0
+}
+
+const recentlyOpened = computed(() => {
+  return [...mediaList.value]
+    .filter(item => item.last_opened_at || progressPercent(item) > 0)
+    .sort((a, b) => {
+      const timeA = a.last_opened_at ? new Date(a.last_opened_at).getTime() : 0
+      const timeB = b.last_opened_at ? new Date(b.last_opened_at).getTime() : 0
+      return timeB - timeA
+    })
+    .slice(0, 8)
+})
 
 const limit = 80
 const offset = ref(0)
@@ -250,61 +289,78 @@ onMounted(async () => {
 
 <template>
   <div class="z-10 relative">
-    <header class="sticky top-0 z-40 bg-background/75 backdrop-blur-xl border-b border-white/10 px-6 md:px-8 py-5 mb-6">
-      <div class="flex flex-wrap items-center justify-between gap-5">
+    <header class="sticky top-0 z-40 bg-background/55 backdrop-blur-2xl border-b border-white/5 px-6 md:px-8 py-4 mb-6 shadow-[0_4px_30px_rgba(0,0,0,0.4)]">
+      <div class="flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-baseline gap-3">
-          <h1 class="text-2xl md:text-3xl font-black text-white tracking-tight">
+          <h1 class="text-xl md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-white/60 tracking-tight">
             {{ pageTitle }}
           </h1>
-          <p class="text-[11px] font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20 uppercase tracking-widest">
-            {{ mediaList.length }} ITEMS
-          </p>
+          <span class="text-[9px] font-black text-accent bg-accent/10 px-2 py-0.5 rounded-md border border-accent/20 uppercase tracking-widest">
+            {{ mediaList.length.toLocaleString() }} 项
+          </span>
         </div>
 
         <div class="flex flex-1 min-w-[260px] max-w-3xl gap-3">
           <div class="relative flex-1 group">
-            <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 group-focus-within:text-accent transition-colors" :size="18" />
+            <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-white/25 group-focus-within:text-accent transition-colors duration-300" :size="16" />
             <input
               v-model="searchQuery"
               type="text"
               placeholder="搜索标题、文件名..."
-              class="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-sm text-white placeholder-white/35 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:bg-white/10 transition-all"
+              class="w-full bg-white/4 border border-white/5 rounded-xl pl-11 pr-4 py-2.5 text-xs text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-accent/25 focus:bg-white/6 focus:border-white/12 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)] transition-all duration-300"
             />
           </div>
 
           <button
             @click="toggleFavoriteFilter"
-            :class="favoriteOnly ? 'bg-accent text-white' : 'bg-white/5 text-white/55 hover:text-white'"
-            class="w-12 h-12 rounded-xl border border-white/10 flex items-center justify-center transition-all"
+            :class="favoriteOnly ? 'bg-gradient-to-tr from-accent to-indigo-500 text-white shadow-md shadow-accent/15 border border-accent/20 scale-102' : 'bg-white/4 border border-white/5 text-white/50 hover:bg-white/6 hover:text-white hover:border-white/10 hover:shadow-md'"
+            class="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 cursor-pointer"
             title="只看收藏"
           >
-            <Star :size="18" :fill="favoriteOnly ? 'currentColor' : 'none'" />
+            <Star :size="16" :fill="favoriteOnly ? 'currentColor' : 'none'" />
+          </button>
+
+          <button
+            @click="filtersExpanded = !filtersExpanded"
+            :class="filtersExpanded || activeFilterCount > 0 ? 'bg-accent/15 border-accent/30 text-accent' : 'bg-white/4 border-white/5 text-white/55 hover:text-white'"
+            class="md:hidden relative w-10 h-10 rounded-xl border flex items-center justify-center transition-all"
+            :aria-expanded="filtersExpanded"
+            title="展开筛选"
+          >
+            <Filter :size="16" />
+            <span v-if="activeFilterCount" class="absolute -right-1 -top-1 min-w-4 h-4 px-1 rounded-full bg-accent text-[9px] font-black text-white flex items-center justify-center">
+              {{ activeFilterCount }}
+            </span>
           </button>
         </div>
       </div>
 
-      <div class="mt-4 flex flex-wrap items-center gap-3 text-sm">
-        <div class="flex items-center gap-2 text-white/45">
-          <Filter :size="16" />
-          <span>筛选</span>
+      <div
+        :class="filtersExpanded ? 'flex' : 'hidden md:flex'"
+        class="mt-3.5 flex-wrap items-center gap-3 text-xs rounded-2xl md:rounded-none bg-white/[0.025] md:bg-transparent border border-white/5 md:border-0 p-3 md:p-0"
+      >
+        <div class="flex items-center gap-1.5 text-white/35 font-bold">
+          <Filter :size="13" />
+          <span class="text-[10px] uppercase tracking-wider">筛选</span>
         </div>
 
+        <!-- Tag Dropdown -->
         <div class="relative">
           <button
             @click="tagDropdownOpen = !tagDropdownOpen"
-            class="min-w-36 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-accent/50 flex items-center justify-between gap-3 hover:bg-white/10 transition-all"
+            class="min-w-32 bg-white/4 border border-white/5 rounded-xl px-3 py-2 text-[11px] text-white/70 focus:outline-none focus:ring-2 focus:ring-accent/20 flex items-center justify-between gap-3 hover:bg-white/6 hover:border-white/10 transition-all duration-300 cursor-pointer font-bold"
           >
             <span class="truncate">{{ selectedTagLabel }}</span>
-            <ChevronDown :size="15" :class="tagDropdownOpen ? 'rotate-180' : ''" class="transition-transform text-white/45" />
+            <ChevronDown :size="12" :class="tagDropdownOpen ? 'rotate-180' : ''" class="transition-transform text-white/35" />
           </button>
           <div
             v-if="tagDropdownOpen"
-            class="absolute left-0 top-full mt-2 z-50 min-w-48 max-h-72 overflow-y-auto rounded-2xl border border-white/10 bg-sidebar/95 backdrop-blur-xl shadow-2xl p-1"
+            class="absolute left-0 top-full mt-1.5 z-50 min-w-44 max-h-64 overflow-y-auto rounded-2xl border border-white/8 bg-sidebar/70 backdrop-blur-3xl shadow-2xl p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] custom-scrollbar"
           >
             <button
               @click="selectTag('')"
-              :class="selectedTag === '' ? 'bg-accent text-white' : 'text-white/65 hover:text-white hover:bg-white/8'"
-              class="w-full rounded-xl px-3 py-2 text-left text-sm font-bold transition-all"
+              :class="selectedTag === '' ? 'bg-accent text-white shadow-sm shadow-accent/15' : 'text-white/70 hover:text-white hover:bg-white/6'"
+              class="w-full rounded-xl px-3 py-2 text-left text-[11px] font-bold transition-all duration-200 cursor-pointer"
             >
               全部标签
             </button>
@@ -312,86 +368,150 @@ onMounted(async () => {
               v-for="tag in tags"
               :key="tag.id"
               @click="selectTag(tag.name)"
-              :class="selectedTag === tag.name ? 'bg-accent text-white' : 'text-white/65 hover:text-white hover:bg-white/8'"
-              class="w-full rounded-xl px-3 py-2 text-left text-sm font-bold transition-all"
+              :class="selectedTag === tag.name ? 'bg-accent text-white shadow-sm shadow-accent/15' : 'text-white/70 hover:text-white hover:bg-white/6'"
+              class="w-full rounded-xl px-3 py-2 text-left text-[11px] font-bold transition-all duration-200 cursor-pointer"
             >
               {{ tag.name }}
             </button>
           </div>
-          <template v-if="false">
-          <option value="" class="bg-white text-slate-950">全部标签</option>
-          <option v-for="tag in tags" :key="tag.id" :value="tag.name" class="bg-white text-slate-950">{{ tag.name }}</option>
-          </template>
         </div>
 
-        <div class="flex bg-white/5 rounded-xl p-1 border border-white/10">
+        <!-- Source Filter (Slide segmented Pill) -->
+        <div class="flex bg-white/3 rounded-xl p-0.5 border border-white/5 shadow-inner">
           <button
             @click="sourceFilter = ''"
-            :class="sourceFilter === '' ? 'bg-accent text-white' : 'text-white/45 hover:text-white'"
-            class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+            :class="sourceFilter === '' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
+            class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-250 cursor-pointer"
           >
-            全部来源
+            全部
           </button>
           <button
             @click="sourceFilter = 'local'"
-            :class="sourceFilter === 'local' ? 'bg-accent text-white' : 'text-white/45 hover:text-white'"
-            class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-            title="本地扫描的媒体（无外部来源）"
+            :class="sourceFilter === 'local' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
+            class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-250 cursor-pointer"
+            title="本地扫描的媒体"
           >
             本地
           </button>
           <button
             @click="sourceFilter = 'x'"
-            :class="sourceFilter === 'x' ? 'bg-accent text-white' : 'text-white/45 hover:text-white'"
-            class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-            title="X (Twitter) 导入的媒体"
+            :class="sourceFilter === 'x' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
+            class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-250 cursor-pointer"
+            title="X (Twitter) 导入"
           >
             X
           </button>
           <button
             @click="sourceFilter = 'wnacg'"
-            :class="sourceFilter === 'wnacg' ? 'bg-accent text-white' : 'text-white/45 hover:text-white'"
-            class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-            title="wnacg 下载的媒体"
+            :class="sourceFilter === 'wnacg' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
+            class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-250 cursor-pointer"
+            title="wnacg 下载"
           >
             wnacg
           </button>
         </div>
 
-        <div class="flex bg-white/5 rounded-xl p-1 border border-white/10">
+        <!-- Sort Filter -->
+        <div class="flex bg-white/3 rounded-xl p-0.5 border border-white/5 shadow-inner">
           <button
             @click="sortBy = 'date'"
-            :class="sortBy === 'date' ? 'bg-accent text-white' : 'text-white/45 hover:text-white'"
-            class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+            :class="sortBy === 'date' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
+            class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-250 cursor-pointer"
           >
             最近添加
           </button>
           <button
             @click="sortBy = 'opened'"
-            :class="sortBy === 'opened' ? 'bg-accent text-white' : 'text-white/45 hover:text-white'"
-            class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+            :class="sortBy === 'opened' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
+            class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-250 cursor-pointer"
           >
             最近打开
           </button>
           <button
             @click="sortBy = 'rating'"
-            :class="sortBy === 'rating' ? 'bg-accent text-white' : 'text-white/45 hover:text-white'"
-            class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+            :class="sortBy === 'rating' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
+            class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-250 cursor-pointer"
           >
             评分
           </button>
           <button
             @click="sortBy = 'title'"
-            :class="sortBy === 'title' ? 'bg-accent text-white' : 'text-white/45 hover:text-white'"
-            class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+            :class="sortBy === 'title' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
+            class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-250 flex items-center gap-1 cursor-pointer"
           >
-            <SortAsc :size="13" /> 名称
+            <SortAsc :size="11" /> 名称
           </button>
         </div>
+
+        <button
+          v-if="activeFilterCount > 0"
+          @click="clearFilters"
+          class="h-8 px-3 rounded-xl border border-white/8 bg-white/3 text-[10px] font-bold text-white/55 hover:text-white hover:bg-white/8 flex items-center gap-1.5 transition-all"
+        >
+          <X :size="12" />
+          清除筛选
+        </button>
       </div>
     </header>
 
-    <div class="px-6 md:px-8 pb-12">
+    <!-- Continue watch/read section -->
+    <div v-if="recentlyOpened.length > 0 && !searchQuery && !selectedTag" class="px-6 md:px-8 mb-8 animate-fluid-entrance select-none">
+      <div class="flex items-center justify-between gap-3 mb-3.5">
+        <div class="flex items-center gap-2">
+          <History class="text-accent" :size="15" />
+          <h2 class="text-[10px] font-black text-white/50 tracking-widest uppercase">继续观看 / 阅读</h2>
+        </div>
+        <div class="flex items-center gap-1">
+          <button @click="scrollContinue(-1)" class="w-8 h-8 rounded-lg border border-white/8 bg-white/4 text-white/55 hover:text-white hover:bg-white/8 flex items-center justify-center transition-all" title="向左滚动">
+            <ChevronLeft :size="16" />
+          </button>
+          <button @click="scrollContinue(1)" class="w-8 h-8 rounded-lg border border-white/8 bg-white/4 text-white/55 hover:text-white hover:bg-white/8 flex items-center justify-center transition-all" title="向右滚动">
+            <ChevronRight :size="16" />
+          </button>
+        </div>
+      </div>
+      <div class="relative -mx-1 px-1">
+        <div class="pointer-events-none absolute right-0 top-0 bottom-2 w-12 bg-gradient-to-l from-background to-transparent z-10"></div>
+        <div ref="continueScrollRef" class="flex gap-4 overflow-x-auto pb-2 pr-10 custom-scrollbar scroll-smooth">
+        <div
+          v-for="item in recentlyOpened"
+          :key="item.id"
+          class="shrink-0 w-52 sm:w-60 bg-gradient-to-b from-white/5 to-white/[0.01] rounded-xl border border-white/5 p-2.5 hover:border-white/15 transition-all duration-300 cursor-pointer flex gap-3 relative shadow-md hover:shadow-[0_12px_24px_-10px_rgba(var(--color-accent),0.15)] group"
+          @click="openMedia(item)"
+        >
+          <div class="w-14 h-18 shrink-0 rounded-lg overflow-hidden bg-black/40 border border-white/5 relative">
+            <img :src="item.cover_path ? thumbnailUrl(item.cover_path) : 'https://via.placeholder.com/100x150'" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+            <div class="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <Play v-if="item.media_type === 'video'" :size="12" fill="white" class="text-white" />
+              <Book v-else :size="12" class="text-white" />
+            </div>
+          </div>
+          <div class="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+            <div>
+              <h3 class="text-xs font-bold text-white/85 group-hover:text-accent truncate transition-colors leading-tight mb-1" :title="item.title">{{ item.title }}</h3>
+              <p class="text-[9px] font-bold text-white/35 uppercase tracking-wider">
+                {{ item.media_type === 'manga' ? '漫画' : item.media_type === 'video' ? '视频' : item.media_type === 'audio' ? '音频' : '杂图' }}
+              </p>
+            </div>
+            <div v-if="progressPercent(item) > 0" class="space-y-1">
+              <div class="flex items-center justify-between text-[8px] font-bold text-white/40">
+                <span>已看 {{ progressPercent(item) }}%</span>
+              </div>
+              <div class="h-1 w-full bg-white/10 rounded-full overflow-hidden">
+                <div
+                  class="h-full rounded-full transition-all duration-300"
+                  :class="item.media_type === 'manga' ? 'bg-purple-400' : 'bg-accent'"
+                  :style="{ width: `${progressPercent(item)}%` }"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </div>
+
+    <div ref="containerRef" class="px-6 md:px-8 pb-12">
       <div v-if="loading" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 md:gap-7">
         <div v-for="i in 12" :key="i" class="aspect-[3/4.5] bg-white/5 animate-pulse rounded-2xl border border-white/5"></div>
       </div>
@@ -432,7 +552,7 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div v-else class="flex flex-col items-center justify-center py-32 text-white/35 text-center">
+      <div v-else-if="!loading && mediaList.length === 0" class="flex flex-col items-center justify-center py-32 text-white/35 text-center">
         <div class="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-5 border border-white/10">
           <Search :size="28" />
         </div>
