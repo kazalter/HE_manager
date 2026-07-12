@@ -1,10 +1,12 @@
 from datetime import datetime
+import mimetypes
 import os
 import uuid
 from typing import List, Optional
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from .. import asmr_source, downloader_push, external_sources, models, schemas, scanner
@@ -33,6 +35,31 @@ from ..services.media_access import get_source_or_404
 from ..services.thumbnails import THUMBNAIL_DIR
 
 router = APIRouter()
+
+
+def _cover_media_type(path: str) -> str:
+    """Return an image MIME type from the actual cached bytes, not its suffix.
+
+    WNACG's CDN can serve WebP bytes from URLs ending in ``.jpg`` or ``.png``.
+    The cache preserves that URL-derived suffix, so FileResponse's default MIME
+    inference can make browsers reject the image under ``nosniff``.
+    """
+    try:
+        with open(path, "rb") as image_file:
+            header = image_file.read(16)
+    except OSError:
+        return "application/octet-stream"
+    if header.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if header.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    if header.startswith(b"RIFF") and header[8:12] == b"WEBP":
+        return "image/webp"
+    if len(header) >= 12 and header[4:12] in (b"ftypavif", b"ftypavis"):
+        return "image/avif"
+    return mimetypes.guess_type(path)[0] or "application/octet-stream"
 
 
 @router.get("/external/sources", response_model=List[schemas.ExternalFavoriteSource])
@@ -245,7 +272,7 @@ def get_external_favorite_cover(favorite_id: int, db: Session = Depends(get_db))
     try:
         cached_cover = ensure_external_cover_cache(item, source)
         if cached_cover and os.path.exists(cached_cover):
-            return FileResponse(cached_cover)
+            return FileResponse(cached_cover, media_type=_cover_media_type(cached_cover))
         raise RuntimeError("封面缓存失败")
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"读取外部封面失败：{exc}")

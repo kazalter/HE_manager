@@ -7,9 +7,11 @@ withDefaults(defineProps<{
   media: Media
   index?: number
   eager?: boolean
+  virtualized?: boolean
 }>(), {
   index: 0,
-  eager: false
+  eager: false,
+  virtualized: false
 })
 
 const getThumb = (path: string | null) => {
@@ -83,7 +85,10 @@ const hoverShadowClass = (type: Media['media_type']) => {
 <template>
   <button
     :style="{ animationDelay: `${Math.min(24, index) * 35}ms` }"
-    :class="{ 'animate-fluid-entrance': index < 16 }"
+    :class="{
+      'animate-fluid-entrance': !virtualized && index < 16,
+      'virtual-card': virtualized,
+    }"
     class="lazy-card tap-active group relative text-left flex flex-col cursor-pointer rounded-2xl focus:outline-none focus:ring-2 focus:ring-accent/40"
     style="transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
   >
@@ -94,7 +99,7 @@ const hoverShadowClass = (type: Media['media_type']) => {
       <img
         :src="getThumb(media.cover_path)"
         :alt="media.title"
-        :loading="eager || index < 12 ? 'eager' : 'lazy'"
+        :loading="eager || virtualized || index < 12 ? 'eager' : 'lazy'"
         decoding="async"
         class="w-full h-full object-cover group-hover:scale-[1.04]"
         style="transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)"

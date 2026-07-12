@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { Book, ChevronDown, ChevronLeft, ChevronRight, Filter, History, Play, Search, SortAsc, Star, X } from 'lucide-vue-next'
@@ -71,7 +71,139 @@ const offset = ref(0)
 const hasMore = ref(true)
 const loadingMore = ref(false)
 const loadMoreRef = ref<HTMLElement | null>(null)
+const containerRef = ref<HTMLElement | null>(null)
+const virtualGridRef = ref<HTMLElement | null>(null)
+const virtualItemsRef = ref<HTMLElement | null>(null)
+const virtualColumns = ref(2)
+const virtualRowHeight = ref(360)
+const virtualRowGap = ref(20)
+const virtualStartRow = ref(0)
+const virtualEndRow = ref(8)
+const virtualOverscan = 6
 let observer: IntersectionObserver | null = null
+let scrollRoot: HTMLElement | null = null
+let resizeObserver: ResizeObserver | null = null
+let virtualFrame = 0
+let hasCompletedInitialFetch = false
+let lastVirtualScrollTop = 0
+let virtualScrollDirection: -1 | 0 | 1 = 0
+let lastVirtualGridWidth = 0
+
+const virtualRowCount = computed(() => Math.ceil(mediaList.value.length / virtualColumns.value))
+const virtualStartIndex = computed(() => virtualStartRow.value * virtualColumns.value)
+const virtualEndIndex = computed(() => Math.min(
+  mediaList.value.length,
+  virtualEndRow.value * virtualColumns.value,
+))
+const virtualMedia = computed(() => mediaList.value.slice(virtualStartIndex.value, virtualEndIndex.value))
+const virtualOffsetY = computed(() => virtualStartRow.value * (virtualRowHeight.value + virtualRowGap.value))
+const virtualTotalHeight = computed(() => {
+  if (virtualRowCount.value === 0) return 0
+  return virtualRowCount.value * virtualRowHeight.value
+    + (virtualRowCount.value - 1) * virtualRowGap.value
+})
+
+const fallbackColumnCount = () => {
+  if (window.innerWidth >= 1536) return 6
+  if (window.innerWidth >= 1280) return 5
+  if (window.innerWidth >= 1024) return 4
+  if (window.innerWidth >= 640) return 3
+  return 2
+}
+
+const updateVirtualWindow = () => {
+  if (!scrollRoot || !virtualGridRef.value || virtualRowCount.value === 0) {
+    virtualStartRow.value = 0
+    virtualEndRow.value = Math.min(8, virtualRowCount.value)
+    return
+  }
+
+  const rootRect = scrollRoot.getBoundingClientRect()
+  const gridRect = virtualGridRef.value.getBoundingClientRect()
+  const gridTop = gridRect.top - rootRect.top + scrollRoot.scrollTop
+  const relativeTop = Math.max(0, scrollRoot.scrollTop - gridTop)
+  const stride = Math.max(1, virtualRowHeight.value + virtualRowGap.value)
+  const firstVisibleRow = Math.floor(relativeTop / stride)
+  const lastVisibleRow = Math.ceil((relativeTop + scrollRoot.clientHeight) / stride)
+  const scrollDistance = Math.abs(scrollRoot.scrollTop - lastVirtualScrollTop)
+  const directionalBuffer = Math.min(12, Math.ceil(scrollDistance / stride))
+  const startBuffer = virtualOverscan + (virtualScrollDirection < 0 ? directionalBuffer : 0)
+  const endBuffer = virtualOverscan + (virtualScrollDirection > 0 ? directionalBuffer : 0)
+  const nextStartRow = Math.max(0, firstVisibleRow - startBuffer)
+  const nextEndRow = Math.min(virtualRowCount.value, lastVisibleRow + endBuffer)
+
+  if (nextStartRow !== virtualStartRow.value) virtualStartRow.value = nextStartRow
+  if (nextEndRow !== virtualEndRow.value) virtualEndRow.value = nextEndRow
+}
+
+const updateVirtualLayout = async (force = false) => {
+  const grid = virtualGridRef.value
+  if (!grid) return
+
+  const gridWidth = grid.clientWidth
+  if (!force && Math.abs(gridWidth - lastVirtualGridWidth) < 0.5) {
+    updateVirtualWindow()
+    return
+  }
+
+  const items = virtualItemsRef.value
+  const computedGrid = items ? window.getComputedStyle(items) : null
+  const templateColumns = computedGrid?.gridTemplateColumns || ''
+  const measuredColumns = templateColumns && templateColumns !== 'none'
+    ? templateColumns.split(' ').filter(Boolean).length
+    : 0
+  const columns = measuredColumns || fallbackColumnCount()
+  const gap = computedGrid ? Number.parseFloat(computedGrid.rowGap) || 20 : (window.innerWidth >= 768 ? 28 : 20)
+  const cardWidth = Math.max(1, (gridWidth - gap * (columns - 1)) / columns)
+
+  lastVirtualGridWidth = gridWidth
+  virtualColumns.value = columns
+  virtualRowGap.value = gap
+  virtualRowHeight.value = cardWidth * 1.5 + 42
+  updateVirtualWindow()
+
+  await nextTick()
+  const card = virtualItemsRef.value?.querySelector<HTMLElement>('.lazy-card')
+  const measuredHeight = card?.getBoundingClientRect().height || 0
+  if (measuredHeight > 0 && Math.abs(measuredHeight - virtualRowHeight.value) > 0.5) {
+    virtualRowHeight.value = measuredHeight
+    updateVirtualWindow()
+  }
+}
+
+const scheduleVirtualUpdate = (remeasure = false) => {
+  window.cancelAnimationFrame(virtualFrame)
+  virtualFrame = window.requestAnimationFrame(() => {
+    if (remeasure) {
+      void updateVirtualLayout(true)
+    } else {
+      updateVirtualWindow()
+    }
+  })
+}
+
+const handleVirtualScroll = () => {
+  let nextScrollTop = lastVirtualScrollTop
+  if (scrollRoot) {
+    nextScrollTop = scrollRoot.scrollTop
+    virtualScrollDirection = nextScrollTop === lastVirtualScrollTop
+      ? 0
+      : nextScrollTop > lastVirtualScrollTop ? 1 : -1
+  }
+  // Do not wait for requestAnimationFrame: a fast scroll must keep its visible
+  // rows mounted in the same frame, otherwise the grid briefly goes blank.
+  updateVirtualWindow()
+  lastVirtualScrollTop = nextScrollTop
+  maybeLoadMore()
+}
+
+const scrollListToStart = () => {
+  if (!scrollRoot || !containerRef.value) return
+  const rootRect = scrollRoot.getBoundingClientRect()
+  const containerRect = containerRef.value.getBoundingClientRect()
+  const targetTop = scrollRoot.scrollTop + containerRect.top - rootRect.top - 16
+  scrollRoot.scrollTo({ top: Math.max(0, targetTop), behavior: 'auto' })
+}
 
 const pageTitle = computed(() => {
   if (props.mediaType === 'video') return '所有视频'
@@ -99,6 +231,7 @@ const fetchTags = async () => {
 }
 
 const fetchMedia = async () => {
+  if (hasCompletedInitialFetch) scrollListToStart()
   loading.value = true
   mediaError.value = ''
   offset.value = 0
@@ -131,6 +264,7 @@ const fetchMedia = async () => {
         : '无法加载媒体列表，请检查后端连接。'
   } finally {
     loading.value = false
+    hasCompletedInitialFetch = true
   }
 }
 
@@ -159,25 +293,45 @@ const loadMore = async () => {
     console.error('Failed to load more media:', err)
   } finally {
     loadingMore.value = false
+    await nextTick()
+    maybeLoadMore()
   }
 }
 
-watch(loadMoreRef, (el) => {
+const observeLoadMore = () => {
   if (observer) observer.disconnect()
+  const el = loadMoreRef.value
   if (el) {
     observer = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting && hasMore.value && !loading.value && !loadingMore.value) {
-        loadMore()
+        void loadMore()
       }
-    }, { rootMargin: '200px' })
+    }, { root: scrollRoot, rootMargin: '0px 0px 1600px 0px' })
     observer.observe(el)
   }
+}
+
+function maybeLoadMore() {
+  if (!scrollRoot || loading.value || loadingMore.value || !hasMore.value) return
+  const remaining = scrollRoot.scrollHeight - scrollRoot.scrollTop - scrollRoot.clientHeight
+  if (remaining < Math.max(1000, scrollRoot.clientHeight * 2)) {
+    void loadMore()
+  }
+}
+
+watch(loadMoreRef, () => {
+  observeLoadMore()
 })
 
+watch(() => mediaList.value.length, () => {
+  scheduleVirtualUpdate(false)
+}, { flush: 'post' })
+
 onUnmounted(() => {
-  if (observer) {
-    observer.disconnect()
-  }
+  observer?.disconnect()
+  resizeObserver?.disconnect()
+  scrollRoot?.removeEventListener('scroll', handleVirtualScroll)
+  window.cancelAnimationFrame(virtualFrame)
 })
 
 const updateMediaInList = (media: Media) => {
@@ -281,6 +435,15 @@ const triggerMissingRecheck = async () => {
 
 onMounted(async () => {
   await fetchMedia()
+  await nextTick()
+  scrollRoot = containerRef.value?.closest<HTMLElement>('.main-scroll-container') || null
+  lastVirtualScrollTop = scrollRoot?.scrollTop || 0
+  scrollRoot?.addEventListener('scroll', handleVirtualScroll, { passive: true })
+  resizeObserver = new ResizeObserver(() => scheduleVirtualUpdate(true))
+  if (containerRef.value) resizeObserver.observe(containerRef.value)
+  await updateVirtualLayout()
+  observeLoadMore()
+  maybeLoadMore()
   await syncSelectedMediaFromRoute()
   fetchTags()
   await triggerMissingRecheck()
@@ -528,14 +691,30 @@ onMounted(async () => {
         v-else-if="mediaList.length > 0"
         class="flex flex-col gap-8"
       >
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 md:gap-7">
-          <MediaCard
-            v-for="(item, index) in mediaList"
-            :key="item.id"
-            :media="item"
-            :index="index"
-            @click="openMedia(item)"
-          />
+        <div
+          ref="virtualGridRef"
+          class="relative w-full"
+          :style="{ height: `${virtualTotalHeight}px` }"
+          :data-virtual-total="mediaList.length"
+          :data-virtual-start="virtualStartIndex"
+          :data-virtual-end="virtualEndIndex"
+          style="contain: layout paint style"
+        >
+          <div
+            ref="virtualItemsRef"
+            class="virtual-media-grid absolute inset-x-0 top-0 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 md:gap-7"
+            :style="{ transform: `translate3d(0, ${virtualOffsetY}px, 0)` }"
+          >
+            <MediaCard
+              v-for="(item, visibleIndex) in virtualMedia"
+              :key="item.id"
+              :media="item"
+              :index="virtualStartIndex + visibleIndex"
+              virtualized
+              eager
+              @click="openMedia(item)"
+            />
+          </div>
         </div>
 
         <div ref="loadMoreRef" class="w-full py-4 flex justify-center">

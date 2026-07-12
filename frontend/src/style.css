@@ -119,6 +119,13 @@ body {
   contain-intrinsic-size: 200px 300px;
 }
 
+/* The list window is already virtualized. Applying a second browser-level
+ * visibility heuristic here can delay paint after its transform changes. */
+.lazy-card.virtual-card {
+  content-visibility: visible;
+  contain-intrinsic-size: auto;
+}
+
 /* Staggered entrance animation for lists */
 @keyframes fluidEntrance {
   from {
