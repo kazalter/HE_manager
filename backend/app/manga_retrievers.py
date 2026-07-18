@@ -39,7 +39,7 @@ log = logging.getLogger(__name__)
 
 # --- Common candidate pull --------------------------------------------------
 
-HIDDEN_DUPLICATE_STATUSES = {"checking", "strong_duplicate", "suspected_duplicate"}
+HIDDEN_DUPLICATE_STATUSES = {"checking", "strong_duplicate", "suspected_duplicate", "dedup_excluded"}
 
 
 def visible_manga(db: Session) -> list[models.Media]:

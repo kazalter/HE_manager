@@ -457,9 +457,27 @@ class DuplicateCandidatePair(BaseModel):
     candidate: DedupMediaSummary
 
 
+class DedupCandidatePage(BaseModel):
+    items: List[DuplicateCandidatePair]
+    total: int = 0
+    limit: int = 20
+    offset: int = 0
+
+
 class DedupActionRequest(BaseModel):
     action: str = Field(description="keep_existing | replace_path | keep_both | ignore")
     note: Optional[str] = None
+
+
+class DedupBatchActionRequest(BaseModel):
+    pair_ids: List[int]
+    action: str = Field(description="keep_both | ignore")
+    note: Optional[str] = None
+
+
+class DedupBatchActionResponse(BaseModel):
+    processed: int = 0
+    skipped: int = 0
 
 
 class DedupDeleteFileRequest(BaseModel):

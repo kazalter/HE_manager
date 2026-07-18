@@ -142,6 +142,34 @@ def classify_video(existing: FingerprintLite, candidate: FingerprintLite) -> Tup
     return LEVEL_UNIQUE, 0, reasons
 
 
+def classify_audio(existing: FingerprintLite, candidate: FingerprintLite) -> Tuple[str, int, List[str]]:
+    reasons: List[str] = []
+    matches = _hashes_overlap(existing, candidate)
+    size_match = _within_pct(existing.file_size, candidate.file_size, 0.01)
+    size_close = _within_pct(existing.file_size, candidate.file_size, 0.05)
+    tracks_match = bool(
+        existing.page_count
+        and candidate.page_count
+        and existing.page_count == candidate.page_count
+    )
+    if matches:
+        reasons.append(f"{matches}/3 个音频抽样 hash 匹配")
+    if size_match:
+        reasons.append("文件大小一致")
+    elif size_close:
+        reasons.append("文件大小接近")
+    if tracks_match:
+        reasons.append(f"音轨数一致 ({existing.page_count})")
+
+    if matches >= 3 and (size_match or tracks_match):
+        return LEVEL_STRONG, 95, reasons
+    if matches >= 2 and (size_close or tracks_match):
+        return LEVEL_SUSPECTED, 75, reasons
+    if matches >= 1 or (size_match and tracks_match):
+        return LEVEL_WEAK, 45, reasons
+    return LEVEL_UNIQUE, 0, reasons
+
+
 def classify(existing: FingerprintLite, candidate: FingerprintLite) -> Tuple[str, int, List[str]]:
     """Returns (level, similarity_0_100, reason_list)."""
     if existing.media_type != candidate.media_type:
@@ -152,4 +180,6 @@ def classify(existing: FingerprintLite, candidate: FingerprintLite) -> Tuple[str
         return classify_image(existing, candidate)
     if existing.media_type == "video":
         return classify_video(existing, candidate)
+    if existing.media_type == "audio":
+        return classify_audio(existing, candidate)
     return LEVEL_UNIQUE, 0, []

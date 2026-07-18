@@ -65,7 +65,7 @@ def analyze_manga_profiles(
         query = db.query(models.Media).filter(
             models.Media.media_type == "manga",
             models.Media.is_missing == False,  # noqa: E712
-            models.Media.duplicate_status.notin_(["checking", "strong_duplicate", "suspected_duplicate"]),
+            models.Media.duplicate_status.notin_(["checking", "strong_duplicate", "suspected_duplicate", "dedup_excluded"]),
         )
         rows = query.order_by(models.Media.id.desc()).all()
         media_ids = [

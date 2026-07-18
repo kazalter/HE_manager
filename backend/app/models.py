@@ -68,6 +68,8 @@ class Media(Base):
     # 'strong_duplicate'    — confirmed dup of an existing entry; UI hides from main library, exposed via dedup management
     # 'suspected_duplicate' — needs user confirmation; UI hides from main library
     # 'weak_suspected'      — visible in library but flagged
+    # 'dedup_excluded'      — resolved in favour of another row; keep the file/row
+    #                         so a later scan does not recreate the same candidate
     normalized_title = Column(String, index=True, nullable=True)
     duplicate_status = Column(String, index=True, default="unique")
 

@@ -2,8 +2,8 @@
 
 Never deletes files implicitly. The "merge" semantically means "consolidate the candidate
 into the existing entry" — afterwards the existing entry carries the union of useful
-metadata, and the candidate is removed from the library (DB row only). The actual file
-remains on disk.
+metadata, while the candidate row becomes a hidden tombstone. Keeping that row prevents
+the still-present physical file from being rediscovered on every folder scan.
 
 For "replace_path", the existing entry adopts the new (candidate) path and the candidate
 row is dropped. Useful when the existing entry is missing on disk.
@@ -20,10 +20,30 @@ from .. import models
 
 
 # Action constants — passed in from API.
-ACTION_KEEP_EXISTING = "keep_existing"   # candidate row removed; existing wins
+ACTION_KEEP_EXISTING = "keep_existing"   # candidate row hidden; existing wins
 ACTION_REPLACE_PATH = "replace_path"     # existing adopts candidate's path, candidate row removed
 ACTION_KEEP_BOTH = "keep_both"           # both stay; candidate becomes 'unique'
 ACTION_IGNORE = "ignore"                 # do nothing; pair archived as 'ignored'
+
+
+def _finish(db: Session, commit: bool) -> None:
+    if commit:
+        db.commit()
+    else:
+        db.flush()
+
+
+def _transfer_external_references(
+    db: Session,
+    media: models.Media,
+    replacement: Optional[models.Media],
+) -> None:
+    db.query(models.XMediaItem).filter(
+        models.XMediaItem.library_media_id == media.id
+    ).update(
+        {models.XMediaItem.library_media_id: replacement.id if replacement else None},
+        synchronize_session=False,
+    )
 
 
 def _merge_metadata(existing: models.Media, candidate: models.Media) -> None:
@@ -65,12 +85,7 @@ def _drop_media_and_fingerprint(
     # X imports keep a back-reference from each downloaded file to its library row.
     # When duplicate resolution removes a Media row, preserve that back-reference by
     # moving it to the row that survives the merge.
-    db.query(models.XMediaItem).filter(
-        models.XMediaItem.library_media_id == media.id
-    ).update(
-        {models.XMediaItem.library_media_id: replacement.id if replacement else None},
-        synchronize_session=False,
-    )
+    _transfer_external_references(db, media, replacement)
     fp = (
         db.query(models.MediaFingerprint)
         .filter(models.MediaFingerprint.media_id == media.id)
@@ -104,6 +119,8 @@ def apply_action(
     pair: models.DuplicateCandidate,
     action: str,
     note: Optional[str] = None,
+    *,
+    commit: bool = True,
 ) -> models.DuplicateCandidate:
     existing = db.query(models.Media).filter(models.Media.id == pair.existing_media_id).first()
     candidate = db.query(models.Media).filter(models.Media.id == pair.candidate_media_id).first()
@@ -111,7 +128,7 @@ def apply_action(
         pair.status = "ignored"
         pair.resolved_at = datetime.utcnow()
         pair.resolution_note = "对应媒体已不存在"
-        db.commit()
+        _finish(db, commit)
         return pair
 
     now = datetime.utcnow()
@@ -121,7 +138,7 @@ def apply_action(
         pair.status = "ignored"
         pair.resolved_at = now
         pair.resolution_note = note
-        db.commit()
+        _finish(db, commit)
         return pair
 
     if action == ACTION_KEEP_BOTH:
@@ -129,10 +146,15 @@ def apply_action(
         pair.status = "kept_both"
         pair.resolved_at = now
         pair.resolution_note = note
-        db.commit()
+        _finish(db, commit)
         return pair
 
     if action == ACTION_REPLACE_PATH:
+        old_path_exists = bool(existing.absolute_path and os.path.exists(existing.absolute_path))
+        if old_path_exists:
+            raise ValueError("只有已有文件丢失时才能采用新路径")
+        if not candidate.absolute_path or not os.path.exists(candidate.absolute_path):
+            raise ValueError("新扫描文件不存在，不能替换路径")
         old_path = existing.absolute_path
         existing.absolute_path = candidate.absolute_path
         existing.relative_path = candidate.relative_path
@@ -143,16 +165,21 @@ def apply_action(
         pair.status = "replaced"
         pair.resolved_at = now
         pair.resolution_note = note or f"路径替换：{old_path} → {existing.absolute_path}"
-        db.commit()
+        _finish(db, commit)
         return pair
 
     if action == ACTION_KEEP_EXISTING:
         _merge_metadata(existing, candidate)
-        _drop_media_and_fingerprint(db, candidate, replacement=existing)
+        # Keep the candidate row as a hidden tombstone. Dropping the DB row while
+        # leaving the physical file on disk makes the next folder scan recreate the
+        # exact same duplicate candidate. The hidden row closes that loop while the
+        # explicit file-cleanup action remains independently confirmable.
+        _transfer_external_references(db, candidate, existing)
+        candidate.duplicate_status = "dedup_excluded"
         pair.status = "merged"
         pair.resolved_at = now
-        pair.resolution_note = note
-        db.commit()
+        pair.resolution_note = note or "保留已有记录；新扫描文件保留在磁盘并从媒体库隐藏"
+        _finish(db, commit)
         return pair
 
     raise ValueError(f"unsupported merge action: {action}")

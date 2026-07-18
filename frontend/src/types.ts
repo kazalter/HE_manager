@@ -20,7 +20,7 @@ export interface Media {
     is_missing: boolean;
     missing_since: string | null;
     normalized_title?: string | null;
-    duplicate_status?: 'unique' | 'checking' | 'strong_duplicate' | 'suspected_duplicate' | 'weak_suspected' | string;
+    duplicate_status?: 'unique' | 'checking' | 'strong_duplicate' | 'suspected_duplicate' | 'weak_suspected' | 'dedup_excluded' | string;
     created_at: string;
     tags: Tag[];
 }
@@ -41,7 +41,7 @@ export interface DedupMediaSummary {
     id: number;
     title: string;
     display_path: string;
-    media_type: 'video' | 'manga' | 'image';
+    media_type: 'video' | 'manga' | 'image' | 'audio';
     extension: string | null;
     file_size: number | null;
     cover_path: string | null;
@@ -69,6 +69,13 @@ export interface DuplicateCandidatePair {
     resolution_note: string | null;
     existing: DedupMediaSummary;
     candidate: DedupMediaSummary;
+}
+
+export interface DedupCandidatePage {
+    items: DuplicateCandidatePair[];
+    total: number;
+    limit: number;
+    offset: number;
 }
 
 export interface Tag {

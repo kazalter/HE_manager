@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 
 from . import models
 
-HIDDEN_DUP_STATUSES = ("checking", "strong_duplicate", "suspected_duplicate")
+HIDDEN_DUP_STATUSES = ("checking", "strong_duplicate", "suspected_duplicate", "dedup_excluded")
 CREATOR_CACHE_TTL_SECONDS = 30.0
 _CREATOR_LIST_CACHE: dict[tuple[int, str], tuple[float, list[dict]]] = {}
 

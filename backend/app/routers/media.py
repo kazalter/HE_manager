@@ -145,7 +145,7 @@ def list_media(
         query = query.filter(models.Media.duplicate_status == duplicate_status)
     elif not include_hidden_duplicates:
         query = query.filter(
-            models.Media.duplicate_status.notin_(["checking", "strong_duplicate", "suspected_duplicate"])
+            models.Media.duplicate_status.notin_(["checking", "strong_duplicate", "suspected_duplicate", "dedup_excluded"])
         )
 
     if sort == "title":
@@ -173,7 +173,12 @@ def list_mobile_media(
     _: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(models.Media).filter(models.Media.is_missing == False).options(selectinload(models.Media.tags))
+    query = (
+        db.query(models.Media)
+        .filter(models.Media.is_missing == False)
+        .filter(models.Media.duplicate_status.notin_(["checking", "strong_duplicate", "suspected_duplicate", "dedup_excluded"]))
+        .options(selectinload(models.Media.tags))
+    )
     if media_type:
         query = query.filter(models.Media.media_type == media_type)
     if search:

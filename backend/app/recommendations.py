@@ -11,7 +11,7 @@ from . import ai_config, manga_retrievers, manga_search, models
 
 log = logging.getLogger(__name__)
 
-HIDDEN_DUPLICATE_STATUSES = {"checking", "strong_duplicate", "suspected_duplicate"}
+HIDDEN_DUPLICATE_STATUSES = {"checking", "strong_duplicate", "suspected_duplicate", "dedup_excluded"}
 
 # (removed — personal media library, no content restrictions)
 

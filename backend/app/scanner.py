@@ -480,7 +480,7 @@ def scan_folder(folder_id: int):
         library_title_index: set[str] = set()
         for row in (
             db.query(models.Media.normalized_title)
-            .filter(models.Media.duplicate_status.notin_(["strong_duplicate", "checking"]))
+            .filter(models.Media.duplicate_status.notin_(["strong_duplicate", "checking", "dedup_excluded"]))
             .all()
         ):
             value = (row[0] or "").strip()

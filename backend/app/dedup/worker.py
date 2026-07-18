@@ -141,7 +141,7 @@ def _candidates_for(db: Session, media: models.Media) -> List[models.Media]:
         .filter(models.Media.id != media.id)
         .filter(models.Media.media_type == media.media_type)
         .filter(models.Media.is_missing == False)  # noqa: E712
-        .filter(models.Media.duplicate_status.notin_(["strong_duplicate", "checking"]))
+        .filter(models.Media.duplicate_status.notin_(["strong_duplicate", "checking", "dedup_excluded"]))
         .filter(models.Media.normalized_title == norm)
         .all()
     )

@@ -22,6 +22,8 @@ from .. import models
 
 HASH_LENGTH = 16  # truncated SHA-1 hex chars
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".avif"}
+AUDIO_EXTS = {".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg", ".opus", ".wma"}
+SAMPLE_BYTES = 64 * 1024
 
 
 @dataclass
@@ -59,6 +61,30 @@ def _safe_mtime(path: str) -> Optional[int]:
 
 def _is_image(name: str) -> bool:
     return os.path.splitext(name)[1].lower() in IMAGE_EXTS
+
+
+def _is_audio(name: str) -> bool:
+    return os.path.splitext(name)[1].lower() in AUDIO_EXTS
+
+
+def _sample_file_chunks(path: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    size = _safe_size(path)
+    if not size:
+        return None, None, None
+    hashes: List[Optional[str]] = []
+    try:
+        with open(path, "rb") as fp:
+            for position in (0, max(0, size // 2 - SAMPLE_BYTES // 2), max(0, size - SAMPLE_BYTES)):
+                fp.seek(position)
+                hashes.append(_short_hash(fp.read(SAMPLE_BYTES)))
+    except OSError:
+        return None, None, None
+    return hashes[0], hashes[1], hashes[2]
+
+
+def _sampled_file_hash(path: str) -> Optional[str]:
+    hashes = [value for value in _sample_file_chunks(path) if value]
+    return _short_hash("|".join(hashes).encode("ascii")) if hashes else None
 
 
 def _pick_three(values: List) -> List:
@@ -242,6 +268,42 @@ def fingerprint_video(path: str) -> FingerprintResult:
     )
 
 
+def fingerprint_audio_file(path: str) -> FingerprintResult:
+    h_first, h_middle, h_last = _sample_file_chunks(path)
+    return FingerprintResult(
+        media_type="audio",
+        file_size=_safe_size(path),
+        hash_first=h_first,
+        hash_middle=h_middle,
+        hash_last=h_last,
+        source_path=path,
+        source_mtime=_safe_mtime(path),
+    )
+
+
+def fingerprint_audio_dir(path: str, media_size: Optional[int]) -> FingerprintResult:
+    tracks: List[str] = []
+    for root, _, files in os.walk(path):
+        for name in files:
+            if _is_audio(name):
+                tracks.append(os.path.join(root, name))
+    tracks.sort()
+    picks = _pick_three(tracks)
+    hashes = [_sampled_file_hash(value) if value else None for value in picks]
+    while len(hashes) < 3:
+        hashes.append(None)
+    return FingerprintResult(
+        media_type="audio",
+        file_size=media_size,
+        page_count=len(tracks),
+        hash_first=hashes[0],
+        hash_middle=hashes[1],
+        hash_last=hashes[2],
+        source_path=path,
+        source_mtime=_safe_mtime(path),
+    )
+
+
 def fingerprint_for_media(media: "models.Media") -> Optional[FingerprintResult]:
     path = media.absolute_path
     if not path or not os.path.exists(path):
@@ -254,6 +316,10 @@ def fingerprint_for_media(media: "models.Media") -> Optional[FingerprintResult]:
         if media.extension == ".dir":
             return fingerprint_manga_dir(path)
         return fingerprint_manga_zip(path)
+    if media.media_type == "audio":
+        if os.path.isdir(path):
+            return fingerprint_audio_dir(path, media.file_size)
+        return fingerprint_audio_file(path)
     return None
 
 
@@ -263,7 +329,7 @@ def fingerprint_cache_is_fresh(record: "models.MediaFingerprint", media: "models
         return False
     if record.source_path != media.absolute_path:
         return False
-    current_size = _safe_size(media.absolute_path)
+    current_size = media.file_size if os.path.isdir(media.absolute_path) else _safe_size(media.absolute_path)
     current_mtime = _safe_mtime(media.absolute_path)
     if current_size is None or current_mtime is None:
         return False

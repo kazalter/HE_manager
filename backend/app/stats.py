@@ -32,7 +32,7 @@ from . import creators as creators_mod
 from . import models
 
 # duplicate_status values the library hides; stats follow the same rule.
-HIDDEN_DUP_STATUSES = ("checking", "strong_duplicate", "suspected_duplicate")
+HIDDEN_DUP_STATUSES = ("checking", "strong_duplicate", "suspected_duplicate", "dedup_excluded")
 
 # Per-endpoint TTL in seconds. Refresh-button users on a personal box don't
 # need sub-second freshness — this just avoids re-running 4 aggregations
@@ -378,7 +378,7 @@ def _top_tags(db: Session, limit: int) -> list[dict]:
             FROM tags t
             JOIN media_tag mt ON mt.tag_id = t.id
             JOIN media m ON m.id = mt.media_id
-            WHERE m.duplicate_status NOT IN ('checking', 'strong_duplicate', 'suspected_duplicate')
+            WHERE m.duplicate_status NOT IN ('checking', 'strong_duplicate', 'suspected_duplicate', 'dedup_excluded')
               AND COALESCE(t.namespace, 'general') != 'artist'
             GROUP BY t.id
             ORDER BY n DESC
