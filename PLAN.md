@@ -35,7 +35,7 @@ docker run --rm he-manager-backend:latest python -c "import torch; assert torch.
 docker run --rm he-manager-backend:latest git --version
 ```
 
-### 2. [ ] 建立健康检查和容器运行基线
+### 2. [x] 建立健康检查和容器运行基线
 
 目标：容器状态能真实反映 API、数据库是否可用，而不只是进程是否存在。
 
@@ -43,6 +43,8 @@ docker run --rm he-manager-backend:latest git --version
 - `docker-compose.yml` 为后端增加 healthcheck，前端依赖健康后端。
 - healthcheck 不输出密钥、路径或业务数据。
 - lifespan 退出时停止可停止的后台调度资源。
+
+完成结果：新增公开但不含业务数据的 `/healthz`，后端检查 SQLite；Compose 为前后端配置 healthcheck 和健康依赖；lifespan 退出时释放自动同步调度锁。生产容器均已验证为 healthy，未鉴权 `/media` 仍返回 401。
 
 验收：后端、前端容器均显示 healthy；未登录请求只能读取健康状态，不能读取业务数据。
 

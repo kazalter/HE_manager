@@ -46,9 +46,18 @@ services:
       # container path == host path == /mnt/hdd, the DB's download_root_path /
       # absolute_path columns are rewritten to /mnt/hdd/... once and stay valid.
       - /mnt/hdd:/mnt/hdd
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/healthz', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   frontend:
     image: nginx:1.27-alpine
+    depends_on:
+      backend:
+        condition: service_healthy
     container_name: he-manager-frontend
     restart: unless-stopped
     volumes:
@@ -57,6 +66,12 @@ services:
     networks:
       - default
       - npm_proxy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
 networks:
   npm_proxy:

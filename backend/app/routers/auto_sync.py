@@ -16,6 +16,10 @@ def init_scheduler() -> None:
     auto_sync_service.init()
 
 
+def stop_scheduler() -> None:
+    auto_sync_service.stop()
+
+
 @router.get("/auto-sync/status", response_model=schemas.AutoSyncStatus)
 def get_auto_sync_status(db: Session = Depends(get_db)):
     sources_status = []

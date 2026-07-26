@@ -37,7 +37,10 @@ async def lifespan(app: FastAPI):
     # Startup tasks
     auto_sync_routes.init_scheduler()
     cleanup_orphaned_thumbnails()
-    yield
+    try:
+        yield
+    finally:
+        auto_sync_routes.stop_scheduler()
 
 _docs_enabled = os.getenv("HE_ENABLE_DOCS", "").lower() in {"1", "true", "yes", "on"}
 app = FastAPI(
@@ -82,6 +85,7 @@ app.mount("/thumbnails", StaticFiles(directory=THUMBNAIL_DIR), name="thumbnails"
 
 
 PUBLIC_PATHS = {
+    "/healthz",
     "/auth/status",
     "/auth/login",
     "/auth/bootstrap",
