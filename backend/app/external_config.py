@@ -30,9 +30,14 @@ def _read_config() -> dict:
 
 
 def _write_config(data: dict) -> None:
-    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+    config_dir = os.path.dirname(CONFIG_PATH) or "."
+    os.makedirs(config_dir, mode=0o700, exist_ok=True)
+    temp_path = f"{CONFIG_PATH}.tmp"
+    with open(temp_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    if os.name != "nt":
+        os.chmod(temp_path, 0o600)
+    os.replace(temp_path, CONFIG_PATH)
 
 
 def get_global_proxy() -> Optional[str]:

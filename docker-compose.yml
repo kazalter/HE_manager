@@ -24,6 +24,9 @@ services:
       HE_ENABLE_DOCS: "0"           # keep /docs /redoc /openapi.json closed on the public net
       # HE_ALLOWED_ORIGINS: "https://<your-sakura-subdomain>"  # only if you ever expose the web UI
       HE_DATABASE_URL: "sqlite:////data/library.db"
+      HE_AI_CONFIG_PATH: "/data/deepseek.json"
+      HF_HOME: "/data/huggingface"
+      SENTENCE_TRANSFORMERS_HOME: "/data/huggingface"
       # --- optional HE_downloader bridge ---
       # HE_DOWNLOADER_URL: "http://192.168.208.130:8011"
       # HE_DOWNLOADER_TOKEN: ""

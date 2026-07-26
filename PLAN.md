@@ -62,7 +62,7 @@ docker run --rm he-manager-backend:latest git --version
 
 验收：连续请求 36 张缩略图不会产生 36 次 token 更新时间写入；Header 鉴权保持兼容。
 
-### 4. [ ] 持久化配置与收紧敏感文件权限
+### 4. [x] 持久化配置与收紧敏感文件权限
 
 目标：重建容器不会丢失 AI 配置或模型缓存，同机其他普通用户不能直接读取凭据。
 
@@ -71,6 +71,8 @@ docker run --rm he-manager-backend:latest git --version
 - 数据目录建议权限 700，敏感文件建议权限 600。
 - 保持已有配置向新位置的兼容迁移。
 - 文档明确 X/ASMR Cookie、DeepSeek Key 的保存边界。
+
+完成结果：生产 DeepSeek 配置改为 `/data/deepseek.json` 并支持旧路径迁移；HuggingFace/SentenceTransformer 缓存固定到 `/data/huggingface`；配置写入使用原子替换和 0600，SQLite/数据目录启动时收紧为 0600/0700，容器默认 umask 077。生产权限与持久环境变量已验证，后端测试 105 项全部通过。
 
 验收：配置后重建后端容器，配置仍存在且 API 不返回明文密钥。
 

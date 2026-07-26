@@ -1,4 +1,5 @@
 from sqlalchemy import create_engine, event
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
@@ -39,6 +40,35 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
+
+
+def secure_data_permissions(database_url: str | None = None) -> None:
+    """Best-effort owner-only permissions for the SQLite data and secrets."""
+    if os.name == "nt":
+        return
+    try:
+        url = make_url(database_url or SQLALCHEMY_DATABASE_URL)
+        if url.drivername != "sqlite" or not url.database or url.database == ":memory:":
+            return
+        db_path = os.path.abspath(url.database)
+        data_dir = os.path.dirname(db_path)
+        if os.path.isdir(data_dir):
+            os.chmod(data_dir, 0o700)
+        sensitive_paths = {
+            db_path,
+            f"{db_path}-wal",
+            f"{db_path}-shm",
+            os.path.join(data_dir, "external_config.json"),
+            os.getenv("HE_AI_CONFIG_PATH", os.path.join(data_dir, "deepseek.json")),
+        }
+        for path in sensitive_paths:
+            if path and os.path.isfile(path):
+                os.chmod(path, 0o600)
+    except (OSError, ValueError):
+        # Permissions differ across bind mounts and Windows-compatible filesystems;
+        # failure to chmod must not make the media server unavailable.
+        return
+
 
 # Utility to get DB session
 def get_db():

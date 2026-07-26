@@ -92,5 +92,7 @@ python .\deploy_to_linux.py
 
 ### 安全与数据防护
 - 生产环境建议通过 Nginx Proxy Manager 等反代工具启用 HTTPS。
-- `.env` 配置文件、`backend/app/library.db` 数据库文件以及 `covers/` 封面文件夹已被 `.gitignore` 忽略，请确保定期备份 `backups/` 目录下的自动数据库备份。
+- Docker 将 SQLite、外部来源凭据、DeepSeek 配置和 HuggingFace 模型缓存持久化在 `./data`；重建后端容器不会清空这些配置。
+- X/ASMR Cookie 与 DeepSeek API Key 是服务运行所需的可恢复凭据，保存在本机数据卷中且不会由状态 API 明文返回；应将 `data` 目录视为敏感数据，保持 owner-only 权限并纳入可信备份。
+- `.env`、数据库、模型缓存以及 `covers/` 封面目录均被 Git 忽略，请定期检查 `backups/` 中的 SQLite 热备份。
 

@@ -33,6 +33,7 @@ async def lifespan(app: FastAPI):
     models.Base.metadata.create_all(bind=engine)
     from .migrations import run_schema_migrations
     run_schema_migrations()
+    database.secure_data_permissions()
     db = database.SessionLocal()
     try:
         auth.cleanup_access_tokens(db)

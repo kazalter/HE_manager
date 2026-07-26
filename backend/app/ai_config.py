@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 from typing import Optional
 
 
@@ -7,11 +8,27 @@ DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEFAULT_DEEPSEEK_MODEL = "deepseek-chat"
 
 BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-CONFIG_DIR = os.path.join(BACKEND_DIR, "instance")
-CONFIG_PATH = os.path.join(CONFIG_DIR, "deepseek.json")
+LEGACY_CONFIG_DIR = os.path.join(BACKEND_DIR, "instance")
+LEGACY_CONFIG_PATH = os.path.join(LEGACY_CONFIG_DIR, "deepseek.json")
+CONFIG_PATH = os.getenv("HE_AI_CONFIG_PATH", LEGACY_CONFIG_PATH)
+# Compatibility alias for existing scripts/tests; writes derive the directory
+# from CONFIG_PATH so an explicit persistent path remains authoritative.
+CONFIG_DIR = os.path.dirname(CONFIG_PATH) or "."
+
+
+def _migrate_legacy_config() -> None:
+    if CONFIG_PATH == LEGACY_CONFIG_PATH or os.path.exists(CONFIG_PATH):
+        return
+    if not os.path.isfile(LEGACY_CONFIG_PATH):
+        return
+    os.makedirs(os.path.dirname(CONFIG_PATH) or ".", mode=0o700, exist_ok=True)
+    shutil.copy2(LEGACY_CONFIG_PATH, CONFIG_PATH)
+    if os.name != "nt":
+        os.chmod(CONFIG_PATH, 0o600)
 
 
 def _read_file_config() -> dict:
+    _migrate_legacy_config()
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -21,9 +38,14 @@ def _read_file_config() -> dict:
 
 
 def _write_file_config(data: dict) -> None:
-    os.makedirs(CONFIG_DIR, exist_ok=True)
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+    config_dir = os.path.dirname(CONFIG_PATH) or "."
+    os.makedirs(config_dir, mode=0o700, exist_ok=True)
+    temp_path = f"{CONFIG_PATH}.tmp"
+    with open(temp_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    if os.name != "nt":
+        os.chmod(temp_path, 0o600)
+    os.replace(temp_path, CONFIG_PATH)
 
 
 def get_deepseek_config() -> dict:

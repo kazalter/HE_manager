@@ -40,5 +40,6 @@ ENV HE_DATABASE_URL=sqlite:////data/library.db \
 
 EXPOSE 8010
 
-# --no-access-log mirrors he.ps1: keeps the ?token= query string out of logs.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8010", "--no-access-log"]
+# Owner-only defaults protect SQLite credentials and API configuration created
+# on bind mounts. --no-access-log keeps binary URL tokens out of request logs.
+CMD ["sh", "-c", "umask 077; exec uvicorn app.main:app --host 0.0.0.0 --port 8010 --no-access-log"]
