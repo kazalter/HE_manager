@@ -5,7 +5,7 @@ import tempfile
 import zipfile
 from unittest.mock import patch
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app import external_sources, models, schemas
@@ -255,6 +255,64 @@ class ExternalSourcesTest(unittest.TestCase):
             self.assertEqual(len(saved.items), 1)
             self.assertEqual(saved.items[0].external_id, "123456")
             self.assertEqual(saved.items[0].sync_position, 3)
+        finally:
+            db.close()
+
+    def test_external_favorites_list_uses_constant_queries_and_never_writes(self):
+        db = self.Session()
+        try:
+            source = models.ExternalFavoriteSource(
+                source_type="wnacg",
+                name="WNACG",
+                favorites_url=external_sources.WNACG_DEFAULT_URL,
+                cookie="session=test",
+                download_root_path="/library",
+            )
+            for index in range(25):
+                url = f"https://www.wnacg.com/photos-index-aid-{index}.html"
+                source.items.append(models.ExternalFavoriteItem(
+                    source_type="wnacg",
+                    external_id=str(index),
+                    title=f"Book {index}",
+                    url=url,
+                    sync_position=index,
+                ))
+                db.add(models.Media(
+                    title=f"Book {index}",
+                    relative_path=f"book-{index}",
+                    absolute_path=f"/library/book-{index}",
+                    media_type="manga",
+                    extension=".dir",
+                    file_size=1,
+                    source_url=url,
+                    source_site="wnacg",
+                    is_missing=False,
+                    duplicate_status="unique",
+                ))
+            db.add(source)
+            db.commit()
+
+            statements = []
+            def capture(_conn, _cursor, statement, _params, _context, _many):
+                statements.append(statement.strip().upper())
+
+            event.listen(self.engine, "before_cursor_execute", capture)
+            try:
+                with patch.object(
+                    external_runtime.os.path,
+                    "isdir",
+                    side_effect=AssertionError("GET must not inspect download folders"),
+                ):
+                    result = external_routes.list_external_favorites(db=db)
+            finally:
+                event.remove(self.engine, "before_cursor_execute", capture)
+
+            self.assertEqual(len(result), 25)
+            self.assertTrue(all(item["local_media_id"] for item in result))
+            selects = [sql for sql in statements if sql.startswith("SELECT")]
+            writes = [sql for sql in statements if sql.startswith(("INSERT", "UPDATE", "DELETE"))]
+            self.assertLessEqual(len(selects), 2)
+            self.assertEqual(writes, [])
         finally:
             db.close()
 

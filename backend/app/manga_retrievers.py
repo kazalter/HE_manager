@@ -30,7 +30,7 @@ import logging
 from typing import Iterable, Optional
 
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from . import manga_search, manga_vector, models
 
@@ -51,6 +51,11 @@ def visible_manga(db: Session) -> list[models.Media]:
     """
     return (
         db.query(models.Media)
+        .options(
+            selectinload(models.Media.tags),
+            selectinload(models.Media.ai_profile),
+            selectinload(models.Media.metadata_profile),
+        )
         .filter(
             models.Media.media_type == "manga",
             models.Media.is_missing == False,  # noqa: E712

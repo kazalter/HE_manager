@@ -12,6 +12,7 @@ import zipfile
 from typing import List, Optional
 from urllib.parse import urljoin, urlparse
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from .. import asmr_source, database, downloader_push, external_sources, models, scanner
@@ -175,13 +176,19 @@ def get_asmr_storage_dirs(source: models.ExternalFavoriteSource, download_root_p
 
 
 def external_item_download_dir(item: models.ExternalFavoriteItem, source: models.ExternalFavoriteSource, download_root_path: Optional[str] = None) -> str:
-    if (source.source_type or "wnacg") == "asmr":
-        _, audio_dir = get_asmr_storage_dirs(source, download_root_path)
+    """Compute an item path without creating directories (safe for GET paths)."""
+    source_type = source.source_type or "wnacg"
+    root = normalize_download_root(
+        download_root_path if download_root_path is not None else source.download_root_path,
+        source_type,
+    )
+    if source_type == "asmr":
+        audio_dir = os.path.join(root, "audio")
         # external_id for ASMR is the RJ code (e.g. "RJ123456"); keep the
         # title-first naming so the directory is human-skimmable in a file
         # explorer while the RJ suffix guarantees uniqueness.
         return os.path.join(audio_dir, f"{safe_filename(item.title, 'asmr')}_{item.external_id}")
-    _, _, manga_dir = get_external_storage_dirs(source, download_root_path)
+    manga_dir = os.path.join(root, "manga")
     return os.path.join(manga_dir, f"{safe_filename(item.title, 'wnacg')}_{item.external_id}")
 
 
@@ -333,6 +340,60 @@ def ensure_wnacg_source_marker(item: models.ExternalFavoriteItem, item_dir: str)
         info_file.write(f"{item.title}\n{item.url}\n")
 
 
+def find_local_media_for_external_items(
+    items: List[models.ExternalFavoriteItem],
+    db: Session,
+) -> dict[int, models.Media]:
+    """Resolve list badges in one read-only query, without filesystem repair."""
+    if not items:
+        return {}
+
+    urls = {item.url for item in items if item.url}
+    expected_paths: dict[int, str] = {}
+    for item in items:
+        source = item.source
+        if source and source.download_root_path:
+            expected_paths[item.id] = external_item_download_dir(item, source)
+
+    filters = []
+    if urls:
+        filters.append(models.Media.source_url.in_(urls))
+    if expected_paths:
+        filters.append(models.Media.absolute_path.in_(set(expected_paths.values())))
+    if not filters:
+        return {}
+
+    media_rows = (
+        db.query(models.Media)
+        .filter(
+            models.Media.is_missing == False,  # noqa: E712
+            or_(*filters),
+        )
+        .order_by(models.Media.id.desc())
+        .all()
+    )
+    by_source: dict[tuple[str, str, str], models.Media] = {}
+    by_path: dict[tuple[str, str], models.Media] = {}
+    for media in media_rows:
+        if media.source_url and media.source_site:
+            by_source.setdefault(
+                (media.source_url, media.source_site, media.media_type),
+                media,
+            )
+        if media.absolute_path:
+            by_path.setdefault((media.absolute_path, media.media_type), media)
+
+    resolved: dict[int, models.Media] = {}
+    for item in items:
+        expected_type = "audio" if (item.source_type or "") == "asmr" else "manga"
+        media = by_source.get((item.url, item.source_type, expected_type))
+        if media is None and item.id in expected_paths:
+            media = by_path.get((expected_paths[item.id], expected_type))
+        if media is not None:
+            resolved[item.id] = media
+    return resolved
+
+
 def find_local_media_for_external_item(item: models.ExternalFavoriteItem, db: Session) -> Optional[models.Media]:
     # WNACG works are manga; ASMR works are audio. The expected media_type is
     # the only branch difference — everything else (source_url/source_site
@@ -413,8 +474,10 @@ def find_local_media_for_external_item(item: models.ExternalFavoriteItem, db: Se
     return upsert_external_downloaded_media(item, source, item_dir, source.download_root_path, db)
 
 
-def serialize_external_favorite_item(item: models.ExternalFavoriteItem, db: Session) -> dict:
-    local_media = find_local_media_for_external_item(item, db)
+def serialize_external_favorite_item(
+    item: models.ExternalFavoriteItem,
+    local_media_id: Optional[int] = None,
+) -> dict:
     return {
         "id": item.id,
         "source_id": item.source_id,
@@ -427,8 +490,22 @@ def serialize_external_favorite_item(item: models.ExternalFavoriteItem, db: Sess
         "category_name": item.category_name,
         "sync_position": item.sync_position,
         "last_seen_at": item.last_seen_at,
-        "local_media_id": local_media.id if local_media else None,
+        "local_media_id": local_media_id,
     }
+
+
+def serialize_external_favorite_items(
+    items: List[models.ExternalFavoriteItem],
+    db: Session,
+) -> List[dict]:
+    local_media = find_local_media_for_external_items(items, db)
+    return [
+        serialize_external_favorite_item(
+            item,
+            local_media_id=local_media[item.id].id if item.id in local_media else None,
+        )
+        for item in items
+    ]
 
 
 def upsert_external_downloaded_media(

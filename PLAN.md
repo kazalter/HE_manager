@@ -92,7 +92,7 @@ docker run --rm he-manager-backend:latest git --version
 
 ## P1：查询、接口与前端交付
 
-### 6. [ ] 清理高成本查询和 GET 副作用
+### 6. [x] 清理高成本查询和 GET 副作用
 
 目标：外部收藏与推荐查询随数据量线性、可控增长。
 
@@ -100,6 +100,8 @@ docker run --rm he-manager-backend:latest git --version
 - GET 列表接口不再修复或写数据库；修复动作放到同步或显式维护任务。
 - 推荐候选一次 eager-load tags、AI profile、metadata profile。
 - 为关键查询增加查询数量或回归测试。
+
+完成结果：外部收藏本地关联改为一次批量只读查询，列表固定最多 2 次 SELECT，GET 不再检查文件、提交或自动修复；新增显式 `POST /external/favorites/reconcile` 维护入口。推荐候选通过 `selectinload` 一次加载 tags、AI profile 和 metadata profile，生产 237 个候选固定 4 次 SELECT。生产外部收藏 197 条响应约 45ms；后端测试 110 项全部通过。
 
 验收：外部收藏列表 SQL 数量不随项目数 N+1 增长；推荐列表不产生逐媒体 lazy-load 查询。
 

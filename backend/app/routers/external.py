@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from .. import asmr_source, downloader_push, external_sources, models, schemas, scanner
 from ..database import get_db
@@ -23,12 +23,13 @@ from ..services.external_runtime import (
     external_cover_sidecar_rel_path,
     external_item_download_dir,
     get_url_base,
+    find_local_media_for_external_item,
     normalize_download_root,
     prepare_asmr_download_plan_for_item,
     prepare_wnacg_download_plan,
     run_asmr_download_job,
     run_wnacg_download_job,
-    serialize_external_favorite_item,
+    serialize_external_favorite_items,
     upsert_external_downloaded_audio_media,
     upsert_external_downloaded_media,
 )
@@ -108,7 +109,9 @@ def list_external_favorites(
     search: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    query = db.query(models.ExternalFavoriteItem)
+    query = db.query(models.ExternalFavoriteItem).options(
+        joinedload(models.ExternalFavoriteItem.source)
+    )
     if source_type:
         query = query.filter(models.ExternalFavoriteItem.source_type == source_type)
     if source_id:
@@ -120,7 +123,7 @@ def list_external_favorites(
         models.ExternalFavoriteItem.sync_position.asc(),
         models.ExternalFavoriteItem.id.desc(),
     ).all()
-    return [serialize_external_favorite_item(item, db) for item in favorite_items]
+    return serialize_external_favorite_items(favorite_items, db)
 
 
 @router.post("/external/wnacg/sync", response_model=schemas.ExternalFavoriteSyncResponse)
@@ -248,7 +251,11 @@ def sync_wnacg_favorites(payload: schemas.ExternalFavoriteSyncRequest, db: Sessi
             )
             .all()
         )
-        return {"source": source, "synced_count": len(deduped), "items": [serialize_external_favorite_item(item, db) for item in items]}
+        return {
+            "source": source,
+            "synced_count": len(deduped),
+            "items": serialize_external_favorite_items(items, db),
+        }
     except HTTPException:
         source.status = "error"
         source.last_error = "同步失败"
@@ -259,6 +266,25 @@ def sync_wnacg_favorites(payload: schemas.ExternalFavoriteSyncRequest, db: Sessi
         source.last_error = str(exc)
         db.commit()
         raise HTTPException(status_code=502, detail=f"同步 WNACG 收藏失败：{exc}")
+
+
+@router.post("/external/favorites/reconcile")
+def reconcile_external_favorites(
+    source_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    """Explicitly repair stale/missing local links; list GETs stay read-only."""
+    query = db.query(models.ExternalFavoriteItem).options(
+        joinedload(models.ExternalFavoriteItem.source)
+    )
+    if source_id is not None:
+        query = query.filter(models.ExternalFavoriteItem.source_id == source_id)
+    items = query.order_by(models.ExternalFavoriteItem.id.asc()).all()
+    linked = 0
+    for item in items:
+        if find_local_media_for_external_item(item, db) is not None:
+            linked += 1
+    return {"checked": len(items), "linked": linked}
 
 
 @router.get("/external/favorites/{favorite_id}/cover")
@@ -635,7 +661,7 @@ def sync_asmr_favorites(payload: schemas.AsmrSyncRequest, db: Session = Depends(
         return {
             "source": source,
             "synced_count": len(deduped),
-            "items": [serialize_external_favorite_item(item, db) for item in items],
+            "items": serialize_external_favorite_items(items, db),
         }
     except HTTPException:
         source.status = "error"

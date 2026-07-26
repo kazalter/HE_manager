@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 import numpy as np
 
-from app import ai_config, manga_metadata, manga_profiles, manga_search, manga_vector, models, recommendations
+from app import ai_config, manga_metadata, manga_profiles, manga_retrievers, manga_search, manga_vector, models, recommendations
 
 
 class RecommendationTest(unittest.TestCase):
@@ -84,6 +84,50 @@ class RecommendationTest(unittest.TestCase):
             ids = [item["media"].id for item in result["recommendations"]]
             self.assertIn(good.id, ids)
             self.assertNotIn(avoided.id, ids)
+        finally:
+            db.close()
+
+    def test_visible_manga_eager_loads_recommendation_relationships(self):
+        db = self.Session()
+        try:
+            folder = models.Folder(path="/manga", scan_mode="manga")
+            tag = models.Tag(name="eager-tag")
+            for index in range(20):
+                media = models.Media(
+                    folder=folder,
+                    title=f"Manga {index}",
+                    relative_path=f"{index}.cbz",
+                    absolute_path=f"/manga/{index}.cbz",
+                    media_type="manga",
+                    extension=".cbz",
+                    file_size=1,
+                    is_missing=False,
+                    duplicate_status="unique",
+                )
+                media.tags.append(tag)
+                media.ai_profile = models.MangaAIProfile(content_summary=f"summary {index}")
+                media.metadata_profile = models.MangaMetadataProfile(parsed_artist=f"artist {index}")
+            db.add(folder)
+            db.commit()
+            db.expire_all()
+
+            statements = []
+            def capture(_conn, _cursor, statement, _params, _context, _many):
+                if statement.lstrip().upper().startswith("SELECT"):
+                    statements.append(statement)
+
+            event.listen(self.engine, "before_cursor_execute", capture)
+            try:
+                candidates = manga_retrievers.visible_manga(db)
+                for media in candidates:
+                    _ = [item.name for item in media.tags]
+                    _ = media.ai_profile.content_summary
+                    _ = media.metadata_profile.parsed_artist
+            finally:
+                event.remove(self.engine, "before_cursor_execute", capture)
+
+            self.assertEqual(len(candidates), 20)
+            self.assertLessEqual(len(statements), 4)
         finally:
             db.close()
 
