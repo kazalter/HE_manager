@@ -48,7 +48,7 @@ docker run --rm he-manager-backend:latest git --version
 
 验收：后端、前端容器均显示 healthy；未登录请求只能读取健康状态，不能读取业务数据。
 
-### 3. [ ] 消除鉴权写放大并收紧 Query Token
+### 3. [x] 消除鉴权写放大并收紧 Query Token
 
 目标：媒体页缩略图请求不再逐张提交 SQLite。
 
@@ -57,6 +57,8 @@ docker run --rm he-manager-backend:latest git --version
 - 普通 JSON API 只接受 Authorization Header。
 - 清理过期、撤销且超过保留期的 token。
 - 补充鉴权和更新时间节流测试。
+
+完成结果：token 使用时间按 10 分钟节流；URL token 仅接受二进制 GET 路由；启动和登录时清理过期/旧撤销 token。生产验证 Header `/media`=200、Query Token `/media`=401、Query Token 缩略图=200，连续请求时间戳不变；历史 token 从 98 条清理至 7 条。后端测试 103 项全部通过。
 
 验收：连续请求 36 张缩略图不会产生 36 次 token 更新时间写入；Header 鉴权保持兼容。
 

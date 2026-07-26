@@ -33,6 +33,11 @@ async def lifespan(app: FastAPI):
     models.Base.metadata.create_all(bind=engine)
     from .migrations import run_schema_migrations
     run_schema_migrations()
+    db = database.SessionLocal()
+    try:
+        auth.cleanup_access_tokens(db)
+    finally:
+        db.close()
 
     # Startup tasks
     auto_sync_routes.init_scheduler()
@@ -139,12 +144,17 @@ async def require_authenticated_request(request: Request, call_next):
     if request.method == "OPTIONS" or _public_path(path):
         response = await call_next(request)
     else:
+        query_token = (
+            request.query_params.get("token")
+            if auth.query_token_allowed(request.method, path)
+            else None
+        )
         raw_token = auth.extract_token(
             authorization=request.headers.get("authorization"),
-            query_token=request.query_params.get("token"),
+            query_token=query_token,
         )
         if not raw_token:
-            print(f"*** AUTH INTERCEPTED: {request.method} {path} (query: {request.query_params})")
+            print(f"*** AUTH INTERCEPTED: {request.method} {path}")
             return _json_error(401, "Missing access token")
 
         db = database.SessionLocal()
