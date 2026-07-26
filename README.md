@@ -58,7 +58,7 @@ HE_manager/
 ```powershell
 cd backend
 python -m venv .venv
-.\.venv\Scripts\pip install -r requirements.txt
+.\.venv\Scripts\pip install -r requirements-dev.txt
 copy .env.example .env
 ```
 修改 `.env` 配置文件，填入您的 `DEEPSEEK_API_KEY` 及媒体库本地路径。

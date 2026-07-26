@@ -1,0 +1,6 @@
+# Development and test dependencies. Runtime containers intentionally do not
+# install this file; CI and local development should install it after the
+# pinned runtime requirements.
+-r requirements.txt
+
+pytest==8.3.5

@@ -15,7 +15,7 @@
 
 ## P0：部署、性能与数据可靠性
 
-### 1. [ ] 精简后端镜像并补齐运行依赖
+### 1. [x] 精简后端镜像并补齐运行依赖
 
 目标：N100 服务器只安装 CPU 版 PyTorch，移除无用 CUDA/Triton 依赖，并确保 BD2 的 git 下载功能在容器内可用。
 
@@ -24,6 +24,8 @@
 - 增加独立 `backend/requirements-dev.txt`，包含 pytest 等测试依赖，运行依赖和测试依赖分离。
 - 更新 Dockerfile 中已经过时的“仅 Android 客户端”说明。
 - 记录新镜像体积；目标显著低于当前 8.94 GB。
+
+完成结果：使用 `torch 2.9.1+cpu`，镜像由 8.94 GB 降至 2.47 GB；容器内 `torch.version.cuda is None`，`git 2.39.5` 可用；CPU 镜像内后端测试 98 项全部通过。
 
 验收：
 
