@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { Book, ChevronDown, ChevronLeft, ChevronRight, Filter, History, Play, Search, SortAsc, Star, X } from 'lucide-vue-next'
@@ -8,6 +8,7 @@ import { authState } from '../auth'
 import type { Media, Tag } from '../types'
 import MediaCard from '../components/MediaCard.vue'
 import MediaDetail from '../components/MediaDetail.vue'
+import PaginationControl from '../components/PaginationControl.vue'
 
 const props = defineProps<{
   mediaType?: string
@@ -66,143 +67,36 @@ const recentlyOpened = computed(() => {
     .slice(0, 8)
 })
 
-const limit = 80
-const offset = ref(0)
-const hasMore = ref(true)
-const loadingMore = ref(false)
-const loadMoreRef = ref<HTMLElement | null>(null)
+const pageSize = 60
+const totalItems = ref(0)
 const containerRef = ref<HTMLElement | null>(null)
-const virtualGridRef = ref<HTMLElement | null>(null)
-const virtualItemsRef = ref<HTMLElement | null>(null)
-const virtualColumns = ref(2)
-const virtualRowHeight = ref(360)
-const virtualRowGap = ref(20)
-const virtualStartRow = ref(0)
-const virtualEndRow = ref(8)
-const virtualOverscan = 6
-let observer: IntersectionObserver | null = null
-let scrollRoot: HTMLElement | null = null
-let resizeObserver: ResizeObserver | null = null
-let virtualFrame = 0
+
+const routePage = (value: unknown) => {
+  const raw = Array.isArray(value) ? value[0] : value
+  const parsed = Number(raw)
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1
+}
+
+const currentPage = ref(routePage(route.query.page))
+const pageCount = computed(() => Math.max(1, Math.ceil(totalItems.value / pageSize)))
 let hasCompletedInitialFetch = false
-let lastVirtualScrollTop = 0
-let virtualScrollDirection: -1 | 0 | 1 = 0
-let lastVirtualGridWidth = 0
+let mediaRequestId = 0
 
-const virtualRowCount = computed(() => Math.ceil(mediaList.value.length / virtualColumns.value))
-const virtualStartIndex = computed(() => virtualStartRow.value * virtualColumns.value)
-const virtualEndIndex = computed(() => Math.min(
-  mediaList.value.length,
-  virtualEndRow.value * virtualColumns.value,
-))
-const virtualMedia = computed(() => mediaList.value.slice(virtualStartIndex.value, virtualEndIndex.value))
-const virtualOffsetY = computed(() => virtualStartRow.value * (virtualRowHeight.value + virtualRowGap.value))
-const virtualTotalHeight = computed(() => {
-  if (virtualRowCount.value === 0) return 0
-  return virtualRowCount.value * virtualRowHeight.value
-    + (virtualRowCount.value - 1) * virtualRowGap.value
-})
-
-const fallbackColumnCount = () => {
-  if (window.innerWidth >= 1536) return 6
-  if (window.innerWidth >= 1280) return 5
-  if (window.innerWidth >= 1024) return 4
-  if (window.innerWidth >= 640) return 3
-  return 2
+const syncPageQuery = (page: number, replace = false) => {
+  const query = { ...route.query }
+  if (page <= 1) delete query.page
+  else query.page = String(page)
+  const location = { path: route.path, query }
+  void (replace ? router.replace(location) : router.push(location))
 }
 
-const updateVirtualWindow = () => {
-  if (!scrollRoot || !virtualGridRef.value || virtualRowCount.value === 0) {
-    virtualStartRow.value = 0
-    virtualEndRow.value = Math.min(8, virtualRowCount.value)
-    return
-  }
-
-  const rootRect = scrollRoot.getBoundingClientRect()
-  const gridRect = virtualGridRef.value.getBoundingClientRect()
-  const gridTop = gridRect.top - rootRect.top + scrollRoot.scrollTop
-  const relativeTop = Math.max(0, scrollRoot.scrollTop - gridTop)
-  const stride = Math.max(1, virtualRowHeight.value + virtualRowGap.value)
-  const firstVisibleRow = Math.floor(relativeTop / stride)
-  const lastVisibleRow = Math.ceil((relativeTop + scrollRoot.clientHeight) / stride)
-  const scrollDistance = Math.abs(scrollRoot.scrollTop - lastVirtualScrollTop)
-  const directionalBuffer = Math.min(12, Math.ceil(scrollDistance / stride))
-  const startBuffer = virtualOverscan + (virtualScrollDirection < 0 ? directionalBuffer : 0)
-  const endBuffer = virtualOverscan + (virtualScrollDirection > 0 ? directionalBuffer : 0)
-  const nextStartRow = Math.max(0, firstVisibleRow - startBuffer)
-  const nextEndRow = Math.min(virtualRowCount.value, lastVisibleRow + endBuffer)
-
-  if (nextStartRow !== virtualStartRow.value) virtualStartRow.value = nextStartRow
-  if (nextEndRow !== virtualEndRow.value) virtualEndRow.value = nextEndRow
-}
-
-const updateVirtualLayout = async (force = false) => {
-  const grid = virtualGridRef.value
-  if (!grid) return
-
-  const gridWidth = grid.clientWidth
-  if (!force && Math.abs(gridWidth - lastVirtualGridWidth) < 0.5) {
-    updateVirtualWindow()
-    return
-  }
-
-  const items = virtualItemsRef.value
-  const computedGrid = items ? window.getComputedStyle(items) : null
-  const templateColumns = computedGrid?.gridTemplateColumns || ''
-  const measuredColumns = templateColumns && templateColumns !== 'none'
-    ? templateColumns.split(' ').filter(Boolean).length
-    : 0
-  const columns = measuredColumns || fallbackColumnCount()
-  const gap = computedGrid ? Number.parseFloat(computedGrid.rowGap) || 20 : (window.innerWidth >= 768 ? 28 : 20)
-  const cardWidth = Math.max(1, (gridWidth - gap * (columns - 1)) / columns)
-
-  lastVirtualGridWidth = gridWidth
-  virtualColumns.value = columns
-  virtualRowGap.value = gap
-  virtualRowHeight.value = cardWidth * 1.5 + 42
-  updateVirtualWindow()
-
-  await nextTick()
-  const card = virtualItemsRef.value?.querySelector<HTMLElement>('.lazy-card')
-  const measuredHeight = card?.getBoundingClientRect().height || 0
-  if (measuredHeight > 0 && Math.abs(measuredHeight - virtualRowHeight.value) > 0.5) {
-    virtualRowHeight.value = measuredHeight
-    updateVirtualWindow()
-  }
-}
-
-const scheduleVirtualUpdate = (remeasure = false) => {
-  window.cancelAnimationFrame(virtualFrame)
-  virtualFrame = window.requestAnimationFrame(() => {
-    if (remeasure) {
-      void updateVirtualLayout(true)
-    } else {
-      updateVirtualWindow()
-    }
-  })
-}
-
-const handleVirtualScroll = () => {
-  let nextScrollTop = lastVirtualScrollTop
-  if (scrollRoot) {
-    nextScrollTop = scrollRoot.scrollTop
-    virtualScrollDirection = nextScrollTop === lastVirtualScrollTop
-      ? 0
-      : nextScrollTop > lastVirtualScrollTop ? 1 : -1
-  }
-  // Do not wait for requestAnimationFrame: a fast scroll must keep its visible
-  // rows mounted in the same frame, otherwise the grid briefly goes blank.
-  updateVirtualWindow()
-  lastVirtualScrollTop = nextScrollTop
-  maybeLoadMore()
-}
-
-const scrollListToStart = () => {
+const scrollListToStart = (behavior: ScrollBehavior = 'auto') => {
+  const scrollRoot = containerRef.value?.closest<HTMLElement>('.main-scroll-container')
   if (!scrollRoot || !containerRef.value) return
   const rootRect = scrollRoot.getBoundingClientRect()
   const containerRect = containerRef.value.getBoundingClientRect()
   const targetTop = scrollRoot.scrollTop + containerRect.top - rootRect.top - 16
-  scrollRoot.scrollTo({ top: Math.max(0, targetTop), behavior: 'auto' })
+  scrollRoot.scrollTo({ top: Math.max(0, targetTop), behavior })
 }
 
 const pageTitle = computed(() => {
@@ -230,12 +124,11 @@ const fetchTags = async () => {
   }
 }
 
-const fetchMedia = async () => {
-  if (hasCompletedInitialFetch) scrollListToStart()
+const fetchMedia = async (scrollBehavior: ScrollBehavior = 'auto') => {
+  const requestId = ++mediaRequestId
+  if (hasCompletedInitialFetch) scrollListToStart(scrollBehavior)
   loading.value = true
   mediaError.value = ''
-  offset.value = 0
-  hasMore.value = true
   try {
     const params: Record<string, string | number | boolean | undefined> = {
       media_type: props.mediaType,
@@ -244,18 +137,30 @@ const fetchMedia = async () => {
       favorite: favoriteOnly.value ? true : undefined,
       source_site: sourceFilter.value || undefined,
       sort: sortBy.value,
-      limit,
-      offset: 0,
+      limit: pageSize,
+      offset: (currentPage.value - 1) * pageSize,
     }
-    const res = await axios.get(`${API_BASE_URL}/media`, { params })
+    const res = await axios.get<Media[]>(`${API_BASE_URL}/media`, { params })
+    if (requestId !== mediaRequestId) return
+
+    const headerTotal = Number(res.headers['x-total-count'])
+    totalItems.value = Number.isSafeInteger(headerTotal) && headerTotal >= 0
+      ? headerTotal
+      : (currentPage.value - 1) * pageSize + res.data.length
+
+    const lastPage = Math.max(1, Math.ceil(totalItems.value / pageSize))
+    if (currentPage.value > lastPage) {
+      currentPage.value = lastPage
+      syncPageQuery(lastPage, true)
+      await fetchMedia()
+      return
+    }
     mediaList.value = res.data
-    if (res.data.length < limit) {
-      hasMore.value = false
-    }
   } catch (err: any) {
+    if (requestId !== mediaRequestId) return
     console.error('Failed to fetch media:', err)
     mediaList.value = []
-    hasMore.value = false
+    totalItems.value = 0
     const status = err?.response?.status
     mediaError.value = status === 401
       ? '登录状态已失效，请重新登录。'
@@ -263,76 +168,27 @@ const fetchMedia = async () => {
         ? '当前账号没有权限读取媒体列表。'
         : '无法加载媒体列表，请检查后端连接。'
   } finally {
-    loading.value = false
-    hasCompletedInitialFetch = true
-  }
-}
-
-const loadMore = async () => {
-  if (loading.value || loadingMore.value || !hasMore.value) return
-  loadingMore.value = true
-  const nextOffset = offset.value + limit
-  try {
-    const params: Record<string, string | number | boolean | undefined> = {
-      media_type: props.mediaType,
-      search: searchQuery.value || undefined,
-      tag: selectedTag.value || undefined,
-      favorite: favoriteOnly.value ? true : undefined,
-      source_site: sourceFilter.value || undefined,
-      sort: sortBy.value,
-      limit,
-      offset: nextOffset,
+    if (requestId === mediaRequestId) {
+      loading.value = false
+      hasCompletedInitialFetch = true
     }
-    const res = await axios.get(`${API_BASE_URL}/media`, { params })
-    mediaList.value.push(...res.data)
-    offset.value = nextOffset
-    if (res.data.length < limit) {
-      hasMore.value = false
-    }
-  } catch (err) {
-    console.error('Failed to load more media:', err)
-  } finally {
-    loadingMore.value = false
-    await nextTick()
-    maybeLoadMore()
   }
 }
 
-const observeLoadMore = () => {
-  if (observer) observer.disconnect()
-  const el = loadMoreRef.value
-  if (el) {
-    observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && hasMore.value && !loading.value && !loadingMore.value) {
-        void loadMore()
-      }
-    }, { root: scrollRoot, rootMargin: '0px 0px 1600px 0px' })
-    observer.observe(el)
-  }
+const goToPage = (page: number) => {
+  const target = Math.max(1, Math.min(page, pageCount.value))
+  if (target === currentPage.value || loading.value) return
+  currentPage.value = target
+  syncPageQuery(target)
+  const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+  void fetchMedia(behavior)
 }
 
-function maybeLoadMore() {
-  if (!scrollRoot || loading.value || loadingMore.value || !hasMore.value) return
-  const remaining = scrollRoot.scrollHeight - scrollRoot.scrollTop - scrollRoot.clientHeight
-  if (remaining < Math.max(1000, scrollRoot.clientHeight * 2)) {
-    void loadMore()
-  }
+const resetPageAndFetch = () => {
+  currentPage.value = 1
+  syncPageQuery(1, true)
+  void fetchMedia()
 }
-
-watch(loadMoreRef, () => {
-  observeLoadMore()
-})
-
-watch(() => mediaList.value.length, () => {
-  scheduleVirtualUpdate(false)
-}, { flush: 'post' })
-
-onUnmounted(() => {
-  observer?.disconnect()
-  resizeObserver?.disconnect()
-  scrollRoot?.removeEventListener('scroll', handleVirtualScroll)
-  window.cancelAnimationFrame(virtualFrame)
-})
 
 const updateMediaInList = (media: Media) => {
   const index = mediaList.value.findIndex(item => item.id === media.id)
@@ -406,10 +262,10 @@ const toggleFavoriteFilter = () => {
 let searchTimer: number | undefined
 watch(searchQuery, () => {
   window.clearTimeout(searchTimer)
-  searchTimer = window.setTimeout(fetchMedia, 250)
+  searchTimer = window.setTimeout(resetPageAndFetch, 250)
 })
 
-watch([() => props.mediaType, selectedTag, sortBy, favoriteOnly, sourceFilter], fetchMedia)
+watch([() => props.mediaType, selectedTag, sortBy, favoriteOnly, sourceFilter], resetPageAndFetch)
 watch(() => route.query.favorite, value => {
   favoriteOnly.value = value === 'true'
 }, { immediate: true })
@@ -417,9 +273,17 @@ watch(() => route.query.source, value => {
   const v = typeof value === 'string' ? value : ''
   sourceFilter.value = (v === 'x' || v === 'wnacg' || v === 'local') ? v : ''
 }, { immediate: true })
+watch(() => route.query.page, value => {
+  const nextPage = routePage(value)
+  if (nextPage === currentPage.value) return
+  currentPage.value = nextPage
+  void fetchMedia()
+})
 watch(() => route.query.media, () => {
   syncSelectedMediaFromRoute()
 })
+
+onUnmounted(() => window.clearTimeout(searchTimer))
 
 const triggerMissingRecheck = async () => {
   if (!authState.user?.is_admin) return
@@ -435,17 +299,8 @@ const triggerMissingRecheck = async () => {
 
 onMounted(async () => {
   await fetchMedia()
-  await nextTick()
-  scrollRoot = containerRef.value?.closest<HTMLElement>('.main-scroll-container') || null
-  lastVirtualScrollTop = scrollRoot?.scrollTop || 0
-  scrollRoot?.addEventListener('scroll', handleVirtualScroll, { passive: true })
-  resizeObserver = new ResizeObserver(() => scheduleVirtualUpdate(true))
-  if (containerRef.value) resizeObserver.observe(containerRef.value)
-  await updateVirtualLayout()
-  observeLoadMore()
-  maybeLoadMore()
   await syncSelectedMediaFromRoute()
-  fetchTags()
+  void fetchTags()
   await triggerMissingRecheck()
 })
 </script>
@@ -459,7 +314,7 @@ onMounted(async () => {
             {{ pageTitle }}
           </h1>
           <span class="text-[9px] font-black text-accent bg-accent/10 px-2 py-0.5 rounded-md border border-accent/20 uppercase tracking-widest">
-            {{ mediaList.length.toLocaleString() }} 项
+            {{ totalItems.toLocaleString() }} 项
           </span>
         </div>
 
@@ -687,49 +542,27 @@ onMounted(async () => {
         <p class="text-sm text-amber-100/75">{{ mediaError }}</p>
       </div>
 
-      <div
-        v-else-if="mediaList.length > 0"
-        class="flex flex-col gap-8"
-      >
-        <div
-          ref="virtualGridRef"
-          class="relative w-full"
-          :style="{ height: `${virtualTotalHeight}px` }"
-          :data-virtual-total="mediaList.length"
-          :data-virtual-start="virtualStartIndex"
-          :data-virtual-end="virtualEndIndex"
-          style="contain: layout paint style"
-        >
-          <div
-            ref="virtualItemsRef"
-            class="virtual-media-grid absolute inset-x-0 top-0 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 md:gap-7"
-            :style="{ transform: `translate3d(0, ${virtualOffsetY}px, 0)` }"
-          >
-            <MediaCard
-              v-for="(item, visibleIndex) in virtualMedia"
-              :key="item.id"
-              :media="item"
-              :index="virtualStartIndex + visibleIndex"
-              virtualized
-              eager
-              @click="openMedia(item)"
-            />
-          </div>
+      <div v-else-if="mediaList.length > 0" class="flex flex-col gap-9">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 md:gap-7">
+          <MediaCard
+            v-for="(item, index) in mediaList"
+            :key="item.id"
+            :media="item"
+            :index="index"
+            @click="openMedia(item)"
+          />
         </div>
 
-        <div ref="loadMoreRef" class="w-full py-4 flex justify-center">
-          <div v-if="loadingMore" class="text-white/45 flex items-center gap-2">
-            <div class="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
-            <span>加载中...</span>
-          </div>
-          <button
-            v-else-if="hasMore"
-            @click="loadMore"
-            class="px-6 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm font-bold text-white transition-all"
-          >
-            加载更多
-          </button>
-        </div>
+        <PaginationControl
+          v-if="pageCount > 1"
+          :page="currentPage"
+          :page-count="pageCount"
+          :total-items="totalItems"
+          :page-size="pageSize"
+          :disabled="loading"
+          item-label="项媒体"
+          @change="goToPage"
+        />
       </div>
 
       <div v-else-if="!loading && mediaList.length === 0" class="flex flex-col items-center justify-center py-32 text-white/35 text-center">

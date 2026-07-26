@@ -9,13 +9,14 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 
 from app import media_cleanup, models, scanner, schemas
 from app.dedup import classify as dedup_classify
 from app.dedup import fingerprint as dedup_fingerprint
 from app.dedup import merge as dedup_merge
 from app.routers import dedup as dedup_routes
+from app.routers import media as media_routes
 
 
 class MediaCoreTest(unittest.TestCase):
@@ -64,6 +65,38 @@ class MediaCoreTest(unittest.TestCase):
             self.assertEqual(saved.view_status, "viewing")
             self.assertEqual(saved.progress, 3)
             self.assertEqual({tag.name for tag in saved.tags}, {"作者A", "已整理"})
+        finally:
+            db.close()
+
+    def test_media_list_exposes_filtered_total_before_pagination(self):
+        db = self.Session()
+        try:
+            folder = models.Folder(path="D:\\Library", scan_mode="auto")
+            db.add(folder)
+            for index, media_type in enumerate(("video", "video", "manga"), start=1):
+                db.add(models.Media(
+                    folder=folder,
+                    title=f"item-{index}",
+                    relative_path=f"item-{index}",
+                    absolute_path=f"D:\\Library\\item-{index}",
+                    media_type=media_type,
+                    extension=".mp4" if media_type == "video" else ".cbz",
+                    file_size=100,
+                ))
+            db.commit()
+
+            response = Response()
+            items = media_routes.list_media(
+                response=response,
+                media_type="video",
+                limit=1,
+                offset=1,
+                db=db,
+            )
+
+            self.assertEqual(len(items), 1)
+            self.assertEqual(response.headers["x-total-count"], "2")
+            self.assertEqual(response.headers["access-control-expose-headers"], "X-Total-Count")
         finally:
             db.close()
 

@@ -109,6 +109,7 @@ def delete_folder(folder_id: int, db: Session = Depends(get_db)):
 
 @router.get("/media", response_model=List[schemas.Media])
 def list_media(
+    response: Response,
     media_type: Optional[str] = None,
     search: Optional[str] = None,
     tag: Optional[str] = None,
@@ -147,6 +148,12 @@ def list_media(
         query = query.filter(
             models.Media.duplicate_status.notin_(["checking", "strong_duplicate", "suspected_duplicate", "dedup_excluded"])
         )
+
+    # Preserve the array response for existing clients while exposing the
+    # filtered total needed by the web library's server-side pagination.
+    total = query.order_by(None).count()
+    response.headers["X-Total-Count"] = str(total)
+    response.headers["Access-Control-Expose-Headers"] = "X-Total-Count"
 
     if sort == "title":
         query = query.order_by(models.Media.title.asc())
