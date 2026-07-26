@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from .. import asmr_source, downloader_push, external_sources, models, schemas, scanner
 from ..database import get_db
+from ..services import job_lifecycle
 from ..services.audio_tracks import AUDIO_TRACK_EXTS, scan_audio_tracks
 from ..services.external_runtime import (
     DOWNLOAD_JOBS,
@@ -287,6 +288,10 @@ def create_wnacg_download_job(
     if not download_root_path:
         raise HTTPException(status_code=400, detail="请先设置下载位置")
 
+    try:
+        job_lifecycle.admit_new_job("external_download", DOWNLOAD_JOBS)
+    except job_lifecycle.JobCapacityError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     job_id = str(uuid.uuid4())
     DOWNLOAD_JOBS[job_id] = {
         "job_id": job_id,
@@ -319,6 +324,7 @@ def create_wnacg_download_job(
         ],
         "results": [],
     }
+    job_lifecycle.record_job("external_download", DOWNLOAD_JOBS[job_id])
     background_tasks.add_task(run_wnacg_download_job, job_id, payload.item_ids, download_root_path)
     return DOWNLOAD_JOBS[job_id]
 
@@ -340,7 +346,7 @@ def cancel_external_download_job(job_id: str):
 
 @router.get("/external/downloads/{job_id}", response_model=schemas.ExternalDownloadJob)
 def get_external_download_job(job_id: str):
-    job = DOWNLOAD_JOBS.get(job_id)
+    job = DOWNLOAD_JOBS.get(job_id) or job_lifecycle.get_job_snapshot("external_download", job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Download job not found")
     return job
@@ -672,6 +678,10 @@ def create_asmr_download_job(
     if not download_root_path:
         raise HTTPException(status_code=400, detail="请先设置下载位置")
 
+    try:
+        job_lifecycle.admit_new_job("external_download", DOWNLOAD_JOBS)
+    except job_lifecycle.JobCapacityError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     job_id = str(uuid.uuid4())
     DOWNLOAD_JOBS[job_id] = {
         "job_id": job_id,
@@ -704,6 +714,7 @@ def create_asmr_download_job(
         ],
         "results": [],
     }
+    job_lifecycle.record_job("external_download", DOWNLOAD_JOBS[job_id])
     background_tasks.add_task(run_asmr_download_job, job_id, payload.item_ids, download_root_path)
     return DOWNLOAD_JOBS[job_id]
 

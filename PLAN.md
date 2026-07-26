@@ -76,7 +76,7 @@ docker run --rm he-manager-backend:latest git --version
 
 验收：配置后重建后端容器，配置仍存在且 API 不返回明文密钥。
 
-### 5. [ ] 恢复去重任务并治理内存 Job 生命周期
+### 5. [x] 恢复去重任务并治理内存 Job 生命周期
 
 目标：重启或异常不会让媒体永久停在 `checking`，后台任务状态不会无限占用内存。
 
@@ -85,6 +85,8 @@ docker run --rm he-manager-backend:latest git --version
 - 下载、推荐、X 导入/同步 Job 增加数量上限和 TTL 清理。
 - 对重启中的 running 任务标记 interrupted，能恢复的任务提供重试入口。
 - 增加重启恢复和清理测试。
+
+完成结果：启动时重新入队所有 `checking` 媒体，处理异常改为可见且可手动重试的 `dedup_error`；下载、漫画分析、X 导入/同步任务增加持久状态快照、默认 200 条上限和 72 小时 TTL。重启会将未完成快照标记为 `interrupted`，原有任务发起接口可重新执行。生产部署恢复了 13 条遗留 `checking`，实测重启后运行任务转为 `interrupted`；后端测试 108 项全部通过。
 
 验收：模拟中途重启后没有永久隐藏的 checking 媒体；完成任务超出 TTL 后会被清理。
 

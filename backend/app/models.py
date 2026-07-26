@@ -182,6 +182,18 @@ class AccessToken(Base):
     user = relationship("User", back_populates="tokens")
 
 
+class BackgroundJob(Base):
+    __tablename__ = "background_jobs"
+
+    job_id = Column(String, primary_key=True)
+    kind = Column(String, index=True)
+    status = Column(String, index=True)
+    payload_json = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    finished_at = Column(DateTime, nullable=True, index=True)
+
+
 class ExternalFavoriteSource(Base):
     __tablename__ = "external_favorite_sources"
 

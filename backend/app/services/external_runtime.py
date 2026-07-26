@@ -15,6 +15,7 @@ from urllib.parse import urljoin, urlparse
 from sqlalchemy.orm import Session
 
 from .. import asmr_source, database, downloader_push, external_sources, models, scanner
+from . import job_lifecycle
 from .audio_tracks import AUDIO_TRACK_EXTS, scan_audio_tracks
 from .manga_pages import get_manga_image_files
 from .media_access import get_source_or_404
@@ -898,6 +899,7 @@ def run_wnacg_download_job(job_id: str, item_ids: List[int], download_root_path:
         job["status"] = "failed"
         job["message"] = str(exc)
     finally:
+        job_lifecycle.record_job("external_download", job, finished=True)
         db.close()
 
 
@@ -1185,6 +1187,7 @@ def run_asmr_download_job(job_id: str, item_ids: List[int], download_root_path: 
         job["status"] = "failed"
         job["message"] = str(exc)
     finally:
+        job_lifecycle.record_job("external_download", job, finished=True)
         db.close()
 
 

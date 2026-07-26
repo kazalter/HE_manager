@@ -1,4 +1,5 @@
 from .. import database, manga_metadata, manga_profiles, models
+from . import job_lifecycle
 
 MANGA_PROFILE_JOBS = {}
 MANGA_METADATA_JOBS = {}
@@ -32,6 +33,7 @@ def run_manga_profile_job(job_id: str, media_ids: list[int], sample_count: int, 
         job["status"] = "failed"
         job["message"] = str(exc)
     finally:
+        job_lifecycle.record_job("manga_profile", job, finished=True)
         db.close()
 
 
@@ -63,4 +65,5 @@ def run_manga_metadata_job(job_id: str, media_ids: list[int], force: bool):
         job["status"] = "failed"
         job["message"] = str(exc)
     finally:
+        job_lifecycle.record_job("manga_metadata", job, finished=True)
         db.close()

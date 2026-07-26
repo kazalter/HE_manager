@@ -24,6 +24,7 @@ from typing import Dict, Optional
 from urllib.parse import unquote
 
 from .. import database, models
+from ..services import job_lifecycle
 from . import client
 
 
@@ -246,6 +247,7 @@ def _run(job: SyncJob, cookie: str) -> None:
         job.stop_reason = job.stop_reason or "error"
     finally:
         job.finished_at = datetime.utcnow().isoformat()
+        job_lifecycle.record_job("x_sync", job, finished=True)
         db.close()
 
 
@@ -254,9 +256,11 @@ def start_sync(*, source_id: int, cookie: str) -> SyncJob:
         for existing in SYNC_JOBS.values():
             if existing.source_id == source_id and existing.status in ("queued", "running"):
                 return existing
+        job_lifecycle.admit_new_job("x_sync", SYNC_JOBS)
         job_id = str(uuid.uuid4())
         job = SyncJob(job_id=job_id, source_id=source_id)
         SYNC_JOBS[job_id] = job
+        job_lifecycle.record_job("x_sync", job)
 
     threading.Thread(target=_run, args=(job, cookie), daemon=True, name=f"x-sync-{job_id}").start()
     return job

@@ -45,6 +45,22 @@ def is_running() -> bool:
     return bool(_WORKER_THREAD and _WORKER_THREAD.is_alive())
 
 
+def recover_checking_jobs() -> int:
+    """Requeue work that was persisted as checking before a process restart."""
+    db = database.SessionLocal()
+    try:
+        media_ids = [
+            row[0]
+            for row in db.query(models.Media.id)
+            .filter(models.Media.duplicate_status == "checking")
+            .order_by(models.Media.id.asc())
+            .all()
+        ]
+    finally:
+        db.close()
+    return enqueue(media_ids)
+
+
 # ----- internals -----
 
 def _ensure_worker() -> None:
@@ -65,11 +81,27 @@ def _run() -> None:
             return
         try:
             _process_one(media_id)
-        except Exception:
+        except Exception as exc:
+            _mark_processing_error(media_id, exc)
             print("[dedup] worker error:")
             print(traceback.format_exc())
         finally:
             _QUEUE.task_done()
+
+
+def _mark_processing_error(media_id: int, exc: Exception) -> None:
+    """Expose failed work again; the explicit recheck endpoint can retry it."""
+    db = database.SessionLocal()
+    try:
+        media = db.query(models.Media).filter(models.Media.id == media_id).first()
+        if media and media.duplicate_status == "checking":
+            media.duplicate_status = "dedup_error"
+            db.commit()
+    except Exception:
+        db.rollback()
+        print(f"[dedup] failed to persist error state for media {media_id}: {exc}")
+    finally:
+        db.close()
 
 
 def _process_one(media_id: int) -> None:

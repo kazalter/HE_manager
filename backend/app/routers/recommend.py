@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from .. import ai_config, manga_metadata, manga_profiles, models, recommendations, schemas
 from ..database import get_db
+from ..services import job_lifecycle
 from ..services.media_access import get_media_or_404
 from ..services.recommend_jobs import (
     MANGA_METADATA_JOBS,
@@ -73,6 +74,10 @@ def analyze_manga_profiles(
             if payload.force or manga_profiles.needs_profile(media)
         ][: payload.limit]
 
+    try:
+        job_lifecycle.admit_new_job("manga_profile", MANGA_PROFILE_JOBS)
+    except job_lifecycle.JobCapacityError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     job_id = str(uuid.uuid4())
     MANGA_PROFILE_JOBS[job_id] = {
         "job_id": job_id,
@@ -84,13 +89,14 @@ def analyze_manga_profiles(
         "current_title": "",
         "errors": [],
     }
+    job_lifecycle.record_job("manga_profile", MANGA_PROFILE_JOBS[job_id])
     background_tasks.add_task(run_manga_profile_job, job_id, media_ids, payload.sample_count, payload.force)
     return MANGA_PROFILE_JOBS[job_id]
 
 
 @router.get("/recommend/manga-profiles/jobs/{job_id}", response_model=schemas.MangaProfileJob)
 def get_manga_profile_job(job_id: str):
-    job = MANGA_PROFILE_JOBS.get(job_id)
+    job = MANGA_PROFILE_JOBS.get(job_id) or job_lifecycle.get_job_snapshot("manga_profile", job_id)
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
     return job
@@ -127,6 +133,10 @@ def analyze_manga_metadata(
             if payload.force or manga_metadata.needs_metadata(media)
         ][: payload.limit]
 
+    try:
+        job_lifecycle.admit_new_job("manga_metadata", MANGA_METADATA_JOBS)
+    except job_lifecycle.JobCapacityError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     job_id = str(uuid.uuid4())
     MANGA_METADATA_JOBS[job_id] = {
         "job_id": job_id,
@@ -138,13 +148,14 @@ def analyze_manga_metadata(
         "current_title": "",
         "errors": [],
     }
+    job_lifecycle.record_job("manga_metadata", MANGA_METADATA_JOBS[job_id])
     background_tasks.add_task(run_manga_metadata_job, job_id, media_ids, payload.force)
     return MANGA_METADATA_JOBS[job_id]
 
 
 @router.get("/recommend/manga-metadata/jobs/{job_id}", response_model=schemas.MangaMetadataJob)
 def get_manga_metadata_job(job_id: str):
-    job = MANGA_METADATA_JOBS.get(job_id)
+    job = MANGA_METADATA_JOBS.get(job_id) or job_lifecycle.get_job_snapshot("manga_metadata", job_id)
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
     return job

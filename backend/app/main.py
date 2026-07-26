@@ -24,6 +24,8 @@ from .routers import recommend as recommend_routes
 from .routers import root as root_routes
 from .routers import stats as stats_routes
 from .routers import x_import as x_import_routes
+from .dedup import worker as dedup_worker
+from .services import job_lifecycle
 from .services.thumbnails import THUMBNAIL_DIR, cleanup_orphaned_thumbnails
 
 
@@ -41,6 +43,9 @@ async def lifespan(app: FastAPI):
         db.close()
 
     # Startup tasks
+    job_lifecycle.recover_interrupted_jobs()
+    job_lifecycle.cleanup_job_history()
+    dedup_worker.recover_checking_jobs()
     auto_sync_routes.init_scheduler()
     cleanup_orphaned_thumbnails()
     try:

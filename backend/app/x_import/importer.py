@@ -20,6 +20,7 @@ from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from .. import database, models
+from ..services import job_lifecycle
 from . import client, storage
 
 
@@ -399,6 +400,7 @@ def _run(job: ImportJob) -> None:
         job.log_error("", str(exc))
     finally:
         job.finished_at = datetime.utcnow().isoformat()
+        job_lifecycle.record_job("x_import", job, finished=True)
         db.close()
 
 
@@ -415,6 +417,7 @@ def start_job(
         existing = JOBS.get(job_id)
         if existing and existing.status in {"queued", "preparing", "running", "paused"}:
             return existing
+        job_lifecycle.admit_new_job("x_import", JOBS)
         job = ImportJob(
             job_id=job_id,
             source_id=source_id,
@@ -424,6 +427,7 @@ def start_job(
             _post_ids=list(post_ids),
         )
         JOBS[job_id] = job
+        job_lifecycle.record_job("x_import", job)
 
     threading.Thread(target=_run, args=(job,), daemon=True, name=f"x-import-{job_id}").start()
     return job

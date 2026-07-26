@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..database import get_db
+from ..services import job_lifecycle
 from ..services.media_access import get_x_source_or_404
 from ..services.thumbnails import THUMBNAIL_DIR
 from ..services.x_import_runtime import (
@@ -171,23 +172,29 @@ def start_x_import(payload: schemas.XImportStartRequest, db: Session = Depends(g
         retry_skipped_only=payload.retry_skipped_only,
     )
     job_id = str(uuid.uuid4())
-    job = x_importer.start_job(
-        job_id=job_id,
-        source_id=source.id,
-        download_root=source.download_root_path,
-        thumbnail_dir=THUMBNAIL_DIR,
-        post_ids=post_ids,
-        cookie=source.cookie,
-    )
+    try:
+        job = x_importer.start_job(
+            job_id=job_id,
+            source_id=source.id,
+            download_root=source.download_root_path,
+            thumbnail_dir=THUMBNAIL_DIR,
+            post_ids=post_ids,
+            cookie=source.cookie,
+        )
+    except job_lifecycle.JobCapacityError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return job.to_dict()
 
 
 @router.get("/x/imports/{job_id}", response_model=schemas.XImportJob)
 def get_x_import_job(job_id: str):
     job = x_importer.get_job(job_id)
-    if not job:
+    if job:
+        return job.to_dict()
+    snapshot = job_lifecycle.get_job_snapshot("x_import", job_id)
+    if not snapshot:
         raise HTTPException(status_code=404, detail="导入任务不存在或已被清理")
-    return job.to_dict()
+    return snapshot
 
 
 @router.get("/x/sources/{source_id}/active-job", response_model=Optional[schemas.XImportJob])
@@ -230,16 +237,22 @@ def start_x_sync(source_id: int, db: Session = Depends(get_db)):
     if existing and existing.status in ("queued", "running"):
         raise HTTPException(status_code=409, detail="已有同步任务在进行")
 
-    job = x_sync.start_sync(source_id=source.id, cookie=source.cookie)
+    try:
+        job = x_sync.start_sync(source_id=source.id, cookie=source.cookie)
+    except job_lifecycle.JobCapacityError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return job.to_dict()
 
 
 @router.get("/x/syncs/{job_id}", response_model=schemas.XSyncJob)
 def get_x_sync_job(job_id: str):
     job = x_sync.get_sync(job_id)
-    if not job:
+    if job:
+        return job.to_dict()
+    snapshot = job_lifecycle.get_job_snapshot("x_sync", job_id)
+    if not snapshot:
         raise HTTPException(status_code=404, detail="同步任务不存在或已被清理")
-    return job.to_dict()
+    return snapshot
 
 
 @router.get("/x/sources/{source_id}/active-sync", response_model=Optional[schemas.XSyncJob])
