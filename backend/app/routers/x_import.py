@@ -6,7 +6,7 @@ import time
 from typing import List, Optional
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -69,17 +69,22 @@ def get_x_source_stats(source_id: int, db: Session = Depends(get_db)):
 @router.get("/x/sources/{source_id}/posts", response_model=List[schemas.XPost])
 def list_x_posts(
     source_id: int,
+    response: Response,
     status: Optional[str] = None,
     limit: int = 100,
+    offset: int = 0,
     db: Session = Depends(get_db),
 ):
     get_x_source_or_404(source_id, db)
     query = db.query(models.XPost).filter(models.XPost.source_id == source_id)
     if status:
         query = query.filter(models.XPost.status == status)
+    response.headers["X-Total-Count"] = str(query.order_by(None).count())
+    response.headers["Access-Control-Expose-Headers"] = "X-Total-Count"
     return (
         query.order_by(models.XPost.discovered_at.desc(), models.XPost.id.desc())
-        .limit(max(1, min(limit, 500)))
+        .offset(max(0, offset))
+        .limit(max(1, min(limit, 200)))
         .all()
     )
 

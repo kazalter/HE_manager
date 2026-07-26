@@ -101,11 +101,11 @@ docker run --rm he-manager-backend:latest git --version
 - 推荐候选一次 eager-load tags、AI profile、metadata profile。
 - 为关键查询增加查询数量或回归测试。
 
-完成结果：外部收藏本地关联改为一次批量只读查询，列表固定最多 2 次 SELECT，GET 不再检查文件、提交或自动修复；新增显式 `POST /external/favorites/reconcile` 维护入口。推荐候选通过 `selectinload` 一次加载 tags、AI profile 和 metadata profile，生产 237 个候选固定 4 次 SELECT。生产外部收藏 197 条响应约 45ms；后端测试 110 项全部通过。
+完成结果：外部收藏本地关联改为一次批量只读查询；分页后的列表固定最多 3 次 SELECT（含总数），GET 不再检查文件、提交或自动修复；新增显式 `POST /external/favorites/reconcile` 维护入口。推荐候选通过 `selectinload` 一次加载 tags、AI profile 和 metadata profile，生产 237 个候选固定 4 次 SELECT。生产外部收藏 197 条响应约 45ms；后端测试 110 项全部通过。
 
 验收：外部收藏列表 SQL 数量不随项目数 N+1 增长；推荐列表不产生逐媒体 lazy-load 查询。
 
-### 7. [ ] 完成移动端与外部列表分页
+### 7. [x] 完成移动端与外部列表分页
 
 目标：任何增长型列表都不默认整库返回。
 
@@ -114,6 +114,8 @@ docker run --rm he-manager-backend:latest git --version
 - `/media`、X 帖子、日志等 limit 设置合理最大值。
 - 前端外部收藏面板接入分页或窗口化渲染。
 - 更新 FEATURE_PLANS 中“Android 分页”的真实状态。
+
+完成结果：`/mobile/media` 支持 `limit/offset/X-Total-Count`，未传参数时仍返回完整数组兼容旧 Android；外部收藏支持服务端搜索、分页和总数，WNACG/ASMR 面板改为每页 15 条服务端分页。`/media` 默认/最大 200，X 帖子与自动同步日志支持 offset、total 且最大 200，同步响应最多返回 100 条。生产验证外部收藏 15/188、移动分页 36/2208、旧移动端仍返回 2208 条、超大 `/media` 请求限制为 200；前端构建通过，后端测试 111 项全部通过。
 
 验收：大列表响应有明确上限；旧客户端未传分页参数时保持兼容。
 

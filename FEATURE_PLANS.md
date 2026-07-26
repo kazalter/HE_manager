@@ -12,7 +12,7 @@
 | ④ | 感知哈希近似去重 | ✅ 完成；跨标题 LSH 可选 |
 | ⑤ | 标签管理界面 | ✅ 完成 |
 | ⑥ | ASMR 同步、下载、播放、字幕、打标、镜像、体积控制 | ✅ 完成 |
-| ⑦ | 手机端传输优化 | 🟡 后端完成；Android 分页搁置 |
+| ⑦ | 手机端传输优化 | 🟡 `/mobile/media` 分页已完成并兼容旧版；Android UI 尚未接入 |
 | ⑧ | Android 性能 | ✅ release + BaselineProfile；滑动 Option B |
 | ⑨ | 公网/FRP 安全加固 | ✅ 代码完成；安卓实际链路经 HTTPS |
 
@@ -22,7 +22,7 @@
    见 `CODE_REVIEW_PLAN.md`。这是当前最主要的维护性任务。
 
 2. **⑦ Android 分页**
-   后端 `/mobile/media` 分页已兼容。Android `LibraryScreenV2` 当前整库拉取 + 客户端筛选/计数/搜索 + RecyclerView，接分页需要重写主屏数据流，回归风险高，暂缓。
+   后端 `/mobile/media` 已支持 `limit`、`offset` 和 `X-Total-Count`；旧版客户端不传参数时仍返回完整数组。Android `LibraryScreenV2` 当前仍整库拉取并在客户端筛选/计数/搜索，尚未发送分页参数，接入时需要重写主屏数据流。
 
 3. **⑧ Option A**
    若滑动仍不够顺，再把卡片模式 RecyclerView + ComposeView 迁到 Compose `LazyVerticalGrid`；杂图保留原生 TileHolder。

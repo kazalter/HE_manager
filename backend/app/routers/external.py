@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from fastapi.responses import FileResponse
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from .. import asmr_source, downloader_push, external_sources, models, schemas, scanner
@@ -104,9 +105,12 @@ def update_external_source(source_id: int, payload: schemas.ExternalFavoriteSour
 
 @router.get("/external/favorites", response_model=List[schemas.ExternalFavoriteItem])
 def list_external_favorites(
+    response: Response,
     source_type: Optional[str] = None,
     source_id: Optional[int] = None,
     search: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
     db: Session = Depends(get_db),
 ):
     query = db.query(models.ExternalFavoriteItem).options(
@@ -117,12 +121,24 @@ def list_external_favorites(
     if source_id:
         query = query.filter(models.ExternalFavoriteItem.source_id == source_id)
     if search:
-        query = query.filter(models.ExternalFavoriteItem.title.ilike(f"%{search}%"))
-    favorite_items = query.order_by(
-        models.ExternalFavoriteItem.sync_position.is_(None),
-        models.ExternalFavoriteItem.sync_position.asc(),
-        models.ExternalFavoriteItem.id.desc(),
-    ).all()
+        pattern = f"%{search}%"
+        query = query.filter(or_(
+            models.ExternalFavoriteItem.title.ilike(pattern),
+            models.ExternalFavoriteItem.category_name.ilike(pattern),
+        ))
+    total = query.order_by(None).count()
+    response.headers["X-Total-Count"] = str(total)
+    response.headers["Access-Control-Expose-Headers"] = "X-Total-Count"
+    favorite_items = (
+        query.order_by(
+            models.ExternalFavoriteItem.sync_position.is_(None),
+            models.ExternalFavoriteItem.sync_position.asc(),
+            models.ExternalFavoriteItem.id.desc(),
+        )
+        .offset(max(0, offset))
+        .limit(max(1, min(limit, 200)))
+        .all()
+    )
     return serialize_external_favorite_items(favorite_items, db)
 
 
@@ -249,6 +265,7 @@ def sync_wnacg_favorites(payload: schemas.ExternalFavoriteSyncRequest, db: Sessi
                 models.ExternalFavoriteItem.sync_position.asc(),
                 models.ExternalFavoriteItem.id.desc(),
             )
+            .limit(100)
             .all()
         )
         return {
@@ -656,6 +673,7 @@ def sync_asmr_favorites(payload: schemas.AsmrSyncRequest, db: Session = Depends(
                 models.ExternalFavoriteItem.sync_position.asc(),
                 models.ExternalFavoriteItem.id.desc(),
             )
+            .limit(100)
             .all()
         )
         return {

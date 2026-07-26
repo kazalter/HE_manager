@@ -31,6 +31,7 @@ const loading = ref(false)
 const syncing = ref(false)
 const errorMessage = ref('')
 const items = ref<ExternalFavoriteItem[]>([])
+const totalItems = ref(0)
 const sources = ref<ExternalFavoriteSource[]>([])
 const activeSourceId = ref<number | null>(null)
 const pageSize = 15
@@ -50,23 +51,13 @@ const activeSource = computed(() => {
   return activeSiteSources.value.find(source => source.id === activeSourceId.value) || activeSiteSources.value[0] || null
 })
 
-const filteredItems = computed(() => {
-  const keyword = searchQuery.value.trim().toLowerCase()
-  if (!keyword) return items.value
-  return items.value.filter(item => {
-    return item.title.toLowerCase().includes(keyword) || (item.category_name || '').toLowerCase().includes(keyword)
-  })
-})
-
-const totalPages = computed(() => Math.max(1, Math.ceil(filteredItems.value.length / pageSize)))
-const pagedItems = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  return filteredItems.value.slice(start, start + pageSize)
-})
-const pageStart = computed(() => filteredItems.value.length === 0 ? 0 : (currentPage.value - 1) * pageSize + 1)
-const pageEnd = computed(() => Math.min(currentPage.value * pageSize, filteredItems.value.length))
+const filteredItems = computed(() => items.value)
+const totalPages = computed(() => Math.max(1, Math.ceil(totalItems.value / pageSize)))
+const pagedItems = computed(() => items.value)
+const pageStart = computed(() => totalItems.value === 0 ? 0 : (currentPage.value - 1) * pageSize + 1)
+const pageEnd = computed(() => Math.min(currentPage.value * pageSize, totalItems.value))
 const pageOptions = computed(() => Array.from({ length: totalPages.value }, (_, index) => index + 1))
-const downloadableFilteredItems = computed(() => filteredItems.value.filter(item => !item.local_media_id))
+const downloadableFilteredItems = computed(() => items.value.filter(item => !item.local_media_id))
 const selectedDownloadItems = computed(() => {
   return items.value.filter(item => selectedDownloadIds.value.has(item.id) && !item.local_media_id)
 })
@@ -138,9 +129,13 @@ const updateLocalMediaInList = (media: Media) => {
 }
 
 const goToPage = (page: number) => {
-  currentPage.value = Math.min(Math.max(page, 1), totalPages.value)
-  pageInput.value = String(currentPage.value)
+  const target = Math.min(Math.max(page, 1), totalPages.value)
   pageDropdownOpen.value = false
+  if (target === currentPage.value) return
+  currentPage.value = target
+  pageInput.value = String(target)
+  selectedDownloadIds.value = new Set()
+  void fetchItems()
 }
 
 const submitPageInput = () => {
@@ -241,7 +236,8 @@ const fetchSources = async () => {
   }
 }
 
-const fetchItems = async () => {
+const fetchItems = async (resetPage = false) => {
+  if (resetPage) currentPage.value = 1
   loading.value = true
   errorMessage.value = ''
   try {
@@ -249,10 +245,20 @@ const fetchItems = async () => {
       params: {
         source_type: 'wnacg',
         source_id: activeSourceId.value || undefined,
+        search: searchQuery.value.trim() || undefined,
+        limit: pageSize,
+        offset: (currentPage.value - 1) * pageSize,
       },
     })
     items.value = res.data
-    goToPage(1)
+    totalItems.value = Number(res.headers['x-total-count'] || res.data.length)
+    const lastPage = Math.max(1, Math.ceil(totalItems.value / pageSize))
+    if (currentPage.value > lastPage) {
+      currentPage.value = lastPage
+      await fetchItems()
+      return
+    }
+    pageInput.value = String(currentPage.value)
   } catch (err) {
     console.error('Failed to fetch external favorites:', err)
     errorMessage.value = '读取外部收藏失败'
@@ -274,10 +280,9 @@ const syncWnacg = async () => {
     })
     const source = res.data.source as ExternalFavoriteSource
     activeSourceId.value = source.id
-    items.value = res.data.items
-    goToPage(1)
     cookie.value = ''
     await fetchSources()
+    await fetchItems(true)
   } catch (err: any) {
     console.error('Failed to sync WNACG favorites:', err)
     errorMessage.value = err.response?.data?.detail || '同步 WNACG 收藏失败'
@@ -290,7 +295,8 @@ const selectSource = async (source: ExternalFavoriteSource) => {
   activeSourceId.value = source.id
   favoritesUrl.value = source.favorites_url
   downloadRootPath.value = source.download_root_path || ''
-  await fetchItems()
+  selectedDownloadIds.value = new Set()
+  await fetchItems(true)
 }
 
 const saveDownloadRootPath = async () => {
@@ -344,20 +350,20 @@ onUnmounted(() => {
     unsubscribeCompleted()
     unsubscribeCompleted = null
   }
+  if (searchTimer) clearTimeout(searchTimer)
 })
 
 watch(() => externalDownloadStore.errorMessage.value, (msg) => {
   if (msg) errorMessage.value = msg
 })
 
-watch([searchQuery, filteredItems], () => {
-  if (currentPage.value > totalPages.value) {
-    currentPage.value = totalPages.value
-  }
-  if (searchQuery.value) {
-    currentPage.value = 1
-  }
-  pageInput.value = String(currentPage.value)
+let searchTimer: ReturnType<typeof setTimeout> | undefined
+watch(searchQuery, () => {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    selectedDownloadIds.value = new Set()
+    void fetchItems(true)
+  }, 300)
 })
 </script>
 
@@ -457,7 +463,7 @@ watch([searchQuery, filteredItems], () => {
         <!-- Panel toolbar: search + refresh + download (was previously in page header) -->
         <div class="bg-white/[0.04] border border-white/10 rounded-2xl px-3 py-3 flex flex-wrap items-center gap-3">
           <p class="text-[11px] font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20 uppercase tracking-widest">
-            {{ filteredItems.length }} ITEMS
+            {{ totalItems }} ITEMS
           </p>
           <div class="relative flex-1 min-w-[200px] group">
             <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 group-focus-within:text-accent transition-colors" :size="16" />
@@ -469,7 +475,7 @@ watch([searchQuery, filteredItems], () => {
             />
           </div>
           <button
-            @click="fetchItems"
+            @click="fetchItems()"
             class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white flex items-center justify-center transition-all"
             title="刷新列表"
           >
@@ -496,7 +502,7 @@ watch([searchQuery, filteredItems], () => {
           <div v-for="i in 10" :key="i" class="aspect-[3/4.3] bg-white/5 animate-pulse rounded-2xl border border-white/5"></div>
         </div>
 
-        <div v-else-if="filteredItems.length > 0" class="space-y-5">
+        <div v-else-if="items.length > 0" class="space-y-5">
           <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-5">
             <button
               v-for="item in pagedItems"
@@ -534,7 +540,7 @@ watch([searchQuery, filteredItems], () => {
 
           <div class="flex flex-wrap items-center justify-between gap-3 bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3">
             <p class="text-xs text-white/45">
-              {{ pageStart }}-{{ pageEnd }} / {{ filteredItems.length }}
+              {{ pageStart }}-{{ pageEnd }} / {{ totalItems }}
             </p>
             <div class="flex flex-wrap items-center gap-2">
               <button

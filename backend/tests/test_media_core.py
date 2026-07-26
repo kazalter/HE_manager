@@ -100,6 +100,44 @@ class MediaCoreTest(unittest.TestCase):
         finally:
             db.close()
 
+    def test_mobile_media_pagination_preserves_legacy_full_array(self):
+        db = self.Session()
+        try:
+            folder = models.Folder(path="D:\\Mobile", scan_mode="manga")
+            db.add(folder)
+            for index in range(5):
+                db.add(models.Media(
+                    folder=folder,
+                    title=f"mobile-{index}",
+                    relative_path=f"mobile-{index}.cbz",
+                    absolute_path=f"D:\\Mobile\\mobile-{index}.cbz",
+                    media_type="manga",
+                    extension=".cbz",
+                    file_size=100,
+                    is_missing=False,
+                    duplicate_status="unique",
+                ))
+            db.commit()
+
+            legacy_response = Response()
+            legacy = media_routes.list_mobile_media(response=legacy_response, _=None, db=db)
+            self.assertEqual(len(legacy), 5)
+            self.assertEqual(legacy_response.headers["x-total-count"], "5")
+
+            paged_response = Response()
+            paged = media_routes.list_mobile_media(
+                response=paged_response,
+                limit=2,
+                offset=2,
+                _=None,
+                db=db,
+            )
+            self.assertEqual(len(paged), 2)
+            self.assertEqual(paged_response.headers["x-total-count"], "5")
+            self.assertEqual([item.title for item in paged], ["mobile-2", "mobile-1"])
+        finally:
+            db.close()
+
     def test_image_metadata_reads_dimensions(self):
         with tempfile.TemporaryDirectory() as tmp:
             image_path = os.path.join(tmp, "cover.jpg")

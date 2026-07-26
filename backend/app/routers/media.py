@@ -164,19 +164,22 @@ def list_media(
     else:
         query = query.order_by(models.Media.id.desc())
 
-    if limit is not None:
-        query = query.limit(limit)
+    effective_limit = 200 if limit is None else max(1, min(limit, 200))
+    query = query.limit(effective_limit)
     if offset is not None:
-        query = query.offset(offset)
+        query = query.offset(max(0, offset))
 
     return query.all()
 
 
 @router.get("/mobile/media", response_model=List[schemas.Media])
 def list_mobile_media(
+    response: Response,
     media_type: Optional[str] = None,
     search: Optional[str] = None,
     sort: str = "date",
+    limit: Optional[int] = None,
+    offset: Optional[int] = None,
     _: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -191,6 +194,10 @@ def list_mobile_media(
     if search:
         query = query.filter(models.Media.title.ilike(f"%{search}%"))
 
+    total = query.order_by(None).count()
+    response.headers["X-Total-Count"] = str(total)
+    response.headers["Access-Control-Expose-Headers"] = "X-Total-Count"
+
     if sort == "title":
         query = query.order_by(models.Media.title.asc())
     elif sort == "rating":
@@ -200,6 +207,12 @@ def list_mobile_media(
     else:
         query = query.order_by(models.Media.id.desc())
 
+    # Omitted pagination remains a full array for released Android clients.
+    # New clients can page with a bounded limit and the total response header.
+    if limit is not None:
+        query = query.limit(max(1, min(limit, 200)))
+    if offset is not None:
+        query = query.offset(max(0, offset))
     return query.all()
 
 

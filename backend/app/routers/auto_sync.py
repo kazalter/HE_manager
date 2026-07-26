@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from .. import auto_sync as auto_sync_service
@@ -145,9 +145,11 @@ def trigger_x_auto_sync(source_id: int, db: Session = Depends(get_db)):
 
 @router.get("/auto-sync/logs", response_model=List[schemas.AutoSyncLogEntry])
 def get_auto_sync_logs(
+    response: Response,
     source_type: Optional[str] = None,
     source_id: Optional[int] = None,
     limit: int = 50,
+    offset: int = 0,
     db: Session = Depends(get_db),
 ):
     query = db.query(models.AutoSyncLog)
@@ -155,7 +157,14 @@ def get_auto_sync_logs(
         query = query.filter(models.AutoSyncLog.source_type == source_type)
     if source_id:
         query = query.filter(models.AutoSyncLog.source_id == source_id)
-    return query.order_by(models.AutoSyncLog.id.desc()).limit(min(limit, 200)).all()
+    response.headers["X-Total-Count"] = str(query.order_by(None).count())
+    response.headers["Access-Control-Expose-Headers"] = "X-Total-Count"
+    return (
+        query.order_by(models.AutoSyncLog.id.desc())
+        .offset(max(0, offset))
+        .limit(max(1, min(limit, 200)))
+        .all()
+    )
 
 
 @router.get("/auto-sync/proxy")

@@ -5,6 +5,7 @@ import tempfile
 import zipfile
 from unittest.mock import patch
 
+from fastapi import Response
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
@@ -303,7 +304,8 @@ class ExternalSourcesTest(unittest.TestCase):
                     "isdir",
                     side_effect=AssertionError("GET must not inspect download folders"),
                 ):
-                    result = external_routes.list_external_favorites(db=db)
+                    response = Response()
+                    result = external_routes.list_external_favorites(response=response, db=db)
             finally:
                 event.remove(self.engine, "before_cursor_execute", capture)
 
@@ -311,8 +313,20 @@ class ExternalSourcesTest(unittest.TestCase):
             self.assertTrue(all(item["local_media_id"] for item in result))
             selects = [sql for sql in statements if sql.startswith("SELECT")]
             writes = [sql for sql in statements if sql.startswith(("INSERT", "UPDATE", "DELETE"))]
-            self.assertLessEqual(len(selects), 2)
+            self.assertLessEqual(len(selects), 3)
+            self.assertEqual(response.headers["X-Total-Count"], "25")
             self.assertEqual(writes, [])
+
+            page_response = Response()
+            page = external_routes.list_external_favorites(
+                response=page_response,
+                source_type="wnacg",
+                limit=7,
+                offset=7,
+                db=db,
+            )
+            self.assertEqual(len(page), 7)
+            self.assertEqual(page_response.headers["X-Total-Count"], "25")
         finally:
             db.close()
 
