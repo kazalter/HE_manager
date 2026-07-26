@@ -67,7 +67,7 @@ const recentlyOpened = computed(() => {
     .slice(0, 8)
 })
 
-const pageSize = 60
+const pageSize = 36
 const totalItems = ref(0)
 const containerRef = ref<HTMLElement | null>(null)
 
