@@ -26,8 +26,40 @@ AUDIO_EXTENSIONS = {'.mp3', '.wav', '.flac', '.m4a', '.aac', '.ogg', '.opus'}
 # Folders to skip (case-insensitive)
 SKIP_FOLDERS = {'mask', 'result', 'inpainted', '.thumbnails', '.he_cover', 'node_modules', '.git', '.vite'}
 
-# Global semaphore for video thumbnail generation to limit concurrency to 2
-THUMBNAIL_SEMAPHORE = threading.BoundedSemaphore(value=2)
+# Thumbnail extraction and sprite/VTT generation both decode video. Sharing one
+# semaphore caps their combined CPU and disk pressure instead of limiting each
+# operation independently.
+VIDEO_PREVIEW_SEMAPHORE = threading.BoundedSemaphore(value=2)
+
+# A single uvicorn worker serves the production container. Reservations are
+# claimed by the request handler before the BackgroundTask starts, closing the
+# duplicate-click race where two scans could otherwise be queued together.
+_FOLDER_SCAN_RESERVATIONS: dict[int, object] = {}
+_FOLDER_SCAN_RESERVATIONS_LOCK = threading.Lock()
+
+
+def reserve_folder_scan(folder_id: int) -> object | None:
+    """Reserve a folder scan, returning an opaque token or ``None`` if busy."""
+    folder_id = int(folder_id)
+    with _FOLDER_SCAN_RESERVATIONS_LOCK:
+        if folder_id in _FOLDER_SCAN_RESERVATIONS:
+            return None
+        token = object()
+        _FOLDER_SCAN_RESERVATIONS[folder_id] = token
+        return token
+
+
+def release_folder_scan(folder_id: int, token: object) -> None:
+    """Release only the reservation represented by *token*."""
+    folder_id = int(folder_id)
+    with _FOLDER_SCAN_RESERVATIONS_LOCK:
+        if _FOLDER_SCAN_RESERVATIONS.get(folder_id) is token:
+            del _FOLDER_SCAN_RESERVATIONS[folder_id]
+
+
+def _owns_folder_scan_reservation(folder_id: int, token: object) -> bool:
+    with _FOLDER_SCAN_RESERVATIONS_LOCK:
+        return _FOLDER_SCAN_RESERVATIONS.get(int(folder_id)) is token
 
 
 def directory_size(root: str) -> int:
@@ -90,7 +122,7 @@ def get_video_thumbnail(video_path, thumb_path):
     best_fallback_frame = None
     best_fallback_time = 0
     
-    with THUMBNAIL_SEMAPHORE:
+    with VIDEO_PREVIEW_SEMAPHORE:
         try:
             cap = cv2.VideoCapture(video_path)
             if not cap.isOpened():
@@ -187,6 +219,11 @@ def count_manga_pages(manga_path, extension):
     return None
 
 def generate_sprite_vtt(video_path, base_name, thumbnail_dir, interval=2):
+    with VIDEO_PREVIEW_SEMAPHORE:
+        return _generate_sprite_vtt(video_path, base_name, thumbnail_dir, interval)
+
+
+def _generate_sprite_vtt(video_path, base_name, thumbnail_dir, interval=2):
     try:
         cap = cv2.VideoCapture(video_path)
         fps = cap.get(cv2.CAP_PROP_FPS)
@@ -446,10 +483,25 @@ def media_type_for_extension(scan_mode, ext):
     return None
 
 
-def scan_folder(folder_id: int):
-    # Create a fresh DB session for the background task
-    db = database.SessionLocal()
+def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
+    """Scan one folder, rejecting concurrent work for the same folder id.
+
+    Request handlers reserve before enqueueing so duplicate requests receive an
+    immediate 409. Direct callers may omit *reservation* and acquire it here.
+    """
+    if reservation is None:
+        reservation = reserve_folder_scan(folder_id)
+    elif not _owns_folder_scan_reservation(folder_id, reservation):
+        return False
+    if reservation is None:
+        return False
+
+    # Create a fresh DB session for the background task. Keep both locals
+    # initialized so even session/query creation failures follow the same cleanup.
+    db = None
+    folder = None
     try:
+        db = database.SessionLocal()
         folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()
         if not folder:
             print(f"Folder with id {folder_id} not found in DB.")
@@ -764,11 +816,15 @@ def scan_folder(folder_id: int):
                 dedup_worker.enqueue(checking_ids)
                 print(f"--- Queued {len(checking_ids)} item(s) for dedup analysis ---")
         print(f"--- Scan completed at {datetime.now()}. Total new items: {processed_count} ---")
+        return True
     except Exception as e:
         print(f"Scan error: {e}")
         print(f"Full traceback: {traceback.format_exc()}")
         if folder:
             folder.status = "error"
             db.commit()
+        return False
     finally:
-        db.close()
+        if db is not None:
+            db.close()
+        release_folder_scan(folder_id, reservation)

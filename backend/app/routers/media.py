@@ -20,6 +20,17 @@ from ..services.thumbnails import THUMBNAIL_DIR, remove_cover_thumbnails
 router = APIRouter()
 
 
+def _queue_folder_scan(folder_id: int, background_tasks: BackgroundTasks) -> None:
+    reservation = scanner.reserve_folder_scan(folder_id)
+    if reservation is None:
+        raise HTTPException(status_code=409, detail="Folder scan already queued or running")
+    try:
+        background_tasks.add_task(scanner.scan_folder, folder_id, reservation)
+    except Exception:
+        scanner.release_folder_scan(folder_id, reservation)
+        raise
+
+
 @router.get("/search-folder")
 def search_folder(name: str):
     results = []
@@ -59,7 +70,7 @@ def create_folder(folder: schemas.FolderCreate, background_tasks: BackgroundTask
         db_folder.thumbnail_interval = folder.thumbnail_interval
         db.commit()
         db.refresh(db_folder)
-        background_tasks.add_task(scanner.scan_folder, db_folder.id)
+        _queue_folder_scan(db_folder.id, background_tasks)
         return db_folder
 
     new_folder = models.Folder(
@@ -72,7 +83,7 @@ def create_folder(folder: schemas.FolderCreate, background_tasks: BackgroundTask
     db.commit()
     db.refresh(new_folder)
 
-    background_tasks.add_task(scanner.scan_folder, new_folder.id)
+    _queue_folder_scan(new_folder.id, background_tasks)
     return new_folder
 
 
@@ -82,7 +93,7 @@ def scan_folder(folder_id: int, background_tasks: BackgroundTasks, db: Session =
     if not db_folder:
         raise HTTPException(status_code=404, detail="Folder not found")
 
-    background_tasks.add_task(scanner.scan_folder, folder_id)
+    _queue_folder_scan(folder_id, background_tasks)
     return db_folder
 
 
