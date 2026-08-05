@@ -1,6 +1,6 @@
 # AGENTS.md - HE Manager
 
-个人自用媒体库：FastAPI 后端、Vue 3 Web 前端、Android 客户端。路线图见 `FEATURE_PLANS.md`，代码审查/优化计划见 `CODE_REVIEW_PLAN.md`。
+个人自用媒体库：FastAPI 后端、Vue 3 Web 前端、Android 客户端。当前优化任务统一以 `PLAN.md` 为准；功能现状见 `FEATURE_PLANS.md`，历史结构审查见 `CODE_REVIEW_PLAN.md`。
 
 ## 核心原则
 

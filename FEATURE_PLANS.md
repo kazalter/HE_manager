@@ -1,41 +1,26 @@
-# HE Manager 功能路线图
+# HE Manager 功能状态
 
-> 代码即真相：已完成项只保留摘要；未完成项保留可执行说明。
+> 本文只记录功能现状。优化任务、优先级和验收标准统一以 `PLAN.md` 为准。
 
-## 当前状态
+## 已完成
 
-| # | 计划 | 状态 |
-|---|------|------|
-| ① | 个人数据看板 `/stats/*` + StatsView | ✅ 完成 |
-| ② | 标签体系、命名空间、自动打标、回填 | ✅ 完成 |
-| ③ | 创作者聚合页 | ✅ 完成 |
-| ④ | 感知哈希近似去重 | ✅ 完成；跨标题 LSH 可选 |
-| ⑤ | 标签管理界面 | ✅ 完成 |
-| ⑥ | ASMR 同步、下载、播放、字幕、打标、镜像、体积控制 | ✅ 完成 |
-| ⑦ | 手机端传输优化 | 🟡 `/mobile/media` 分页已完成并兼容旧版；Android UI 尚未接入 |
-| ⑧ | Android 性能 | ✅ release + BaselineProfile；滑动 Option B |
-| ⑨ | 公网/FRP 安全加固 | ✅ 代码完成；安卓实际链路经 HTTPS |
+- 个人数据看板：`/stats/*` + `StatsView`。
+- 标签基础体系：命名空间、自动打标与回填。
+- 创作者聚合页。
+- 感知哈希近似去重；跨标题 LSH/BK-tree 为长期可选项。
+- ASMR 同步、下载、播放、字幕、打标、镜像和体积控制。
+- Android release + Baseline Profile 性能优化。
+- 公网/FRP 鉴权与安全加固。
+- `/mobile/media` 后端分页，并兼容不传分页参数的旧 Android 客户端。
 
-## 剩余任务
+## 待闭环
 
-1. **拆分 `backend/app/main.py`**
-   见 `CODE_REVIEW_PLAN.md`。这是当前最主要的维护性任务。
+- **标签管理界面**：现有代码和文档状态曾不一致，按 `PLAN.md` #12 核验后决定完整接通或移除死代码；在验收前不标记完成。
+- **Android 分页 UI**：后端已支持 `limit`、`offset`、`X-Total-Count`，但 `LibraryScreenV2` 尚未接入。
+- **Android 列表可选优化**：仅在 release 仍卡顿时，将卡片列表迁移到 `LazyVerticalGrid`。
 
-2. **⑦ Android 分页**
-   后端 `/mobile/media` 已支持 `limit`、`offset` 和 `X-Total-Count`；旧版客户端不传参数时仍返回完整数组。Android `LibraryScreenV2` 当前仍整库拉取并在客户端筛选/计数/搜索，尚未发送分页参数，接入时需要重写主屏数据流。
+## 业务约束
 
-3. **⑧ Option A**
-   若滑动仍不够顺，再把卡片模式 RecyclerView + ComposeView 迁到 Compose `LazyVerticalGrid`；杂图保留原生 TileHolder。
-
-4. **④ 可选后续**
-   pHash 目前依赖 `normalized_title` 候选过滤，只抓同标题近似重复。跨标题改名/重编码副本需要 LSH/BK-tree 全库近邻。
-
-5. **⑥ 可选后续**
-   Baseline Profile 可升级为 baselineprofile 插件 + macrobenchmark 设备生成；当前手写 profile 已够用。
-
-## 保留事实
-
-- ASMR 用户喜欢是私有播放列表，不是 mark；同步必须使用本人 token。
-- ASMR 镜像由客户端多镜像 fallback，用户配置 base 存 `source.favorites_url`。
-- Android release 才能判断真实性能；debug 卡顿不能作为结论。
-- 运维坑：改后端后确认 8010 无僵尸 uvicorn；watchfiles 在含空格路径上热重载容易抖。
+- ASMR 用户喜欢是私有播放列表，同步必须使用本人 token。
+- ASMR 镜像由客户端多镜像 fallback，用户配置保存在 `source.favorites_url`。
+- Android 性能只以 release 构建为准。
