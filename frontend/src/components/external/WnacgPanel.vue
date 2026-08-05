@@ -17,7 +17,7 @@ import {
 } from 'lucide-vue-next'
 import { API_BASE_URL, authUrl } from '../../config'
 import type { ExternalFavoriteItem, ExternalFavoriteSource, Media } from '../../types'
-import MediaDetail from '../MediaDetail.vue'
+import { AsyncMediaDetail as MediaDetail } from '../asyncComponents'
 import ExternalDownloadProgress from '../ExternalDownloadProgress.vue'
 import AutoSyncSection from './AutoSyncSection.vue'
 import { externalDownloadStore } from '../../stores/externalDownloadStore'

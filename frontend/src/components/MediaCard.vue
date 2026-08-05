@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Book, Eye, Film, Headphones, Image as ImageIcon, Play, Star } from 'lucide-vue-next'
 import { thumbnailUrl } from '../config'
+import mediaPlaceholderUrl from '../assets/media-placeholder.svg?no-inline'
 import type { Media } from '../types'
 
 withDefaults(defineProps<{
@@ -14,10 +15,7 @@ withDefaults(defineProps<{
   virtualized: false
 })
 
-const getThumb = (path: string | null) => {
-  if (!path) return 'https://via.placeholder.com/400x600?text=No+Cover'
-  return thumbnailUrl(path)
-}
+const getThumb = (path: string | null) => path ? thumbnailUrl(path) : mediaPlaceholderUrl
 
 const formatSize = (bytes: number) => {
   if (bytes === 0) return '本地目录'

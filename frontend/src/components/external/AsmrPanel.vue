@@ -16,7 +16,7 @@ import {
 } from 'lucide-vue-next'
 import { API_BASE_URL, authUrl } from '../../config'
 import type { ExternalFavoriteItem, ExternalFavoriteSource, Media } from '../../types'
-import MediaDetail from '../MediaDetail.vue'
+import { AsyncMediaDetail as MediaDetail } from '../asyncComponents'
 import ThemeSelect from '../ThemeSelect.vue'
 import { asmrDownloadStore } from '../../stores/asmrDownloadStore'
 

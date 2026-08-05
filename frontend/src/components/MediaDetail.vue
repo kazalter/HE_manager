@@ -2,8 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import axios from 'axios'
 import { ChevronLeft, ChevronRight, Maximize, Minimize, Plus, Star, Tag as TagIcon, Trash2, X, FileQuestion, RefreshCw } from 'lucide-vue-next'
-import Artplayer from 'artplayer'
-import artplayerPluginVttThumbnail from 'artplayer-plugin-vtt-thumbnail'
+import type Artplayer from 'artplayer'
 import { API_BASE_URL, STREAM_URL, THUMBNAIL_URL, authUrl, thumbnailUrl } from '../config'
 import type { Media } from '../types'
 
@@ -598,6 +597,24 @@ const initArtplayer = async () => {
   const container = artRef.value
   if (token !== artInitToken || !container || !isVideo.value) return
 
+  let artplayerModule: typeof import('artplayer')
+  let vttPluginModule: typeof import('artplayer-plugin-vtt-thumbnail')
+  try {
+    const loadedModules = await Promise.all([
+      import('artplayer'),
+      import('artplayer-plugin-vtt-thumbnail'),
+    ])
+    artplayerModule = loadedModules[0]
+    vttPluginModule = loadedModules[1]
+  } catch (err) {
+    console.error('Failed to load video player:', err)
+    showToast('播放器加载失败，请重试')
+    return
+  }
+  if (token !== artInitToken) return
+
+  const ArtplayerConstructor = artplayerModule.default
+  const artplayerPluginVttThumbnail = vttPluginModule.default
   const plugins = []
   if (currentMedia.value.cover_path) {
     try {
@@ -625,7 +642,7 @@ const initArtplayer = async () => {
   if (token !== artInitToken) return
 
   container.replaceChildren()
-  artInstance = new Artplayer({
+  artInstance = new ArtplayerConstructor({
     container,
     url: videoUrl.value,
     volume: 0.5,

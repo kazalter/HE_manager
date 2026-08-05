@@ -5,9 +5,10 @@ import axios from 'axios'
 import { Book, ChevronDown, ChevronLeft, ChevronRight, Filter, History, Play, Search, SortAsc, Star, X } from 'lucide-vue-next'
 import { API_BASE_URL, thumbnailUrl } from '../config'
 import { authState } from '../auth'
+import mediaPlaceholderUrl from '../assets/media-placeholder.svg?no-inline'
 import type { Media, Tag } from '../types'
 import MediaCard from '../components/MediaCard.vue'
-import MediaDetail from '../components/MediaDetail.vue'
+import { AsyncMediaDetail as MediaDetail } from '../components/asyncComponents'
 import PaginationControl from '../components/PaginationControl.vue'
 
 const props = defineProps<{
@@ -17,6 +18,7 @@ const props = defineProps<{
 const route = useRoute()
 const router = useRouter()
 const mediaList = ref<Media[]>([])
+const continueMedia = ref<Media[]>([])
 const tags = ref<Tag[]>([])
 const loading = ref(true)
 const mediaError = ref('')
@@ -57,7 +59,7 @@ const progressPercent = (media: Media) => {
 }
 
 const recentlyOpened = computed(() => {
-  return [...mediaList.value]
+  return [...continueMedia.value]
     .filter(item => item.last_opened_at || progressPercent(item) > 0)
     .sort((a, b) => {
       const timeA = a.last_opened_at ? new Date(a.last_opened_at).getTime() : 0
@@ -121,6 +123,18 @@ const fetchTags = async () => {
     tags.value = res.data
   } catch (err) {
     console.error('Failed to fetch tags:', err)
+  }
+}
+
+const fetchContinueMedia = async () => {
+  try {
+    const res = await axios.get<Media[]>(`${API_BASE_URL}/media`, {
+      params: { sort: 'opened', limit: 12, offset: 0 },
+    })
+    continueMedia.value = res.data
+  } catch (err) {
+    console.error('Failed to fetch continue-watching media:', err)
+    continueMedia.value = []
   }
 }
 
@@ -194,6 +208,12 @@ const updateMediaInList = (media: Media) => {
   const index = mediaList.value.findIndex(item => item.id === media.id)
   if (index >= 0) {
     mediaList.value[index] = media
+  }
+  const continueIndex = continueMedia.value.findIndex(item => item.id === media.id)
+  if (continueIndex >= 0) {
+    continueMedia.value[continueIndex] = media
+  } else if (media.last_opened_at || progressPercent(media) > 0) {
+    continueMedia.value = [media, ...continueMedia.value].slice(0, 12)
   }
   if (selectedMedia.value?.id === media.id) {
     selectedMedia.value = media
@@ -298,7 +318,7 @@ const triggerMissingRecheck = async () => {
 }
 
 onMounted(async () => {
-  await fetchMedia()
+  await Promise.all([fetchMedia(), fetchContinueMedia()])
   await syncSelectedMediaFromRoute()
   void fetchTags()
   await triggerMissingRecheck()
@@ -498,7 +518,7 @@ onMounted(async () => {
           @click="openMedia(item)"
         >
           <div class="w-14 h-18 shrink-0 rounded-lg overflow-hidden bg-black/40 border border-white/5 relative">
-            <img :src="item.cover_path ? thumbnailUrl(item.cover_path) : 'https://via.placeholder.com/100x150'" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+            <img :src="item.cover_path ? thumbnailUrl(item.cover_path) : mediaPlaceholderUrl" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
             <div class="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               <Play v-if="item.media_type === 'video'" :size="12" fill="white" class="text-white" />
               <Book v-else :size="12" class="text-white" />

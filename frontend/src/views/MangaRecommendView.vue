@@ -5,7 +5,7 @@ import { AlertTriangle, ChevronDown, KeyRound, Loader2, RefreshCw, Save, Send, S
 import { API_BASE_URL } from '../config'
 import type { AiRecommendationStatus, MangaMetadataJob, MangaMetadataStats, MangaProfileJob, MangaProfileStats, MangaRecommendationResponse, Media } from '../types'
 import MediaCard from '../components/MediaCard.vue'
-import MediaDetail from '../components/MediaDetail.vue'
+import { AsyncMediaDetail as MediaDetail } from '../components/asyncComponents'
 
 const query = ref('')
 const limit = ref(12)

@@ -6,7 +6,7 @@ import { ArrowLeft, ExternalLink, Palette, Search, SortAsc } from 'lucide-vue-ne
 import { API_BASE_URL, thumbnailUrl } from '../config'
 import type { Creator, CreatorDetail, Media } from '../types'
 import MediaCard from '../components/MediaCard.vue'
-import MediaDetail from '../components/MediaDetail.vue'
+import { AsyncMediaDetail as MediaDetail } from '../components/asyncComponents'
 
 const route = useRoute()
 const router = useRouter()
