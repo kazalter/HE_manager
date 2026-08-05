@@ -21,25 +21,38 @@ import { AsyncMediaDetail as MediaDetail } from '../asyncComponents'
 import ExternalDownloadProgress from '../ExternalDownloadProgress.vue'
 import AutoSyncSection from './AutoSyncSection.vue'
 import { externalDownloadStore } from '../../stores/externalDownloadStore'
+import { useExternalFavoritesPage } from '../../composables/useExternalFavoritesPage'
 
 const favoritesUrl = ref('https://www.wnacg.com/users-users_fav.html')
 const downloadRootPath = ref('')
 const cookie = ref('')
 const pageLimit = ref(30)
 const searchQuery = ref('')
-const loading = ref(false)
 const syncing = ref(false)
 const errorMessage = ref('')
-const items = ref<ExternalFavoriteItem[]>([])
-const totalItems = ref(0)
 const sources = ref<ExternalFavoriteSource[]>([])
 const activeSourceId = ref<number | null>(null)
-const pageSize = 15
-const currentPage = ref(1)
 const pageInput = ref('1')
 const pageDropdownOpen = ref(false)
 const downloadPanelOpen = ref(false)
 const selectedDownloadIds = ref<Set<number>>(new Set())
+const {
+  items,
+  totalItems,
+  currentPage,
+  loading,
+  error: favoritesError,
+  totalPages,
+  pageStart,
+  pageEnd,
+  fetchItems,
+  setPage: setFavoritesPage,
+} = useExternalFavoritesPage({
+  sourceType: 'wnacg',
+  activeSourceId,
+  searchQuery,
+  onSearchReset: () => { selectedDownloadIds.value = new Set() },
+})
 const downloadJob = externalDownloadStore.job
 const downloadInProgress = externalDownloadStore.inProgress
 const failedTasks = externalDownloadStore.failedTasks
@@ -52,10 +65,7 @@ const activeSource = computed(() => {
 })
 
 const filteredItems = computed(() => items.value)
-const totalPages = computed(() => Math.max(1, Math.ceil(totalItems.value / pageSize)))
 const pagedItems = computed(() => items.value)
-const pageStart = computed(() => totalItems.value === 0 ? 0 : (currentPage.value - 1) * pageSize + 1)
-const pageEnd = computed(() => Math.min(currentPage.value * pageSize, totalItems.value))
 const pageOptions = computed(() => Array.from({ length: totalPages.value }, (_, index) => index + 1))
 const downloadableFilteredItems = computed(() => items.value.filter(item => !item.local_media_id))
 const selectedDownloadItems = computed(() => {
@@ -131,11 +141,9 @@ const updateLocalMediaInList = (media: Media) => {
 const goToPage = (page: number) => {
   const target = Math.min(Math.max(page, 1), totalPages.value)
   pageDropdownOpen.value = false
-  if (target === currentPage.value) return
-  currentPage.value = target
+  if (!setFavoritesPage(target)) return
   pageInput.value = String(target)
   selectedDownloadIds.value = new Set()
-  void fetchItems()
 }
 
 const submitPageInput = () => {
@@ -236,37 +244,6 @@ const fetchSources = async () => {
   }
 }
 
-const fetchItems = async (resetPage = false) => {
-  if (resetPage) currentPage.value = 1
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const res = await axios.get(`${API_BASE_URL}/external/favorites`, {
-      params: {
-        source_type: 'wnacg',
-        source_id: activeSourceId.value || undefined,
-        search: searchQuery.value.trim() || undefined,
-        limit: pageSize,
-        offset: (currentPage.value - 1) * pageSize,
-      },
-    })
-    items.value = res.data
-    totalItems.value = Number(res.headers['x-total-count'] || res.data.length)
-    const lastPage = Math.max(1, Math.ceil(totalItems.value / pageSize))
-    if (currentPage.value > lastPage) {
-      currentPage.value = lastPage
-      await fetchItems()
-      return
-    }
-    pageInput.value = String(currentPage.value)
-  } catch (err) {
-    console.error('Failed to fetch external favorites:', err)
-    errorMessage.value = '读取外部收藏失败'
-  } finally {
-    loading.value = false
-  }
-}
-
 const syncWnacg = async () => {
   syncing.value = true
   errorMessage.value = ''
@@ -350,21 +327,15 @@ onUnmounted(() => {
     unsubscribeCompleted()
     unsubscribeCompleted = null
   }
-  if (searchTimer) clearTimeout(searchTimer)
 })
 
 watch(() => externalDownloadStore.errorMessage.value, (msg) => {
   if (msg) errorMessage.value = msg
 })
-
-let searchTimer: ReturnType<typeof setTimeout> | undefined
-watch(searchQuery, () => {
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    selectedDownloadIds.value = new Set()
-    void fetchItems(true)
-  }, 300)
+watch(favoritesError, message => {
+  errorMessage.value = message
 })
+watch(currentPage, page => { pageInput.value = String(page) })
 </script>
 
 <template>

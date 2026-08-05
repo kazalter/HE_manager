@@ -19,6 +19,7 @@ import type { ExternalFavoriteItem, ExternalFavoriteSource, Media } from '../../
 import { AsyncMediaDetail as MediaDetail } from '../asyncComponents'
 import ThemeSelect from '../ThemeSelect.vue'
 import { asmrDownloadStore } from '../../stores/asmrDownloadStore'
+import { useExternalFavoritesPage } from '../../composables/useExternalFavoritesPage'
 
 const AUDIO_FORMAT_OPTIONS: { value: 'all' | 'no_wav' | 'mp3_only'; label: string }[] = [
   { value: 'all', label: '全部格式' },
@@ -108,17 +109,29 @@ const audioFormatFilter = ref<'all' | 'no_wav' | 'mp3_only'>('all')
 const audioVersionFilter = ref<'all' | 'no_se' | 'se_only'>('all')
 const downloadRootPath = ref('')
 const searchQuery = ref('')
-const loading = ref(false)
 const syncing = ref(false)
 const errorMessage = ref('')
-const items = ref<ExternalFavoriteItem[]>([])
-const totalItems = ref(0)
 const sources = ref<ExternalFavoriteSource[]>([])
 const activeSourceId = ref<number | null>(null)
-const pageSize = 15
-const currentPage = ref(1)
 const downloadPanelOpen = ref(false)
 const selectedDownloadIds = ref<Set<number>>(new Set())
+const {
+  items,
+  totalItems,
+  currentPage,
+  loading,
+  error: favoritesError,
+  totalPages,
+  pageStart,
+  pageEnd,
+  fetchItems,
+  setPage: setFavoritesPage,
+} = useExternalFavoritesPage({
+  sourceType: 'asmr',
+  activeSourceId,
+  searchQuery,
+  onSearchReset: () => { selectedDownloadIds.value = new Set() },
+})
 const localAudioList = ref<Media[]>([])
 const selectedLocalMedia = ref<Media | null>(null)
 
@@ -138,10 +151,7 @@ const activeSource = computed(() =>
 )
 
 const filteredItems = computed(() => items.value)
-const totalPages = computed(() => Math.max(1, Math.ceil(totalItems.value / pageSize)))
 const pagedItems = computed(() => items.value)
-const pageStart = computed(() => (totalItems.value === 0 ? 0 : (currentPage.value - 1) * pageSize + 1))
-const pageEnd = computed(() => Math.min(currentPage.value * pageSize, totalItems.value))
 
 const downloadableItems = computed(() => items.value.filter(item => !item.local_media_id))
 const selectedDownloadItems = computed(() =>
@@ -164,10 +174,8 @@ const coverSrc = (item: ExternalFavoriteItem) => authUrl(`${API_BASE_URL}/extern
 
 const goToPage = (page: number) => {
   const target = Math.min(Math.max(page, 1), totalPages.value)
-  if (target === currentPage.value) return
-  currentPage.value = target
+  if (!setFavoritesPage(target)) return
   selectedDownloadIds.value = new Set()
-  void fetchItems()
 }
 
 const hydrateFromSource = (s: ExternalFavoriteSource | null | undefined) => {
@@ -232,36 +240,6 @@ const pingMirrors = async () => {
     errorMessage.value = '镜像探活失败'
   } finally {
     pinging.value = false
-  }
-}
-
-const fetchItems = async (resetPage = false) => {
-  if (resetPage) currentPage.value = 1
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const res = await axios.get(`${API_BASE_URL}/external/favorites`, {
-      params: {
-        source_type: 'asmr',
-        source_id: activeSourceId.value || undefined,
-        search: searchQuery.value.trim() || undefined,
-        limit: pageSize,
-        offset: (currentPage.value - 1) * pageSize,
-      },
-    })
-    items.value = res.data
-    totalItems.value = Number(res.headers['x-total-count'] || res.data.length)
-    const lastPage = Math.max(1, Math.ceil(totalItems.value / pageSize))
-    if (currentPage.value > lastPage) {
-      currentPage.value = lastPage
-      await fetchItems()
-      return
-    }
-  } catch (err) {
-    console.error('Failed to fetch ASMR favorites:', err)
-    errorMessage.value = '读取 ASMR 收藏失败'
-  } finally {
-    loading.value = false
   }
 }
 
@@ -415,7 +393,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (unsubscribeCompleted) { unsubscribeCompleted(); unsubscribeCompleted = null }
-  if (searchTimer) clearTimeout(searchTimer)
+  if (saveTimer) clearTimeout(saveTimer)
 })
 
 watch([audioFormatFilter, audioVersionFilter, playlistUrl], persistSourceSettings)
@@ -425,14 +403,7 @@ watch([audioFormatFilter, audioVersionFilter, playlistUrl], persistSourceSetting
 watch([apiBase, apiMirrors, playlistUrl], persistUrls)
 watch(username, persistCredentials)
 watch(() => asmrDownloadStore.errorMessage.value, msg => { if (msg) errorMessage.value = msg })
-let searchTimer: ReturnType<typeof setTimeout> | undefined
-watch(searchQuery, () => {
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    selectedDownloadIds.value = new Set()
-    void fetchItems(true)
-  }, 300)
-})
+watch(favoritesError, message => { errorMessage.value = message })
 </script>
 
 <template>

@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import axios from 'axios'
+import { computed, ref } from 'vue'
 import {
   AlertTriangle,
   AtSign,
@@ -16,9 +15,8 @@ import {
   Upload,
   X as XIcon,
 } from 'lucide-vue-next'
-import { API_BASE_URL } from '../../config'
 import { xImportStore } from '../../stores/xImportStore'
-import type { XImportSource, XPost } from '../../types'
+import { useXImportPanelData } from '../../composables/useXImportPanelData'
 import AutoSyncSection from './AutoSyncSection.vue'
 
 const downloadRootPath = ref('')
@@ -26,8 +24,7 @@ const cookieString = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
 const uploadResult = ref<{ parsed: number; new_posts: number; existing_posts: number } | null>(null)
-const failedPosts = ref<XPost[]>([])
-const failedLoading = ref(false)
+const { failedPosts, failedLoading, fetchFailedPosts, updateAutoSync } = useXImportPanelData(downloadRootPath)
 
 const source = xImportStore.source
 const stats = xImportStore.stats
@@ -189,53 +186,7 @@ const onRetrySkipped = async () => {
   }
 }
 
-const fetchFailedPosts = async () => {
-  if (!source.value) return
-  failedLoading.value = true
-  try {
-    const res = await axios.get<XPost[]>(`${API_BASE_URL}/x/sources/${source.value.id}/posts`, {
-      params: { status: 'failed', limit: 100 },
-    })
-    failedPosts.value = res.data
-  } catch (err) {
-    console.error('Failed to fetch failed posts:', err)
-  } finally {
-    failedLoading.value = false
-  }
-}
-
-const handleAutoSyncUpdate = async (payload: { auto_sync_enabled?: boolean; auto_sync_interval_hours?: number }) => {
-  if (!source.value) return
-  try {
-    const res = await axios.patch(`${API_BASE_URL}/auto-sync/x/${source.value.id}`, payload)
-    const updated = res.data as XImportSource
-    xImportStore.state.source = updated
-  } catch (err: any) {
-    xImportStore.setError(err.response?.data?.detail || '更新自动同步配置失败')
-  }
-}
-
-let unsubscribe: (() => void) | null = null
-
-onMounted(async () => {
-  await xImportStore.fetchSource()
-  if (source.value?.download_root_path) {
-    downloadRootPath.value = source.value.download_root_path
-  }
-  await xImportStore.ensureResumed()
-  unsubscribe = xImportStore.onCompleted(async () => {
-    if (source.value) await xImportStore.refreshStats(source.value.id)
-    await fetchFailedPosts()
-  })
-  await fetchFailedPosts()
-})
-
-onUnmounted(() => {
-  if (unsubscribe) {
-    unsubscribe()
-    unsubscribe = null
-  }
-})
+const handleAutoSyncUpdate = updateAutoSync
 </script>
 
 <template>
