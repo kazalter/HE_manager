@@ -163,6 +163,18 @@ def ensure_dedup_indexes():
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_dup_candidates_level ON duplicate_candidates (level)"))
 
 
+def ensure_tag_columns():
+    inspector = inspect(engine)
+    if not inspector.has_table("tags"):
+        return
+    columns = {column["name"] for column in inspector.get_columns("tags")}
+    with engine.begin() as conn:
+        if "namespace" not in columns:
+            conn.execute(text("ALTER TABLE tags ADD COLUMN namespace VARCHAR NOT NULL DEFAULT 'general'"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tags_namespace ON tags (namespace)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tags_name_namespace ON tags (name, namespace)"))
+
+
 def run_schema_migrations():
     """Runs all manual idempotent schema migrations."""
     ensure_folder_option_columns()
@@ -176,3 +188,5 @@ def run_schema_migrations():
     ensure_x_import_indexes()
     ensure_dedup_columns()
     ensure_dedup_indexes()
+    ensure_tag_columns()
+

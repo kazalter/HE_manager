@@ -43,9 +43,11 @@ class AuthToken(BaseModel):
 
 class TagBase(BaseModel):
     name: str
+    namespace: str = "general"
 
 class Tag(TagBase):
     id: int
+    count: Optional[int] = 0
     model_config = ConfigDict(from_attributes=True)
 
 class MediaBase(BaseModel):
@@ -89,8 +91,17 @@ class MediaUpdate(BaseModel):
     source_url: Optional[str] = None
     source_site: Optional[str] = None
 
-class TagCreate(TagBase):
-    pass
+class TagCreate(BaseModel):
+    name: str
+    namespace: Optional[str] = "general"
+
+class TagUpdate(BaseModel):
+    name: Optional[str] = None
+    namespace: Optional[str] = None
+
+class TagMergeRequest(BaseModel):
+    target_id: int
+
 
 
 class MangaRecommendationRequest(BaseModel):

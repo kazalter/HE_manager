@@ -8,9 +8,10 @@ import zipfile
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.responses import FileResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
-from .. import auth, database, media_cleanup, models, scanner, schemas
+from .. import auth, database, media_cleanup, models, scanner, schemas, tagging
 from ..database import get_db
 from ..services.manga_pages import get_manga_image_files
 from ..services.media_access import get_media_or_404
@@ -344,7 +345,100 @@ def recheck_all_missing(background_tasks: BackgroundTasks, db: Session = Depends
 
 @router.get("/tags", response_model=List[schemas.Tag])
 def list_tags(db: Session = Depends(get_db)):
-    return db.query(models.Tag).order_by(models.Tag.name.asc()).all()
+    rows = (
+        db.query(
+            models.Tag.id,
+            models.Tag.name,
+            models.Tag.namespace,
+            func.count(models.media_tags.c.media_id).label("count"),
+        )
+        .outerjoin(models.media_tags, models.Tag.id == models.media_tags.c.tag_id)
+        .group_by(models.Tag.id, models.Tag.name, models.Tag.namespace)
+        .order_by(models.Tag.name.asc())
+        .all()
+    )
+    return [
+        schemas.Tag(
+            id=r.id,
+            name=r.name,
+            namespace=r.namespace or "general",
+            count=int(r.count or 0),
+        )
+        for r in rows
+    ]
+
+
+@router.patch("/tags/{tag_id}", response_model=schemas.Tag)
+def update_tag(tag_id: int, payload: schemas.TagUpdate, db: Session = Depends(get_db)):
+    tag = db.query(models.Tag).filter(models.Tag.id == tag_id).first()
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+
+    new_name = payload.name.strip() if payload.name is not None else tag.name
+    if not new_name:
+        raise HTTPException(status_code=400, detail="Tag name cannot be empty")
+
+    new_ns = (payload.namespace or "general").strip() if payload.namespace is not None else (tag.namespace or "general")
+
+    existing = (
+        db.query(models.Tag)
+        .filter(models.Tag.name == new_name, models.Tag.namespace == new_ns, models.Tag.id != tag.id)
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="Tag with this name and namespace already exists")
+
+    tag.name = new_name
+    tag.namespace = new_ns
+    db.commit()
+    db.refresh(tag)
+
+    count = db.query(models.media_tags).filter(models.media_tags.c.tag_id == tag.id).count()
+    return schemas.Tag(
+        id=tag.id,
+        name=tag.name,
+        namespace=tag.namespace or "general",
+        count=count,
+    )
+
+
+@router.post("/tags/{tag_id}/merge")
+def merge_tag(tag_id: int, payload: schemas.TagMergeRequest, db: Session = Depends(get_db)):
+    if tag_id == payload.target_id:
+        raise HTTPException(status_code=400, detail="Cannot merge a tag into itself")
+
+    source_tag = db.query(models.Tag).filter(models.Tag.id == tag_id).first()
+    if not source_tag:
+        raise HTTPException(status_code=404, detail="Source tag not found")
+
+    target_tag = db.query(models.Tag).filter(models.Tag.id == payload.target_id).first()
+    if not target_tag:
+        raise HTTPException(status_code=404, detail="Target tag not found")
+
+    for media in list(source_tag.media_items):
+        if target_tag not in media.tags:
+            media.tags.append(target_tag)
+        if source_tag in media.tags:
+            media.tags.remove(source_tag)
+
+    db.delete(source_tag)
+    db.commit()
+    return {"message": "Merged successfully", "source_id": tag_id, "target_id": payload.target_id}
+
+
+@router.delete("/tags/{tag_id}")
+def delete_tag(tag_id: int, db: Session = Depends(get_db)):
+    tag = db.query(models.Tag).filter(models.Tag.id == tag_id).first()
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+
+    for media in list(tag.media_items):
+        if tag in media.tags:
+            media.tags.remove(tag)
+
+    db.delete(tag)
+    db.commit()
+    return {"message": "Tag deleted successfully", "id": tag_id}
 
 
 @router.post("/media/{media_id}/tags", response_model=schemas.Media)
@@ -354,14 +448,8 @@ def add_media_tag(media_id: int, payload: schemas.TagCreate, db: Session = Depen
     if not tag_name:
         raise HTTPException(status_code=400, detail="Tag name cannot be empty")
 
-    tag = db.query(models.Tag).filter(models.Tag.name == tag_name).first()
-    if not tag:
-        tag = models.Tag(name=tag_name)
-        db.add(tag)
-        db.flush()
-
-    if tag not in media.tags:
-        media.tags.append(tag)
+    namespace = (payload.namespace or "general").strip() or "general"
+    tag = tagging.attach_tag(db, media, tag_name, namespace)
     db.commit()
     db.refresh(media)
     return media

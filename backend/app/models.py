@@ -96,9 +96,13 @@ class Media(Base):
 
 class Tag(Base):
     __tablename__ = "tags"
+    __table_args__ = (
+        UniqueConstraint("name", "namespace", name="uq_tag_name_namespace"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
+    name = Column(String, index=True)
+    namespace = Column(String, default="general", index=True)
 
     media_items = relationship("Media", secondary=media_tags, back_populates="tags")
 

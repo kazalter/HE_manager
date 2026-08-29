@@ -55,6 +55,11 @@ const router = createRouter({
       props: true
     },
     {
+      path: '/tags',
+      name: 'tags',
+      component: () => import('../views/TagsView.vue')
+    },
+    {
       path: '/recommend',
       name: 'manga-recommend',
       component: () => import('../views/MangaRecommendView.vue')
