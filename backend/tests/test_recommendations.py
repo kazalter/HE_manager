@@ -27,7 +27,30 @@ class RecommendationTest(unittest.TestCase):
         ai_config.CONFIG_PATH = os.path.join(self._config_tmp.name, "deepseek.json")
         self._tag_cache = {}
 
+        class DummyEmbeddingModel:
+            def encode(self, texts, **kwargs):
+                if isinstance(texts, str):
+                    h = abs(hash(texts)) % 10000 + 1
+                    vec = np.zeros(384, dtype=np.float32)
+                    vec[0] = float(h) / 10000.0
+                    return vec
+                res = []
+                for t in texts:
+                    h = abs(hash(t)) % 10000 + 1
+                    vec = np.zeros(384, dtype=np.float32)
+                    vec[0] = float(h) / 10000.0
+                    res.append(vec)
+                return np.array(res, dtype=np.float32)
+
+        self._old_model = manga_vector._model
+        self._old_get_model = manga_vector.get_model
+        self._dummy_model = DummyEmbeddingModel()
+        manga_vector._model = self._dummy_model
+        manga_vector.get_model = lambda: self._dummy_model
+
     def tearDown(self):
+        manga_vector._model = self._old_model
+        manga_vector.get_model = self._old_get_model
         ai_config.CONFIG_DIR = self._old_config_dir
         ai_config.CONFIG_PATH = self._old_config_path
         for key, value in self._old_env.items():

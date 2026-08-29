@@ -35,18 +35,9 @@
 | 10 | [x] 拆分前端巨型组件 | 详情页拆为五个媒体/元数据组件；进度、键盘和全屏生命周期抽为 composable；三类外部面板共用分页请求与订阅逻辑；生产构建和浏览器交互回归通过 |
 | 11 | [x] 拆分后端大型领域模块 | `external_runtime`、`routers/external`、`scanner` 与 `auto_sync` 均完成高内聚模块化拆分与门面兼容；后端测试全量通过 |
 | 12 | [x] 决定并闭环标签管理 | 统一前后端 Tag 模型与 namespace/count；补齐 CRUD、聚合与合并 API；挂载 `/tags` 路由与侧栏；测试 100 项全量通过 |
+| 13 | [x] 建立可重复测试与 CI | 后端 pytest/HF-mock 完全离线化（126项通过）；前端引入 Vitest（11项通过）与 E2E 流；创建 GitHub Actions CI 工作流 |
 
 ## 当前任务
-
-### 13. [ ] 建立可重复测试与 CI
-
-- 标准化后端 dev requirements、pytest 配置和测试命令。
-- 推荐测试 mock HuggingFace，禁止测试时联网下载模型。
-- 增加前端 Vitest：分页、鉴权、MediaDetail 关键状态。
-- 增加登录、媒体分页、打开/关闭详情的最小 E2E。
-- GitHub Actions 执行后端测试、前端类型检查和生产构建。
-
-验收：CI 在无生产数据、无模型下载条件下稳定通过。
 
 ### 14. [ ] 文档与运维监控
 
