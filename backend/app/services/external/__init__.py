@@ -1,58 +1,54 @@
-"""Facade for external service modules.
-
-This module re-exports components split into app.services.external:
-- covers: storage paths, cover caches, sidecar handling
-- jobs: in-memory download job tracking and cancellation
-- matching: DB local media association and folder creation
-- wnacg: WNACG archive and page-by-page downloading
-- asmr: ASMR audio work streaming and downloads
-"""
-import os
-import time
-
-from .external import (
+from .asmr import (
+    cleanup_incomplete_asmr_download,
+    download_asmr_item,
+    prepare_asmr_download_plan_for_item,
+    run_asmr_download_job,
+)
+from .covers import (
     DEFAULT_EXTERNAL_DOWNLOAD_DIR,
     EXTERNAL_COVERS_DIR,
     HE_CALLBACK_TOKEN,
     HE_PUBLIC_URL,
-    WNACG_ARCHIVE_IMAGE_EXTENSIONS,
-    DOWNLOAD_JOBS,
-    DownloadCancelled,
-    cleanup_incomplete_asmr_download,
-    cleanup_incomplete_download,
-    download_asmr_item,
-    download_wnacg_item,
     ensure_asmr_cover_file,
-    ensure_external_audio_library,
     ensure_external_cover_cache,
-    ensure_external_manga_library,
-    ensure_wnacg_source_marker,
     external_cover_sidecar_rel_path,
     external_item_download_dir,
     find_cached_cover,
     find_external_cover_sidecar,
-    find_local_media_for_external_item,
-    find_local_media_for_external_items,
-    find_task,
     get_asmr_storage_dirs,
     get_cover_cache_prefix,
     get_cover_extension,
     get_external_storage_dirs,
     get_image_extension,
     get_url_base,
-    is_cancel_requested,
-    log_wnacg_download_failure,
     normalize_download_root,
-    prepare_asmr_download_plan_for_item,
-    prepare_wnacg_download_plan,
-    run_asmr_download_job,
-    run_wnacg_download_job,
     safe_filename,
+)
+from .jobs import (
+    DOWNLOAD_JOBS,
+    DownloadCancelled,
+    find_task,
+    is_cancel_requested,
+)
+from .matching import (
+    ensure_external_audio_library,
+    ensure_external_manga_library,
+    ensure_wnacg_source_marker,
+    find_local_media_for_external_item,
+    find_local_media_for_external_items,
     serialize_external_favorite_item,
     serialize_external_favorite_items,
     upsert_external_downloaded_audio_media,
     upsert_external_downloaded_media,
     wnacg_download_is_complete,
+)
+from .wnacg import (
+    WNACG_ARCHIVE_IMAGE_EXTENSIONS,
+    cleanup_incomplete_download,
+    download_wnacg_item,
+    log_wnacg_download_failure,
+    prepare_wnacg_download_plan,
+    run_wnacg_download_job,
 )
 
 __all__ = [
@@ -98,6 +94,4 @@ __all__ = [
     "download_asmr_item",
     "cleanup_incomplete_asmr_download",
     "run_asmr_download_job",
-    "os",
-    "time",
 ]
