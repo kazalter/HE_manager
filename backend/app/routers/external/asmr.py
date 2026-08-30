@@ -1,5 +1,6 @@
 from datetime import datetime
 import hashlib
+import logging
 import os
 import uuid
 from typing import Optional
@@ -21,6 +22,8 @@ from ...services.external import (
 from ...services.media_access import get_source_or_404
 from ...services.thumbnails import THUMBNAIL_DIR
 from .downloader import _push_external_items
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -86,7 +89,7 @@ def asmr_recheck_covers(db: Session = Depends(get_db)):
                     cover_src = cover_dst
                     fetched_remote += 1
                 except Exception as exc:  # noqa: BLE001
-                    print(f"  ! recheck-covers: remote fetch failed for {media.title!r}: {exc}")
+                    logger.warning("recheck-covers: remote fetch failed for %r: %s", media.title, exc)
                     failed += 1
                     continue
 

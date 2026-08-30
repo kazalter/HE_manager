@@ -6,6 +6,7 @@ blocked — scans return as soon as basic insertion finishes.
 """
 from __future__ import annotations
 
+import logging
 import queue
 import threading
 import traceback
@@ -17,6 +18,7 @@ from sqlalchemy.orm import Session
 from .. import database, models
 from . import classify, fingerprint, normalize
 
+logger = logging.getLogger(__name__)
 
 _QUEUE: "queue.Queue[int]" = queue.Queue()
 _WORKER_THREAD: Optional[threading.Thread] = None
@@ -83,8 +85,7 @@ def _run() -> None:
             _process_one(media_id)
         except Exception as exc:
             _mark_processing_error(media_id, exc)
-            print("[dedup] worker error:")
-            print(traceback.format_exc())
+            logger.exception("[dedup] worker error processing media %s: %s", media_id, exc)
         finally:
             _QUEUE.task_done()
 
@@ -99,7 +100,7 @@ def _mark_processing_error(media_id: int, exc: Exception) -> None:
             db.commit()
     except Exception:
         db.rollback()
-        print(f"[dedup] failed to persist error state for media {media_id}: {exc}")
+        logger.error("[dedup] failed to persist error state for media %s: %s", media_id, exc)
     finally:
         db.close()
 

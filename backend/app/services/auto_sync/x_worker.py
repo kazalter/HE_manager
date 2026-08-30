@@ -1,14 +1,16 @@
-from __future__ import annotations
-
 from datetime import datetime
+import logging
 import time
 import traceback
 import uuid
 
 from ... import database, models
+from ..storage_guard import is_mount_or_sentinel_valid
 from ..thumbnails import THUMBNAIL_DIR
 from .locks import _release_source
 from .policy import _next_run_after_status, _prune_auto_sync_logs
+
+logger = logging.getLogger(__name__)
 
 
 def _run_x(source_id: int) -> None:
@@ -38,6 +40,12 @@ def _run_x(source_id: int) -> None:
         if not source.download_root_path:
             status = "failed"
             message = "下载路径未配置"
+            return
+
+        valid_storage, storage_reason = is_mount_or_sentinel_valid(source.download_root_path)
+        if not valid_storage:
+            status = "failed"
+            message = f"下载存储未挂载或哨兵缺失: {storage_reason}"
             return
 
         source.auto_sync_last_status = "running"
@@ -188,13 +196,17 @@ def _run_x(source_id: int) -> None:
             db.add(log)
             _prune_auto_sync_logs(db)
             db.commit()
-        except Exception:
-            traceback.print_exc()
+        except Exception as exc:
+            logger.exception("Error saving auto-sync log for x #%s: %s", source_id, exc)
         finally:
             db.close()
             _release_source("x", source_id)
-            print(
-                f"  [auto-sync] x #{source_id} finished: "
-                f"{status} — synced={synced_count} downloaded={downloaded_count} "
-                f"failed={failed_count} ({duration}s)"
+            logger.info(
+                "  [auto-sync] x #%s finished: %s — synced=%s downloaded=%s failed=%s (%ss)",
+                source_id,
+                status,
+                synced_count,
+                downloaded_count,
+                failed_count,
+                duration,
             )

@@ -1,5 +1,6 @@
 from datetime import datetime
 import hashlib
+import logging
 import mimetypes
 import os
 import string
@@ -17,6 +18,8 @@ from ..services.manga_pages import get_manga_image_files
 from ..services.media_access import get_media_or_404
 from ..services.range_response import get_ranged_file_response
 from ..services.thumbnails import THUMBNAIL_DIR, remove_cover_thumbnails
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -580,7 +583,7 @@ def get_manga_page(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"  ! Failed to serve manga page {media_id}/{page_index}: {e}")
+        logger.warning("Failed to serve manga page %s/%s: %s", media_id, page_index, e)
         raise HTTPException(status_code=500, detail="Failed to read page")
 
 

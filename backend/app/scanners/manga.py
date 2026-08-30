@@ -1,8 +1,11 @@
+import logging
 import os
 import zipfile
 from PIL import Image
 
 from .common import IMAGE_EXTENSIONS, SKIP_FOLDERS
+
+logger = logging.getLogger(__name__)
 
 
 def get_image_metadata(image_path: str) -> dict:
@@ -10,7 +13,7 @@ def get_image_metadata(image_path: str) -> dict:
         with Image.open(image_path) as img:
             return {"width": img.width, "height": img.height}
     except Exception as e:
-        print(f"Error reading image metadata: {e}")
+        logger.warning("Error reading image metadata for %s: %s", image_path, e)
     return {"width": None, "height": None}
 
 
@@ -26,7 +29,7 @@ def count_manga_pages(manga_path: str, extension: str) -> int | None:
         with zipfile.ZipFile(manga_path, 'r') as z:
             return sum(1 for f in z.namelist() if any(f.lower().endswith(ext) for ext in image_exts))
     except Exception as e:
-        print(f"Error counting manga pages: {e}")
+        logger.warning("Error counting manga pages for %s: %s", manga_path, e)
     return None
 
 
@@ -43,7 +46,7 @@ def get_manga_thumbnail(manga_path: str, thumb_path: str) -> bool:
                     img.save(thumb_path, "JPEG")
                     return True
     except Exception as e:
-        print(f"Error generating manga thumbnail: {e}")
+        logger.warning("Error generating manga thumbnail for %s: %s", manga_path, e)
     return False
 
 
@@ -56,7 +59,7 @@ def get_image_thumbnail(image_path: str, thumb_path: str) -> bool:
         img.save(thumb_path, "JPEG")
         return True
     except Exception as e:
-        print(f"Error generating image thumbnail: {e}")
+        logger.warning("Error generating image thumbnail for %s: %s", image_path, e)
     return False
 
 
@@ -73,5 +76,5 @@ def get_folder_thumbnail(folder_path: str, thumb_path: str) -> bool:
             img.save(thumb_path, "JPEG")
             return True
     except Exception as e:
-        print(f"Error generating folder thumbnail: {e}")
+        logger.warning("Error generating folder thumbnail for %s: %s", folder_path, e)
     return False

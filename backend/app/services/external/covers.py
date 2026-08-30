@@ -1,5 +1,6 @@
 import glob
 import hashlib
+import logging
 import mimetypes
 import os
 import re
@@ -7,6 +8,9 @@ from typing import Optional
 from urllib.parse import urlparse
 
 from ... import asmr_source, downloader_push, external_sources, models, scanner
+from .. import storage_guard
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_EXTERNAL_DOWNLOAD_DIR = os.path.join(os.getcwd(), "external_downloads")
 EXTERNAL_COVERS_DIR = os.path.abspath(os.path.join(os.getcwd(), "..", "covers"))
@@ -28,6 +32,7 @@ def get_external_storage_dirs(source: models.ExternalFavoriteSource, download_ro
         download_root_path if download_root_path is not None else source.download_root_path,
         source.source_type or "wnacg",
     )
+    storage_guard.ensure_storage_available(root, purpose="external_downloads")
     covers_dir = os.path.join(EXTERNAL_COVERS_DIR, source.source_type or "wnacg")
     manga_dir = os.path.join(root, "manga")
     os.makedirs(covers_dir, exist_ok=True)
@@ -84,7 +89,7 @@ def ensure_asmr_cover_file(item: models.ExternalFavoriteItem, item_dir: str) -> 
     try:
         content, content_type = asmr_source.fetch_file(cover_url)
     except Exception as exc:  # noqa: BLE001 — cover is nice-to-have
-        print(f"  ! Failed to download cover for {item.title!r}: {exc}")
+        logger.warning("Failed to download cover for %r: %s", item.title, exc)
         return None
     ext = get_cover_extension(content_type, cover_url)
     cover_local = os.path.join(item_dir, f"cover{ext}")
@@ -92,7 +97,7 @@ def ensure_asmr_cover_file(item: models.ExternalFavoriteItem, item_dir: str) -> 
         with open(cover_local, "wb") as cover_file:
             cover_file.write(content)
     except OSError as exc:
-        print(f"  ! Failed to write cover for {item.title!r}: {exc}")
+        logger.warning("Failed to write cover for %r: %s", item.title, exc)
         return None
     return cover_local
 
@@ -126,7 +131,7 @@ def ensure_external_cover_cache(item: models.ExternalFavoriteItem, source: model
                 proxy=source.proxy,
             )
     except Exception as exc:  # noqa: BLE001
-        print(f"  ! Failed to cache external cover for {item.title!r}: {exc}")
+        logger.warning("Failed to cache external cover for %r: %s", item.title, exc)
         return None
     extension = get_cover_extension(content_type, item.cover_url)
     cover_path = os.path.join(covers_dir, f"{get_cover_cache_prefix(item)}{extension}")
@@ -134,7 +139,7 @@ def ensure_external_cover_cache(item: models.ExternalFavoriteItem, source: model
         with open(cover_path, "wb") as cover_file:
             cover_file.write(content)
     except OSError as exc:
-        print(f"  ! Failed to write external cover cache for {item.title!r}: {exc}")
+        logger.warning("Failed to write external cover cache for %r: %s", item.title, exc)
         return None
     return cover_path
 
@@ -150,6 +155,7 @@ def get_asmr_storage_dirs(source: models.ExternalFavoriteSource, download_root_p
         download_root_path if download_root_path is not None else source.download_root_path,
         source.source_type or "asmr",
     )
+    storage_guard.ensure_storage_available(root, purpose="external_downloads")
     audio_dir = os.path.join(root, "audio")
     os.makedirs(audio_dir, exist_ok=True)
     return root, audio_dir

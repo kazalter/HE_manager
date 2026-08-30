@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import logging
 import threading
 import time
 import traceback
@@ -22,6 +23,8 @@ from .locks import (
 from .policy import TICK_INTERVAL, _prune_auto_sync_logs
 from .wnacg import _run_wnacg
 from .x_worker import _run_x
+
+logger = logging.getLogger(__name__)
 
 _running = False
 _ticker_thread: Optional[threading.Thread] = None
@@ -83,7 +86,7 @@ def _tick() -> None:
                 name=f"auto-sync-x-{source.id}",
             ).start()
     except Exception as exc:
-        print(f"  [auto-sync] ticker error: {exc}")
+        logger.error("[auto-sync] ticker error: %s", exc)
     finally:
         db.close()
 
@@ -93,8 +96,8 @@ def _ticker_loop() -> None:
     while _running:
         try:
             _tick()
-        except Exception:
-            traceback.print_exc()
+        except Exception as exc:
+            logger.exception("[auto-sync] unhandled exception in ticker loop: %s", exc)
         for _ in range(int(TICK_INTERVAL / 0.5)):
             if not _running:
                 return
@@ -108,7 +111,7 @@ def init() -> None:
         if _running:
             return
         if not _try_acquire_scheduler_lock():
-            print("  [auto-sync] scheduler already active in another process")
+            logger.info("[auto-sync] scheduler already active in another process")
             return
         _running = True
         _restore_schedules()
@@ -116,7 +119,7 @@ def init() -> None:
             target=_ticker_loop, daemon=True, name="auto-sync-ticker"
         )
         _ticker_thread.start()
-        print("  [auto-sync] scheduler started")
+        logger.info("[auto-sync] scheduler started")
 
 
 def stop() -> None:

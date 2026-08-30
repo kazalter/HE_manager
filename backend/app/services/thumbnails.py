@@ -1,6 +1,9 @@
+import logging
 import os
 
 from .. import database, models
+
+logger = logging.getLogger(__name__)
 
 THUMBNAIL_DIR = os.path.join(os.getcwd(), ".thumbnails")
 os.makedirs(THUMBNAIL_DIR, exist_ok=True)
@@ -42,6 +45,6 @@ def cleanup_orphaned_thumbnails():
                 except Exception:
                     pass
     except Exception as e:
-        print(f"Error cleaning up thumbnails: {e}")
+        logger.warning("Error cleaning up thumbnails: %s", e)
     finally:
         db.close()

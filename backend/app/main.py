@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -23,10 +24,17 @@ from .routers import media as media_routes
 from .routers import recommend as recommend_routes
 from .routers import root as root_routes
 from .routers import stats as stats_routes
+from .routers import system as system_routes
 from .routers import x_import as x_import_routes
 from .dedup import worker as dedup_worker
 from .services import job_lifecycle
 from .services.thumbnails import THUMBNAIL_DIR, cleanup_orphaned_thumbnails
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -89,6 +97,7 @@ app.include_router(auth_routes.router)
 app.include_router(media_routes.router)
 app.include_router(audio_routes.router)
 app.include_router(recommend_routes.router)
+app.include_router(system_routes.router)
 app.include_router(x_import_routes.router)
 app.include_router(root_routes.router)
 
@@ -160,7 +169,7 @@ async def require_authenticated_request(request: Request, call_next):
             query_token=query_token,
         )
         if not raw_token:
-            print(f"*** AUTH INTERCEPTED: {request.method} {path}")
+            logger.warning("Auth intercepted: %s %s", request.method, path)
             return _json_error(401, "Missing access token")
 
         db = database.SessionLocal()

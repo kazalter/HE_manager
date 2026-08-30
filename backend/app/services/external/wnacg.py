@@ -1,5 +1,6 @@
 from datetime import datetime
 import glob
+import logging
 import os
 import re
 import shutil
@@ -23,6 +24,8 @@ from .matching import (
     find_local_media_for_external_item,
     upsert_external_downloaded_media,
 )
+
+logger = logging.getLogger(__name__)
 
 WNACG_ARCHIVE_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}
 
@@ -123,7 +126,7 @@ def _resolve_wnacg_archive_urls(item: models.ExternalFavoriteItem, source: model
             if signed_url:
                 urls.append(signed_url)
         except Exception as exc:  # noqa: BLE001 - fallback to static archive links / per-page download
-            print(f"  ! Failed to resolve wnacg archive worker URL for {item.title!r}: {exc}")
+            logger.warning("Failed to resolve wnacg archive worker URL for %r: %s", item.title, exc)
 
     for url in plan.get("archive_urls") or []:
         if url and url not in urls:
@@ -194,7 +197,7 @@ def _try_download_wnacg_archive(
             if job is not None:
                 job["downloaded_bytes"] = bytes_before_attempt
             last_error = exc
-            print(f"  ! WNACG archive download failed for {item.title!r}: {exc}")
+            logger.warning("WNACG archive download failed for %r: %s", item.title, exc)
         finally:
             if os.path.exists(archive_path):
                 try:
@@ -203,7 +206,7 @@ def _try_download_wnacg_archive(
                     pass
 
     if last_error is not None:
-        print(f"  ! Falling back to per-page WNACG download for {item.title!r}")
+        logger.info("Falling back to per-page WNACG download for %r", item.title)
     return None
 
 
@@ -237,7 +240,7 @@ def prepare_wnacg_download_plan(item: models.ExternalFavoriteItem, source: model
         archive_worker_request = external_sources.parse_wnacg_worker_archive_request(download_html)
         archive_urls = external_sources.parse_wnacg_archive_urls(download_html, base_url=download_page_url)
     except Exception as exc:  # noqa: BLE001 - the image downloader below remains the fallback
-        print(f"  ! Failed to inspect wnacg archive page for {item.title!r}: {exc}")
+        logger.warning("Failed to inspect wnacg archive page for %r: %s", item.title, exc)
 
     return {
         "item_dir": item_dir,

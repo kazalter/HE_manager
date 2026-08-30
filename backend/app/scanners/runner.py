@@ -1,10 +1,12 @@
 from datetime import datetime
 import hashlib
+import logging
 import os
 import traceback
 
 from .. import database, models
 from ..dedup import worker as dedup_worker
+from ..services.storage_guard import ensure_folder_scannable
 from .audio import (
     count_audio_tracks,
     get_work_cover_path,
@@ -37,6 +39,8 @@ from .video import (
     get_video_thumbnail,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
     """Scan one folder, rejecting concurrent work for the same folder id."""
@@ -53,7 +57,15 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
         db = database.SessionLocal()
         folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()
         if not folder:
-            print(f"Folder with id {folder_id} not found in DB.")
+            logger.warning("Folder with id %s not found in DB.", folder_id)
+            return False
+
+        # Verify storage guard and mount safety
+        is_scannable, guard_reason = ensure_folder_scannable(folder.path)
+        if not is_scannable:
+            logger.warning("Folder scan skipped for %s (id=%s): %s", folder.path, folder_id, guard_reason)
+            folder.status = "idle"
+            db.commit()
             return False
 
         folder.status = "scanning"
@@ -85,10 +97,13 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                 library_title_index.add(value)
         pending_dedup_paths: list[str] = []
 
-        print(
-            f"--- Starting scan for folder: {folder.path} "
-            f"[Mode: {folder.scan_mode}, Thumbnails: {thumbnail_enabled}, Interval: {thumbnail_interval}s] "
-            f"at {datetime.now()} ---"
+        logger.info(
+            "--- Starting scan for folder: %s [Mode: %s, Thumbnails: %s, Interval: %ss] at %s ---",
+            folder.path,
+            folder.scan_mode,
+            thumbnail_enabled,
+            thumbnail_interval,
+            datetime.now(),
         )
 
         for root, dirs, files in os.walk(folder.path):
@@ -121,7 +136,7 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                         media_batch.append(media)
                         existing_media[root] = media
                         processed_count += 1
-                        print(f"  + Added Folder Manga: {media.title}")
+                        logger.info("  + Added Folder Manga: %s", media.title)
 
                         if len(media_batch) >= BATCH_SIZE:
                             db.add_all(media_batch)
@@ -193,7 +208,7 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                         media_batch.append(media)
                         existing_media[root] = media
                         processed_count += 1
-                        print(f"  + Added Audio Work: {media.title}")
+                        logger.info("  + Added Audio Work: %s", media.title)
 
                         if len(media_batch) >= BATCH_SIZE:
                             db.add_all(media_batch)
@@ -204,36 +219,31 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                         existing.missing_since = None
                         if existing.page_count != track_count:
                             existing.page_count = track_count
-                        if total_duration is not None and existing.duration != total_duration:
+                        if total_duration and existing.duration != total_duration:
                             existing.duration = total_duration
                     dirs[:] = []
                 continue
 
+            # --- REGULAR FILE LOGIC ---
             for file in files:
+                ext = os.path.splitext(file)[1].lower()
+                target_type = media_type_for_extension(ext, folder.scan_mode)
+                if not target_type:
+                    continue
+
+                file_path = os.path.join(root, file)
+                scanned_paths.add(file_path)
+
+                existing = existing_media.get(file_path)
+                if existing:
+                    existing.is_missing = False
+                    existing.missing_since = None
+                    continue
+
+                rel_path = os.path.relpath(file_path, folder.path)
                 try:
-                    file_path = os.path.join(root, file)
-                    ext = os.path.splitext(file)[1].lower()
-
-                    target_type = media_type_for_extension(folder.scan_mode, ext)
-                    if not target_type:
-                        continue
-
-                    scanned_paths.add(file_path)
-                    existing = existing_media.get(file_path)
-                    if existing:
-                        existing.is_missing = False
-                        existing.missing_since = None
-                        try:
-                            file_size = os.path.getsize(file_path)
-                            if existing.file_size != file_size:
-                                existing.file_size = file_size
-                        except OSError:
-                            pass
-                        continue
-
-                    media = None
-                    rel_path = os.path.relpath(file_path, folder.path)
                     file_size = os.path.getsize(file_path)
+                    media = None
 
                     if target_type == 'video':
                         metadata = get_video_metadata(file_path)
@@ -244,21 +254,20 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                             is_missing=False
                         )
                         file_hash = hashlib.md5(file_path.encode()).hexdigest()[:12]
-                        base_name = f"thumb_v_{file_hash}_{datetime.now().timestamp()}".replace(' ', '_')
-                        thumb_name = f"{base_name}.jpg"
+                        thumb_name = f"thumb_v_{file_hash}_{datetime.now().timestamp()}.jpg"
                         thumb_path = os.path.join(thumbnail_dir, thumb_name)
-                        success, t_ms, source = get_video_thumbnail(file_path, thumb_path)
-                        if success:
+                        cover_result = get_video_thumbnail(file_path, thumb_path, thumbnail_enabled, thumbnail_interval)
+                        if cover_result:
                             media.cover_path = thumb_name
-                            media.cover_time_ms = t_ms
-                            media.cover_source = source
-                            if thumbnail_enabled:
-                                generate_sprite_vtt(
-                                    file_path,
-                                    base_name,
-                                    thumbnail_dir,
-                                    interval=thumbnail_interval,
-                                )
+                            media.cover_time_ms = cover_result.get("cover_time_ms")
+                            media.cover_source = cover_result.get("cover_source")
+
+                        sprite_name = f"sprite_v_{file_hash}.jpg"
+                        vtt_name = f"sprite_v_{file_hash}.vtt"
+                        sprite_path = os.path.join(thumbnail_dir, sprite_name)
+                        vtt_path = os.path.join(thumbnail_dir, vtt_name)
+                        if metadata["duration"] and metadata["duration"] > 0:
+                            generate_sprite_vtt(file_path, sprite_path, vtt_path, metadata["duration"])
 
                     elif target_type == 'manga':
                         page_count = count_manga_pages(file_path, ext)
@@ -270,7 +279,7 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                         file_hash = hashlib.md5(file_path.encode()).hexdigest()[:12]
                         thumb_name = f"thumb_m_{file_hash}_{datetime.now().timestamp()}.jpg"
                         thumb_path = os.path.join(thumbnail_dir, thumb_name)
-                        if get_manga_thumbnail(manga_path=file_path, thumb_path=thumb_path):
+                        if get_manga_thumbnail(file_path, thumb_path):
                             media.cover_path = thumb_name
 
                     elif target_type == 'image':
@@ -298,7 +307,7 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                         media_batch.append(media)
                         existing_media[file_path] = media
                         processed_count += 1
-                        print(f"  + Added {media.media_type}: {file}")
+                        logger.info("  + Added %s: %s", media.media_type, file)
 
                     if len(media_batch) >= BATCH_SIZE:
                         db.add_all(media_batch)
@@ -306,7 +315,7 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                         media_batch = []
 
                 except Exception as file_error:
-                    print(f"Error processing file {file}: {file_error}")
+                    logger.error("Error processing file %s: %s", file, file_error)
                     continue
 
         if media_batch:
@@ -333,12 +342,11 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
             ]
             if checking_ids:
                 dedup_worker.enqueue(checking_ids)
-                print(f"--- Queued {len(checking_ids)} item(s) for dedup analysis ---")
-        print(f"--- Scan completed at {datetime.now()}. Total new items: {processed_count} ---")
+                logger.info("--- Queued %d item(s) for dedup analysis ---", len(checking_ids))
+        logger.info("--- Scan completed at %s. Total new items: %d ---", datetime.now(), processed_count)
         return True
     except Exception as e:
-        print(f"Scan error: {e}")
-        print(f"Full traceback: {traceback.format_exc()}")
+        logger.exception("Scan error: %s", e)
         if folder:
             folder.status = "error"
             db.commit()

@@ -1,9 +1,12 @@
+import logging
 import os
 import cv2
 import numpy as np
 from PIL import Image
 
 from . import common
+
+logger = logging.getLogger(__name__)
 
 
 def is_valid_frame(frame, max_width=512):
@@ -99,7 +102,7 @@ def get_video_thumbnail(video_path, thumb_path, semaphore=None, cv2_module=None)
 
             cap.release()
         except Exception as e:
-            print(f"Error generating video thumbnail: {e}")
+            logger.warning("Error generating video thumbnail for %s: %s", video_path, e)
 
     return False, 0, "failed"
 
@@ -120,7 +123,7 @@ def get_video_metadata(video_path):
             metadata["height"] = height
         cap.release()
     except Exception as e:
-        print(f"Error reading video metadata: {e}")
+        logger.warning("Error reading video metadata for %s: %s", video_path, e)
     return metadata
 
 
@@ -210,7 +213,7 @@ def _generate_sprite_vtt(video_path, base_name, thumbnail_dir, interval=2):
         cap.release()
         return True
     except Exception as e:
-        print(f"Error generating sprite vtt: {e}")
+        logger.warning("Error generating sprite vtt for %s: %s", video_path, e)
         return False
 
 

@@ -5,18 +5,18 @@
 ## 已完成
 
 - 个人数据看板：`/stats/*` + `StatsView`。
-- 标签基础体系：命名空间、自动打标与回填。
+- 标签管理系统：统一命名空间、自动打标、回填、标签合并与管理界面（`/tags` + `TagsView`）。
 - 创作者聚合页。
 - 感知哈希近似去重；跨标题 LSH/BK-tree 为长期可选项。
 - ASMR 同步、下载、播放、字幕、打标、镜像和体积控制。
 - Android release + Baseline Profile 性能优化。
 - 公网/FRP 鉴权与安全加固。
 - `/mobile/media` 后端分页，并兼容不传分页参数的旧 Android 客户端。
+- 存储与运维监控：SQLite 在线热备份（`sqlite3.backup` API）、备份新鲜度检测（`scripts/backup_db.py`）、Sentinel 存储挂载保护（`storage_guard.py`）与结构化日志体系。
 
 ## 待闭环
 
-- **标签管理界面**：现有代码和文档状态曾不一致，按 `PLAN.md` #12 核验后决定完整接通或移除死代码；在验收前不标记完成。
-- **Android 分页 UI**：后端已支持 `limit`、`offset`、`X-Total-Count`，但 `LibraryScreenV2` 尚未接入。
+- **Android 分页 UI**：后端已支持 `limit`、`offset`、`X-Total-Count`，待后续 Android 端迭代接入。
 - **Android 列表可选优化**：仅在 release 仍卡顿时，将卡片列表迁移到 `LazyVerticalGrid`。
 
 ## 业务约束

@@ -36,17 +36,11 @@
 | 11 | [x] 拆分后端大型领域模块 | `external_runtime`、`routers/external`、`scanner` 与 `auto_sync` 均完成高内聚模块化拆分与门面兼容；后端测试全量通过 |
 | 12 | [x] 决定并闭环标签管理 | 统一前后端 Tag 模型与 namespace/count；补齐 CRUD、聚合与合并 API；挂载 `/tags` 路由与侧栏；测试 100 项全量通过 |
 | 13 | [x] 建立可重复测试与 CI | 后端 pytest/HF-mock 完全离线化（126项通过）；前端引入 Vitest（11项通过）与 E2E 流；创建 GitHub Actions CI 工作流 |
+| 14 | [x] 文档与运维监控 | 在线热备份、新鲜度监控与 Sentinel 存储保护已上线；散落 print 完成结构化 logging 改造；README 补齐生产运维指南；131 项测试全量通过 |
 
 ## 当前任务
 
-### 14. [ ] 文档与运维监控
-
-- README 补充 CPU-only 镜像、持久卷、备份恢复和健康检查。
-- 备份任务增加新鲜度检查；HDD 使用真实挂载或 sentinel，防止误写系统盘。
-- 散落 `print` 逐步迁移为结构化 logging，并保持敏感信息脱敏。
-- 最终核对主计划、功能状态和实际代码一致。
-
-验收：文档命令可在当前 Linux Docker 画像执行，备份过期可被发现。
+全部 14 项优化任务已全部闭环。
 
 ## 长期可选项
 

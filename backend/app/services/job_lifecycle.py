@@ -7,12 +7,15 @@ of leaving clients polling an unknown or apparently running job forever.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 from datetime import datetime, timedelta
 from typing import Any, MutableMapping, Optional
 
 from .. import database, models
+
+logger = logging.getLogger(__name__)
 
 JOB_TTL_HOURS = max(1, int(os.getenv("HE_JOB_TTL_HOURS", "72")))
 JOB_MAX_ENTRIES = max(10, int(os.getenv("HE_JOB_MAX_ENTRIES", "200")))
@@ -75,7 +78,7 @@ def record_job(kind: str, job: Any, *, finished: bool = False) -> None:
         persisted = True
     except Exception as exc:  # Job bookkeeping must not abort the actual work.
         db.rollback()
-        print(f"[jobs] failed to persist {kind}/{job_id}: {exc}")
+        logger.warning("[jobs] failed to persist %s/%s: %s", kind, job_id, exc)
     finally:
         db.close()
     with _LOCK:
@@ -84,7 +87,7 @@ def record_job(kind: str, job: Any, *, finished: bool = False) -> None:
         try:
             cleanup_job_history()
         except Exception as exc:
-            print(f"[jobs] cleanup failed: {exc}")
+            logger.warning("[jobs] cleanup failed: %s", exc)
 
 
 def get_job_snapshot(kind: str, job_id: str) -> Optional[dict]:

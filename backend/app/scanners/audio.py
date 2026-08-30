@@ -1,9 +1,12 @@
 import json
+import logging
 import os
 from typing import Optional
 from PIL import Image
 
 from .common import AUDIO_EXTENSIONS, IMAGE_EXTENSIONS
+
+logger = logging.getLogger(__name__)
 
 
 def has_audio_file_recursive(work_root: str) -> bool:
@@ -26,7 +29,7 @@ def read_tracks_json(work_root: str) -> Optional[dict]:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as exc:  # noqa: BLE001 - any parse / IO failure is "no manifest"
-        print(f"  ! Failed to parse tracks.json at {path}: {exc}")
+        logger.warning("Failed to parse tracks.json at %s: %s", path, exc)
         return None
 
 
@@ -60,5 +63,5 @@ def make_work_thumbnail(cover_path: str, thumb_path: str) -> bool:
         img.save(thumb_path, "JPEG")
         return True
     except Exception as exc:  # noqa: BLE001
-        print(f"Error generating work thumbnail: {exc}")
+        logger.error("Error generating work thumbnail: %s", exc)
         return False
