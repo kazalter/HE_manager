@@ -92,6 +92,7 @@ const initObserver = () => {
 onBeforeUnmount(() => {
   observer?.disconnect()
   if (scrollTimeout) clearTimeout(scrollTimeout)
+  if (rateToastTimer) clearTimeout(rateToastTimer)
 })
 
 const fetchAll = async () => {
@@ -471,6 +472,37 @@ const levelClass = (lvl: number, inRange: boolean) => {
 const attentionEmpty = computed(
   () => attention.value && attention.value.dusty.length === 0 && attention.value.unrated.length === 0,
 )
+
+const attentionFilter = ref<'all' | 'unrated' | 'dusty'>('all')
+const hoverStars = ref<Record<number, number>>({})
+const ratingLoading = ref<number | null>(null)
+const rateToast = ref<string | null>(null)
+let rateToastTimer: number | undefined
+
+const quickRate = async (item: StatAttentionItem, stars: number, event: Event) => {
+  event.preventDefault()
+  event.stopPropagation()
+  if (ratingLoading.value === item.id) return
+  ratingLoading.value = item.id
+  try {
+    await axios.patch(`${API_BASE_URL}/media/${item.id}`, { rating: stars })
+    item.rating = stars
+    rateToast.value = `已为《${item.title}》评分 ${stars} 星`
+    window.clearTimeout(rateToastTimer)
+    rateToastTimer = window.setTimeout(() => {
+      rateToast.value = null
+    }, 2500)
+    setTimeout(() => {
+      if (attention.value) {
+        attention.value.unrated = attention.value.unrated.filter((i) => i.id !== item.id)
+      }
+    }, 500)
+  } catch {
+    // non-fatal
+  } finally {
+    ratingLoading.value = null
+  }
+}
 
 // ---- highlights helpers ----
 const creatorLink = (c: { kind: string; screen_name: string | null }) =>
@@ -880,19 +912,145 @@ const lastOpenedText = (item: StatAttentionItem) => {
 
       <!-- 4. 待整理项目 -->
       <section id="section-attention" class="space-y-6 scroll-mt-24">
-        <div v-if="attention && !attentionEmpty" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="flex items-center justify-between flex-wrap gap-3">
+          <div class="flex items-center gap-2.5">
+            <Sparkles :size="20" class="text-accent" />
+            <div>
+              <h2 class="text-base font-black text-white/90">待整理与评价建议</h2>
+              <p class="text-xs text-white/45 mt-0.5">补齐评分完善偏好画像，重新发现高分宝藏</p>
+            </div>
+          </div>
+          <div v-if="attention && !attentionEmpty" class="flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/10 text-xs">
+            <button
+              type="button"
+              @click="attentionFilter = 'all'"
+              class="px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer select-none"
+              :class="attentionFilter === 'all' ? 'bg-accent text-white shadow-md shadow-accent/20' : 'text-white/60 hover:text-white'"
+            >
+              全部 ({{ (attention.unrated?.length || 0) + (attention.dusty?.length || 0) }})
+            </button>
+            <button
+              v-if="attention.unrated.length"
+              type="button"
+              @click="attentionFilter = 'unrated'"
+              class="px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer select-none"
+              :class="attentionFilter === 'unrated' ? 'bg-accent text-white shadow-md shadow-accent/20' : 'text-white/60 hover:text-white'"
+            >
+              看过但未评分 ({{ attention.unrated.length }})
+            </button>
+            <button
+              v-if="attention.dusty.length"
+              type="button"
+              @click="attentionFilter = 'dusty'"
+              class="px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer select-none"
+              :class="attentionFilter === 'dusty' ? 'bg-accent text-white shadow-md shadow-accent/20' : 'text-white/60 hover:text-white'"
+            >
+              尘封高分 ({{ attention.dusty.length }})
+            </button>
+          </div>
+        </div>
+
+        <div v-if="attention && !attentionEmpty" class="space-y-6">
+          <!-- 看过但还没评分 -->
           <div
-            v-if="attention.dusty.length"
-            class="rounded-3xl p-6 bg-white/[0.02] backdrop-blur-3xl border border-white/6 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)]"
+            v-if="attention.unrated.length && (attentionFilter === 'all' || attentionFilter === 'unrated')"
+            class="rounded-3xl p-6 bg-white/[0.02] backdrop-blur-3xl border border-white/6 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)] transition-all"
           >
-            <h2 class="text-xs font-black tracking-wider uppercase text-white/55 mb-1">尘封的高分作品</h2>
-            <p class="text-[10px] font-bold text-accent/80 uppercase tracking-widest mb-4">评分 ≥ 4，但已 {{ attention.stale_days }} 天没打开</p>
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div class="flex items-center justify-between mb-5 flex-wrap gap-2">
+              <div>
+                <h3 class="text-sm font-black text-white/90 flex items-center gap-2">
+                  <Star :size="16" class="text-amber-400" />
+                  看过但还没评分
+                </h3>
+                <p class="text-xs text-white/45 mt-1">补个评分，让推荐更准 · 支持直接在卡片下方点击打星</p>
+              </div>
+              <span class="text-xs font-bold text-accent bg-accent/10 border border-accent/20 px-2.5 py-1 rounded-lg tabular-nums">
+                待评分 {{ attention.unrated.length }} 部
+              </span>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+              <div
+                v-for="item in attention.unrated"
+                :key="item.id"
+                class="rounded-2xl overflow-hidden bg-white/[0.02] border border-white/8 shadow-md group flex flex-col justify-between hover:bg-white/[0.05] hover:border-white/15 hover:-translate-y-1 transition-all duration-300"
+              >
+                <RouterLink
+                  :to="`/?media=${item.id}`"
+                  class="block flex-1"
+                >
+                  <div class="aspect-[3/4] bg-black/30 overflow-hidden relative">
+                    <img
+                      v-if="item.cover_path"
+                      :src="thumbnailUrl(item.cover_path)"
+                      class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      loading="lazy"
+                    />
+                    <div v-else class="w-full h-full flex items-center justify-center text-white/20 text-xs">无封面</div>
+                    <span
+                      v-if="item.media_type"
+                      class="absolute top-2 left-2 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-md border border-white/10 text-white/75"
+                    >
+                      {{ typeMeta[item.media_type]?.label ?? item.media_type }}
+                    </span>
+                  </div>
+                  <div class="p-3 pb-1">
+                    <div
+                      class="text-xs text-white/85 font-bold line-clamp-2 leading-snug group-hover:text-accent transition-colors"
+                      :title="item.title"
+                    >
+                      {{ item.title }}
+                    </div>
+                  </div>
+                </RouterLink>
+
+                <div class="px-3 pb-3 pt-1">
+                  <div class="flex items-center justify-between pt-2 border-t border-white/5">
+                    <div class="flex items-center gap-0.5" title="点击直接评星">
+                      <button
+                        v-for="s in 5"
+                        :key="s"
+                        type="button"
+                        @click="quickRate(item, s, $event)"
+                        @mouseenter="hoverStars[item.id] = s"
+                        @mouseleave="delete hoverStars[item.id]"
+                        class="p-0.5 text-white/25 hover:text-amber-300 transition-all hover:scale-110 active:scale-95 cursor-pointer"
+                        :class="{ 'text-amber-300': (hoverStars[item.id] || item.rating) >= s }"
+                      >
+                        <Star :size="13" :fill="(hoverStars[item.id] || item.rating) >= s ? 'currentColor' : 'none'" />
+                      </button>
+                    </div>
+                    <span class="text-[10px] text-white/35 font-semibold shrink-0">{{ lastOpenedText(item) }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 尘封的高分作品 -->
+          <div
+            v-if="attention.dusty.length && (attentionFilter === 'all' || attentionFilter === 'dusty')"
+            class="rounded-3xl p-6 bg-white/[0.02] backdrop-blur-3xl border border-white/6 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)] transition-all"
+          >
+            <div class="flex items-center justify-between mb-5 flex-wrap gap-2">
+              <div>
+                <h3 class="text-sm font-black text-white/90 flex items-center gap-2">
+                  <Clock :size="16" class="text-accent" />
+                  尘封的高分作品
+                </h3>
+                <p class="text-xs text-white/45 mt-1">评分 ≥ 4，但已超过 {{ attention.stale_days }} 天未打开</p>
+              </div>
+              <span class="text-xs font-bold text-white/50 bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg tabular-nums">
+                共 {{ attention.dusty.length }} 部
+              </span>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
               <RouterLink
                 v-for="item in attention.dusty"
                 :key="item.id"
                 :to="`/?media=${item.id}`"
-                class="rounded-xl overflow-hidden bg-white/[0.02] border border-white/8 shadow-md group block hover:bg-white/[0.05] hover:border-white/15 hover:-translate-y-0.5 transition-all duration-300"
+                class="rounded-2xl overflow-hidden bg-white/[0.02] border border-white/8 shadow-md group flex flex-col justify-between hover:bg-white/[0.05] hover:border-white/15 hover:-translate-y-1 transition-all duration-300"
               >
                 <div class="aspect-[3/4] bg-black/30 overflow-hidden relative">
                   <img
@@ -902,54 +1060,49 @@ const lastOpenedText = (item: StatAttentionItem) => {
                     loading="lazy"
                   />
                   <div v-else class="w-full h-full flex items-center justify-center text-white/20 text-xs">无封面</div>
+                  <span
+                    v-if="item.media_type"
+                    class="absolute top-2 left-2 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-md border border-white/10 text-white/75"
+                  >
+                    {{ typeMeta[item.media_type]?.label ?? item.media_type }}
+                  </span>
                 </div>
-                <div class="p-3">
-                  <div class="text-xs text-white/80 font-bold truncate group-hover:text-accent transition-colors" :title="item.title">{{ item.title }}</div>
-                  <div class="flex items-center justify-between mt-2">
+                <div class="p-3 flex-1 flex flex-col justify-between">
+                  <div
+                    class="text-xs text-white/85 font-bold line-clamp-2 leading-snug group-hover:text-accent transition-colors"
+                    :title="item.title"
+                  >
+                    {{ item.title }}
+                  </div>
+                  <div class="flex items-center justify-between mt-2.5 pt-2 border-t border-white/5">
                     <span class="flex items-center gap-0.5 text-amber-300/90">
-                      <Star v-for="n in item.rating" :key="n" :size="9" fill="currentColor" />
+                      <Star v-for="n in item.rating" :key="n" :size="10" fill="currentColor" />
                     </span>
-                    <span class="text-[10px] text-white/35 font-bold">{{ lastOpenedText(item) }}</span>
+                    <span class="text-[10px] text-white/35 font-semibold">{{ lastOpenedText(item) }}</span>
                   </div>
                 </div>
               </RouterLink>
             </div>
           </div>
-
-          <div
-            v-if="attention.unrated.length"
-            class="rounded-3xl p-6 bg-white/[0.02] backdrop-blur-3xl border border-white/6 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)]"
-          >
-            <h2 class="text-xs font-black tracking-wider uppercase text-white/55 mb-1">看过但还没评分</h2>
-            <p class="text-[10px] font-bold text-accent/80 uppercase tracking-widest mb-4">补个评分，让推荐更准</p>
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <RouterLink
-                v-for="item in attention.unrated"
-                :key="item.id"
-                :to="`/?media=${item.id}`"
-                class="rounded-xl overflow-hidden bg-white/[0.02] border border-white/8 shadow-md group block hover:bg-white/[0.05] hover:border-white/15 hover:-translate-y-0.5 transition-all duration-300"
-              >
-                <div class="aspect-[3/4] bg-black/30 overflow-hidden relative">
-                  <img
-                    v-if="item.cover_path"
-                    :src="thumbnailUrl(item.cover_path)"
-                    class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    loading="lazy"
-                  />
-                  <div v-else class="w-full h-full flex items-center justify-center text-white/20 text-xs">无封面</div>
-                </div>
-                <div class="p-3">
-                  <div class="text-xs text-white/80 font-bold truncate group-hover:text-accent transition-colors" :title="item.title">{{ item.title }}</div>
-                  <div class="text-[10px] text-white/35 font-bold mt-2">{{ lastOpenedText(item) }}</div>
-                </div>
-              </RouterLink>
-            </div>
-          </div>
         </div>
+
         <div v-else-if="attention" class="rounded-3xl p-8 bg-white/[0.02] backdrop-blur-3xl border border-white/6 text-center text-white/45 text-sm">
           暂无待整理或未评分作品，媒体库井井有条 ✨
         </div>
       </section>
     </div>
+
+    <!-- Rating Toast -->
+    <Teleport to="body">
+      <Transition name="page-fade">
+        <div
+          v-if="rateToast"
+          class="fixed bottom-6 right-6 z-[300] flex items-center gap-2.5 rounded-2xl border border-amber-400/30 bg-sidebar/95 px-5 py-3 text-sm font-bold text-white shadow-2xl backdrop-blur-xl"
+        >
+          <Star class="text-amber-400 shrink-0" :size="18" fill="currentColor" />
+          <span>{{ rateToast }}</span>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>

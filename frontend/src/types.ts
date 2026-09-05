@@ -422,6 +422,8 @@ export interface StatAttentionItem {
     id: number;
     title: string;
     cover_path?: string | null;
+    media_type?: string;
+    view_status?: string;
     rating: number;
     last_opened_at: string | null;
 }
