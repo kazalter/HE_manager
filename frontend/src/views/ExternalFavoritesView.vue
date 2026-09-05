@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { AtSign, ChevronDown, Globe2, Headphones, Plus, Settings, Check, Loader2 } from 'lucide-vue-next'
+import { AtSign, Globe2, Headphones, Settings, Check, Loader2 } from 'lucide-vue-next'
 import axios from 'axios'
 import { API_BASE_URL } from '../config'
 import WnacgPanel from '../components/external/WnacgPanel.vue'
@@ -24,13 +24,11 @@ const sites: SiteOption[] = [
 ]
 
 const activeSite = ref<SiteKey>('wnacg')
-const pickerOpen = ref(false)
 
 const activeOption = computed(() => sites.find(site => site.key === activeSite.value) || sites[0])
 
 const selectSite = (key: SiteKey) => {
   activeSite.value = key
-  pickerOpen.value = false
 }
 
 const globalProxy = ref('')
@@ -90,80 +88,38 @@ onMounted(() => {
     </header>
 
     <main class="px-6 md:px-8 pb-12 space-y-6">
-      <!-- Source picker (collapsible) -->
-      <section class="bg-white/[0.04] border border-white/10 rounded-2xl overflow-hidden">
+      <!-- Source segmented tabs (flat, 1-click) -->
+      <section class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
         <button
+          v-for="site in sites"
+          :key="site.key"
           type="button"
-          @click="pickerOpen = !pickerOpen"
-          class="w-full px-5 py-4 flex items-center justify-between gap-4 hover:bg-white/[0.02] transition-all text-left"
+          @click="selectSite(site.key)"
+          :class="activeSite === site.key
+            ? 'border-accent bg-accent/15 ring-1 ring-accent/30 shadow-lg shadow-accent/5'
+            : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]'"
+          class="group relative text-left rounded-2xl border p-4 transition-all duration-200 flex items-center gap-3.5 cursor-pointer"
         >
-          <div class="flex items-center gap-3 min-w-0">
-            <div class="w-11 h-11 rounded-xl bg-accent/15 text-accent flex items-center justify-center border border-accent/20 shrink-0">
-              <component :is="activeOption.icon" :size="22" />
-            </div>
-            <div class="min-w-0">
-              <p class="text-[10px] font-black text-white/45 uppercase tracking-widest">数据源</p>
-              <div class="flex items-center gap-2 mt-0.5">
-                <h2 class="text-base font-black text-white truncate">{{ activeOption.label }}</h2>
-                <span class="text-[10px] font-bold text-accent bg-accent/10 border border-accent/20 rounded-full px-2 py-0.5 uppercase tracking-widest shrink-0">
-                  {{ activeOption.badge }}
-                </span>
-              </div>
-              <p class="text-xs text-white/45 mt-0.5 truncate">{{ activeOption.description }}</p>
-            </div>
-          </div>
-          <div class="flex items-center gap-2 text-xs text-white/55 shrink-0">
-            <span class="hidden sm:inline">{{ pickerOpen ? '收起' : '切换数据源' }}</span>
-            <ChevronDown :size="18" :class="pickerOpen ? 'rotate-180' : ''" class="transition-transform" />
-          </div>
-        </button>
-
-        <div
-          v-if="pickerOpen"
-          class="px-5 pb-5 pt-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 border-t border-white/5"
-        >
-          <button
-            v-for="site in sites"
-            :key="site.key"
-            type="button"
-            @click="selectSite(site.key)"
-            :class="activeSite === site.key
-              ? 'border-accent/60 bg-accent/10 ring-1 ring-accent/30 shadow-lg shadow-accent/5'
-              : 'border-white/10 bg-black/20 hover:border-white/25 hover:bg-white/[0.04]'"
-            class="text-left rounded-xl border p-4 transition-all flex items-start gap-3"
+          <div
+            :class="activeSite === site.key ? 'bg-accent text-white shadow-md shadow-accent/20' : 'bg-white/5 border border-white/10 text-white/70 group-hover:text-white'"
+            class="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-all"
           >
-            <div
-              :class="activeSite === site.key ? 'bg-accent/20 border-accent/30 text-accent' : 'bg-white/[0.06] border-white/10 text-white/85'"
-              class="w-10 h-10 rounded-lg border flex items-center justify-center shrink-0"
-            >
-              <component :is="site.icon" :size="18" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2">
-                <p class="text-sm font-black text-white truncate">{{ site.label }}</p>
-                <span
-                  :class="activeSite === site.key ? 'text-accent' : 'text-white/35'"
-                  class="text-[10px] font-bold uppercase tracking-widest shrink-0"
-                >
-                  {{ site.badge }}
-                </span>
-              </div>
-              <p class="text-xs text-white/55 mt-1 leading-snug line-clamp-2">{{ site.description }}</p>
-              <p
-                v-if="activeSite === site.key"
-                class="text-[10px] font-black text-accent mt-2 uppercase tracking-widest"
-              >
-                · 当前选中
-              </p>
-            </div>
-          </button>
-
-          <div class="rounded-xl border border-dashed border-white/10 bg-black/15 p-4 flex flex-col items-center justify-center text-center text-white/35 min-h-[88px]">
-            <Plus :size="18" class="mb-1.5" />
-            <p class="text-[11px] font-bold leading-snug">新增数据源</p>
-            <p class="text-[10px] mt-0.5 leading-snug">后续接入新网站后会显示在这里</p>
+            <component :is="site.icon" :size="20" />
           </div>
-        </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-black text-white truncate">{{ site.label }}</span>
+              <span
+                :class="activeSite === site.key ? 'bg-accent/25 text-accent border-accent/40' : 'bg-white/5 text-white/45 border-white/10'"
+                class="text-[10px] font-bold border rounded-md px-1.5 py-0.5 tracking-wider uppercase shrink-0"
+              >
+                {{ site.badge }}
+              </span>
+            </div>
+            <p class="text-xs text-white/50 mt-0.5 truncate">{{ site.description }}</p>
+          </div>
+          <div v-if="activeSite === site.key" class="w-2 h-2 rounded-full bg-accent shrink-0 ring-4 ring-accent/20"></div>
+        </button>
       </section>
 
       <!-- Global Proxy Settings -->

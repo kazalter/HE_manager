@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import axios from 'axios'
-import { Check, FolderOpen, FolderPlus, HardDrive, Image as ImageIcon, Palette, RefreshCw, Timer, Trash2, X } from 'lucide-vue-next'
+import { FolderOpen, FolderPlus, HardDrive, Image as ImageIcon, Keyboard, Palette, RefreshCw, Sparkles, Timer, Trash2, X } from 'lucide-vue-next'
 import { API_BASE_URL } from '../config'
 import { applyTheme, getStoredTheme, themes } from '../theme'
 import type { Folder } from '../types'
@@ -14,6 +14,17 @@ const thumbnailInterval = ref(1)
 const loading = ref(false)
 const showAddModal = ref(false)
 const selectedTheme = ref<string>(getStoredTheme())
+const scanToast = ref<string | null>(null)
+let toastTimer: number | undefined
+const prevScanning = ref<Set<number>>(new Set())
+
+const showToast = (msg: string) => {
+  scanToast.value = msg
+  window.clearTimeout(toastTimer)
+  toastTimer = window.setTimeout(() => {
+    scanToast.value = null
+  }, 3000)
+}
 
 const modes: Array<{ id: Folder['scan_mode']; label: string; description: string }> = [
   { id: 'auto', label: '自动', description: '自动识别视频、漫画压缩包、单张图片、单文件音频' },
@@ -36,8 +47,20 @@ const selectTheme = (themeId: string) => {
 const fetchFolders = async () => {
   try {
     const res = await axios.get(`${API_BASE_URL}/folders`)
-    folders.value = res.data
-    if (folders.value.some(f => f.status === 'scanning')) {
+    const newFolders: Folder[] = res.data
+    for (const id of prevScanning.value) {
+      const f = newFolders.find(x => x.id === id)
+      if (f && f.status !== 'scanning') {
+        showToast(`目录「${f.path}」扫描完成！`)
+      }
+    }
+    const currentScanning = new Set<number>()
+    for (const f of newFolders) {
+      if (f.status === 'scanning') currentScanning.add(f.id)
+    }
+    prevScanning.value = currentScanning
+    folders.value = newFolders
+    if (currentScanning.size > 0) {
       window.setTimeout(fetchFolders, 2000)
     }
   } catch (err) {
@@ -102,7 +125,11 @@ const addFolder = async () => {
 
 const scanFolder = async (id: number) => {
   const folder = folders.value.find(f => f.id === id)
-  if (folder) folder.status = 'scanning'
+  if (folder) {
+    folder.status = 'scanning'
+    prevScanning.value.add(id)
+    showToast(`已开始扫描目录「${folder.path}」...`)
+  }
 
   try {
     await axios.post(`${API_BASE_URL}/folders/${id}/scan`)
@@ -145,45 +172,43 @@ onMounted(fetchFolders)
     </header>
 
     <div class="space-y-8">
-      <section class="border border-white/6 bg-white/[0.02] backdrop-blur-3xl rounded-3xl p-6 md:p-8 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)]">
-        <div class="flex items-center gap-3 mb-6">
-          <Palette class="text-accent" />
-          <div>
-            <h2 class="text-xl font-bold text-white/90">主题</h2>
-            <p class="text-sm text-white/45 mt-1">选择你喜欢的颜色风格，设置会保存在本机。</p>
+      <section class="border border-white/6 bg-white/[0.02] backdrop-blur-3xl rounded-3xl p-5 md:p-6 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)]">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2.5">
+            <Palette class="text-accent" :size="20" />
+            <h2 class="text-base font-bold text-white/90">界面主题</h2>
+            <span class="text-xs text-white/40">选择全局高亮配色</span>
           </div>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
           <button
             v-for="theme in themes"
             :key="theme.id"
             type="button"
             @click="selectTheme(theme.id)"
             :aria-pressed="selectedTheme === theme.id"
-            :class="selectedTheme === theme.id ? 'border-accent bg-accent/15 text-white shadow-lg shadow-accent/5' : 'border-white/8 bg-white/3 text-white/75 hover:bg-white/8 hover:border-white/15'"
-            class="relative text-left rounded-xl border p-4 transition-all min-h-[136px] cursor-pointer"
+            :class="selectedTheme === theme.id ? 'border-accent bg-accent/15 text-white ring-1 ring-accent/30 shadow-md shadow-accent/10' : 'border-white/8 bg-white/[0.02] text-white/75 hover:bg-white/5 hover:border-white/15'"
+            class="group relative text-left rounded-xl border p-2.5 transition-all flex items-center gap-2.5 cursor-pointer"
           >
-            <span v-if="selectedTheme === theme.id" class="absolute right-3 top-3 w-7 h-7 rounded-lg bg-accent text-white flex items-center justify-center shadow-md shadow-accent/10">
-              <Check :size="16" />
-            </span>
-
-            <div class="flex gap-2 mb-4">
+            <div class="flex shrink-0">
               <span
-                v-for="color in theme.swatches"
+                v-for="color in theme.swatches.slice(0, 2)"
                 :key="color"
-                class="w-8 h-8 rounded-lg border border-white/15"
+                class="w-4 h-4 rounded-full border border-white/20 -mr-1 shadow-sm"
                 :style="{ backgroundColor: color }"
               ></span>
             </div>
-            <p class="font-bold text-white">{{ theme.name }}</p>
-            <p class="text-xs text-white/45 mt-1 leading-relaxed pr-5">{{ theme.description }}</p>
+            <div class="min-w-0 flex-1">
+              <p class="font-bold text-xs text-white truncate">{{ theme.name }}</p>
+            </div>
+            <span v-if="selectedTheme === theme.id" class="w-2 h-2 rounded-full bg-accent shrink-0 ring-2 ring-accent/30"></span>
           </button>
 
           <!-- Custom Theme Picker -->
           <label
-            :class="selectedTheme.startsWith('#') ? 'border-accent bg-accent/15 text-white shadow-lg shadow-accent/5' : 'border-white/8 bg-white/3 text-white/75 hover:bg-white/8 hover:border-white/15'"
-            class="relative text-left rounded-xl border p-4 transition-all min-h-[136px] block cursor-pointer"
+            :class="selectedTheme.startsWith('#') ? 'border-accent bg-accent/15 text-white ring-1 ring-accent/30 shadow-md shadow-accent/10' : 'border-white/8 bg-white/[0.02] text-white/75 hover:bg-white/5 hover:border-white/15'"
+            class="relative text-left rounded-xl border p-2.5 transition-all flex items-center gap-2.5 cursor-pointer"
           >
             <input 
               type="color" 
@@ -192,29 +217,21 @@ onMounted(fetchFolders)
               class="absolute opacity-0 w-0 h-0"
               title="选择自定义颜色"
             />
-
-            <span v-if="selectedTheme.startsWith('#')" class="absolute right-3 top-3 w-7 h-7 rounded-lg bg-accent text-white flex items-center justify-center shadow-md shadow-accent/10 pointer-events-none">
-              <Check :size="16" />
-            </span>
-
-            <div class="flex gap-2 mb-4 pointer-events-none">
-              <!-- Single color swatch / Rainbow -->
-              <span
-                class="w-8 h-8 rounded-lg"
-                :class="selectedTheme.startsWith('#') ? 'border border-white/15' : 'shadow-inner'"
-                :style="selectedTheme.startsWith('#') ? { backgroundColor: selectedTheme } : { background: 'linear-gradient(135deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3)' }"
-              ></span>
+            <span
+              class="w-4 h-4 rounded-full shrink-0 border border-white/20 shadow-sm"
+              :style="selectedTheme.startsWith('#') ? { backgroundColor: selectedTheme } : { background: 'linear-gradient(135deg, #ff0000, #ffff00, #00ffff, #9400d3)' }"
+            ></span>
+            <div class="min-w-0 flex-1 pointer-events-none">
+              <p class="font-bold text-xs text-white truncate">自定义颜色</p>
             </div>
-            
-            <p class="font-bold text-white pointer-events-none">自定义颜色</p>
-            <p class="text-xs text-white/45 mt-1 leading-relaxed pr-5 pointer-events-none">选择您喜欢的色系，一键生成全局主题。</p>
+            <span v-if="selectedTheme.startsWith('#')" class="w-2 h-2 rounded-full bg-accent shrink-0 ring-2 ring-accent/30"></span>
           </label>
         </div>
       </section>
 
       <section class="border border-white/6 bg-white/[0.02] backdrop-blur-3xl rounded-3xl p-6 md:p-8 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)]">
         <h2 class="text-xs font-black tracking-wider uppercase text-white/55 mb-6 flex items-center gap-3">
-          <HardDrive class="text-green-400" :size="18" />
+          <HardDrive class="text-emerald-400" :size="18" />
           已挂载目录
         </h2>
 
@@ -226,7 +243,8 @@ onMounted(fetchFolders)
           <div
             v-for="folder in folders"
             :key="folder.id"
-            class="group flex flex-wrap items-center justify-between gap-4 p-5 bg-white/[0.01] hover:bg-white/5 border border-white/8 rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] transition-all duration-300"
+            class="group relative flex flex-wrap items-center justify-between gap-4 p-5 bg-white/[0.01] hover:bg-white/5 border rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] transition-all duration-300"
+            :class="folder.status === 'scanning' ? 'border-accent/40 bg-accent/[0.04]' : 'border-white/8'"
           >
             <div class="min-w-0 flex-1">
               <p class="font-mono text-sm md:text-base text-white/90 break-all" :title="folder.path">{{ folder.path }}</p>
@@ -237,10 +255,14 @@ onMounted(fetchFolders)
                 <span v-if="folder.scan_mode === 'video' || folder.scan_mode === 'auto'" class="text-[10px] font-black bg-white/10 px-2 py-0.5 rounded border border-white/10 text-white/65">
                   {{ folder.thumbnail_enabled ? `预览间隔 ${folder.thumbnail_interval} 秒` : '进度预览关闭' }}
                 </span>
-                <p class="text-sm flex items-center gap-2" :class="folder.status === 'scanning' ? 'text-accent animate-pulse' : 'text-white/80'">
-                  <span class="w-1.5 h-1.5 rounded-full" :class="folder.status === 'scanning' ? 'bg-accent shadow-[0_0_8px_rgba(129,140,248,0.8)]' : 'bg-green-500'"></span>
+                <p class="text-sm flex items-center gap-2" :class="folder.status === 'scanning' ? 'text-accent font-bold' : 'text-white/80'">
+                  <span v-if="folder.status === 'scanning'" class="relative flex h-2.5 w-2.5">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-accent"></span>
+                  </span>
+                  <span v-else class="w-2 h-2 rounded-full bg-emerald-400"></span>
                   {{ folder.status === 'scanning' ? '深度扫描中...' : '空闲' }}
-                  <span class="text-white/50" v-if="folder.last_scanned_at">
+                  <span class="text-white/50 font-normal" v-if="folder.last_scanned_at">
                     上次扫描: {{ formatLocalTime(folder.last_scanned_at) }}
                   </span>
                 </p>
@@ -266,6 +288,55 @@ onMounted(fetchFolders)
                 <Trash2 :size="20" />
                 <span class="hidden lg:inline text-xs font-bold">移除</span>
               </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 全站键盘快捷键指南 -->
+      <section class="border border-white/6 bg-white/[0.02] backdrop-blur-3xl rounded-3xl p-6 md:p-8 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)]">
+        <div class="flex items-center gap-3 mb-6">
+          <Keyboard class="text-accent" :size="22" />
+          <div>
+            <h2 class="text-lg font-bold text-white/90">全站键盘快捷键指南</h2>
+            <p class="text-xs text-white/45 mt-0.5">熟悉快捷键可获得极致流畅的浏览与播放体验</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="rounded-2xl border border-white/8 bg-white/[0.02] p-4 space-y-3">
+            <h3 class="text-xs font-black uppercase text-accent tracking-wider">全局与导航</h3>
+            <div class="space-y-2 text-xs">
+              <div class="flex items-center justify-between"><span class="text-white/60">打开 / 聚焦搜索</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">/ 或 Ctrl+K</kbd></div>
+              <div class="flex items-center justify-between"><span class="text-white/60">关闭浮层 / 弹窗</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">Esc</kbd></div>
+              <div class="flex items-center justify-between"><span class="text-white/60">展开 / 折叠侧栏</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">点击底栏</kbd></div>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-white/8 bg-white/[0.02] p-4 space-y-3">
+            <h3 class="text-xs font-black uppercase text-accent tracking-wider">漫画阅读器</h3>
+            <div class="space-y-2 text-xs">
+              <div class="flex items-center justify-between"><span class="text-white/60">前一页 / 后一页</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">← / →</kbd></div>
+              <div class="flex items-center justify-between"><span class="text-white/60">重置 / 适合屏幕</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">0</kbd></div>
+              <div class="flex items-center justify-between"><span class="text-white/60">放大 / 缩小图像</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">+ / -</kbd></div>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-white/8 bg-white/[0.02] p-4 space-y-3">
+            <h3 class="text-xs font-black uppercase text-accent tracking-wider">视频播放器</h3>
+            <div class="space-y-2 text-xs">
+              <div class="flex items-center justify-between"><span class="text-white/60">播放 / 暂停</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">Space</kbd></div>
+              <div class="flex items-center justify-between"><span class="text-white/60">快退 / 快进 5秒</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">← / →</kbd></div>
+              <div class="flex items-center justify-between"><span class="text-white/60">音量调节 / 全屏</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">↑ / ↓ / F</kbd></div>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-white/8 bg-white/[0.02] p-4 space-y-3">
+            <h3 class="text-xs font-black uppercase text-accent tracking-wider">音频与打标</h3>
+            <div class="space-y-2 text-xs">
+              <div class="flex items-center justify-between"><span class="text-white/60">音频播放 / 暂停</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">Space</kbd></div>
+              <div class="flex items-center justify-between"><span class="text-white/60">一键快速打星</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">1 ~ 5</kbd></div>
+              <div class="flex items-center justify-between"><span class="text-white/60">联想选择补全标签</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">Enter</kbd></div>
             </div>
           </div>
         </div>
@@ -382,6 +453,18 @@ onMounted(fetchFolders)
           </div>
         </div>
       </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="scanToast"
+          class="fixed bottom-6 right-6 z-[300] flex items-center gap-2.5 rounded-2xl border border-accent/30 bg-sidebar/95 px-5 py-3 text-sm font-bold text-white shadow-2xl backdrop-blur-xl"
+        >
+          <Sparkles class="text-accent shrink-0" :size="18" />
+          <span>{{ scanToast }}</span>
+        </div>
+      </Transition>
     </Teleport>
   </div>
 </template>

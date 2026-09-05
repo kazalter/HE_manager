@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import axios from 'axios'
 import { AlertTriangle, ChevronDown, KeyRound, Loader2, RefreshCw, Save, Send, ShieldCheck, Sparkles } from 'lucide-vue-next'
 import { API_BASE_URL } from '../config'
@@ -21,6 +21,29 @@ const deepseekBaseUrl = ref('https://api.deepseek.com')
 const deepseekMessage = ref('')
 const modelInputRef = ref<HTMLInputElement | null>(null)
 const showDeepSeekPanel = ref(false)
+const settingsContainerRef = ref<HTMLElement | null>(null)
+
+const handleDocClick = (e: MouseEvent) => {
+  if (showDeepSeekPanel.value && settingsContainerRef.value && !settingsContainerRef.value.contains(e.target as Node)) {
+    showDeepSeekPanel.value = false
+  }
+}
+
+const handleGlobalKeyDown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape' && showDeepSeekPanel.value) {
+    showDeepSeekPanel.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('pointerdown', handleDocClick)
+  window.addEventListener('keydown', handleGlobalKeyDown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleDocClick)
+  window.removeEventListener('keydown', handleGlobalKeyDown)
+})
 const result = ref<MangaRecommendationResponse | null>(null)
 const aiStatus = ref<AiRecommendationStatus | null>(null)
 const metadataStats = ref<MangaMetadataStats | null>(null)
@@ -245,7 +268,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <div class="relative flex items-center gap-3">
+        <div ref="settingsContainerRef" class="relative flex items-center gap-3">
           <button
             type="button"
             @click="showDeepSeekPanel = !showDeepSeekPanel"
@@ -629,34 +652,34 @@ onMounted(() => {
           <div v-for="i in limit" :key="i" class="aspect-[3/4.5] rounded-2xl border border-white/5 bg-white/5 animate-pulse"></div>
         </div>
 
-        <div v-else-if="result?.recommendations.length" class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-5">
+        <div v-else-if="result?.recommendations.length" class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-5 items-stretch">
           <article
             v-for="item in result.recommendations"
             :key="item.media.id"
-            class="rounded-2xl border border-white/10 bg-white/[0.04] p-4 hover:bg-white/[0.07] transition-all"
+            class="flex flex-col h-full rounded-2xl border border-white/10 bg-white/[0.04] p-4 hover:bg-white/[0.07] transition-all"
           >
-            <div class="grid grid-cols-[124px_minmax(0,1fr)] gap-4">
+            <div class="grid grid-cols-[124px_minmax(0,1fr)] gap-4 h-full">
               <MediaCard :media="item.media" @click="selectedMedia = item.media" />
-              <div class="min-w-0">
-                <button @click="selectedMedia = item.media" class="text-left w-full">
-                  <h3 class="text-base font-black text-white leading-snug line-clamp-3">{{ item.media.title }}</h3>
-                </button>
-                <p class="text-sm leading-6 text-white/65 mt-3">{{ item.reason }}</p>
-                <div class="mt-3 flex flex-wrap gap-2">
-                  <span
-                    v-for="tag in item.matched_tags.slice(0, 5)"
-                    :key="tag"
-                    class="px-2 py-1 rounded-lg bg-accent/12 border border-accent/20 text-[11px] font-bold text-accent"
-                  >
-                    {{ tag }}
-                  </span>
+              <div class="min-w-0 flex flex-col justify-between h-full">
+                <div>
+                  <button @click="selectedMedia = item.media" class="text-left w-full cursor-pointer">
+                    <h3 class="text-base font-black text-white leading-snug line-clamp-2 hover:text-accent transition-colors" :title="item.media.title">{{ item.media.title }}</h3>
+                  </button>
+                  <p class="text-xs leading-relaxed text-white/65 mt-2 line-clamp-3">{{ item.reason }}</p>
+                  <div class="mt-2.5 flex flex-wrap gap-1.5">
+                    <span
+                      v-for="tag in item.matched_tags.slice(0, 4)"
+                      :key="tag"
+                      class="px-2 py-0.5 rounded-md bg-accent/12 border border-accent/20 text-[10px] font-bold text-accent"
+                    >
+                      {{ tag }}
+                    </span>
+                  </div>
                 </div>
-                <div class="mt-4 flex items-center gap-2 text-[11px] text-white/35">
+                <div class="mt-3 pt-2.5 border-t border-white/8 flex items-center justify-between text-[11px] text-white/40 font-medium">
                   <span>{{ item.media.page_count || '-' }} 页</span>
-                  <span>·</span>
-                  <span>{{ item.media.rating }} 星</span>
-                  <span>·</span>
-                  <span>score {{ item.score }}</span>
+                  <span>{{ item.media.rating ? `${item.media.rating} 星` : '未评分' }}</span>
+                  <span class="text-accent font-bold">score {{ item.score }}</span>
                 </div>
               </div>
             </div>

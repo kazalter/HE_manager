@@ -25,7 +25,7 @@
 | **6** | 音频播放器全栈重构 (`AudioPlayer.vue`) | 摆脱原生灰色 audio 控件（自建定制玻璃态播放条）、倍速切换、简单歌词预览、页面底部常驻 Mini Bar | [x] | 定制深色唱片黑胶播放器、倍速播放、顺序/循环/随机、实时歌词同步已闭环 |
 | **7** | 视频播放与快捷手势 (`VideoPlayer.vue`, `MediaDetail.vue`) | 视频长按快进/快退 HUD 视觉动效升级、快捷键防误触、全屏与宽屏切换优化 | [x] | 视频快进快退HUD胶囊动效、音量滚轮实时数值反馈、播放模式指示已闭环 |
 | **8** | 整理与发现页面 (`TagsView`, `CreatorsView`, `DedupView`) | 统一全站分页组件接入、标签直达媒体库与0引用清理、创作者首字母检索、重复管理优劣属性红绿对比与即时预览 | [x] | 统一分页组件(Dedup/Wnacg/Asmr)、标签直达与0引用清理/合并搜索、创作者字母检索与详情筛选、重复高画质识别与并排全屏对比已闭环 |
-| **9** | 系统设置、外部工具与推荐 (`SettingsView`, `ExternalFavoritesView`, `MangaRecommendView`, `StatsView`) | 外部收藏 Segmented Tabs 扁平化、偏好设置紧凑化与快捷键指南面板、推荐抽屉 Click-outside 关闭、统计面板顶部快速定位锚点 | [ ] | 待开始 |
+| **9** | 系统设置、外部工具与推荐 (`SettingsView`, `ExternalFavoritesView`, `MangaRecommendView`, `StatsView`) | 外部收藏 Segmented Tabs 扁平化、偏好设置紧凑化与快捷键指南面板、推荐抽屉 Click-outside 关闭、统计面板顶部快速定位锚点 | [x] | 外部收藏平铺切换、设置主题紧凑化与扫描微光反馈+快捷键指南卡片、推荐抽屉防误触与网格对齐、统计顶部吸顶快速锚点已闭环 |
 
 ---
 
@@ -139,14 +139,14 @@
 ---
 
 ### 任务 9：偏好设置、外部工具与推荐 (`SettingsView`, `ExternalFavoritesView`, `MangaRecommendView`, `StatsView`)
-- [ ] **9.1 外部收藏页面扁平化 (`ExternalFavoritesView.vue`)**
+- [x] **9.1 外部收藏页面扁平化 (`ExternalFavoritesView.vue`)**
   - 将数据源折叠选择器改造为顶部平铺 Segmented Tabs，减少 1 次点击展开步骤。
-- [ ] **9.2 偏好设置细节打磨 (`SettingsView.vue`)**
+- [x] **9.2 偏好设置细节打磨 (`SettingsView.vue`)**
   - 主题色选择条紧凑化，腾出首屏给扫描文件夹；
   - 增加全站键盘快捷键帮助指南卡片；
   - 文件夹扫描过程增加更直观的动态进度/波纹动画与完成 Toast。
-- [ ] **9.3 AI 漫画推荐抽屉与卡片排版 (`MangaRecommendView.vue`)**
+- [x] **9.3 AI 漫画推荐抽屉与卡片排版 (`MangaRecommendView.vue`)**
   - 模型设置弹层增加点击外部自动收起（Click Outside）；
   - 推荐结果卡片网格统一垂直高度对齐，防止图文错位。
-- [ ] **9.4 统计面板快速导航 (`StatsView.vue`)**
+- [x] **9.4 统计面板快速导航 (`StatsView.vue`)**
   - 顶部增加吸顶锚点导航条，点击快速平滑跳跃至【概览指标】【分布图表】【活跃趋势】【待整理项目】。
