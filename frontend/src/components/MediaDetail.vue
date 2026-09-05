@@ -529,11 +529,18 @@ watch(
 )
 
 const nextPage = () => {
-  if (totalMangaPages.value === null || currentPage.value < totalMangaPages.value - 1) currentPage.value++
+  const step = localStorage.getItem('he_manga_read_mode') === 'double' ? 2 : 1
+  if (totalMangaPages.value === null || currentPage.value < totalMangaPages.value - 1) {
+    const max = totalMangaPages.value === null ? Number.MAX_SAFE_INTEGER : totalMangaPages.value - 1
+    currentPage.value = Math.min(max, currentPage.value + step)
+  }
 }
 
 const prevPage = () => {
-  if (currentPage.value > 0) currentPage.value--
+  const step = localStorage.getItem('he_manga_read_mode') === 'double' ? 2 : 1
+  if (currentPage.value > 0) {
+    currentPage.value = Math.max(0, currentPage.value - step)
+  }
 }
 
 const clearPendingLongPress = () => {
