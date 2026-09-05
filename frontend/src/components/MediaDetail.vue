@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import axios from 'axios'
-import { Maximize, Minimize, Trash2, X, FileQuestion, RefreshCw } from 'lucide-vue-next'
+import { Maximize, Minimize, Trash2, X, FileQuestion, RefreshCw, PanelRightClose, PanelRightOpen } from 'lucide-vue-next'
 import type Artplayer from 'artplayer'
 import { API_BASE_URL, STREAM_URL, THUMBNAIL_URL, authUrl, thumbnailUrl } from '../config'
 import type { Media } from '../types'
@@ -29,6 +29,16 @@ const currentMedia = ref<Media>(props.initialMedia)
 const currentPage = ref(0)
 const totalMangaPages = ref<number | null>(null)
 const artRef = ref<HTMLDivElement | null>(null)
+const showMetadataPanel = ref(localStorage.getItem('he_detail_meta_panel') !== 'false')
+const toggleMetadataPanel = () => {
+  showMetadataPanel.value = !showMetadataPanel.value
+  localStorage.setItem('he_detail_meta_panel', String(showMetadataPanel.value))
+  nextTick(() => {
+    if (artInstance && typeof (artInstance as unknown as { resize?: () => void }).resize === 'function') {
+      (artInstance as unknown as { resize: () => void }).resize()
+    }
+  })
+}
 
 const isRechecking = ref(false)
 const toastMessage = ref('')
@@ -730,6 +740,15 @@ onUnmounted(() => {
           >
             <h2 class="text-lg font-bold truncate pr-4 grow text-white/95 drop-shadow-xl select-none">{{ currentMedia.title }}</h2>
             <div class="flex items-center gap-2">
+              <button
+                v-if="!isFullscreen"
+                @click="toggleMetadataPanel"
+                class="w-11 h-11 rounded-xl bg-black/35 backdrop-blur-md hover:bg-black/55 text-white/65 hover:text-white transition-all"
+                :title="showMetadataPanel ? '收起信息侧栏' : '展开信息侧栏'"
+              >
+                <PanelRightClose v-if="showMetadataPanel" :size="19" class="mx-auto" />
+                <PanelRightOpen v-else :size="19" class="mx-auto" />
+              </button>
               <button @click="toggleFullscreen" class="w-11 h-11 rounded-xl bg-black/35 backdrop-blur-md hover:bg-black/55 text-white/65 hover:text-white transition-all" :title="isFullscreen ? '退出全屏' : '全屏'">
                 <Minimize v-if="isFullscreen" :size="19" class="mx-auto" />
                 <Maximize v-else :size="19" class="mx-auto" />
@@ -828,7 +847,7 @@ onUnmounted(() => {
         </section>
 
         <MetadataPanel
-          v-if="!isFullscreen"
+          v-if="!isFullscreen && showMetadataPanel"
           :media="currentMedia"
           :cover-url="coverUrl"
           :media-type-label="mediaTypeLabel"
