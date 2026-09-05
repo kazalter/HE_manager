@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
-import { Tags as TagsIcon, RefreshCw, Pencil, GitMerge, Trash2, Check, X, Search } from 'lucide-vue-next'
+import { Tags as TagsIcon, RefreshCw, Pencil, GitMerge, Trash2, Check, X, Search, ExternalLink } from 'lucide-vue-next'
 import { API_BASE_URL } from '../config'
 import type { Tag } from '../types'
 import ThemeSelect from '../components/ThemeSelect.vue'
@@ -23,12 +23,15 @@ const refreshSpinning = ref(false)
 const search = ref('')
 const collapsed = ref<Set<string>>(new Set())
 
+const zeroCountTags = computed(() => tags.value.filter(t => (t.count ?? 0) === 0))
+
 // edit / merge state
 const editId = ref<number | null>(null)
 const editName = ref('')
 const editNs = ref('general')
 const rowError = ref<{ id: number; msg: string } | null>(null)
 const mergeId = ref<number | null>(null)
+const mergeSearch = ref('')
 // 0 = "no target chosen" sentinel (no tag has id 0; stays falsy for the
 // existing !mergeTargetId guards) so the value fits ThemeSelect's typed model.
 const mergeTargetId = ref<number>(0)
@@ -111,14 +114,16 @@ const saveEdit = async (t: Tag) => {
 const startMerge = (t: Tag) => {
   mergeId.value = t.id
   mergeTargetId.value = 0
+  mergeSearch.value = ''
   rowError.value = null
   editId.value = null
 }
-const mergeCandidates = computed(() =>
-  tags.value
-    .filter(t => t.id !== mergeId.value)
-    .sort((a, b) => (a.namespace + a.name).localeCompare(b.namespace + b.name)),
-)
+const mergeCandidates = computed(() => {
+  const q = mergeSearch.value.trim().toLowerCase()
+  return tags.value
+    .filter(t => t.id !== mergeId.value && (!q || t.name.toLowerCase().includes(q) || nsLabel(t.namespace).toLowerCase().includes(q)))
+    .sort((a, b) => (a.namespace + a.name).localeCompare(b.namespace + b.name))
+})
 const mergeOptions = computed(() => [
   { value: 0, label: '选择目标标签…' },
   ...mergeCandidates.value.map(c => ({
@@ -139,6 +144,24 @@ const confirmMerge = async (t: Tag) => {
     await fetchTags()
   } catch (err: any) {
     rowError.value = { id: t.id, msg: err?.response?.data?.detail || '合并失败' }
+  } finally {
+    busy.value = false
+  }
+}
+
+const cleanupZeroCountTags = async () => {
+  const targets = zeroCountTags.value
+  if (targets.length === 0 || busy.value) return
+  if (!confirm(`确认一键清理全部 ${targets.length} 个引用为 0 的孤立标签？`)) return
+  busy.value = true
+  errorMessage.value = ''
+  try {
+    for (const t of targets) {
+      await axios.delete(`${API_BASE_URL}/tags/${t.id}`)
+    }
+    await fetchTags()
+  } catch (err: any) {
+    errorMessage.value = err?.response?.data?.detail || '清理标签失败'
   } finally {
     busy.value = false
   }
@@ -169,13 +192,25 @@ const removeTag = async (t: Tag) => {
         </h1>
         <p class="text-white/45 text-sm mt-1">重命名、合并、清理标签 · 共 {{ tags.length }} 个</p>
       </div>
-      <button
-        @click="refresh"
-        class="p-2.5 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition-all"
-        title="刷新"
-      >
-        <RefreshCw :size="18" :class="{ 'animate-spin': refreshSpinning }" />
-      </button>
+      <div class="flex items-center gap-3">
+        <button
+          v-if="zeroCountTags.length > 0"
+          @click="cleanupZeroCountTags"
+          :disabled="busy"
+          class="px-3 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-200 hover:bg-amber-500/25 flex items-center gap-1.5 text-xs font-bold transition-all disabled:opacity-50"
+          :title="`一键清理 ${zeroCountTags.length} 个 0 引用标签`"
+        >
+          <Trash2 :size="14" />
+          清理 {{ zeroCountTags.length }} 个孤立标签
+        </button>
+        <button
+          @click="refresh"
+          class="p-2.5 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition-all"
+          title="刷新"
+        >
+          <RefreshCw :size="18" :class="{ 'animate-spin': refreshSpinning }" />
+        </button>
+      </div>
     </div>
 
     <div class="relative mb-6">
@@ -220,6 +255,13 @@ const removeTag = async (t: Tag) => {
               <span class="flex-1 min-w-0 truncate text-sm text-white">{{ t.name }}</span>
               <span class="shrink-0 text-xs text-white/40 tabular-nums">{{ t.count ?? 0 }}</span>
               <div class="shrink-0 flex items-center gap-1">
+                <router-link
+                  :to="{ path: '/', query: { tag: t.name } }"
+                  class="p-1.5 rounded-lg text-white/40 hover:text-accent hover:bg-white/8 transition-colors"
+                  title="前往媒体库查看此标签作品"
+                >
+                  <ExternalLink :size="15" />
+                </router-link>
                 <button @click="startEdit(t)" class="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/8" title="重命名 / 改类别">
                   <Pencil :size="15" />
                 </button>
@@ -250,8 +292,16 @@ const removeTag = async (t: Tag) => {
             </div>
 
             <!-- merge row -->
-            <div v-else class="flex items-center gap-2">
-              <span class="shrink-0 text-sm text-white/70 truncate max-w-[30%]">合并「{{ t.name }}」→</span>
+            <div v-else class="flex flex-wrap items-center gap-2">
+              <span class="shrink-0 text-sm text-white/70 truncate max-w-[20%]">合并「{{ t.name }}」→</span>
+              <div class="relative w-36 shrink-0">
+                <Search :size="13" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/30" />
+                <input
+                  v-model="mergeSearch"
+                  placeholder="筛选目标…"
+                  class="w-full rounded-lg bg-white/5 border border-white/10 pl-7 pr-2 py-1.5 text-xs text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-accent/50"
+                />
+              </div>
               <ThemeSelect v-model="mergeTargetId" :options="mergeOptions" class="min-w-0 flex-1" />
               <button @click="confirmMerge(t)" :disabled="busy || !mergeTargetId" class="p-1.5 rounded-lg bg-accent/80 text-white hover:bg-accent disabled:opacity-40" title="确认合并">
                 <Check :size="15" />

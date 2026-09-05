@@ -3,8 +3,6 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import axios from 'axios'
 import {
   CheckSquare,
-  ChevronLeft,
-  ChevronRight,
   Download,
   ExternalLink,
   Headphones,
@@ -14,6 +12,7 @@ import {
   Square,
   X,
 } from 'lucide-vue-next'
+import PaginationControl from '../PaginationControl.vue'
 import { API_BASE_URL, authUrl } from '../../config'
 import type { ExternalFavoriteItem, ExternalFavoriteSource, Media } from '../../types'
 import { AsyncMediaDetail as MediaDetail } from '../asyncComponents'
@@ -681,26 +680,17 @@ watch(favoritesError, message => { errorMessage.value = message })
           </div>
 
           <div class="flex flex-wrap items-center justify-between gap-3 bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3">
-            <p class="text-xs text-white/45">{{ pageStart }}-{{ pageEnd }} / {{ totalItems }}</p>
-            <div class="flex items-center gap-2">
-              <button
-                @click="goToPage(currentPage - 1)"
-                :disabled="currentPage <= 1"
-                class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed flex items-center justify-center transition-all"
-                title="上一页"
-              >
-                <ChevronLeft :size="18" />
-              </button>
-              <span class="text-sm font-bold text-white/70 px-2">第 {{ currentPage }} / {{ totalPages }} 页</span>
-              <button
-                @click="goToPage(currentPage + 1)"
-                :disabled="currentPage >= totalPages"
-                class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed flex items-center justify-center transition-all"
-                title="下一页"
-              >
-                <ChevronRight :size="18" />
-              </button>
-            </div>
+            <span class="text-xs text-white/45">{{ pageStart }}-{{ pageEnd }} / {{ totalItems }} 条</span>
+            <PaginationControl
+              v-if="totalPages > 1"
+              :page="currentPage"
+              :page-count="totalPages"
+              :total-items="totalItems"
+              :page-size="pageLimit"
+              :disabled="loading"
+              item-label="条 ASMR"
+              @change="goToPage"
+            />
           </div>
         </div>
 

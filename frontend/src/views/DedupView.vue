@@ -4,9 +4,8 @@ import {
   AlertTriangle,
   Check,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Copy,
+  Eye,
   FileImage,
   Film,
   Filter,
@@ -14,6 +13,7 @@ import {
   Layers,
   RefreshCw,
   ShieldCheck,
+  Sparkles,
   Star,
   Trash2,
   X,
@@ -21,6 +21,25 @@ import {
 import { thumbnailUrl } from '../config'
 import { dedupStore } from '../stores/dedupStore'
 import type { DedupMediaSummary, DuplicateCandidatePair } from '../types'
+import PaginationControl from '../components/PaginationControl.vue'
+
+const previewModalPair = ref<DuplicateCandidatePair | null>(null)
+
+const getQualityComparison = (pair: DuplicateCandidatePair) => {
+  const leftSize = pair.existing.file_size || 0
+  const rightSize = pair.candidate.file_size || 0
+  const sizeDiff = leftSize - rightSize
+
+  const leftRes = (pair.existing.width || 0) * (pair.existing.height || 0)
+  const rightRes = (pair.candidate.width || 0) * (pair.candidate.height || 0)
+
+  if (leftRes > rightRes && rightRes > 0) return 'left'
+  if (rightRes > leftRes && leftRes > 0) return 'right'
+
+  if (sizeDiff > 1024 * 50) return 'left'
+  if (sizeDiff < -1024 * 50) return 'right'
+  return 'equal'
+}
 
 const summary = dedupStore.summary
 const pairs = dedupStore.pairs
@@ -256,7 +275,10 @@ const onModalKeydown = (event: KeyboardEvent) => {
 }
 
 const handleGlobalEscape = (event: KeyboardEvent) => {
-  if (event.key === 'Escape' && confirmDeletePair.value) closeDeleteModal()
+  if (event.key === 'Escape') {
+    if (confirmDeletePair.value) closeDeleteModal()
+    if (previewModalPair.value) previewModalPair.value = null
+  }
 }
 
 onMounted(async () => {
@@ -441,11 +463,23 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalEscape))
 
             <div class="grid gap-4 min-[900px]:grid-cols-[minmax(0,1fr)_minmax(270px,.8fr)_minmax(0,1fr)]">
               <section class="min-w-0" aria-label="左侧现有记录">
-                <p class="mb-2 text-sm font-black text-emerald-300">左侧 · 现有记录</p>
+                <div class="mb-2 flex items-center justify-between">
+                  <p class="text-sm font-black text-emerald-300">左侧 · 现有记录</p>
+                  <span v-if="getQualityComparison(pair) === 'left'" class="inline-flex items-center gap-1 rounded-md bg-emerald-400/15 border border-emerald-400/25 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+                    <Sparkles :size="12" /> 较高画质 / 大文件
+                  </span>
+                </div>
                 <div class="flex gap-3">
-                  <div class="flex h-36 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/30">
-                    <img v-if="pair.existing.cover_path" :src="thumbnailUrl(pair.existing.cover_path)" :alt="`${pair.existing.title} 封面`" class="h-full w-full object-cover" />
+                  <div
+                    @click="previewModalPair = pair"
+                    class="group/cover relative flex h-36 w-24 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/30 transition hover:border-white/30"
+                    title="点击并排高清对比预览"
+                  >
+                    <img v-if="pair.existing.cover_path" :src="thumbnailUrl(pair.existing.cover_path)" :alt="`${pair.existing.title} 封面`" class="h-full w-full object-cover transition duration-300 group-hover/cover:scale-105" />
                     <component v-else :is="typeMeta(pair.existing.media_type).icon" :size="30" class="text-white/25" aria-hidden="true" />
+                    <div class="absolute inset-0 bg-black/40 opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                      <Eye :size="18" />
+                    </div>
                   </div>
                   <div class="min-w-0 space-y-2">
                     <p class="text-base font-black leading-snug text-white">{{ pair.existing.title }}</p>
@@ -471,11 +505,23 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalEscape))
               </section>
 
               <section class="min-w-0" aria-label="右侧新扫描记录">
-                <p class="mb-2 text-sm font-black text-amber-300">右侧 · 新扫描记录</p>
+                <div class="mb-2 flex items-center justify-between">
+                  <p class="text-sm font-black text-amber-300">右侧 · 新扫描记录</p>
+                  <span v-if="getQualityComparison(pair) === 'right'" class="inline-flex items-center gap-1 rounded-md bg-emerald-400/15 border border-emerald-400/25 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+                    <Sparkles :size="12" /> 较高画质 / 大文件
+                  </span>
+                </div>
                 <div class="flex gap-3">
-                  <div class="flex h-36 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/30">
-                    <img v-if="pair.candidate.cover_path" :src="thumbnailUrl(pair.candidate.cover_path)" :alt="`${pair.candidate.title} 封面`" class="h-full w-full object-cover" />
+                  <div
+                    @click="previewModalPair = pair"
+                    class="group/cover relative flex h-36 w-24 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/30 transition hover:border-white/30"
+                    title="点击并排高清对比预览"
+                  >
+                    <img v-if="pair.candidate.cover_path" :src="thumbnailUrl(pair.candidate.cover_path)" :alt="`${pair.candidate.title} 封面`" class="h-full w-full object-cover transition duration-300 group-hover/cover:scale-105" />
                     <component v-else :is="typeMeta(pair.candidate.media_type).icon" :size="30" class="text-white/25" aria-hidden="true" />
+                    <div class="absolute inset-0 bg-black/40 opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                      <Eye :size="18" />
+                    </div>
                   </div>
                   <div class="min-w-0 space-y-2">
                     <p class="text-base font-black leading-snug text-white">{{ pair.candidate.title }}</p>
@@ -494,6 +540,21 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalEscape))
             </div>
 
             <div v-if="pair.status === 'pending'" class="mt-5 grid gap-2 border-t border-white/10 pt-4 min-[700px]:grid-cols-2 min-[1180px]:grid-cols-[1.1fr_1.1fr_1fr_auto]">
+              <button
+                v-if="getQualityComparison(pair) !== 'equal'"
+                type="button"
+                :disabled="processingPairIds.has(pair.id)"
+                @click="onResolve(pair, getQualityComparison(pair) === 'left' ? 'keep_existing' : 'replace_path')"
+                class="min-[1180px]:col-span-full mb-1 rounded-xl bg-emerald-500/20 border border-emerald-500/35 hover:bg-emerald-500/30 text-emerald-100 px-4 py-2.5 text-left text-sm font-black transition-all cursor-pointer disabled:opacity-50 flex items-center justify-between"
+              >
+                <div class="flex items-center gap-2">
+                  <Sparkles :size="16" class="text-emerald-400" />
+                  <span>一键保留更高质量项 ({{ getQualityComparison(pair) === 'left' ? '左侧' : '右侧' }})</span>
+                </div>
+                <span class="text-xs font-normal text-emerald-300/80">
+                  {{ getQualityComparison(pair) === 'left' ? '保留左侧记录并隐藏右侧' : '采用右侧高画质文件路径' }}
+                </span>
+              </button>
               <button type="button" :disabled="processingPairIds.has(pair.id)" @click="onResolve(pair, 'keep_existing')" class="min-h-12 rounded-xl bg-accent px-4 py-2 text-left text-sm font-black text-white hover:brightness-110 focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-50">
                 保留左侧记录
                 <span class="mt-0.5 block text-xs font-medium text-white/70">右侧文件保留，但从媒体库隐藏</span>
@@ -536,15 +597,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalEscape))
             </button>
           </template>
         </div>
-        <div class="flex items-center gap-2">
-          <button type="button" aria-label="上一页" :disabled="dedupStore.state.page <= 1 || loading" @click="goToPage(dedupStore.state.page - 1)" class="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 disabled:opacity-35">
-            <ChevronLeft :size="17" aria-hidden="true" />
-          </button>
-          <span class="min-w-20 text-center font-bold text-white/70">{{ dedupStore.state.page }} / {{ totalPages }}</span>
-          <button type="button" aria-label="下一页" :disabled="dedupStore.state.page >= totalPages || loading" @click="goToPage(dedupStore.state.page + 1)" class="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 disabled:opacity-35">
-            <ChevronRight :size="17" aria-hidden="true" />
-          </button>
-        </div>
+        <PaginationControl
+          v-if="totalPages > 1"
+          :page="dedupStore.state.page"
+          :page-count="totalPages"
+          :total-items="total"
+          :page-size="dedupStore.state.pageSize"
+          :disabled="loading"
+          item-label="组重复"
+          @change="goToPage"
+        />
       </footer>
     </main>
 
@@ -567,6 +629,82 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalEscape))
             <div class="mt-5 grid grid-cols-2 gap-3">
               <button ref="cancelDeleteButton" type="button" @click="closeDeleteModal" class="h-11 rounded-xl border border-white/12 bg-white/5 text-sm font-bold text-white/75 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent">取消</button>
               <button type="button" @click="onDeleteConfirmed" class="flex h-11 items-center justify-center gap-2 rounded-xl bg-red-500 text-sm font-black text-white hover:brightness-110 focus-visible:ring-2 focus-visible:ring-red-200"><Trash2 :size="16" aria-hidden="true" />确认永久删除</button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="previewModalPair"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+          @click.self="previewModalPair = null"
+        >
+          <div class="relative flex max-h-[90vh] w-full max-w-5xl flex-col rounded-2xl border border-white/12 bg-[rgb(var(--color-sidebar))] p-6 shadow-2xl overflow-hidden">
+            <div class="flex items-center justify-between pb-4 border-b border-white/10">
+              <div>
+                <h3 class="flex items-center gap-2 text-base font-bold text-white">
+                  <Eye :size="18" class="text-accent" />
+                  封面与画质并排对比
+                </h3>
+                <p class="mt-0.5 text-xs text-white/50">左侧现有 vs 右侧新扫描 · 点击背景或按 Esc 退出</p>
+              </div>
+              <button
+                type="button"
+                @click="previewModalPair = null"
+                class="rounded-lg p-2 text-white/60 hover:bg-white/10 hover:text-white transition-colors"
+                title="关闭预览"
+              >
+                <X :size="20" />
+              </button>
+            </div>
+
+            <div class="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-y-auto py-4 md:grid-cols-2">
+              <!-- Left item -->
+              <div class="flex flex-col items-center gap-3 rounded-xl border border-white/10 bg-black/30 p-4">
+                <div class="flex w-full items-center justify-between text-xs">
+                  <span class="font-bold text-emerald-400">现有记录</span>
+                  <span class="text-white/60">
+                    {{ previewModalPair.existing.width && previewModalPair.existing.height ? `${previewModalPair.existing.width} × ${previewModalPair.existing.height}` : '分辨率未知' }} · {{ formatSize(previewModalPair.existing.file_size) }}
+                  </span>
+                </div>
+                <div class="flex max-h-[52vh] min-h-[240px] w-full flex-1 items-center justify-center overflow-hidden rounded-lg bg-black/50 p-2">
+                  <img
+                    v-if="previewModalPair.existing.cover_path"
+                    :src="thumbnailUrl(previewModalPair.existing.cover_path)"
+                    :alt="previewModalPair.existing.title"
+                    class="max-h-full max-w-full rounded object-contain"
+                  />
+                  <div v-else class="text-white/30 text-sm">暂无封面</div>
+                </div>
+                <p class="w-full truncate text-center text-xs font-medium text-white/80" :title="previewModalPair.existing.title">
+                  {{ previewModalPair.existing.title }}
+                </p>
+              </div>
+
+              <!-- Right item -->
+              <div class="flex flex-col items-center gap-3 rounded-xl border border-white/10 bg-black/30 p-4">
+                <div class="flex w-full items-center justify-between text-xs">
+                  <span class="font-bold text-amber-400">新扫描候选</span>
+                  <span class="text-white/60">
+                    {{ previewModalPair.candidate.width && previewModalPair.candidate.height ? `${previewModalPair.candidate.width} × ${previewModalPair.candidate.height}` : '分辨率未知' }} · {{ formatSize(previewModalPair.candidate.file_size) }}
+                  </span>
+                </div>
+                <div class="flex max-h-[52vh] min-h-[240px] w-full flex-1 items-center justify-center overflow-hidden rounded-lg bg-black/50 p-2">
+                  <img
+                    v-if="previewModalPair.candidate.cover_path"
+                    :src="thumbnailUrl(previewModalPair.candidate.cover_path)"
+                    :alt="previewModalPair.candidate.title"
+                    class="max-h-full max-w-full rounded object-contain"
+                  />
+                  <div v-else class="text-white/30 text-sm">暂无封面</div>
+                </div>
+                <p class="w-full truncate text-center text-xs font-medium text-white/80" :title="previewModalPair.candidate.title">
+                  {{ previewModalPair.candidate.title }}
+                </p>
+              </div>
             </div>
           </div>
         </div>

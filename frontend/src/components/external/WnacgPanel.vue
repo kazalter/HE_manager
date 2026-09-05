@@ -3,9 +3,6 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import axios from 'axios'
 import {
   CheckSquare,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Download,
   ExternalLink,
   Globe2,
@@ -20,6 +17,7 @@ import type { ExternalFavoriteItem, ExternalFavoriteSource, Media } from '../../
 import { AsyncMediaDetail as MediaDetail } from '../asyncComponents'
 import ExternalDownloadProgress from '../ExternalDownloadProgress.vue'
 import AutoSyncSection from './AutoSyncSection.vue'
+import PaginationControl from '../PaginationControl.vue'
 import { externalDownloadStore } from '../../stores/externalDownloadStore'
 import { useExternalFavoritesPage } from '../../composables/useExternalFavoritesPage'
 
@@ -32,8 +30,6 @@ const syncing = ref(false)
 const errorMessage = ref('')
 const sources = ref<ExternalFavoriteSource[]>([])
 const activeSourceId = ref<number | null>(null)
-const pageInput = ref('1')
-const pageDropdownOpen = ref(false)
 const downloadPanelOpen = ref(false)
 const selectedDownloadIds = ref<Set<number>>(new Set())
 const {
@@ -43,8 +39,6 @@ const {
   loading,
   error: favoritesError,
   totalPages,
-  pageStart,
-  pageEnd,
   fetchItems,
   setPage: setFavoritesPage,
 } = useExternalFavoritesPage({
@@ -66,7 +60,6 @@ const activeSource = computed(() => {
 
 const filteredItems = computed(() => items.value)
 const pagedItems = computed(() => items.value)
-const pageOptions = computed(() => Array.from({ length: totalPages.value }, (_, index) => index + 1))
 const downloadableFilteredItems = computed(() => items.value.filter(item => !item.local_media_id))
 const selectedDownloadItems = computed(() => {
   return items.value.filter(item => selectedDownloadIds.value.has(item.id) && !item.local_media_id)
@@ -140,15 +133,8 @@ const updateLocalMediaInList = (media: Media) => {
 
 const goToPage = (page: number) => {
   const target = Math.min(Math.max(page, 1), totalPages.value)
-  pageDropdownOpen.value = false
   if (!setFavoritesPage(target)) return
-  pageInput.value = String(target)
   selectedDownloadIds.value = new Set()
-}
-
-const submitPageInput = () => {
-  const page = Number.parseInt(pageInput.value, 10)
-  goToPage(Number.isFinite(page) ? page : currentPage.value)
 }
 
 const toggleDownloadSelection = (item: ExternalFavoriteItem) => {
@@ -335,7 +321,6 @@ watch(() => externalDownloadStore.errorMessage.value, (msg) => {
 watch(favoritesError, message => {
   errorMessage.value = message
 })
-watch(currentPage, page => { pageInput.value = String(page) })
 </script>
 
 <template>
@@ -510,73 +495,25 @@ watch(currentPage, page => { pageInput.value = String(page) })
           </div>
 
           <div class="flex flex-wrap items-center justify-between gap-3 bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3">
-            <p class="text-xs text-white/45">
-              {{ pageStart }}-{{ pageEnd }} / {{ totalItems }}
-            </p>
-            <div class="flex flex-wrap items-center gap-2">
-              <button
-                @click="toggleAllFilteredSelection"
-                class="h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-white flex items-center gap-2 text-xs font-bold transition-all"
-                title="全选当前列表"
-              >
-                <CheckSquare v-if="allFilteredSelected" :size="16" />
-                <Square v-else :size="16" />
-                全选
-              </button>
-              <button
-                @click="goToPage(currentPage - 1)"
-                :disabled="currentPage <= 1"
-                class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed flex items-center justify-center transition-all"
-                title="上一页"
-              >
-                <ChevronLeft :size="18" />
-              </button>
-              <form @submit.prevent="submitPageInput" class="flex items-center gap-2">
-                <input
-                  v-model="pageInput"
-                  type="number"
-                  min="1"
-                  :max="totalPages"
-                  class="w-16 h-10 rounded-xl bg-black/20 border border-white/10 px-2 text-center text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-accent/50"
-                  title="输入页码"
-                />
-                <span class="text-sm font-bold text-white/45">/ {{ totalPages }}</span>
-                <div class="relative">
-                  <button
-                    type="button"
-                    @click="pageDropdownOpen = !pageDropdownOpen"
-                    class="h-10 min-w-24 rounded-xl bg-black/20 border border-white/10 px-3 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-accent/50 flex items-center justify-between gap-2 hover:bg-white/10 transition-all"
-                    title="选择页码"
-                  >
-                    <span>第 {{ currentPage }} 页</span>
-                    <ChevronDown :size="15" :class="pageDropdownOpen ? 'rotate-180' : ''" class="transition-transform text-white/45" />
-                  </button>
-                  <div
-                    v-if="pageDropdownOpen"
-                    class="absolute right-0 bottom-full mb-2 z-50 min-w-28 max-h-72 overflow-y-auto rounded-2xl border border-white/10 bg-sidebar/95 backdrop-blur-xl shadow-2xl p-1"
-                  >
-                    <button
-                      v-for="page in pageOptions"
-                      :key="page"
-                      type="button"
-                      @click="goToPage(page)"
-                      :class="currentPage === page ? 'bg-accent text-white' : 'text-white/65 hover:text-white hover:bg-white/8'"
-                      class="w-full rounded-xl px-3 py-2 text-left text-sm font-bold transition-all"
-                    >
-                      第 {{ page }} 页
-                    </button>
-                  </div>
-                </div>
-              </form>
-              <button
-                @click="goToPage(currentPage + 1)"
-                :disabled="currentPage >= totalPages"
-                class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed flex items-center justify-center transition-all"
-                title="下一页"
-              >
-                <ChevronRight :size="18" />
-              </button>
-            </div>
+            <button
+              @click="toggleAllFilteredSelection"
+              class="h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-white flex items-center gap-2 text-xs font-bold transition-all"
+              title="全选当前列表"
+            >
+              <CheckSquare v-if="allFilteredSelected" :size="16" />
+              <Square v-else :size="16" />
+              全选
+            </button>
+            <PaginationControl
+              v-if="totalPages > 1"
+              :page="currentPage"
+              :page-count="totalPages"
+              :total-items="totalItems"
+              :page-size="pageLimit"
+              :disabled="loading"
+              item-label="条收藏"
+              @change="goToPage"
+            />
           </div>
         </div>
 

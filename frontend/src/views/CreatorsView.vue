@@ -46,13 +46,79 @@ const openCreator = (sn: string) => {
   router.push({ name: 'creator-detail', params: { screenName: sn } })
 }
 
+const selectedLetter = ref<string>('ALL')
+
+const availableLetters = computed(() => {
+  const set = new Set<string>()
+  for (const c of creators.value) {
+    const raw = (c.display_name || c.screen_name || '').trim()
+    const firstChar = raw[0]?.toUpperCase()
+    if (firstChar && firstChar >= 'A' && firstChar <= 'Z') {
+      set.add(firstChar)
+    } else if (firstChar) {
+      set.add('#')
+    }
+  }
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').filter(l => set.has(l))
+  if (set.has('#')) alphabet.push('#')
+  return ['ALL', ...alphabet]
+})
+
+const displayedCreators = computed(() => {
+  if (selectedLetter.value === 'ALL') return creators.value
+  return creators.value.filter(c => {
+    const raw = (c.display_name || c.screen_name || '').trim()
+    const firstChar = raw[0]?.toUpperCase()
+    if (selectedLetter.value === '#') {
+      return !firstChar || firstChar < 'A' || firstChar > 'Z'
+    }
+    return firstChar === selectedLetter.value
+  })
+})
+
 // ---- detail mode ----
 const detail = ref<CreatorDetail | null>(null)
 const detailLoading = ref(false)
 const detailError = ref('')
 const selectedMedia = ref<Media | null>(null)
+const detailTypeFilter = ref<string>('all')
+const detailSort = ref<'desc' | 'asc' | 'rating' | 'title'>('desc')
+
+const handleBack = () => {
+  if (window.history.state?.back) {
+    router.back()
+  } else {
+    router.push({ name: 'creators' })
+  }
+}
 
 const detailMedia = computed(() => detail.value?.media ?? [])
+
+const mediaTypesInDetail = computed(() => {
+  const counts: Record<string, number> = {}
+  for (const m of detailMedia.value) {
+    counts[m.media_type] = (counts[m.media_type] || 0) + 1
+  }
+  return counts
+})
+
+const filteredDetailMedia = computed(() => {
+  let list = detailMedia.value
+  if (detailTypeFilter.value !== 'all') {
+    list = list.filter(m => m.media_type === detailTypeFilter.value)
+  }
+  const sorted = [...list]
+  if (detailSort.value === 'asc') {
+    sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+  } else if (detailSort.value === 'rating') {
+    sorted.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+  } else if (detailSort.value === 'title') {
+    sorted.sort((a, b) => a.title.localeCompare(b.title))
+  } else {
+    sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  }
+  return sorted
+})
 
 const fetchDetail = async (sn: string) => {
   detailLoading.value = true
@@ -189,6 +255,20 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
           </div>
         </div>
       </div>
+
+      <div v-if="availableLetters.length > 2" class="flex flex-wrap items-center gap-1.5 pt-3 border-t border-white/8 mt-4">
+        <span class="text-xs font-bold text-white/35 mr-1">首字母:</span>
+        <button
+          v-for="l in availableLetters"
+          :key="l"
+          type="button"
+          @click="selectedLetter = l"
+          :class="selectedLetter === l ? 'bg-accent text-white font-black' : 'text-white/50 hover:text-white hover:bg-white/10'"
+          class="min-w-7 h-7 px-2 rounded-lg text-xs transition-all flex items-center justify-center cursor-pointer"
+        >
+          {{ l === 'ALL' ? '全部' : l }}
+        </button>
+      </div>
     </header>
 
     <div class="px-6 md:px-8 pb-12">
@@ -197,11 +277,11 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
       </div>
 
       <div
-        v-else-if="creators.length > 0"
+        v-else-if="displayedCreators.length > 0"
         class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 md:gap-7"
       >
         <button
-          v-for="c in creators"
+          v-for="c in displayedCreators"
           :key="c.key"
           @click="c.screen_name && openCreator(c.screen_name)"
           :disabled="!c.screen_name"
@@ -238,6 +318,13 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
         </button>
       </div>
 
+      <div v-else-if="creators.length > 0" class="flex flex-col items-center justify-center py-24 text-white/40 text-center">
+        <p class="text-base font-bold">首字母「{{ selectedLetter }}」下暂无创作者</p>
+        <button type="button" @click="selectedLetter = 'ALL'" class="mt-2 text-sm text-accent underline cursor-pointer">
+          查看全部创作者
+        </button>
+      </div>
+
       <div v-else class="flex flex-col items-center justify-center py-32 text-white/35 text-center">
         <div class="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-5 border border-white/10">
           <Palette :size="28" />
@@ -251,29 +338,70 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
   <!-- ===== detail mode ===== -->
   <div v-else>
     <header class="sticky top-0 z-40 bg-background/75 backdrop-blur-xl border-b border-white/10 px-6 md:px-8 py-5 mb-6">
-      <div class="flex flex-wrap items-center gap-4">
-        <button
-          @click="router.push({ name: 'creators' })"
-          class="p-2.5 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition-all"
-          title="返回创作者列表"
-        >
-          <ArrowLeft :size="18" />
-        </button>
-        <div class="min-w-0">
-          <h1 class="text-xl md:text-2xl font-black text-white tracking-tight truncate">
-            {{ detail?.creator.display_name || '@' + screenName }}
-          </h1>
-          <div class="flex items-center gap-3 text-xs text-white/45 mt-0.5">
-            <a
-              :href="xProfileUrl(screenName)"
-              target="_blank"
-              rel="noopener"
-              class="flex items-center gap-1 hover:text-accent transition-colors"
-            >@{{ screenName }} <ExternalLink :size="12" /></a>
-            <span v-if="detail">· {{ detail.creator.media_count }} 件作品</span>
-            <span v-if="detail && detail.creator.posts_pending > 0" class="text-accent">
-              · {{ detail.creator.posts_pending }} 条推文待入库
-            </span>
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-4 min-w-0">
+          <button
+            @click="handleBack"
+            class="p-2.5 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+            title="返回创作者列表"
+          >
+            <ArrowLeft :size="18" />
+          </button>
+          <div class="min-w-0">
+            <h1 class="text-xl md:text-2xl font-black text-white tracking-tight truncate">
+              {{ detail?.creator.display_name || '@' + screenName }}
+            </h1>
+            <div class="flex items-center gap-3 text-xs text-white/45 mt-0.5">
+              <a
+                :href="xProfileUrl(screenName)"
+                target="_blank"
+                rel="noopener"
+                class="flex items-center gap-1 hover:text-accent transition-colors"
+              >@{{ screenName }} <ExternalLink :size="12" /></a>
+              <span v-if="detail">· {{ detail.creator.media_count }} 件作品</span>
+              <span v-if="detail && detail.creator.posts_pending > 0" class="text-accent">
+                · {{ detail.creator.posts_pending }} 条推文待入库
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+          <!-- Type filter tabs -->
+          <div class="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl p-1 text-xs">
+            <button
+              v-for="t in [
+                { k: 'all', label: '全部', count: detailMedia.length },
+                { k: 'image', label: '杂图', count: mediaTypesInDetail['image'] || 0 },
+                { k: 'manga', label: '漫画', count: mediaTypesInDetail['manga'] || 0 },
+                { k: 'video', label: '视频', count: mediaTypesInDetail['video'] || 0 },
+                { k: 'audio', label: '音频', count: mediaTypesInDetail['audio'] || 0 },
+              ].filter(x => x.k === 'all' || x.count > 0)"
+              :key="t.k"
+              @click="detailTypeFilter = t.k"
+              :class="detailTypeFilter === t.k ? 'bg-accent text-white font-bold' : 'text-white/45 hover:text-white'"
+              class="px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+            >
+              {{ t.label }} ({{ t.count }})
+            </button>
+          </div>
+
+          <!-- Sort selector -->
+          <div class="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl p-1 text-xs">
+            <button
+              v-for="s in [
+                { k: 'desc', label: '最新' },
+                { k: 'asc', label: '最早' },
+                { k: 'rating', label: '评分' },
+                { k: 'title', label: '标题' },
+              ]"
+              :key="s.k"
+              @click="detailSort = s.k as any"
+              :class="detailSort === s.k ? 'bg-accent text-white font-bold' : 'text-white/45 hover:text-white'"
+              class="px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+            >
+              {{ s.label }}
+            </button>
           </div>
         </div>
       </div>
@@ -286,12 +414,16 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
 
       <div v-else-if="detailError" class="py-24 text-center text-white/40">{{ detailError }}</div>
 
+      <div v-else-if="filteredDetailMedia.length === 0" class="py-24 text-center text-white/40">
+        该筛选条件下暂无作品。
+      </div>
+
       <div
         v-else
         class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 md:gap-7"
       >
         <MediaCard
-          v-for="item in detailMedia"
+          v-for="item in filteredDetailMedia"
           :key="item.id"
           :media="item"
           @click="openMedia(item)"
@@ -302,7 +434,7 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
     <MediaDetail
       v-if="selectedMedia"
       :initial-media="selectedMedia"
-      :all-media="detailMedia"
+      :all-media="filteredDetailMedia"
       @close="closeMedia"
       @updated="updateMediaInList"
       @navigate="openMedia($event, true)"
