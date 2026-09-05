@@ -151,14 +151,27 @@ const hoverShadowClass = (type: Media['media_type']) => {
     </div>
 
     <!-- Title and Meta -->
-    <div class="mt-2.5 px-0.5 tracking-tight min-w-0 w-full">
-      <h3 class="text-xs font-bold text-white/85 group-hover:text-accent line-clamp-1 leading-snug mb-1 transition-colors duration-300" :title="media.title">
+    <div class="mt-2.5 px-0.5 tracking-tight min-w-0 w-full flex flex-col justify-between">
+      <h3
+        class="text-xs font-bold text-white/90 group-hover:text-accent line-clamp-2 min-h-[2.25rem] leading-[1.125rem] mb-1.5 transition-colors duration-200"
+        :title="media.title"
+      >
         {{ media.title }}
       </h3>
-      <div class="flex items-center gap-1.5 text-[10px] text-white/40 font-semibold tracking-wide min-w-0">
-        <span class="px-1 py-0.2 rounded bg-white/5 border border-white/8 font-bold text-white/50 shrink-0 text-[8px] uppercase">{{ media.extension.replace('.', '') || 'DIR' }}</span>
-        <span class="truncate">{{ formatMeta(media) }}</span>
-        <span v-if="media.view_status === 'viewed'" class="ml-auto text-green-400 shrink-0" title="已看">
+      <div class="flex items-center gap-1.5 text-[10px] text-white/55 font-semibold tracking-wide min-w-0">
+        <span class="px-1.5 py-0.5 rounded bg-white/8 border border-white/10 font-bold text-white/60 shrink-0 text-[8px] uppercase tracking-wider">
+          {{ media.extension.replace('.', '') || 'DIR' }}
+        </span>
+        <span class="truncate text-white/45">{{ formatMeta(media) }}</span>
+
+        <!-- Rating Indicator -->
+        <span v-if="media.rating" class="ml-auto flex items-center gap-0.5 text-amber-300 font-bold text-[10px] shrink-0" :title="`评分: ${media.rating} 星`">
+          <Star :size="10" fill="currentColor" />
+          <span>{{ media.rating }}</span>
+        </span>
+
+        <!-- Viewed Status -->
+        <span v-if="media.view_status === 'viewed'" class="text-emerald-400 shrink-0" :class="{ 'ml-auto': !media.rating }" title="已看">
           <Eye :size="11" />
         </span>
       </div>

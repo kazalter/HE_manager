@@ -27,19 +27,39 @@ const searchQuery = ref('')
 const sortBy = ref<'date' | 'title' | 'rating' | 'opened'>('date')
 const selectedTag = ref('')
 const tagDropdownOpen = ref(false)
+const tagSearchQuery = ref('')
 const favoriteOnly = ref(false)
 const sourceFilter = ref<'' | 'x' | 'wnacg' | 'local'>('')
 const filtersExpanded = ref(false)
 const continueScrollRef = ref<HTMLElement | null>(null)
+const continueCollapsed = ref(localStorage.getItem('he_continue_collapsed') === 'true')
+const hiddenContinueIds = ref<Set<number>>(new Set())
+
+watch(continueCollapsed, (val) => {
+  localStorage.setItem('he_continue_collapsed', String(val))
+})
+
+const filteredTags = computed(() => {
+  const query = tagSearchQuery.value.trim().toLowerCase()
+  if (!query) return tags.value
+  return tags.value.filter(tag => tag.name.toLowerCase().includes(query))
+})
 
 const activeFilterCount = computed(() => {
-  return Number(Boolean(selectedTag.value)) + Number(Boolean(sourceFilter.value)) + Number(sortBy.value !== 'date')
+  return Number(Boolean(selectedTag.value)) + Number(Boolean(sourceFilter.value)) + Number(sortBy.value !== 'date') + Number(Boolean(searchQuery.value))
 })
 
 const clearFilters = () => {
+  searchQuery.value = ''
   selectedTag.value = ''
+  tagSearchQuery.value = ''
   sourceFilter.value = ''
   sortBy.value = 'date'
+}
+
+const dismissContinueItem = (id: number, event: MouseEvent) => {
+  event.stopPropagation()
+  hiddenContinueIds.value = new Set([...hiddenContinueIds.value, id])
 }
 
 const scrollContinue = (direction: -1 | 1) => {
@@ -60,7 +80,7 @@ const progressPercent = (media: Media) => {
 
 const recentlyOpened = computed(() => {
   return [...continueMedia.value]
-    .filter(item => item.last_opened_at || progressPercent(item) > 0)
+    .filter(item => !hiddenContinueIds.value.has(item.id) && (item.last_opened_at || progressPercent(item) > 0))
     .sort((a, b) => {
       const timeA = a.last_opened_at ? new Date(a.last_opened_at).getTime() : 0
       const timeB = b.last_opened_at ? new Date(b.last_opened_at).getTime() : 0
@@ -117,6 +137,7 @@ const selectedTagLabel = computed(() => selectedTag.value || '全部标签')
 
 const selectTag = (tagName: string) => {
   selectedTag.value = tagName
+  tagSearchQuery.value = ''
   tagDropdownOpen.value = false
 }
 
@@ -349,8 +370,17 @@ onMounted(async () => {
               v-model="searchQuery"
               type="text"
               placeholder="搜索标题、文件名..."
-              class="w-full bg-white/4 border border-white/5 rounded-xl pl-11 pr-4 py-2.5 text-xs text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-accent/25 focus:bg-white/6 focus:border-white/12 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)] transition-all duration-300"
+              class="w-full bg-white/4 border border-white/5 rounded-xl pl-11 pr-10 py-2.5 text-xs text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-accent/25 focus:bg-white/6 focus:border-white/12 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)] transition-all duration-300"
             />
+            <button
+              v-if="searchQuery"
+              type="button"
+              @click="searchQuery = ''"
+              class="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/30 hover:text-white rounded-md transition-colors cursor-pointer"
+              title="清空搜索"
+            >
+              <X :size="14" />
+            </button>
           </div>
 
           <button
@@ -397,24 +427,39 @@ onMounted(async () => {
           </button>
           <div
             v-if="tagDropdownOpen"
-            class="absolute left-0 top-full mt-1.5 z-50 min-w-44 max-h-64 overflow-y-auto rounded-2xl border border-white/8 bg-sidebar/70 backdrop-blur-3xl shadow-2xl p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] custom-scrollbar"
+            class="absolute left-0 top-full mt-1.5 z-50 min-w-56 max-h-72 flex flex-col rounded-2xl border border-white/10 bg-sidebar/95 backdrop-blur-3xl shadow-2xl p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
           >
-            <button
-              @click="selectTag('')"
-              :class="selectedTag === '' ? 'bg-accent text-white shadow-sm shadow-accent/15' : 'text-white/70 hover:text-white hover:bg-white/6'"
-              class="w-full rounded-xl px-3 py-2 text-left text-[11px] font-bold transition-all duration-200 cursor-pointer"
-            >
-              全部标签
-            </button>
-            <button
-              v-for="tag in tags"
-              :key="tag.id"
-              @click="selectTag(tag.name)"
-              :class="selectedTag === tag.name ? 'bg-accent text-white shadow-sm shadow-accent/15' : 'text-white/70 hover:text-white hover:bg-white/6'"
-              class="w-full rounded-xl px-3 py-2 text-left text-[11px] font-bold transition-all duration-200 cursor-pointer"
-            >
-              {{ tag.name }}
-            </button>
+            <div class="px-1 py-1 mb-1 border-b border-white/8">
+              <input
+                v-model="tagSearchQuery"
+                type="text"
+                placeholder="过滤标签..."
+                class="w-full bg-white/6 border border-white/10 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-white/30 focus:outline-none focus:border-accent/40"
+                @click.stop
+              />
+            </div>
+            <div class="overflow-y-auto max-h-56 custom-scrollbar pr-0.5 space-y-0.5">
+              <button
+                @click="selectTag('')"
+                :class="selectedTag === '' ? 'bg-accent text-white shadow-sm shadow-accent/15' : 'text-white/70 hover:text-white hover:bg-white/6'"
+                class="w-full rounded-xl px-3 py-1.5 text-left text-[11px] font-bold transition-all duration-200 cursor-pointer"
+              >
+                全部标签
+              </button>
+              <button
+                v-for="tag in filteredTags"
+                :key="tag.id"
+                @click="selectTag(tag.name)"
+                :class="selectedTag === tag.name ? 'bg-accent text-white shadow-sm shadow-accent/15' : 'text-white/70 hover:text-white hover:bg-white/6'"
+                class="w-full rounded-xl px-3 py-1.5 text-left text-[11px] font-bold transition-all duration-200 cursor-pointer flex items-center justify-between"
+              >
+                <span class="truncate">{{ tag.name }}</span>
+                <span v-if="tag.count" class="text-[9px] text-white/40 font-mono ml-2">{{ tag.count }}</span>
+              </button>
+              <div v-if="filteredTags.length === 0" class="py-3 text-center text-[11px] text-white/35">
+                无匹配标签
+              </div>
+            </div>
           </div>
         </div>
 
@@ -503,16 +548,26 @@ onMounted(async () => {
           <History class="text-accent" :size="15" />
           <h2 class="text-[10px] font-black text-white/50 tracking-widest uppercase">继续观看 / 阅读</h2>
         </div>
-        <div class="flex items-center gap-1">
-          <button @click="scrollContinue(-1)" class="w-8 h-8 rounded-lg border border-white/8 bg-white/4 text-white/55 hover:text-white hover:bg-white/8 flex items-center justify-center transition-all" title="向左滚动">
-            <ChevronLeft :size="16" />
+        <div class="flex items-center gap-1.5">
+          <button
+            @click="continueCollapsed = !continueCollapsed"
+            class="h-8 px-2.5 rounded-lg border border-white/8 bg-white/4 text-[11px] font-bold text-white/55 hover:text-white hover:bg-white/8 flex items-center gap-1.5 transition-all cursor-pointer"
+            :title="continueCollapsed ? '展开继续观看' : '收起继续观看'"
+          >
+            <span>{{ continueCollapsed ? '展开' : '收起' }}</span>
+            <ChevronDown :size="13" class="transition-transform duration-200" :class="{ '-rotate-90': continueCollapsed }" />
           </button>
-          <button @click="scrollContinue(1)" class="w-8 h-8 rounded-lg border border-white/8 bg-white/4 text-white/55 hover:text-white hover:bg-white/8 flex items-center justify-center transition-all" title="向右滚动">
-            <ChevronRight :size="16" />
-          </button>
+          <template v-if="!continueCollapsed">
+            <button @click="scrollContinue(-1)" class="w-8 h-8 rounded-lg border border-white/8 bg-white/4 text-white/55 hover:text-white hover:bg-white/8 flex items-center justify-center transition-all cursor-pointer" title="向左滚动">
+              <ChevronLeft :size="16" />
+            </button>
+            <button @click="scrollContinue(1)" class="w-8 h-8 rounded-lg border border-white/8 bg-white/4 text-white/55 hover:text-white hover:bg-white/8 flex items-center justify-center transition-all cursor-pointer" title="向右滚动">
+              <ChevronRight :size="16" />
+            </button>
+          </template>
         </div>
       </div>
-      <div class="relative -mx-1 px-1">
+      <div v-show="!continueCollapsed" class="relative -mx-1 px-1">
         <div class="pointer-events-none absolute right-0 top-0 bottom-2 w-12 bg-gradient-to-l from-background to-transparent z-10"></div>
         <div ref="continueScrollRef" class="flex gap-4 overflow-x-auto pb-2 pr-10 custom-scrollbar scroll-smooth">
         <div
@@ -521,6 +576,16 @@ onMounted(async () => {
           class="shrink-0 w-52 sm:w-60 bg-gradient-to-b from-white/5 to-white/[0.01] rounded-xl border border-white/5 p-2.5 hover:border-white/15 transition-all duration-300 cursor-pointer flex gap-3 relative shadow-md hover:shadow-[0_12px_24px_-10px_rgba(var(--color-accent),0.15)] group"
           @click="openMedia(item)"
         >
+          <!-- 临时忽略/移除按钮 -->
+          <button
+            type="button"
+            @click="dismissContinueItem(item.id, $event)"
+            class="absolute top-2 right-2 w-5 h-5 rounded-full bg-black/75 border border-white/10 text-white/40 hover:text-white hover:bg-red-500/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-20 cursor-pointer"
+            title="从列表中移除"
+          >
+            <X :size="11" />
+          </button>
+
           <div class="w-14 h-18 shrink-0 rounded-lg overflow-hidden bg-black/40 border border-white/5 relative">
             <img :src="item.cover_path ? thumbnailUrl(item.cover_path) : mediaPlaceholderUrl" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
             <div class="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
