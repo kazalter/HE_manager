@@ -25,6 +25,7 @@ export function useImageViewerZoom(
   let startTx = 0
   let startTy = 0
   let dragDistance = 0
+  let hasDragged = false
 
   const isZoomed = computed(() => scale.value > 1.01)
   const zoomPercent = computed(() => Math.round(scale.value * 100))
@@ -49,6 +50,8 @@ export function useImageViewerZoom(
       scale.value = 1
       translateX.value = 0
       translateY.value = 0
+      hasDragged = false
+      dragDistance = 0
       return
     }
 
@@ -82,6 +85,8 @@ export function useImageViewerZoom(
     translateY.value = 0
     isPanning.value = false
     isMouseDown = false
+    hasDragged = false
+    dragDistance = 0
   }
 
   const handleZoomWheel = (event: WheelEvent) => {
@@ -92,10 +97,11 @@ export function useImageViewerZoom(
   }
 
   const onMouseDown = (event: MouseEvent) => {
+    dragDistance = 0
+    hasDragged = false
     if (scale.value <= 1.01 || event.button !== 0) return
     isMouseDown = true
     isPanning.value = true
-    dragDistance = 0
     startX = event.clientX
     startY = event.clientY
     startTx = translateX.value
@@ -109,7 +115,10 @@ export function useImageViewerZoom(
     if (!isMouseDown) return
     const dx = event.clientX - startX
     const dy = event.clientY - startY
-    dragDistance += Math.abs(dx) + Math.abs(dy)
+    dragDistance = Math.hypot(dx, dy)
+    if (dragDistance > 8) {
+      hasDragged = true
+    }
     clampTranslation(startTx + dx, startTy + dy, scale.value)
   }
 
@@ -120,7 +129,17 @@ export function useImageViewerZoom(
     window.removeEventListener('mouseup', onMouseUp)
   }
 
-  const wasDragging = () => dragDistance > 6
+  const wasDragging = () => {
+    if (scale.value <= 1.01) {
+      hasDragged = false
+      dragDistance = 0
+      return false
+    }
+    const dragged = hasDragged
+    hasDragged = false
+    dragDistance = 0
+    return dragged
+  }
 
   const onKeydown = (event: KeyboardEvent) => {
     const target = event.target as HTMLElement | null

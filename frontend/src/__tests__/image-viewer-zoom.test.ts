@@ -82,28 +82,39 @@ describe('useImageViewerZoom composable', () => {
     wrapper.unmount()
   })
 
-  it('supports drag and pan only when zoomed in', () => {
+  it('supports drag and pan only when zoomed in and does not block clicks', () => {
     const { wrapper, zoom } = createTestViewer()
 
-    // Try drag when not zoomed -> should not drag
+    // Try drag when not zoomed -> should not drag and wasDragging is always false
     zoom.onMouseDown(new MouseEvent('mousedown', { button: 0, clientX: 100, clientY: 100 }))
     expect(zoom.isPanning.value).toBe(false)
+    expect(zoom.wasDragging()).toBe(false)
 
     // Zoom in
     zoom.setScale(2)
     expect(zoom.isZoomed.value).toBe(true)
 
-    // Drag start
+    // Click jitter (< 8px movement) should NOT count as dragging
+    zoom.onMouseDown(new MouseEvent('mousedown', { button: 0, clientX: 100, clientY: 100 }))
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 103, clientY: 102 }))
+    window.dispatchEvent(new MouseEvent('mouseup'))
+    expect(zoom.wasDragging()).toBe(false)
+
+    // Genuine drag (> 8px)
     zoom.onMouseDown(new MouseEvent('mousedown', { button: 0, clientX: 100, clientY: 100 }))
     expect(zoom.isPanning.value).toBe(true)
-
-    // Drag move
     window.dispatchEvent(new MouseEvent('mousemove', { clientX: 150, clientY: 120 }))
-    expect(zoom.wasDragging()).toBe(true)
-
-    // Drag end
     window.dispatchEvent(new MouseEvent('mouseup'))
     expect(zoom.isPanning.value).toBe(false)
+
+    // wasDragging() returns true ONCE to suppress the click from this drag...
+    expect(zoom.wasDragging()).toBe(true)
+    // ...and immediately resets so subsequent clicks are never blocked
+    expect(zoom.wasDragging()).toBe(false)
+
+    // Resetting zoom guarantees wasDragging is false
+    zoom.resetZoom()
+    expect(zoom.wasDragging()).toBe(false)
 
     wrapper.unmount()
   })

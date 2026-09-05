@@ -80,7 +80,7 @@ export function useMediaOverlayControls(
   }
 
   const onFullscreenChange = () => {
-    isFullscreen.value = !!document.fullscreenElement
+    isFullscreen.value = !!document.fullscreenElement || (typeof screen !== 'undefined' && window.innerHeight >= screen.height - 2)
     clearTimer()
     showControls.value = true
     if (clickOnlyControls.value) {
@@ -103,6 +103,7 @@ export function useMediaOverlayControls(
     document.body.style.overflow = 'hidden'
     window.addEventListener('mousemove', onMouseMove)
     document.addEventListener('fullscreenchange', onFullscreenChange)
+    window.addEventListener('resize', onFullscreenChange)
     resetTimer()
   })
 
@@ -110,6 +111,7 @@ export function useMediaOverlayControls(
     document.body.style.overflow = 'auto'
     window.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('fullscreenchange', onFullscreenChange)
+    window.removeEventListener('resize', onFullscreenChange)
     clearTimer()
     window.clearTimeout(viewerClickTimer)
     if (document.fullscreenElement) void document.exitFullscreen()
