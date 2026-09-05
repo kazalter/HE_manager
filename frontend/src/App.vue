@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { authState, logout } from './auth'
-import { ChevronRight, Menu } from 'lucide-vue-next'
+import { ChevronUp, Menu } from 'lucide-vue-next'
 import Sidebar from './components/Sidebar.vue'
 import AuthView from './views/AuthView.vue'
 
@@ -27,6 +27,7 @@ watch(desktopCollapsed, (newVal) => {
 
 const route = useRoute()
 const mainScrollRef = ref<HTMLElement | null>(null)
+const showBackToTop = ref(false)
 
 const updateResponsiveShell = () => {
   const nextCompact = window.innerWidth < 900
@@ -43,7 +44,19 @@ watch(() => route.path, () => {
     mainScrollRef.value.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
     mainScrollRef.value.scrollTop = 0
   }
+  showBackToTop.value = false
 })
+
+const handleMainScroll = (event: Event) => {
+  const target = event.target as HTMLElement
+  showBackToTop.value = target.scrollTop > 360
+}
+
+const scrollToTop = () => {
+  if (mainScrollRef.value) {
+    mainScrollRef.value.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+}
 
 onMounted(() => {
   updateResponsiveShell()
@@ -55,7 +68,6 @@ onUnmounted(() => window.removeEventListener('resize', updateResponsiveShell))
 const isEmbed = computed(() => {
   return route.path.endsWith('/embed') || route.query.embed === 'true'
 })
-
 </script>
 
 <template>
@@ -74,34 +86,35 @@ const isEmbed = computed(() => {
     <Sidebar
       v-if="!isEmbed"
       v-model:collapsed="isCollapsed"
+      :is-compact="isCompactViewport"
       :class="isCompactViewport ? 'fixed left-0 top-0 z-50' : 'shrink-0 relative z-40'"
       class="transition-all duration-300 ease-in-out"
       :user="authState.user"
       @logout="logout"
     />
 
+    <!-- Mobile Drawer Overlay Backdrop -->
     <button
       v-if="isCompactViewport && !isCollapsed && !isEmbed"
-      class="fixed inset-0 z-40 bg-black/55 backdrop-blur-sm cursor-default"
+      class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm cursor-default transition-opacity"
       aria-label="关闭导航菜单"
       @click="isCollapsed = true"
     ></button>
 
+    <!-- Mobile Hamburger Trigger (Only on compact screen when collapsed) -->
     <button
-      v-if="isCollapsed && !isEmbed"
+      v-if="isCompactViewport && isCollapsed && !isEmbed"
       @click="isCollapsed = false"
-      :class="isCompactViewport
-        ? 'left-4 top-4 w-11 h-11 rounded-xl border border-white/15 bg-sidebar/85 backdrop-blur-xl'
-        : 'left-0 top-1/2 -translate-y-1/2 w-5.5 h-16 rounded-r-2xl border-y border-r border-white/20 bg-accent hover:w-7.5'"
-      class="fixed z-50 flex items-center justify-center text-white shadow-md shadow-accent/20 transition-all duration-200 cursor-pointer"
+      class="fixed z-50 left-4 top-4 w-11 h-11 rounded-xl border border-white/15 bg-sidebar/85 backdrop-blur-xl flex items-center justify-center text-white shadow-md shadow-accent/20 transition-all duration-200 cursor-pointer hover:bg-white/10"
       title="展开侧边栏"
+      aria-label="展开侧边栏"
     >
-      <Menu v-if="isCompactViewport" :size="20" />
-      <ChevronRight v-else :size="14" />
+      <Menu :size="20" />
     </button>
 
     <main
       ref="mainScrollRef"
+      @scroll="handleMainScroll"
       class="flex-1 min-w-0 relative z-10 box-border main-scroll-container"
       :class="isEmbed ? 'h-screen overflow-hidden' : 'h-screen overflow-y-auto overflow-x-hidden scroll-smooth custom-scrollbar'"
     >
@@ -112,6 +125,20 @@ const isEmbed = computed(() => {
       </router-view>
       <div v-if="!isEmbed" class="h-20 w-full"></div>
     </main>
+
+    <!-- Smooth Back To Top Floating Action Button -->
+    <transition name="page-fade">
+      <button
+        v-if="showBackToTop && !isEmbed"
+        type="button"
+        @click="scrollToTop"
+        class="fixed bottom-7 right-7 z-40 w-11 h-11 rounded-2xl bg-sidebar/85 hover:bg-accent backdrop-blur-2xl border border-white/15 text-white/70 hover:text-white shadow-2xl shadow-black/60 flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer"
+        title="返回顶部"
+        aria-label="返回顶部"
+      >
+        <ChevronUp :size="20" />
+      </button>
+    </transition>
   </div>
   <div v-else class="h-screen w-full bg-background text-white/50 flex items-center justify-center">
     正在检查登录状态
