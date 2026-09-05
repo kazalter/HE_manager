@@ -26,6 +26,7 @@ watch(desktopCollapsed, (newVal) => {
 })
 
 const route = useRoute()
+const mainScrollRef = ref<HTMLElement | null>(null)
 
 const updateResponsiveShell = () => {
   const nextCompact = window.innerWidth < 900
@@ -35,6 +36,13 @@ const updateResponsiveShell = () => {
 
 watch(() => route.fullPath, () => {
   if (isCompactViewport.value) mobileSidebarOpen.value = false
+})
+
+watch(() => route.path, () => {
+  if (mainScrollRef.value) {
+    mainScrollRef.value.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
+    mainScrollRef.value.scrollTop = 0
+  }
 })
 
 onMounted(() => {
@@ -93,6 +101,7 @@ const isEmbed = computed(() => {
     </button>
 
     <main
+      ref="mainScrollRef"
       class="flex-1 min-w-0 relative z-10 box-border main-scroll-container"
       :class="isEmbed ? 'h-screen overflow-hidden' : 'h-screen overflow-y-auto overflow-x-hidden scroll-smooth custom-scrollbar'"
     >

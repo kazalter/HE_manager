@@ -92,13 +92,16 @@ const syncPageQuery = (page: number, replace = false) => {
   void (replace ? router.replace(location) : router.push(location))
 }
 
-const scrollListToStart = (behavior: ScrollBehavior = 'auto') => {
+const scrollToTop = (behavior: ScrollBehavior = 'auto') => {
   const scrollRoot = containerRef.value?.closest<HTMLElement>('.main-scroll-container')
-  if (!scrollRoot || !containerRef.value) return
-  const rootRect = scrollRoot.getBoundingClientRect()
-  const containerRect = containerRef.value.getBoundingClientRect()
-  const targetTop = scrollRoot.scrollTop + containerRect.top - rootRect.top - 16
-  scrollRoot.scrollTo({ top: Math.max(0, targetTop), behavior })
+    || document.querySelector<HTMLElement>('.main-scroll-container')
+  if (!scrollRoot) return
+  if (behavior === 'auto') {
+    scrollRoot.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
+    scrollRoot.scrollTop = 0
+  } else {
+    scrollRoot.scrollTo({ top: 0, behavior })
+  }
 }
 
 const pageTitle = computed(() => {
@@ -140,7 +143,7 @@ const fetchContinueMedia = async () => {
 
 const fetchMedia = async (scrollBehavior: ScrollBehavior = 'auto') => {
   const requestId = ++mediaRequestId
-  if (hasCompletedInitialFetch) scrollListToStart(scrollBehavior)
+  if (hasCompletedInitialFetch) scrollToTop(scrollBehavior)
   loading.value = true
   mediaError.value = ''
   try {
@@ -318,6 +321,7 @@ const triggerMissingRecheck = async () => {
 }
 
 onMounted(async () => {
+  scrollToTop('auto')
   await Promise.all([fetchMedia(), fetchContinueMedia()])
   await syncSelectedMediaFromRoute()
   void fetchTags()
