@@ -358,7 +358,7 @@ onMounted(async () => {
           <h1 class="text-xl md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-white/60 tracking-tight">
             {{ pageTitle }}
           </h1>
-          <span class="text-[9px] font-black text-accent bg-accent/10 px-2 py-0.5 rounded-md border border-accent/20 uppercase tracking-widest">
+          <span class="text-xs font-black text-accent bg-accent/10 px-2 py-0.5 rounded-md border border-accent/20 uppercase tracking-widest">
             {{ totalItems.toLocaleString() }} 项
           </span>
         </div>
@@ -370,7 +370,7 @@ onMounted(async () => {
               v-model="searchQuery"
               type="text"
               placeholder="搜索标题、文件名..."
-              class="w-full bg-white/4 border border-white/5 rounded-xl pl-11 pr-10 py-2.5 text-xs text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-accent/25 focus:bg-white/6 focus:border-white/12 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)] transition-all duration-300"
+              class="w-full bg-white/4 border border-white/5 rounded-xl pl-11 pr-10 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-accent/25 focus:bg-white/6 focus:border-white/12 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)] transition-all duration-300"
             />
             <button
               v-if="searchQuery"
@@ -400,7 +400,7 @@ onMounted(async () => {
             title="展开筛选"
           >
             <Filter :size="16" />
-            <span v-if="activeFilterCount" class="absolute -right-1 -top-1 min-w-4 h-4 px-1 rounded-full bg-accent text-[9px] font-black text-white flex items-center justify-center">
+            <span v-if="activeFilterCount" class="absolute -right-1 -top-1 min-w-4 h-4 px-1 rounded-full bg-accent text-[10px] font-black text-white flex items-center justify-center">
               {{ activeFilterCount }}
             </span>
           </button>
@@ -413,14 +413,14 @@ onMounted(async () => {
       >
         <div class="flex items-center gap-1.5 text-white/35 font-bold">
           <Filter :size="13" />
-          <span class="text-[10px] uppercase tracking-wider">筛选</span>
+          <span class="text-xs uppercase tracking-wider">筛选</span>
         </div>
 
         <!-- Tag Dropdown -->
         <div class="relative">
           <button
             @click="tagDropdownOpen = !tagDropdownOpen"
-            class="min-w-32 bg-white/4 border border-white/5 rounded-xl px-3 py-2 text-[11px] text-white/70 focus:outline-none focus:ring-2 focus:ring-accent/20 flex items-center justify-between gap-3 hover:bg-white/6 hover:border-white/10 transition-all duration-300 cursor-pointer font-bold"
+            class="min-w-32 bg-white/4 border border-white/5 rounded-xl px-3 py-2 text-xs text-white/70 focus:outline-none focus:ring-2 focus:ring-accent/20 flex items-center justify-between gap-3 hover:bg-white/6 hover:border-white/10 transition-all duration-300 cursor-pointer font-bold"
           >
             <span class="truncate">{{ selectedTagLabel }}</span>
             <ChevronDown :size="12" :class="tagDropdownOpen ? 'rotate-180' : ''" class="transition-transform text-white/35" />
@@ -434,7 +434,7 @@ onMounted(async () => {
                 v-model="tagSearchQuery"
                 type="text"
                 placeholder="过滤标签..."
-                class="w-full bg-white/6 border border-white/10 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-white/30 focus:outline-none focus:border-accent/40"
+                class="w-full bg-white/6 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-accent/40"
                 @click.stop
               />
             </div>
@@ -442,7 +442,7 @@ onMounted(async () => {
               <button
                 @click="selectTag('')"
                 :class="selectedTag === '' ? 'bg-accent text-white shadow-sm shadow-accent/15' : 'text-white/70 hover:text-white hover:bg-white/6'"
-                class="w-full rounded-xl px-3 py-1.5 text-left text-[11px] font-bold transition-all duration-200 cursor-pointer"
+                class="w-full rounded-xl px-3 py-1.5 text-left text-xs font-bold transition-all duration-200 cursor-pointer"
               >
                 全部标签
               </button>
@@ -451,12 +451,12 @@ onMounted(async () => {
                 :key="tag.id"
                 @click="selectTag(tag.name)"
                 :class="selectedTag === tag.name ? 'bg-accent text-white shadow-sm shadow-accent/15' : 'text-white/70 hover:text-white hover:bg-white/6'"
-                class="w-full rounded-xl px-3 py-1.5 text-left text-[11px] font-bold transition-all duration-200 cursor-pointer flex items-center justify-between"
+                class="w-full rounded-xl px-3 py-1.5 text-left text-xs font-bold transition-all duration-200 cursor-pointer flex items-center justify-between"
               >
                 <span class="truncate">{{ tag.name }}</span>
-                <span v-if="tag.count" class="text-[9px] text-white/40 font-mono ml-2">{{ tag.count }}</span>
+                <span v-if="tag.count" class="text-[10px] text-white/40 font-mono ml-2">{{ tag.count }}</span>
               </button>
-              <div v-if="filteredTags.length === 0" class="py-3 text-center text-[11px] text-white/35">
+              <div v-if="filteredTags.length === 0" class="py-3 text-center text-xs text-white/35">
                 无匹配标签
               </div>
             </div>
@@ -468,14 +468,14 @@ onMounted(async () => {
           <button
             @click="sourceFilter = ''"
             :class="sourceFilter === '' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
-            class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-250 cursor-pointer"
+            class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
           >
             全部
           </button>
           <button
             @click="sourceFilter = 'local'"
             :class="sourceFilter === 'local' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
-            class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-250 cursor-pointer"
+            class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
             title="本地扫描的媒体"
           >
             本地
@@ -483,7 +483,7 @@ onMounted(async () => {
           <button
             @click="sourceFilter = 'x'"
             :class="sourceFilter === 'x' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
-            class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-250 cursor-pointer"
+            class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
             title="X (Twitter) 导入"
           >
             X
@@ -491,7 +491,7 @@ onMounted(async () => {
           <button
             @click="sourceFilter = 'wnacg'"
             :class="sourceFilter === 'wnacg' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
-            class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-250 cursor-pointer"
+            class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
             title="wnacg 下载"
           >
             wnacg
@@ -503,28 +503,28 @@ onMounted(async () => {
           <button
             @click="sortBy = 'date'"
             :class="sortBy === 'date' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
-            class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-250 cursor-pointer"
+            class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
           >
             最近添加
           </button>
           <button
             @click="sortBy = 'opened'"
             :class="sortBy === 'opened' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
-            class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-250 cursor-pointer"
+            class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
           >
             最近打开
           </button>
           <button
             @click="sortBy = 'rating'"
             :class="sortBy === 'rating' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
-            class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-250 cursor-pointer"
+            class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
           >
             评分
           </button>
           <button
             @click="sortBy = 'title'"
             :class="sortBy === 'title' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
-            class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-250 flex items-center gap-1 cursor-pointer"
+            class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 flex items-center gap-1 cursor-pointer"
           >
             <SortAsc :size="11" /> 名称
           </button>
@@ -533,7 +533,7 @@ onMounted(async () => {
         <button
           v-if="activeFilterCount > 0"
           @click="clearFilters"
-          class="h-8 px-3 rounded-xl border border-white/8 bg-white/3 text-[10px] font-bold text-white/55 hover:text-white hover:bg-white/8 flex items-center gap-1.5 transition-all"
+          class="h-8 px-3 rounded-xl border border-white/8 bg-white/3 text-xs font-bold text-white/55 hover:text-white hover:bg-white/8 flex items-center gap-1.5 transition-all"
         >
           <X :size="12" />
           清除筛选
@@ -546,12 +546,12 @@ onMounted(async () => {
       <div class="flex items-center justify-between gap-3 mb-3.5">
         <div class="flex items-center gap-2">
           <History class="text-accent" :size="15" />
-          <h2 class="text-[10px] font-black text-white/50 tracking-widest uppercase">继续观看 / 阅读</h2>
+          <h2 class="text-xs font-black text-white/50 tracking-wider uppercase">继续观看 / 阅读</h2>
         </div>
         <div class="flex items-center gap-1.5">
           <button
             @click="continueCollapsed = !continueCollapsed"
-            class="h-8 px-2.5 rounded-lg border border-white/8 bg-white/4 text-[11px] font-bold text-white/55 hover:text-white hover:bg-white/8 flex items-center gap-1.5 transition-all cursor-pointer"
+            class="h-8 px-2.5 rounded-lg border border-white/8 bg-white/4 text-xs font-bold text-white/55 hover:text-white hover:bg-white/8 flex items-center gap-1.5 transition-all cursor-pointer"
             :title="continueCollapsed ? '展开继续观看' : '收起继续观看'"
           >
             <span>{{ continueCollapsed ? '展开' : '收起' }}</span>
@@ -595,13 +595,13 @@ onMounted(async () => {
           </div>
           <div class="flex-1 min-w-0 flex flex-col justify-between py-0.5">
             <div>
-              <h3 class="text-xs font-bold text-white/85 group-hover:text-accent truncate transition-colors leading-tight mb-1" :title="item.title">{{ item.title }}</h3>
-              <p class="text-[9px] font-bold text-white/35 uppercase tracking-wider">
+              <h3 class="text-sm font-bold text-white/85 group-hover:text-accent truncate transition-colors leading-tight mb-1" :title="item.title">{{ item.title }}</h3>
+              <p class="text-[10.5px] font-bold text-white/35 uppercase tracking-wider">
                 {{ item.media_type === 'manga' ? '漫画' : item.media_type === 'video' ? '视频' : item.media_type === 'audio' ? '音频' : '杂图' }}
               </p>
             </div>
             <div v-if="progressPercent(item) > 0" class="space-y-1">
-              <div class="flex items-center justify-between text-[8px] font-bold text-white/40">
+              <div class="flex items-center justify-between text-[10px] font-bold text-white/40">
                 <span>已看 {{ progressPercent(item) }}%</span>
               </div>
               <div class="h-1 w-full bg-white/10 rounded-full overflow-hidden">

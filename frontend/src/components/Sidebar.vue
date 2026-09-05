@@ -96,7 +96,7 @@ const handleLogout = () => {
           <h1 class="text-lg font-black tracking-tight text-white truncate">
             HE Manager
           </h1>
-          <p class="text-[10px] text-white/35 font-medium -mt-0.5">个人媒体中心</p>
+          <p class="text-xs text-white/45 font-medium -mt-0.5">个人媒体中心</p>
         </div>
       </div>
 
@@ -114,7 +114,7 @@ const handleLogout = () => {
     <nav class="flex-1 space-y-1 overflow-x-hidden overflow-y-auto custom-scrollbar pr-0.5">
       <!-- Section 1: 媒体库 -->
       <div class="space-y-1">
-        <div v-if="!collapsed || isCompact" class="px-3 pt-2 pb-1 text-[10px] font-black uppercase tracking-wider text-white/30">
+        <div v-if="!collapsed || isCompact" class="px-3 pt-2 pb-1 text-xs font-bold uppercase tracking-wider text-white/40">
           媒体库
         </div>
 
@@ -230,7 +230,7 @@ const handleLogout = () => {
 
       <!-- Section 2: 发现与整理 -->
       <div class="space-y-1">
-        <div v-if="!collapsed || isCompact" class="px-3 pt-1 pb-1 text-[10px] font-black uppercase tracking-wider text-white/30">
+        <div v-if="!collapsed || isCompact" class="px-3 pt-1 pb-1 text-xs font-bold uppercase tracking-wider text-white/40">
           发现与整理
         </div>
 
@@ -309,7 +309,7 @@ const handleLogout = () => {
 
       <!-- Section 3: 系统与工具 -->
       <div class="space-y-1">
-        <div v-if="!collapsed || isCompact" class="px-3 pt-1 pb-1 text-[10px] font-black uppercase tracking-wider text-white/30">
+        <div v-if="!collapsed || isCompact" class="px-3 pt-1 pb-1 text-xs font-bold uppercase tracking-wider text-white/40">
           系统与工具
         </div>
 

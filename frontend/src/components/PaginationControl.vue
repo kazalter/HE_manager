@@ -249,7 +249,7 @@ onUnmounted(() => {
   gap: 7px;
   margin: 0;
   color: rgba(255, 255, 255, 0.38);
-  font-size: 12px;
+  font-size: 13.5px;
 }
 
 .media-pagination__summary strong { color: rgba(255, 255, 255, 0.76); }
@@ -286,11 +286,11 @@ onUnmounted(() => {
   gap: 9px;
   padding: 0 14px;
   color: rgba(255, 255, 255, 0.72);
-  font-size: 12px;
+  font-size: 13.5px;
   font-weight: 700;
 }
 
-.media-page-picker__trigger strong { color: rgb(var(--color-accent-glow)); font-size: 14px; }
+.media-page-picker__trigger strong { color: rgb(var(--color-accent-glow)); font-size: 15px; }
 .media-page-picker__trigger svg { transition: transform 180ms ease; }
 .media-page-picker.is-open .media-page-picker__trigger svg { transform: rotate(180deg); }
 
@@ -322,9 +322,9 @@ onUnmounted(() => {
 
 .media-page-picker__panel > header strong,
 .media-page-picker__panel > header small { display: block; }
-.media-page-picker__panel > header strong { color: rgba(255, 255, 255, 0.9); font-size: 14px; }
-.media-page-picker__panel > header small { margin-top: 3px; color: rgba(255, 255, 255, 0.35); font-size: 10px; }
-.media-page-picker__panel > header > span { padding: 4px 8px; border-radius: 999px; color: rgb(var(--color-accent-glow)); background: rgba(var(--color-accent), 0.12); font-size: 10px; font-weight: 800; }
+.media-page-picker__panel > header strong { color: rgba(255, 255, 255, 0.9); font-size: 15px; }
+.media-page-picker__panel > header small { margin-top: 3px; color: rgba(255, 255, 255, 0.35); font-size: 11px; }
+.media-page-picker__panel > header > span { padding: 4px 8px; border-radius: 999px; color: rgb(var(--color-accent-glow)); background: rgba(var(--color-accent), 0.12); font-size: 11px; font-weight: 800; }
 
 .media-page-picker__jump {
   display: flex;
@@ -333,7 +333,7 @@ onUnmounted(() => {
   padding: 10px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.065);
   color: rgba(255, 255, 255, 0.45);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .media-page-picker__jump label { font-weight: 800; }
@@ -345,17 +345,17 @@ onUnmounted(() => {
   outline: 0;
   color: white;
   background: rgba(0, 0, 0, 0.26);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
   text-align: center;
 }
 .media-page-picker__jump input:focus { border-color: rgba(var(--color-accent), 0.7); box-shadow: 0 0 0 3px rgba(var(--color-accent), 0.12); }
 .media-page-picker__jump input[aria-invalid="true"] { border-color: rgba(248, 113, 113, 0.65); color: rgb(254, 202, 202); }
-.media-page-picker__jump button { height: 32px; margin-left: auto; border: 1px solid rgba(var(--color-accent), 0.4); border-radius: 9px; padding: 0 12px; color: white; background: rgba(var(--color-accent), 0.8); font-size: 11px; font-weight: 800; }
+.media-page-picker__jump button { height: 32px; margin-left: auto; border: 1px solid rgba(var(--color-accent), 0.4); border-radius: 9px; padding: 0 12px; color: white; background: rgba(var(--color-accent), 0.8); font-size: 12px; font-weight: 800; }
 
 .media-page-picker__scroll { max-height: 245px; overflow-y: auto; overscroll-behavior: contain; padding: 10px; }
 .media-page-picker__grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
-.media-page-picker__grid button { height: 36px; display: flex; align-items: center; justify-content: center; gap: 3px; border: 1px solid transparent; border-radius: 9px; color: rgba(255, 255, 255, 0.58); background: rgba(255, 255, 255, 0.04); font-size: 11px; font-weight: 700; }
+.media-page-picker__grid button { height: 36px; display: flex; align-items: center; justify-content: center; gap: 3px; border: 1px solid transparent; border-radius: 9px; color: rgba(255, 255, 255, 0.58); background: rgba(255, 255, 255, 0.04); font-size: 12px; font-weight: 700; }
 .media-page-picker__grid button:hover,
 .media-page-picker__grid button:focus-visible { border-color: rgba(var(--color-accent), 0.42); color: white; background: rgba(var(--color-accent), 0.13); }
 .media-page-picker__grid button[aria-selected="true"] { border-color: rgba(var(--color-accent-glow), 0.28); color: white; background: rgb(var(--color-accent)); box-shadow: 0 5px 15px rgba(var(--color-accent), 0.2); }

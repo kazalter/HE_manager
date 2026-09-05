@@ -118,21 +118,21 @@ const hoverShadowClass = (type: Media['media_type']) => {
 
       <!-- Type Badge -->
       <div class="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-black/75 border border-white/10 flex items-center gap-1 z-20">
-        <Film v-if="media.media_type === 'video'" :size="9" class="text-accent" />
-        <Book v-else-if="media.media_type === 'manga'" :size="9" class="text-purple-300" />
-        <Headphones v-else-if="media.media_type === 'audio'" :size="9" class="text-cyan-300" />
-        <ImageIcon v-else :size="9" class="text-green-300" />
-        <span class="text-[9px] font-black text-white/90 uppercase tracking-wider">{{ typeLabel(media.media_type) }}</span>
+        <Film v-if="media.media_type === 'video'" :size="10" class="text-accent" />
+        <Book v-else-if="media.media_type === 'manga'" :size="10" class="text-purple-300" />
+        <Headphones v-else-if="media.media_type === 'audio'" :size="10" class="text-cyan-300" />
+        <ImageIcon v-else :size="10" class="text-green-300" />
+        <span class="text-[10.5px] font-black text-white/90 uppercase tracking-wider">{{ typeLabel(media.media_type) }}</span>
       </div>
 
       <!-- Favorite Badge -->
       <div v-if="media.favorite" class="absolute top-2 left-2 w-6 h-6 rounded-md bg-black/75 border border-white/10 flex items-center justify-center text-amber-300 z-20">
-        <Star :size="11" fill="currentColor" />
+        <Star :size="12" fill="currentColor" />
       </div>
 
       <!-- Progress Badge (Manga) -->
       <div v-if="media.media_type === 'manga' && media.page_count && progressPercent(media) > 0" class="absolute left-2 bottom-3 rounded-md bg-black/75 border border-white/10 px-1.5 py-0.5 z-20">
-        <span class="text-[9px] font-black text-white/90">{{ mangaProgressText(media) }}</span>
+        <span class="text-[10.5px] font-black text-white/90">{{ mangaProgressText(media) }}</span>
       </div>
 
       <!-- Progress Bar -->
@@ -145,7 +145,7 @@ const hoverShadowClass = (type: Media['media_type']) => {
       </div>
 
       <!-- Missing File Overlay -->
-      <div v-if="media.is_missing" class="absolute inset-x-2 bottom-2 rounded-md bg-red-500/90 border border-red-400/20 px-1.5 py-1 text-center text-[10px] font-black text-white z-20 shadow-md">
+      <div v-if="media.is_missing" class="absolute inset-x-2 bottom-2 rounded-md bg-red-500/90 border border-red-400/20 px-1.5 py-1 text-center text-[11px] font-black text-white z-20 shadow-md">
         文件丢失
       </div>
     </div>
@@ -153,26 +153,26 @@ const hoverShadowClass = (type: Media['media_type']) => {
     <!-- Title and Meta -->
     <div class="mt-2.5 px-0.5 tracking-tight min-w-0 w-full flex flex-col justify-between">
       <h3
-        class="text-xs font-bold text-white/90 group-hover:text-accent line-clamp-2 min-h-[2.25rem] leading-[1.125rem] mb-1.5 transition-colors duration-200"
+        class="text-[13.5px] sm:text-sm font-bold text-white/90 group-hover:text-accent line-clamp-2 min-h-[2.5rem] leading-snug mb-1.5 transition-colors duration-200"
         :title="media.title"
       >
         {{ media.title }}
       </h3>
-      <div class="flex items-center gap-1.5 text-[10px] text-white/55 font-semibold tracking-wide min-w-0">
-        <span class="px-1.5 py-0.5 rounded bg-white/8 border border-white/10 font-bold text-white/60 shrink-0 text-[8px] uppercase tracking-wider">
+      <div class="flex items-center gap-1.5 text-[11.5px] text-white/55 font-semibold tracking-wide min-w-0">
+        <span class="px-1.5 py-0.5 rounded bg-white/8 border border-white/10 font-bold text-white/60 shrink-0 text-[9.5px] uppercase tracking-wider">
           {{ media.extension.replace('.', '') || 'DIR' }}
         </span>
         <span class="truncate text-white/45">{{ formatMeta(media) }}</span>
 
         <!-- Rating Indicator -->
-        <span v-if="media.rating" class="ml-auto flex items-center gap-0.5 text-amber-300 font-bold text-[10px] shrink-0" :title="`评分: ${media.rating} 星`">
-          <Star :size="10" fill="currentColor" />
+        <span v-if="media.rating" class="ml-auto flex items-center gap-0.5 text-amber-300 font-bold text-[11.5px] shrink-0" :title="`评分: ${media.rating} 星`">
+          <Star :size="11" fill="currentColor" />
           <span>{{ media.rating }}</span>
         </span>
 
         <!-- Viewed Status -->
         <span v-if="media.view_status === 'viewed'" class="text-emerald-400 shrink-0" :class="{ 'ml-auto': !media.rating }" title="已看">
-          <Eye :size="11" />
+          <Eye :size="12" />
         </span>
       </div>
     </div>
