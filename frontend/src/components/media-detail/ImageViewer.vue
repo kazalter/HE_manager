@@ -14,6 +14,7 @@ const emit = defineEmits<{
   next: []
   viewerClick: []
   viewerDoubleClick: []
+  controlsHover: [hovering: boolean]
 }>()
 </script>
 
@@ -26,6 +27,8 @@ const emit = defineEmits<{
     <div class="flex-1 flex items-center justify-center w-full h-full relative">
       <button
         @click.stop="emit('previous')"
+        @mouseenter="emit('controlsHover', true)"
+        @mouseleave="emit('controlsHover', false)"
         :class="showControls
           ? 'opacity-100 translate-x-0'
           : clickOnlyControls
@@ -41,6 +44,8 @@ const emit = defineEmits<{
 
       <button
         @click.stop="emit('next')"
+        @mouseenter="emit('controlsHover', true)"
+        @mouseleave="emit('controlsHover', false)"
         :class="showControls
           ? 'opacity-100 translate-x-0'
           : clickOnlyControls

@@ -18,6 +18,7 @@ const emit = defineEmits<{
   'update:currentPage': [page: number]
   viewerClick: []
   viewerDoubleClick: []
+  controlsHover: [hovering: boolean]
 }>()
 
 const thumbStripRef = ref<HTMLDivElement | null>(null)
@@ -82,6 +83,16 @@ const onStripScroll = () => {
   if (thumbStripRef.value) thumbStripScroll.value = thumbStripRef.value.scrollLeft
 }
 
+const onStripMouseEnter = () => {
+  emit('controlsHover', true)
+}
+
+const onStripMouseLeave = () => {
+  if (isDragging) return
+  hoverThumbIndex.value = -1
+  emit('controlsHover', false)
+}
+
 const onDragStart = (event: MouseEvent) => {
   const element = thumbStripRef.value
   if (!element) return
@@ -91,6 +102,7 @@ const onDragStart = (event: MouseEvent) => {
   dragScrollStart = element.scrollLeft
   element.style.cursor = 'grabbing'
   element.style.scrollBehavior = 'auto'
+  emit('controlsHover', true)
   window.addEventListener('mousemove', onDragMove)
   window.addEventListener('mouseup', onDragEnd)
 }
@@ -102,7 +114,7 @@ const onDragMove = (event: MouseEvent) => {
   thumbStripRef.value.scrollLeft = dragScrollStart - delta
 }
 
-const onDragEnd = () => {
+const onDragEnd = (event: MouseEvent) => {
   isDragging = false
   if (thumbStripRef.value) {
     thumbStripRef.value.style.cursor = 'grab'
@@ -110,6 +122,15 @@ const onDragEnd = () => {
   }
   window.removeEventListener('mousemove', onDragMove)
   window.removeEventListener('mouseup', onDragEnd)
+  const rect = thumbStripRef.value?.parentElement?.getBoundingClientRect()
+  if (rect) {
+    const isInside = event.clientX >= rect.left && event.clientX <= rect.right &&
+                     event.clientY >= rect.top && event.clientY <= rect.bottom
+    if (!isInside) {
+      hoverThumbIndex.value = -1
+      emit('controlsHover', false)
+    }
+  }
 }
 
 const onThumbClick = (page: number) => {
@@ -119,6 +140,7 @@ const onThumbClick = (page: number) => {
 const onThumbEnter = (page: number, event: MouseEvent) => {
   if (isDragging) return
   hoverThumbIndex.value = page
+  emit('controlsHover', true)
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   const stripRect = thumbStripRef.value?.parentElement?.getBoundingClientRect()
   if (!stripRect) return
@@ -162,6 +184,8 @@ onBeforeUnmount(() => {
     >
       <button
         @click.stop="previousPage"
+        @mouseenter="emit('controlsHover', true)"
+        @mouseleave="emit('controlsHover', false)"
         :class="showControls
           ? 'opacity-100 translate-x-0'
           : clickOnlyControls
@@ -177,6 +201,8 @@ onBeforeUnmount(() => {
 
       <button
         @click.stop="nextPage"
+        @mouseenter="emit('controlsHover', true)"
+        @mouseleave="emit('controlsHover', false)"
         :class="showControls
           ? 'opacity-100 translate-x-0'
           : clickOnlyControls
@@ -191,6 +217,8 @@ onBeforeUnmount(() => {
       <div
         :class="showControls || !clickOnlyControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3 pointer-events-none'"
         class="absolute bottom-6 left-1/2 z-20 w-[min(520px,calc(100%-2rem))] -translate-x-1/2 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 px-4 py-3 shadow-2xl transition-all duration-300"
+        @mouseenter="emit('controlsHover', true)"
+        @mouseleave="emit('controlsHover', false)"
         @click.stop
       >
         <div class="flex items-center justify-between gap-4 text-sm font-mono tracking-widest">
@@ -210,6 +238,8 @@ onBeforeUnmount(() => {
         : 'translate-y-full opacity-0 pointer-events-none max-h-0 overflow-hidden border-t-0'"
       class="shrink-0 border-white/10 bg-[#0c0c0e]/95 relative z-30 transition-all duration-500 ease-in-out flex flex-col"
       @click.stop
+      @mouseenter="onStripMouseEnter"
+      @mouseleave="onStripMouseLeave"
     >
       <div class="flex items-center justify-between text-xs font-semibold px-6 py-2 text-white/50">
         <span>预览目录 (共 {{ totalPages }} 页)</span>

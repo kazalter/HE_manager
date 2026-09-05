@@ -129,6 +129,7 @@ const {
   isFullscreen,
   showControls,
   clickOnlyControls: clickOnlyViewerControls,
+  setControlsHover,
   handleViewerClick,
   handleViewerDoubleClick,
   toggleFullscreen,
@@ -718,6 +719,8 @@ onUnmounted(() => {
       <div class="relative w-full h-full bg-[#060606] shadow-2xl flex overflow-hidden">
         <section class="relative flex-1 min-w-0 bg-black flex flex-col">
           <header
+            @mouseenter="setControlsHover(true)"
+            @mouseleave="setControlsHover(false)"
             :class="showControls
               ? 'opacity-100 translate-y-0'
               : clickOnlyViewerControls
@@ -777,6 +780,7 @@ onUnmounted(() => {
             :progress-percent="mangaProgressPercent"
             @viewer-click="handleViewerClick"
             @viewer-double-click="handleViewerDoubleClick"
+            @controls-hover="setControlsHover"
           />
 
           <ImageViewer
@@ -789,6 +793,7 @@ onUnmounted(() => {
             @next="nextMedia"
             @viewer-click="handleViewerClick"
             @viewer-double-click="handleViewerDoubleClick"
+            @controls-hover="setControlsHover"
           />
 
           <div v-if="isVideo" class="min-[1100px]:hidden shrink-0 border-t border-white/10 bg-background/95 px-4 sm:px-6 py-4">
