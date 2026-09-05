@@ -52,6 +52,7 @@ let artInstance: Artplayer | null = null
 let volumeWheelElement: HTMLElement | null = null
 let vttBlobUrl = ''
 let artInitToken = 0
+let containerResizeObserver: ResizeObserver | null = null
 
 let longPressTimer: number | undefined
 let longPressDirection: 'forward' | 'rewind' | null = null
@@ -306,6 +307,7 @@ const handleVolumeWheel = (e: WheelEvent) => {
 
   artInstance.muted = nextVolume === 0
   artInstance.volume = Number(nextVolume.toFixed(2))
+  artInstance.notice.show = `音量: ${Math.round(artInstance.volume * 100)}%`
 }
 
 const interceptClick = (e: MouseEvent) => {
@@ -364,6 +366,10 @@ const {
 })
 
 const destroyArtplayer = () => {
+  if (containerResizeObserver) {
+    containerResizeObserver.disconnect()
+    containerResizeObserver = null
+  }
   unbindVideoProgressEvents()
   volumeWheelElement?.removeEventListener('wheel', handleVolumeWheel, { capture: true })
   artRef.value?.removeEventListener('click', interceptClick, true)
@@ -496,6 +502,16 @@ const initArtplayer = async () => {
   volumeWheelElement = container.querySelector('.art-video-player') ?? container
   volumeWheelElement.addEventListener('wheel', handleVolumeWheel, { capture: true, passive: false })
   bindVideoProgressEvents((artInstance as unknown as { video?: HTMLVideoElement } | null)?.video)
+
+  if (containerResizeObserver) {
+    containerResizeObserver.disconnect()
+  }
+  containerResizeObserver = new ResizeObserver(() => {
+    if (artInstance && typeof (artInstance as unknown as { resize?: () => void }).resize === 'function') {
+      (artInstance as unknown as { resize: () => void }).resize()
+    }
+  })
+  containerResizeObserver.observe(container)
 }
 
 watch(
@@ -697,6 +713,9 @@ const handleKeyup = (e: KeyboardEvent) => {
           progressVideoElement.value.duration || 0,
           progressVideoElement.value.currentTime + VIDEO_SEEK_STEP_SECONDS
         )
+        if (artInstance) {
+          artInstance.notice.show = `快进 ${VIDEO_SEEK_STEP_SECONDS} 秒`
+        }
       }
     }
   }
@@ -710,6 +729,9 @@ const handleKeyup = (e: KeyboardEvent) => {
           0,
           progressVideoElement.value.currentTime - VIDEO_SEEK_STEP_SECONDS
         )
+        if (artInstance) {
+          artInstance.notice.show = `快退 ${VIDEO_SEEK_STEP_SECONDS} 秒`
+        }
       }
     }
   }
