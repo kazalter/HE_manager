@@ -3,6 +3,7 @@ import tempfile
 import unittest
 import zipfile
 from datetime import datetime
+from unittest import mock
 
 from PIL import Image
 from sqlalchemy import create_engine, event
@@ -10,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from fastapi import HTTPException, Response
+from fastapi.responses import FileResponse
 
 from app import media_cleanup, models, scanner, schemas
 from app.dedup import classify as dedup_classify
@@ -17,6 +19,7 @@ from app.dedup import fingerprint as dedup_fingerprint
 from app.dedup import merge as dedup_merge
 from app.routers import dedup as dedup_routes
 from app.routers import media as media_routes
+from app.services import thumbnails
 
 
 class MediaCoreTest(unittest.TestCase):
@@ -503,6 +506,64 @@ class MediaCoreTest(unittest.TestCase):
                 .count(),
                 0,
             )
+        finally:
+            db.close()
+
+    def test_manga_page_thumbnail_generation_and_cleanup(self):
+        db = self.Session()
+        try:
+            with tempfile.TemporaryDirectory() as tmp_media, tempfile.TemporaryDirectory() as tmp_thumb:
+                cbz_path = os.path.join(tmp_media, "test.cbz")
+                img = Image.new("RGB", (400, 600), color="blue")
+                page_img_path = os.path.join(tmp_media, "001.jpg")
+                img.save(page_img_path, "JPEG")
+                with zipfile.ZipFile(cbz_path, "w") as archive:
+                    archive.write(page_img_path, "001.jpg")
+
+                folder = models.Folder(path=tmp_media, scan_mode="manga")
+                media = models.Media(
+                    folder=folder,
+                    title="test.cbz",
+                    relative_path="test.cbz",
+                    absolute_path=cbz_path,
+                    media_type="manga",
+                    extension=".cbz",
+                    page_count=1,
+                )
+                db.add(folder)
+                db.add(media)
+                db.commit()
+
+                with (
+                    mock.patch.object(media_routes, "THUMBNAIL_DIR", tmp_thumb),
+                    mock.patch.object(thumbnails, "THUMBNAIL_DIR", tmp_thumb),
+                ):
+                    # Request thumbnail
+                    res = media_routes.get_manga_page(media.id, 0, thumbnail=True, db=db)
+                    self.assertIsInstance(res, FileResponse)
+                    self.assertEqual(res.headers.get("Cache-Control"), "public, max-age=604800, immutable")
+                    self.assertEqual(res.media_type, "image/jpeg")
+
+                    expected_thumb = os.path.join(tmp_thumb, f"manga_page_{media.id}_0.jpg")
+                    self.assertTrue(os.path.exists(expected_thumb))
+
+                    # Verify thumbnail image dimensions
+                    with Image.open(expected_thumb) as thumb_img:
+                        self.assertLessEqual(thumb_img.width, 200)
+                        self.assertLessEqual(thumb_img.height, 280)
+
+                    # Second call hits disk cache
+                    cached_res = media_routes.get_manga_page(media.id, 0, thumbnail=True, db=db)
+                    self.assertIsInstance(cached_res, FileResponse)
+
+                    # Full image call returns standard Response (not thumbnail FileResponse)
+                    full_res = media_routes.get_manga_page(media.id, 0, thumbnail=False, db=db)
+                    self.assertIsInstance(full_res, Response)
+                    self.assertEqual(full_res.headers.get("Cache-Control"), "public, max-age=86400")
+
+                    # Test thumbnail cleanup
+                    thumbnails.remove_manga_page_thumbnails(media.id)
+                    self.assertFalse(os.path.exists(expected_thumb))
         finally:
             db.close()
 

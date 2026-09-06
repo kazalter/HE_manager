@@ -27,6 +27,21 @@ def remove_cover_thumbnails(cover_path: str | None) -> None:
         pass
 
 
+def remove_manga_page_thumbnails(media_id: int) -> None:
+    prefix = f"manga_page_{media_id}_"
+    try:
+        for filename in os.listdir(THUMBNAIL_DIR):
+            if filename.startswith(prefix):
+                thumb_path = os.path.join(THUMBNAIL_DIR, filename)
+                if os.path.exists(thumb_path):
+                    try:
+                        os.remove(thumb_path)
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+
 def cleanup_orphaned_thumbnails():
     db = database.SessionLocal()
     try:

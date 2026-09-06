@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Columns2,
+  GalleryHorizontal,
   Keyboard,
   RotateCcw,
   ScrollText,
@@ -40,13 +42,23 @@ const readMode = ref<MangaReadMode>(
 const isRtl = ref(localStorage.getItem('he_manga_rtl') === 'true')
 const showShortcutGuide = ref(false)
 
+const isStripCollapsed = ref(localStorage.getItem('he_manga_strip_collapsed') === 'true')
+const toggleStripCollapsed = () => {
+  isStripCollapsed.value = !isStripCollapsed.value
+  localStorage.setItem('he_manga_strip_collapsed', String(isStripCollapsed.value))
+}
+const isStripOpen = computed(() => (props.showControls || !props.clickOnlyControls) && !isStripCollapsed.value)
+
 const thumbStripRef = ref<HTMLDivElement | null>(null)
 const imageContainerRef = ref<HTMLDivElement | null>(null)
 const webtoonContainerRef = ref<HTMLDivElement | null>(null)
 const thumbStripScroll = ref(0)
+const stripContainerWidth = ref(800)
+let stripResizeObserver: ResizeObserver | null = null
 const hoverThumbIndex = ref(-1)
 const hoverThumbX = ref(0)
 const hoverThumbY = ref(0)
+let hoverTimer: number | undefined
 let isDragging = false
 let dragStartX = 0
 let dragScrollStart = 0
@@ -54,6 +66,9 @@ let dragMoved = false
 let lastWheelAt = 0
 let isProgrammaticScroll = false
 let programmaticScrollTimer: number | undefined
+let scrollRafId: number | null = null
+let dragRafId: number | null = null
+let pendingDragScroll = 0
 
 const {
   scale: zoomScale,
@@ -74,7 +89,7 @@ const THUMB_W = 110
 const THUMB_H = 148
 const THUMB_GAP = 12
 const THUMB_PAD = 24
-const THUMB_BUFFER = 5
+const THUMB_BUFFER = 8
 const WHEEL_INTERVAL_MS = 320
 
 const stepSize = computed(() => (readMode.value === 'double' ? 2 : 1))
@@ -159,9 +174,34 @@ const totalWidth = computed(() => {
   return THUMB_PAD * 2 + props.totalPages * THUMB_W + (props.totalPages - 1) * THUMB_GAP
 })
 
+const updateStripWidth = () => {
+  if (thumbStripRef.value) {
+    const w = thumbStripRef.value.clientWidth
+    if (w > 0) stripContainerWidth.value = w
+  }
+}
+
+watch(thumbStripRef, (el) => {
+  if (stripResizeObserver) {
+    stripResizeObserver.disconnect()
+    stripResizeObserver = null
+  }
+  if (el && typeof ResizeObserver !== 'undefined') {
+    stripResizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 0) {
+          stripContainerWidth.value = entry.contentRect.width
+        }
+      }
+    })
+    stripResizeObserver.observe(el)
+    updateStripWidth()
+  }
+})
+
 const visibleThumbnails = computed(() => {
-  if (!props.totalPages || !thumbStripRef.value) return []
-  const containerWidth = thumbStripRef.value.clientWidth || 800
+  if (!props.totalPages) return []
+  const containerWidth = stripContainerWidth.value
   const start = Math.max(0, Math.floor((thumbStripScroll.value - THUMB_PAD) / (THUMB_W + THUMB_GAP)) - THUMB_BUFFER)
   const end = Math.min(
     props.totalPages - 1,
@@ -183,7 +223,13 @@ const scrollToPage = (page: number, smooth = true) => {
 }
 
 const onStripScroll = () => {
-  if (thumbStripRef.value) thumbStripScroll.value = thumbStripRef.value.scrollLeft
+  if (scrollRafId !== null) return
+  scrollRafId = requestAnimationFrame(() => {
+    scrollRafId = null
+    if (thumbStripRef.value) {
+      thumbStripScroll.value = thumbStripRef.value.scrollLeft
+    }
+  })
 }
 
 const onStripMouseEnter = () => {
@@ -192,7 +238,7 @@ const onStripMouseEnter = () => {
 
 const onStripMouseLeave = () => {
   if (isDragging) return
-  hoverThumbIndex.value = -1
+  onThumbLeave()
   emit('controlsHover', false)
 }
 
@@ -214,11 +260,22 @@ const onDragMove = (event: MouseEvent) => {
   if (!isDragging || !thumbStripRef.value) return
   const delta = event.clientX - dragStartX
   if (Math.abs(delta) > 3) dragMoved = true
-  thumbStripRef.value.scrollLeft = dragScrollStart - delta
+  pendingDragScroll = dragScrollStart - delta
+  if (dragRafId !== null) return
+  dragRafId = requestAnimationFrame(() => {
+    dragRafId = null
+    if (thumbStripRef.value) {
+      thumbStripRef.value.scrollLeft = pendingDragScroll
+    }
+  })
 }
 
 const onDragEnd = (event: MouseEvent) => {
   isDragging = false
+  if (dragRafId !== null) {
+    cancelAnimationFrame(dragRafId)
+    dragRafId = null
+  }
   if (thumbStripRef.value) {
     thumbStripRef.value.style.cursor = 'grab'
     thumbStripRef.value.style.scrollBehavior = ''
@@ -230,7 +287,7 @@ const onDragEnd = (event: MouseEvent) => {
     const isInside = event.clientX >= rect.left && event.clientX <= rect.right &&
                      event.clientY >= rect.top && event.clientY <= rect.bottom
     if (!isInside) {
-      hoverThumbIndex.value = -1
+      onThumbLeave()
       emit('controlsHover', false)
     }
   }
@@ -242,13 +299,23 @@ const onThumbClick = (page: number) => {
 
 const onThumbEnter = (page: number, event: MouseEvent) => {
   if (isDragging) return
-  hoverThumbIndex.value = page
-  emit('controlsHover', true)
-  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  const stripRect = thumbStripRef.value?.parentElement?.getBoundingClientRect()
-  if (!stripRect) return
-  hoverThumbX.value = rect.left + rect.width / 2 - stripRect.left
-  hoverThumbY.value = rect.top - stripRect.top - 8
+  const target = event.currentTarget as HTMLElement
+  window.clearTimeout(hoverTimer)
+  hoverTimer = window.setTimeout(() => {
+    if (isDragging) return
+    hoverThumbIndex.value = page
+    emit('controlsHover', true)
+    const rect = target.getBoundingClientRect()
+    const stripRect = thumbStripRef.value?.parentElement?.getBoundingClientRect()
+    if (!stripRect) return
+    hoverThumbX.value = rect.left + rect.width / 2 - stripRect.left
+    hoverThumbY.value = rect.top - stripRect.top - 8
+  }, 70)
+}
+
+const onThumbLeave = () => {
+  window.clearTimeout(hoverTimer)
+  hoverThumbIndex.value = -1
 }
 
 const onWheel = (event: WheelEvent) => {
@@ -320,10 +387,32 @@ watch(() => props.media.id, () => {
   scrollToPage(props.currentPage, false)
 })
 
+watch(isStripOpen, (open) => {
+  if (open) {
+    nextTick(() => {
+      updateStripWidth()
+      scrollToPage(props.currentPage, false)
+    })
+  }
+})
+
+onMounted(() => {
+  updateStripWidth()
+  window.addEventListener('resize', updateStripWidth, { passive: true })
+})
+
 onBeforeUnmount(() => {
   window.removeEventListener('mousemove', onDragMove)
   window.removeEventListener('mouseup', onDragEnd)
+  window.removeEventListener('resize', updateStripWidth)
   window.clearTimeout(programmaticScrollTimer)
+  window.clearTimeout(hoverTimer)
+  if (scrollRafId !== null) cancelAnimationFrame(scrollRafId)
+  if (dragRafId !== null) cancelAnimationFrame(dragRafId)
+  if (stripResizeObserver) {
+    stripResizeObserver.disconnect()
+    stripResizeObserver = null
+  }
 })
 </script>
 
@@ -457,8 +546,13 @@ onBeforeUnmount(() => {
 
       <!-- Bottom Floating Control Pill (Slider + Mode Switcher + Shortcuts) -->
       <div
-        :class="showControls || !clickOnlyControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3 pointer-events-none'"
-        class="absolute bottom-6 left-1/2 z-20 w-[min(620px,calc(100%-2rem))] -translate-x-1/2 rounded-2xl bg-black/75 backdrop-blur-xl border border-white/12 p-3 sm:px-4 sm:py-3 shadow-2xl transition-all duration-300 flex flex-col gap-2.5"
+        :class="showControls || !clickOnlyControls ? 'opacity-100' : 'opacity-0 pointer-events-none'"
+        class="absolute left-1/2 z-20 w-[min(620px,calc(100%-2rem))] rounded-2xl bg-black/75 backdrop-blur-xl border border-white/12 p-3 sm:px-4 sm:py-3 shadow-2xl transition-[transform,opacity] duration-250 ease-out flex flex-col gap-2.5 select-none"
+        :style="{
+          bottom: '24px',
+          transform: `translate3d(-50%, ${isStripOpen ? '-184px' : (showControls || !clickOnlyControls ? '0px' : '12px')}, 0)`,
+        }"
+        style="will-change: transform, opacity;"
         @mouseenter="emit('controlsHover', true)"
         @mouseleave="emit('controlsHover', false)"
         @click.stop
@@ -525,6 +619,19 @@ onBeforeUnmount(() => {
           >
             <Keyboard :size="15" />
           </button>
+
+          <!-- Toggle Thumbnail Strip Button -->
+          <button
+            v-if="totalPages && totalPages > 0"
+            type="button"
+            @click="toggleStripCollapsed"
+            class="h-7 px-2 rounded-lg flex items-center gap-1.5 text-xs text-white/60 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            :class="{ 'bg-accent/20 text-accent font-bold': isStripOpen }"
+            :title="isStripOpen ? '收起底部预览长条' : '展开底部预览长条'"
+          >
+            <GalleryHorizontal :size="14" />
+            <span class="text-[11px] hidden sm:inline">{{ isStripOpen ? '收起目录' : '展开目录' }}</span>
+          </button>
         </div>
 
         <!-- Interactive Progress Slider -->
@@ -545,7 +652,13 @@ onBeforeUnmount(() => {
       <!-- Shortcut Guide Popover -->
       <div
         v-if="showShortcutGuide"
-        class="absolute bottom-28 left-1/2 -translate-x-1/2 z-30 w-80 rounded-2xl bg-[#121216]/95 backdrop-blur-2xl border border-white/15 p-4 shadow-2xl text-xs text-white/85 animate-fluid-entrance"
+        class="absolute z-30 w-80 rounded-2xl bg-[#121216]/95 backdrop-blur-2xl border border-white/15 p-4 shadow-2xl text-xs text-white/85 animate-fluid-entrance select-none"
+        :style="{
+          bottom: isStripOpen ? '280px' : '96px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          transition: 'bottom 240ms cubic-bezier(0.16, 1, 0.3, 1)',
+        }"
         @click.stop
       >
         <div class="flex items-center justify-between pb-2 mb-2.5 border-b border-white/10">
@@ -583,9 +696,14 @@ onBeforeUnmount(() => {
       <div
         v-if="readMode !== 'webtoon'"
         :class="showControls || isZoomed
-          ? 'opacity-100 translate-y-0'
-          : 'opacity-0 translate-y-3 pointer-events-none'"
-        class="absolute bottom-6 right-6 z-20 flex items-center gap-1 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 px-2 py-1.5 shadow-2xl transition-all duration-300 select-none text-white/80"
+          ? 'opacity-100'
+          : 'opacity-0 pointer-events-none'"
+        class="absolute right-6 z-20 flex items-center gap-1 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 px-2 py-1.5 shadow-2xl transition-[transform,opacity] duration-250 ease-out select-none text-white/80"
+        :style="{
+          bottom: '24px',
+          transform: `translate3d(0, ${isStripOpen ? '-184px' : (showControls || isZoomed ? '0px' : '12px')}, 0)`,
+        }"
+        style="will-change: transform, opacity;"
         @click.stop
         @mouseenter="emit('controlsHover', true)"
         @mouseleave="emit('controlsHover', false)"
@@ -631,17 +749,29 @@ onBeforeUnmount(() => {
     <!-- Bottom Thumbnail Strip Bar -->
     <div
       v-if="totalPages && totalPages > 0"
-      :class="showControls || !clickOnlyControls
-        ? 'translate-y-0 opacity-100 max-h-[220px] border-t'
-        : 'translate-y-full opacity-0 pointer-events-none max-h-0 overflow-hidden border-t-0'"
-      class="shrink-0 border-white/10 bg-[#0c0c0e]/95 relative z-30 transition-all duration-500 ease-in-out flex flex-col"
+      :class="isStripOpen
+        ? 'translate-y-0 opacity-100'
+        : 'translate-y-full opacity-0 pointer-events-none'"
+      class="absolute bottom-0 inset-x-0 z-30 border-t border-white/10 bg-[#0c0c0e]/95 backdrop-blur-2xl transition-[transform,opacity] duration-250 ease-out flex flex-col shadow-2xl select-none"
+      style="will-change: transform, opacity;"
       @click.stop
       @mouseenter="onStripMouseEnter"
       @mouseleave="onStripMouseLeave"
     >
-      <div class="flex items-center justify-between text-xs font-semibold px-6 py-2 text-white/50">
-        <span>预览目录 (共 {{ totalPages }} 页)</span>
-        <span>当前第 {{ currentPage + 1 }} 页</span>
+      <div class="flex items-center justify-between text-xs font-semibold px-6 py-1.5 text-white/50 border-b border-white/5">
+        <div class="flex items-center gap-3">
+          <span>预览目录 (共 {{ totalPages }} 页)</span>
+          <span class="text-white/30 text-[11px] font-mono">当前第 {{ currentPage + 1 }} 页</span>
+        </div>
+        <button
+          type="button"
+          @click="toggleStripCollapsed"
+          class="flex items-center gap-1 text-[11px] text-white/50 hover:text-white transition-colors cursor-pointer py-0.5 px-2 rounded-md hover:bg-white/10"
+          title="收起预览目录"
+        >
+          <ChevronDown :size="14" />
+          <span>收起</span>
+        </button>
       </div>
 
       <div
@@ -666,19 +796,21 @@ onBeforeUnmount(() => {
           <div
             v-for="item in visibleThumbnails"
             :key="item.index"
-            class="absolute top-0 cursor-pointer rounded-xl border-2 transition-all duration-200"
+            class="absolute top-0 cursor-pointer rounded-xl border-2 transition-[border-color,transform,box-shadow] duration-150"
+            style="contain: layout paint style;"
             :class="isThumbnailActive(item.index)
               ? 'border-accent shadow-[0_0_16px_rgba(129,140,248,0.5)] bg-accent/10 scale-105 z-10'
               : 'border-white/8 hover:border-white/25 bg-white/5'"
             :style="{ left: `${item.left}px`, width: `${THUMB_W}px`, height: `${THUMB_H}px` }"
             @click="onThumbClick(item.index)"
             @mouseenter="onThumbEnter(item.index, $event)"
-            @mouseleave="hoverThumbIndex = -1"
+            @mouseleave="onThumbLeave"
           >
             <img
               :src="thumbnailUrl(item.index)"
               loading="lazy"
-              class="w-full h-full object-cover rounded-[10px] transition-all duration-200"
+              decoding="async"
+              class="w-full h-full object-cover rounded-[10px]"
               :class="isThumbnailActive(item.index) ? 'brightness-110' : 'hover:brightness-110'"
               draggable="false"
               alt="Page thumbnail"

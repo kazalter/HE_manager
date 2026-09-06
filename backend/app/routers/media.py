@@ -1,11 +1,13 @@
 from datetime import datetime
 import hashlib
+from io import BytesIO
 import logging
 import mimetypes
 import os
 import string
 from typing import List, Optional
 import zipfile
+from PIL import Image
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.responses import FileResponse
@@ -17,7 +19,7 @@ from ..database import get_db
 from ..services.manga_pages import get_manga_image_files
 from ..services.media_access import get_media_or_404
 from ..services.range_response import get_ranged_file_response
-from ..services.thumbnails import THUMBNAIL_DIR, remove_cover_thumbnails
+from ..services.thumbnails import THUMBNAIL_DIR, remove_cover_thumbnails, remove_manga_page_thumbnails
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +137,7 @@ def delete_folder(folder_id: int, db: Session = Depends(get_db)):
     media_cleanup.detach_media_references(db, [media.id for media in associated_media])
     for media in associated_media:
         remove_cover_thumbnails(media.cover_path)
+        remove_manga_page_thumbnails(media.id)
 
     db.delete(db_folder)
     db.commit()
@@ -317,6 +320,7 @@ def update_media(media_id: int, payload: schemas.MediaUpdate, db: Session = Depe
 def delete_media(media_id: int, db: Session = Depends(get_db)):
     media = get_media_or_404(media_id, db)
     remove_cover_thumbnails(media.cover_path)
+    remove_manga_page_thumbnails(media.id)
 
     media_cleanup.detach_media_references(db, [media.id])
 
@@ -559,6 +563,7 @@ def get_manga_page(
     media_id: int,
     page_index: int,
     track_progress: bool = False,
+    thumbnail: bool = False,
     db: Session = Depends(get_db),
 ):
     media = get_media_or_404(media_id, db)
@@ -569,6 +574,14 @@ def get_manga_page(
         media.is_missing = False
         media.missing_since = None
         db.commit()
+
+    thumb_path = os.path.join(THUMBNAIL_DIR, f"manga_page_{media.id}_{page_index}.jpg") if thumbnail else None
+    if thumbnail and thumb_path and os.path.exists(thumb_path):
+        return FileResponse(
+            thumb_path,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=604800, immutable"},
+        )
 
     try:
         files = get_manga_image_files(media)
@@ -591,14 +604,38 @@ def get_manga_page(
             with open(img_path, "rb") as f:
                 content = f.read()
             mime, _ = mimetypes.guess_type(img_path)
-            return Response(content=content, media_type=mime or "application/octet-stream")
+        else:
+            with zipfile.ZipFile(media.absolute_path, "r") as archive:
+                filename = files[page_index]
+                with archive.open(filename) as f:
+                    content = f.read()
+                mime, _ = mimetypes.guess_type(filename)
 
-        with zipfile.ZipFile(media.absolute_path, "r") as archive:
-            filename = files[page_index]
-            with archive.open(filename) as f:
-                content = f.read()
-            mime, _ = mimetypes.guess_type(filename)
-            return Response(content=content, media_type=mime or "application/octet-stream")
+        if thumbnail and thumb_path:
+            try:
+                with Image.open(BytesIO(content)) as img:
+                    if img.mode in ("RGBA", "P"):
+                        img = img.convert("RGB")
+                    img.thumbnail((200, 280))
+                    img.save(thumb_path, "JPEG", quality=80)
+                return FileResponse(
+                    thumb_path,
+                    media_type="image/jpeg",
+                    headers={"Cache-Control": "public, max-age=604800, immutable"},
+                )
+            except Exception as e:
+                logger.warning("Failed to generate thumbnail for manga %s page %s: %s", media_id, page_index, e)
+                return Response(
+                    content=content,
+                    media_type=mime or "application/octet-stream",
+                    headers={"Cache-Control": "public, max-age=86400"},
+                )
+
+        return Response(
+            content=content,
+            media_type=mime or "application/octet-stream",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -651,7 +688,8 @@ def get_mobile_manga_page(
     media_id: int,
     page_index: int,
     track_progress: bool = False,
+    thumbnail: bool = False,
     _: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
 ):
-    return get_manga_page(media_id, page_index, track_progress, db)
+    return get_manga_page(media_id, page_index, track_progress, thumbnail, db)
