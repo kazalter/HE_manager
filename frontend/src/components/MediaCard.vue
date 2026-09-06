@@ -97,20 +97,21 @@ const hoverShadowClass = (type: Media['media_type']) => {
       'animate-fluid-entrance': !virtualized && index < 16,
       'virtual-card': virtualized,
     }"
-    class="lazy-card tap-active group relative text-left flex flex-col cursor-pointer rounded-2xl focus:outline-none focus:ring-2 focus:ring-accent/40"
+    class="w-full lazy-card tap-active group relative text-left flex flex-col cursor-pointer rounded-2xl focus:outline-none focus:ring-2 focus:ring-accent/40"
     style="transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
   >
     <div
       class="aspect-[3/4.5] w-full relative overflow-hidden bg-gradient-to-b from-white/5 to-white/[0.01] rounded-2xl border border-white/8 shadow-md group-hover:border-white/20 transition-all duration-300 ease-out"
       :class="hoverShadowClass(media.media_type)"
+      style="transform: translateZ(0);"
     >
       <img
         :src="imageLoadFailed ? mediaPlaceholderUrl : getThumb(media.cover_path)"
         :alt="media.title"
         :loading="eager || !virtualized || index < 36 ? 'eager' : 'lazy'"
         decoding="async"
-        class="w-full h-full object-cover group-hover:scale-[1.04]"
-        style="transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)"
+        class="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.04]"
+        style="transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1); will-change: transform; backface-visibility: hidden;"
         @error="onImageError"
       />
 

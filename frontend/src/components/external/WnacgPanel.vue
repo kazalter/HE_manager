@@ -467,12 +467,15 @@ watch(favoritesError, message => {
               @click="openExternalItem(item)"
               class="group bg-white/[0.04] border border-white/10 rounded-2xl overflow-hidden hover:-translate-y-1 hover:border-accent/35 transition-all text-left"
             >
-              <div class="aspect-[3/4] bg-black/30 overflow-hidden relative">
+              <div class="aspect-[3/4] bg-black/30 overflow-hidden relative" style="transform: translateZ(0);">
                 <img
                   v-if="item.cover_url"
                   :src="coverSrc(item)"
                   :alt="item.title"
-                  class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  class="absolute inset-0 w-full h-full object-cover group-hover:scale-105"
+                  style="transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1); will-change: transform; backface-visibility: hidden;"
+                  loading="eager"
+                  decoding="async"
                 />
                 <div v-else class="w-full h-full flex items-center justify-center text-white/25">
                   <Globe2 :size="34" />

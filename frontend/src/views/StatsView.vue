@@ -981,11 +981,12 @@ const lastOpenedText = (item: StatAttentionItem) => {
                   :to="`/?media=${item.id}`"
                   class="block flex-1"
                 >
-                  <div class="aspect-[3/4] bg-black/30 overflow-hidden relative">
+                  <div class="aspect-[3/4] bg-black/30 overflow-hidden relative" style="transform: translateZ(0);">
                     <img
                       v-if="item.cover_path"
                       :src="thumbnailUrl(item.cover_path)"
-                      class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      class="absolute inset-0 w-full h-full object-cover group-hover:scale-105"
+                      style="transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1); will-change: transform; backface-visibility: hidden;"
                       loading="eager"
                       decoding="async"
                     />
@@ -1055,11 +1056,12 @@ const lastOpenedText = (item: StatAttentionItem) => {
                 :to="`/?media=${item.id}`"
                 class="rounded-2xl overflow-hidden bg-white/[0.02] border border-white/8 shadow-md group flex flex-col justify-between hover:bg-white/[0.05] hover:border-white/15 hover:-translate-y-1 transition-all duration-300"
               >
-                <div class="aspect-[3/4] bg-black/30 overflow-hidden relative">
+                <div class="aspect-[3/4] bg-black/30 overflow-hidden relative" style="transform: translateZ(0);">
                   <img
                     v-if="item.cover_path"
                     :src="thumbnailUrl(item.cover_path)"
-                    class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    class="absolute inset-0 w-full h-full object-cover group-hover:scale-105"
+                    style="transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1); will-change: transform; backface-visibility: hidden;"
                     loading="eager"
                     decoding="async"
                   />

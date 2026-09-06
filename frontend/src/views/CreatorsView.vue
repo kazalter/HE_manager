@@ -287,12 +287,13 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
           :disabled="!c.screen_name"
           class="group text-left flex flex-col cursor-pointer transition-all duration-300 hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-accent/50 rounded-2xl"
         >
-          <div class="aspect-[3/4] relative overflow-hidden bg-sidebar/70 rounded-2xl border border-white/10 shadow-lg group-hover:shadow-2xl group-hover:shadow-accent/10 group-hover:border-white/20 transition-all duration-300">
+          <div class="aspect-[3/4] relative overflow-hidden bg-sidebar/70 rounded-2xl border border-white/10 shadow-lg group-hover:shadow-2xl group-hover:shadow-accent/10 group-hover:border-white/20 transition-all duration-300" style="transform: translateZ(0);">
             <img
               v-if="c.cover_path"
               :src="thumbnailUrl(c.cover_path)"
               :alt="displayName(c)"
-              class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              style="will-change: transform; backface-visibility: hidden;"
               loading="eager"
               decoding="async"
             />
