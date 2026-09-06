@@ -370,6 +370,26 @@ const onViewerClick = () => {
   emit('viewerClick')
 }
 
+const preloadedMangaPages = new Set<string>()
+
+const preloadAdjacentMangaPages = (page: number) => {
+  if (readMode.value === 'webtoon') return
+  const max = props.totalPages || 99999
+  const ahead = [page + 1, page + 2, page + 3]
+  for (const p of ahead) {
+    if (p < max) {
+      const url = pageUrlFor(p)
+      if (!preloadedMangaPages.has(url)) {
+        preloadedMangaPages.add(url)
+        if (typeof Image !== 'undefined') {
+          const img = new Image()
+          img.src = url
+        }
+      }
+    }
+  }
+}
+
 watch(() => props.currentPage, page => {
   if (readMode.value !== 'webtoon') {
     resetZoom()
@@ -377,11 +397,13 @@ watch(() => props.currentPage, page => {
     scrollWebtoonToPage(page)
   }
   scrollToPage(page)
-})
+  preloadAdjacentMangaPages(page)
+}, { immediate: true })
 watch(() => props.totalPages, total => {
   if (total) scrollToPage(props.currentPage, false)
 })
 watch(() => props.media.id, () => {
+  preloadedMangaPages.clear()
   hoverThumbIndex.value = -1
   thumbStripScroll.value = 0
   scrollToPage(props.currentPage, false)
@@ -402,6 +424,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  preloadedMangaPages.clear()
   window.removeEventListener('mousemove', onDragMove)
   window.removeEventListener('mouseup', onDragEnd)
   window.removeEventListener('resize', updateStripWidth)

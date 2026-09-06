@@ -540,9 +540,48 @@ watch(
       stopArtplayer()
     }
 
+    if (newVal.media_type === 'image') {
+      preloadAdjacentImages()
+    }
   },
   { immediate: true },
 )
+
+const preloadedImageUrls = new Set<string>()
+
+const preloadAdjacentImages = () => {
+  if (!isImage.value || currentIndex.value === -1 || !props.allMedia.length) return
+
+  const targets = [
+    currentIndex.value + 1,
+    currentIndex.value + 2,
+    currentIndex.value - 1,
+  ]
+
+  for (const idx of targets) {
+    if (idx >= 0 && idx < props.allMedia.length) {
+      const item = props.allMedia[idx]
+      if (item && item.media_type === 'image') {
+        const streamUrl = authUrl(`${API_BASE_URL}/stream/${item.id}`)
+        if (!preloadedImageUrls.has(streamUrl)) {
+          preloadedImageUrls.add(streamUrl)
+          if (typeof Image !== 'undefined') {
+            const img = new Image()
+            img.src = streamUrl
+          }
+        }
+      }
+    }
+  }
+
+  if (preloadedImageUrls.size > 50) {
+    const list = Array.from(preloadedImageUrls)
+    preloadedImageUrls.clear()
+    for (const url of list.slice(-25)) {
+      preloadedImageUrls.add(url)
+    }
+  }
+}
 
 const nextPage = () => {
   const step = localStorage.getItem('he_manga_read_mode') === 'double' ? 2 : 1
@@ -744,6 +783,7 @@ const handleWindowBlur = () => {
 useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
 
 onUnmounted(() => {
+  preloadedImageUrls.clear()
   finishVideoLongPress(false)
   window.clearTimeout(clickTimer)
   stopArtplayer()

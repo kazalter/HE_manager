@@ -62,6 +62,7 @@ def get_ranged_file_response(request: Request, file_path: str):
     base_headers = {
         "Accept-Ranges": "bytes",
         "Content-Type": media_type,
+        "Cache-Control": "private, max-age=86400",
     }
 
     if not range_header:

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ChevronLeft, ChevronRight, Loader2, RotateCcw, RotateCw, ZoomIn, ZoomOut } from 'lucide-vue-next'
 import type { Media } from '../../types'
 import { useImageViewerZoom } from '../../composables/useImageViewerZoom'
@@ -21,10 +21,18 @@ const emit = defineEmits<{
 
 const imgRef = ref<HTMLImageElement | null>(null)
 const imageContainerRef = ref<HTMLDivElement | null>(null)
-const isLoading = ref(true)
+const showLoading = ref(false)
 const rotation = ref(0)
 const isActualSize = ref(false)
 let lastWheelAt = 0
+let loadingTimer: number | undefined
+
+const clearLoadingTimer = () => {
+  if (loadingTimer) {
+    window.clearTimeout(loadingTimer)
+    loadingTimer = undefined
+  }
+}
 
 const {
   scale: zoomScale,
@@ -53,11 +61,13 @@ const resetAll = () => {
 }
 
 const onImageLoad = () => {
-  isLoading.value = false
+  clearLoadingTimer()
+  showLoading.value = false
 }
 
 const onImageError = () => {
-  isLoading.value = false
+  clearLoadingTimer()
+  showLoading.value = false
 }
 
 const toggleActualSize = () => {
@@ -105,15 +115,39 @@ const onViewerClick = () => {
   emit('viewerClick')
 }
 
-watch(() => props.imageUrl, () => {
-  isLoading.value = true
+const scheduleLoadingCheck = (url: string) => {
+  clearLoadingTimer()
+  if (typeof Image !== 'undefined') {
+    const probe = new Image()
+    probe.src = url
+    if (probe.complete) {
+      showLoading.value = false
+      return
+    }
+  }
+  // Only display loading indicator if the image takes > 250ms (prevents flicker on LAN/cached images)
+  loadingTimer = window.setTimeout(() => {
+    showLoading.value = true
+  }, 250)
+}
+
+watch(() => props.imageUrl, (newUrl) => {
   resetAll()
+  scheduleLoadingCheck(newUrl)
 })
 
 watch(isZoomed, (val) => {
   if (!val) {
     isActualSize.value = false
   }
+})
+
+onMounted(() => {
+  scheduleLoadingCheck(props.imageUrl)
+})
+
+onBeforeUnmount(() => {
+  clearLoadingTimer()
 })
 </script>
 
@@ -125,14 +159,23 @@ watch(isZoomed, (val) => {
     @dblclick="emit('viewerDoubleClick')"
   >
     <div class="flex-1 flex items-center justify-center w-full h-full relative overflow-hidden">
-      <!-- Loading Skeleton Overlay -->
-      <div
-        v-if="isLoading"
-        class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/50 backdrop-blur-xs z-10 pointer-events-none transition-opacity duration-300"
+      <!-- Non-blocking Loading Indicator (shown only if loading exceeds 250ms) -->
+      <Transition
+        enter-active-class="transition-opacity duration-200"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition-opacity duration-200"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
       >
-        <Loader2 class="w-8 h-8 text-accent animate-spin" />
-        <span class="text-xs text-white/60 tracking-wider">正在加载图片...</span>
-      </div>
+        <div
+          v-if="showLoading"
+          class="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-full bg-black/65 backdrop-blur-md border border-white/10 px-4 py-2 z-10 pointer-events-none shadow-xl text-white/80"
+        >
+          <Loader2 class="w-4 h-4 text-accent animate-spin" />
+          <span class="text-xs font-medium tracking-wide">加载中...</span>
+        </div>
+      </Transition>
 
       <!-- Left Prev Button -->
       <button
@@ -162,11 +205,10 @@ watch(isZoomed, (val) => {
           :src="imageUrl"
           @load="onImageLoad"
           @error="onImageError"
-          class="h-full w-full object-contain pointer-events-none transition-all duration-300"
-          :class="isLoading ? 'opacity-0 scale-95' : 'opacity-100 scale-100'"
+          class="h-full w-full object-contain pointer-events-none select-none"
           :style="{
             transform: `translate3d(${zoomTx}px, ${zoomTy}px, 0px) scale(${zoomScale}) rotate(${rotation}deg)`,
-            transition: isZoomPanning ? 'none' : 'transform 0.15s ease-out, opacity 0.3s ease-out',
+            transition: isZoomPanning ? 'none' : 'transform 0.15s ease-out',
           }"
           :alt="media.title"
         />
