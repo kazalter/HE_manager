@@ -97,6 +97,33 @@ class ScanConcurrencyTest(unittest.TestCase):
         finally:
             scanner.release_folder_scan(42001, token)
 
+    def test_scan_all_folders_skips_already_queued(self):
+        f1 = mock.MagicMock(id=51001)
+        f2 = mock.MagicMock(id=51002)
+        f3 = mock.MagicMock(id=51003)
+        session = mock.MagicMock()
+        session.query.return_value.all.return_value = [f1, f2, f3]
+
+        def fake_queue(folder_id, bg):
+            if folder_id == 51002:
+                raise HTTPException(status_code=409, detail="already running")
+
+        with mock.patch.object(media_routes, "_queue_folder_scan", side_effect=fake_queue):
+            res = media_routes.scan_all_folders(BackgroundTasks(), db=session)
+            self.assertEqual(res.total_count, 3)
+            self.assertEqual(res.queued_count, 2)
+            self.assertEqual(res.queued_folder_ids, [51001, 51003])
+
+    def test_scan_all_folders_reraises_non_409(self):
+        f1 = mock.MagicMock(id=51001)
+        session = mock.MagicMock()
+        session.query.return_value.all.return_value = [f1]
+
+        with mock.patch.object(media_routes, "_queue_folder_scan", side_effect=HTTPException(status_code=500, detail="boom")):
+            with self.assertRaises(HTTPException) as ctx:
+                media_routes.scan_all_folders(BackgroundTasks(), db=session)
+            self.assertEqual(ctx.exception.status_code, 500)
+
     def test_scan_exception_before_folder_lookup_releases_reservation(self):
         session = mock.MagicMock()
         session.query.side_effect = RuntimeError("database unavailable")

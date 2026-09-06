@@ -205,6 +205,13 @@ class Folder(FolderBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class FolderScanAllResponse(BaseModel):
+    queued_count: int
+    total_count: int
+    queued_folder_ids: List[int]
+
+
+
 class ExternalFavoriteSource(BaseModel):
     id: int
     source_type: str

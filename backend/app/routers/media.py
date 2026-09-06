@@ -91,6 +91,25 @@ def create_folder(folder: schemas.FolderCreate, background_tasks: BackgroundTask
     return new_folder
 
 
+@router.post("/folders/scan-all", response_model=schemas.FolderScanAllResponse)
+def scan_all_folders(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    folders = db.query(models.Folder).all()
+    queued_ids: List[int] = []
+    for folder in folders:
+        try:
+            _queue_folder_scan(folder.id, background_tasks)
+            queued_ids.append(folder.id)
+        except HTTPException as exc:
+            if exc.status_code == 409:
+                continue
+            raise
+    return schemas.FolderScanAllResponse(
+        queued_count=len(queued_ids),
+        total_count=len(folders),
+        queued_folder_ids=queued_ids,
+    )
+
+
 @router.post("/folders/{folder_id}/scan", response_model=schemas.Folder)
 def scan_folder(folder_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     db_folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()

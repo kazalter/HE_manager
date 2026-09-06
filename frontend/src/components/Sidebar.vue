@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   BarChart3,
@@ -15,7 +15,6 @@ import {
   Image as ImageIcon,
   LogOut,
   Palette,
-  RefreshCw,
   Settings as SettingsIcon,
   Sparkles,
   Star,
@@ -40,15 +39,6 @@ const route = useRoute()
 
 const isHomeActive = computed(() => route.path === '/' && route.query.favorite !== 'true')
 const isFavoriteActive = computed(() => route.path === '/' && route.query.favorite === 'true')
-
-const isRefreshing = ref(false)
-const refreshApp = () => {
-  if (isRefreshing.value) return
-  isRefreshing.value = true
-  setTimeout(() => {
-    window.location.reload()
-  }, 400)
-}
 
 const toggle = () => {
   emit('update:collapsed', !props.collapsed)
@@ -85,7 +75,7 @@ const handleLogout = () => {
     <!-- App Brand & Title Header -->
     <div
       class="mb-4 flex items-center overflow-hidden whitespace-nowrap transition-all"
-      :class="collapsed && !isCompact ? 'justify-center px-0 py-1' : 'justify-between px-2 py-1 gap-3'"
+      :class="collapsed && !isCompact ? 'justify-center px-0 py-1' : 'px-2 py-1'"
     >
       <div class="flex items-center gap-3 min-w-0">
         <div class="shrink-0 w-9 h-9 rounded-xl bg-gradient-to-tr from-accent to-indigo-500 shadow-md shadow-accent/25 flex items-center justify-center overflow-hidden">
@@ -99,15 +89,6 @@ const handleLogout = () => {
           <p class="text-xs text-white/45 font-medium -mt-0.5">个人媒体中心</p>
         </div>
       </div>
-
-      <button
-        v-if="!collapsed || isCompact"
-        @click="refreshApp"
-        class="text-white/35 hover:text-accent hover:bg-accent/15 p-1.5 rounded-lg transition-all shrink-0 flex items-center justify-center cursor-pointer"
-        title="刷新页面"
-      >
-        <RefreshCw :size="16" :stroke-width="2.2" :class="{ 'animate-spin': isRefreshing }" class="hover:rotate-180 transition-transform duration-500" />
-      </button>
     </div>
 
     <!-- Navigation Scroll Area -->

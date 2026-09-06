@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
 import { FolderOpen, FolderPlus, HardDrive, Image as ImageIcon, Keyboard, Palette, RefreshCw, Sparkles, Timer, Trash2, X } from 'lucide-vue-next'
 import { API_BASE_URL } from '../config'
@@ -140,6 +140,28 @@ const scanFolder = async (id: number) => {
   }
 }
 
+const isAnyScanning = computed(() => folders.value.some(f => f.status === 'scanning'))
+
+const scanAllFolders = async () => {
+  if (isAnyScanning.value) return
+  const idleFolders = folders.value.filter(f => f.status !== 'scanning')
+  if (idleFolders.length === 0) return
+
+  idleFolders.forEach(f => {
+    f.status = 'scanning'
+    prevScanning.value.add(f.id)
+  })
+  showToast(`已开始扫描全部 ${idleFolders.length} 个目录...`)
+
+  try {
+    await axios.post(`${API_BASE_URL}/folders/scan-all`)
+    window.setTimeout(fetchFolders, 1000)
+  } catch (err) {
+    console.error('一键扫描所有目录失败:', err)
+    await fetchFolders()
+  }
+}
+
 const removeFolder = async (id: number) => {
   if (!confirm('确定要从库中移除此目录吗？\n该操作不会删除硬盘上的文件，只会清理库中的媒体记录。')) return
   try {
@@ -230,10 +252,24 @@ onMounted(fetchFolders)
       </section>
 
       <section class="border border-white/6 bg-white/[0.02] backdrop-blur-3xl rounded-3xl p-6 md:p-8 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)]">
-        <h2 class="text-xs font-black tracking-wider uppercase text-white/55 mb-6 flex items-center gap-3">
-          <HardDrive class="text-emerald-400" :size="18" />
-          已挂载目录
-        </h2>
+        <div class="flex items-center justify-between gap-4 mb-6">
+          <h2 class="text-xs font-black tracking-wider uppercase text-white/55 flex items-center gap-3">
+            <HardDrive class="text-emerald-400" :size="18" />
+            已挂载目录
+            <span v-if="folders.length > 0" class="text-white/30 text-[11px] font-mono font-normal">({{ folders.length }})</span>
+          </h2>
+
+          <button
+            v-if="folders.length > 0"
+            @click="scanAllFolders"
+            :disabled="isAnyScanning"
+            class="h-9 px-3.5 rounded-xl bg-white/5 hover:bg-accent/20 hover:text-accent border border-white/10 hover:border-accent/30 flex items-center gap-2 transition-all disabled:opacity-50 disabled:pointer-events-none active:scale-95 text-xs font-bold text-white/80 cursor-pointer shadow-sm"
+            :title="isAnyScanning ? '正在扫描目录中' : '一键刷新扫描所有已挂载目录'"
+          >
+            <RefreshCw :class="{ 'animate-spin text-accent': isAnyScanning }" :size="14" />
+            <span>{{ isAnyScanning ? '扫描中...' : '一键刷新所有目录' }}</span>
+          </button>
+        </div>
 
         <div v-if="folders.length === 0" class="text-center py-12 border border-dashed border-white/10 rounded-xl bg-white/[0.01]">
           <p class="text-white/35 font-medium text-sm">尚未添加任何扫描来源</p>
