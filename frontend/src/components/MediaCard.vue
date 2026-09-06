@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import { Book, Eye, Film, Headphones, Image as ImageIcon, Play, Star } from 'lucide-vue-next'
 import { thumbnailUrl } from '../config'
 import mediaPlaceholderUrl from '../assets/media-placeholder.svg?no-inline'
 import type { Media } from '../types'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   media: Media
   index?: number
   eager?: boolean
@@ -13,6 +14,15 @@ withDefaults(defineProps<{
   index: 0,
   eager: false,
   virtualized: false
+})
+
+const imageLoadFailed = ref(false)
+const onImageError = () => {
+  imageLoadFailed.value = true
+}
+
+watch(() => props.media.cover_path, () => {
+  imageLoadFailed.value = false
 })
 
 const getThumb = (path: string | null) => path ? thumbnailUrl(path) : mediaPlaceholderUrl
@@ -95,12 +105,13 @@ const hoverShadowClass = (type: Media['media_type']) => {
       :class="hoverShadowClass(media.media_type)"
     >
       <img
-        :src="getThumb(media.cover_path)"
+        :src="imageLoadFailed ? mediaPlaceholderUrl : getThumb(media.cover_path)"
         :alt="media.title"
-        :loading="eager || virtualized || index < 12 ? 'eager' : 'lazy'"
+        :loading="eager || !virtualized || index < 36 ? 'eager' : 'lazy'"
         decoding="async"
         class="w-full h-full object-cover group-hover:scale-[1.04]"
         style="transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)"
+        @error="onImageError"
       />
 
       <!-- Subtle overlay gradient on hover -->

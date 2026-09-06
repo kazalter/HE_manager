@@ -124,14 +124,13 @@ body {
   --ease-in-out-sine: cubic-bezier(0.37, 0, 0.63, 1);
 }
 
-/* Performance-oriented Lazy Render Grid Item */
+/* Media Card Container: content-visibility: auto is intentionally disabled
+ * because it causes delayed painting and suppresses image loading in Chromium until hover. */
 .lazy-card {
-  content-visibility: auto;
-  contain-intrinsic-size: 200px 300px;
+  content-visibility: visible;
+  contain-intrinsic-size: auto;
 }
 
-/* The list window is already virtualized. Applying a second browser-level
- * visibility heuristic here can delay paint after its transform changes. */
 .lazy-card.virtual-card {
   content-visibility: visible;
   contain-intrinsic-size: auto;

@@ -293,7 +293,8 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
               :src="thumbnailUrl(c.cover_path)"
               :alt="displayName(c)"
               class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-              loading="lazy"
+              loading="eager"
+              decoding="async"
             />
             <div v-else class="w-full h-full flex items-center justify-center text-white/15">
               <Palette :size="40" />

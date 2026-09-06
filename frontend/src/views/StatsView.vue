@@ -829,7 +829,8 @@ const lastOpenedText = (item: StatAttentionItem) => {
                       v-if="c.cover_path"
                       :src="thumbnailUrl(c.cover_path)"
                       class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      loading="lazy"
+                      loading="eager"
+                      decoding="async"
                     />
                   </div>
                   <div class="flex-1 min-w-0">
@@ -873,7 +874,8 @@ const lastOpenedText = (item: StatAttentionItem) => {
                       v-if="v.cover_path"
                       :src="thumbnailUrl(v.cover_path)"
                       class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      loading="lazy"
+                      loading="eager"
+                      decoding="async"
                     />
                   </div>
                   <div class="flex-1 min-w-0">
@@ -984,7 +986,8 @@ const lastOpenedText = (item: StatAttentionItem) => {
                       v-if="item.cover_path"
                       :src="thumbnailUrl(item.cover_path)"
                       class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      loading="lazy"
+                      loading="eager"
+                      decoding="async"
                     />
                     <div v-else class="w-full h-full flex items-center justify-center text-white/20 text-xs">无封面</div>
                     <span
@@ -1057,7 +1060,8 @@ const lastOpenedText = (item: StatAttentionItem) => {
                     v-if="item.cover_path"
                     :src="thumbnailUrl(item.cover_path)"
                     class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    loading="lazy"
+                    loading="eager"
+                    decoding="async"
                   />
                   <div v-else class="w-full h-full flex items-center justify-center text-white/20 text-xs">无封面</div>
                   <span
