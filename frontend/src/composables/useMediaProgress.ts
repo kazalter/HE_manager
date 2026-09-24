@@ -21,6 +21,7 @@ export function useMediaProgress(options: MediaProgressOptions) {
   let lastVideoProgress = -1
   let lastMangaProgress = -1
   let mangaTimer: number | undefined
+  const progressWrites = new Map<number, Promise<void>>()
   const SAVE_INTERVAL_MS = 5000
 
   const inferredStatus = (progress: number, duration: number | null): Media['view_status'] => {
@@ -44,11 +45,15 @@ export function useMediaProgress(options: MediaProgressOptions) {
 
     Object.assign(options.media.value, { progress, duration, view_status: inferredStatus(progress, duration) })
     options.emitUpdated({ ...options.media.value })
-    try {
-      await options.updateMedia({ progress, duration: duration ?? undefined }, mediaId)
-    } catch (err) {
-      console.error('Failed to save video progress:', err)
-    }
+    // Keep writes for each media item ordered. A slow earlier PATCH must never
+    // finish after a newer pause, ended or close save.
+    const previous = progressWrites.get(mediaId) ?? Promise.resolve()
+    const write = previous.catch(() => {}).then(() =>
+      options.updateMedia({ progress, duration: duration ?? undefined }, mediaId),
+    )
+    progressWrites.set(mediaId, write)
+    try { await write } catch (err) { console.error('Failed to save video progress:', err) }
+    finally { if (progressWrites.get(mediaId) === write) progressWrites.delete(mediaId) }
   }
 
   const saveMangaProgress = async (force = false) => {
@@ -83,7 +88,6 @@ export function useMediaProgress(options: MediaProgressOptions) {
     if (options.media.value.progress > 0 && video.duration && options.media.value.progress < video.duration - 3) {
       video.currentTime = options.media.value.progress
     }
-    void saveVideoProgress(true)
   }
   const onTimeUpdate = () => { void saveVideoProgress(false) }
   const onPause = () => { void saveVideoProgress(true) }

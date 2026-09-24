@@ -2,8 +2,7 @@
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import axios from 'axios'
 import { Maximize, Minimize, Trash2, X, FileQuestion, RefreshCw, PanelRightClose, PanelRightOpen } from 'lucide-vue-next'
-import type Artplayer from 'artplayer'
-import { API_BASE_URL, STREAM_URL, THUMBNAIL_URL, authUrl, thumbnailUrl } from '../config'
+import { API_BASE_URL, STREAM_URL, authUrl, thumbnailUrl } from '../config'
 import type { Media } from '../types'
 import AudioPlayer from './media-detail/AudioPlayer.vue'
 import ImageViewer from './media-detail/ImageViewer.vue'
@@ -12,7 +11,9 @@ import MetadataPanel from './media-detail/MetadataPanel.vue'
 import VideoPlayer from './media-detail/VideoPlayer.vue'
 import { useMediaOverlayControls } from '../composables/useMediaOverlayControls'
 import { useMediaProgress } from '../composables/useMediaProgress'
+import { useVideoPlayback } from '../composables/useVideoPlayback'
 import { useMediaKeyboard } from '../composables/useMediaKeyboard'
+import { nextVideo } from '../utils/videoSequence'
 
 const props = defineProps<{
   initialMedia: Media
@@ -28,16 +29,11 @@ const emit = defineEmits<{
 const currentMedia = ref<Media>(props.initialMedia)
 const currentPage = ref(0)
 const totalMangaPages = ref<number | null>(null)
-const artRef = ref<HTMLDivElement | null>(null)
 const showMetadataPanel = ref(localStorage.getItem('he_detail_meta_panel') !== 'false')
 const toggleMetadataPanel = () => {
   showMetadataPanel.value = !showMetadataPanel.value
   localStorage.setItem('he_detail_meta_panel', String(showMetadataPanel.value))
-  nextTick(() => {
-    if (artInstance && typeof (artInstance as unknown as { resize?: () => void }).resize === 'function') {
-      (artInstance as unknown as { resize: () => void }).resize()
-    }
-  })
+  nextTick(resizeVideoPlayer)
 }
 
 const isRechecking = ref(false)
@@ -46,88 +42,6 @@ const showToast = (msg: string) => {
   toastMessage.value = msg
   setTimeout(() => { toastMessage.value = '' }, 3000)
 }
-
-let clickTimer: number | undefined
-let artInstance: Artplayer | null = null
-let volumeWheelElement: HTMLElement | null = null
-let vttBlobUrl = ''
-let artInitToken = 0
-let containerResizeObserver: ResizeObserver | null = null
-
-let longPressTimer: number | undefined
-let longPressDirection: 'forward' | 'rewind' | null = null
-let originalPlaybackRate = 1
-let rewindInterval: number | undefined
-let rewoundSeconds = 0
-
-const VIDEO_SEEK_STEP_SECONDS = 10
-const LONG_PRESS_DELAY_MS = 400
-const REWIND_REPEAT_INTERVAL_MS = 250
-
-// --- Play Mode Configuration ---
-type PlayMode = 'stop' | 'loop' | 'order' | 'shuffle'
-
-const PLAY_MODES: PlayMode[] = ['stop', 'loop', 'order', 'shuffle']
-const PLAY_MODE_LABELS: Record<PlayMode, string> = {
-  stop: '播放完暂停',
-  loop: '单片循环',
-  order: '顺序播放',
-  shuffle: '随机播放',
-}
-
-const savedPlayMode = localStorage.getItem('he_play_mode') as PlayMode | null
-const playMode = ref<PlayMode>(savedPlayMode && PLAY_MODES.includes(savedPlayMode) ? savedPlayMode : 'stop')
-
-const togglePlayMode = () => {
-  const idx = PLAY_MODES.indexOf(playMode.value)
-  const nextMode = PLAY_MODES[(idx + 1) % PLAY_MODES.length]
-  playMode.value = nextMode
-  localStorage.setItem('he_play_mode', nextMode)
-  if (artInstance) {
-    artInstance.option.loop = nextMode === 'loop'
-  }
-}
-
-const playModeLabel = computed(() => PLAY_MODE_LABELS[playMode.value])
-
-const getPlayModeIconHtml = (mode: PlayMode) => {
-  let icon = ''
-  if (mode === 'loop') {
-    icon = '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 10h1v4"/>'
-  } else if (mode === 'order') {
-    icon = '<path d="M4 6h8"/><path d="M4 12h5"/><path d="M4 18h8"/><path d="m15 9 5 3-5 3Z"/>'
-  } else if (mode === 'shuffle') {
-    icon = '<path d="M3 6h3c5 0 5 12 10 12h5"/><path d="m18 15 3 3-3 3"/><path d="M3 18h3c2.1 0 3.3-2.1 4.5-4.5"/><path d="M13.5 8.5C14.7 6.6 16 6 18 6h3"/><path d="m18 3 3 3-3 3"/>'
-  } else {
-    icon = '<rect x="7" y="7" width="10" height="10" rx="2"/>'
-  }
-
-  return `<span data-play-mode="${mode}" aria-hidden="true" style="display:flex;align-items:center;justify-content:center;width:22px;height:22px;color:inherit"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icon}</svg></span>`
-}
-
-const updatePlayModeControl = (control: HTMLElement) => {
-  control.innerHTML = getPlayModeIconHtml(playMode.value)
-  // Artplayer's tooltip is rendered from aria-label (hint.css), not title/data-tooltip.
-  control.setAttribute('aria-label', playModeLabel.value)
-  control.setAttribute('title', playModeLabel.value)
-}
-
-const VOLUME_WHEEL_STEP = 0.05
-const VOLUME_WHEEL_SELECTOR = [
-  '.art-control-volume',
-  '.art-volume-panel',
-  '.art-volume-inner',
-  '.art-volume-slider',
-  '.art-volume-handle',
-  '.art-volume-loaded',
-  '.art-volume-indicator',
-  '.art-icon-volume',
-  '.art-icon-volumeClose',
-].join(', ')
-const VOLUME_WHEEL_HOVER_SELECTOR = VOLUME_WHEEL_SELECTOR
-  .split(', ')
-  .map(selector => `${selector}:hover`)
-  .join(', ')
 
 const imageUrl = computed(() => authUrl(`${API_BASE_URL}/stream/${currentMedia.value.id}`))
 const videoUrl = computed(() => authUrl(`${STREAM_URL}/${currentMedia.value.id}`))
@@ -205,7 +119,13 @@ const updateMedia = async (
 ) => {
   const res = await axios.patch(`${API_BASE_URL}/media/${mediaId}`, payload)
   if (currentMedia.value.id === mediaId) {
-    applyMediaPatch(res.data)
+    if (payload.progress !== undefined) {
+      // A newer local position may already be queued while this PATCH was in flight.
+      applyMediaPatch({ ...res.data, progress: currentMedia.value.progress,
+        duration: currentMedia.value.duration, view_status: currentMedia.value.view_status })
+    } else {
+      applyMediaPatch(res.data)
+    }
   } else {
     // A progress request may finish after playback already moved to another item.
     // Keep the parent list fresh without replacing the newly selected media.
@@ -243,6 +163,7 @@ const removeTag = async (tagId: number) => {
 
 const nextMedia = () => {
   if (currentIndex.value < props.allMedia.length - 1) {
+    if (isVideo.value) void saveVideoProgress(true)
     const next = props.allMedia[currentIndex.value + 1]
     currentMedia.value = next
     currentPage.value = 0
@@ -252,6 +173,7 @@ const nextMedia = () => {
 
 const prevMedia = () => {
   if (currentIndex.value > 0) {
+    if (isVideo.value) void saveVideoProgress(true)
     const prev = props.allMedia[currentIndex.value - 1]
     currentMedia.value = prev
     currentPage.value = 0
@@ -288,61 +210,10 @@ const removeMissingMedia = async () => {
   }
 }
 
-const isArtVolumeTarget = (e: WheelEvent) => {
-  const path = e.composedPath()
-  const isVolumePath = path.some(node => node instanceof Element && !!node.closest(VOLUME_WHEEL_SELECTOR))
-  if (isVolumePath) return true
-  return !!volumeWheelElement?.querySelector(VOLUME_WHEEL_HOVER_SELECTOR)
-}
-
-const handleVolumeWheel = (e: WheelEvent) => {
-  if (!artInstance || !isArtVolumeTarget(e)) return
-  e.preventDefault()
-  e.stopPropagation()
-
-  const delta = e.deltaY || e.deltaX
-  const direction = delta < 0 ? 1 : -1
-  const currentVolume = artInstance.muted ? 0 : artInstance.volume
-  const nextVolume = Math.min(1, Math.max(0, currentVolume + direction * VOLUME_WHEEL_STEP))
-
-  artInstance.muted = nextVolume === 0
-  artInstance.volume = Number(nextVolume.toFixed(2))
-  artInstance.notice.show = `音量: ${Math.round(artInstance.volume * 100)}%`
-}
-
-const interceptClick = (e: MouseEvent) => {
-  const target = e.target as HTMLElement
-  if (target.tagName.toLowerCase() !== 'video' && !target.classList.contains('art-state')) return
-
-  e.stopPropagation()
-  e.stopImmediatePropagation()
-  e.preventDefault()
-
-  if (e.type === 'dblclick') {
-    window.clearTimeout(clickTimer)
-    clickTimer = undefined
-    if (artInstance) artInstance.fullscreen = !artInstance.fullscreen
-    return
-  }
-
-  if (clickTimer) {
-    window.clearTimeout(clickTimer)
-    clickTimer = undefined
-  } else {
-    clickTimer = window.setTimeout(() => {
-      clickTimer = undefined
-      if (artInstance) artInstance.toggle()
-    }, 300)
-  }
-}
-
 const handleVideoSequenceEnded = () => {
-  if (playMode.value === 'order') {
-    nextMedia()
-  } else if (playMode.value === 'shuffle' && props.allMedia.length > 1) {
-    let randomIndex = Math.floor(Math.random() * props.allMedia.length)
-    if (randomIndex === currentIndex.value) randomIndex = (randomIndex + 1) % props.allMedia.length
-    const next = props.allMedia[randomIndex]
+  if (playMode.value === 'order' || playMode.value === 'shuffle') {
+    const next = nextVideo(props.allMedia, currentMedia.value.id, playMode.value)
+    if (!next) return
     currentMedia.value = next
     currentPage.value = 0
     emit('navigate', next)
@@ -365,187 +236,6 @@ const {
   onVideoEnded: handleVideoSequenceEnded,
 })
 
-const destroyArtplayer = () => {
-  if (containerResizeObserver) {
-    containerResizeObserver.disconnect()
-    containerResizeObserver = null
-  }
-  unbindVideoProgressEvents()
-  volumeWheelElement?.removeEventListener('wheel', handleVolumeWheel, { capture: true })
-  artRef.value?.removeEventListener('click', interceptClick, true)
-  artRef.value?.removeEventListener('dblclick', interceptClick, true)
-
-  if (artInstance) {
-    try {
-      artInstance.destroy(false)
-    } catch (err) {
-      console.warn('Artplayer destroy failed:', err)
-    }
-    artInstance = null
-  }
-
-  if (vttBlobUrl) {
-    URL.revokeObjectURL(vttBlobUrl)
-    vttBlobUrl = ''
-  }
-
-  volumeWheelElement = null
-  artRef.value?.replaceChildren()
-}
-
-const stopArtplayer = () => {
-  artInitToken++
-  destroyArtplayer()
-}
-
-const setArtContainer = (container: HTMLDivElement | null) => {
-  artRef.value = container
-}
-
-const initArtplayer = async () => {
-  const token = ++artInitToken
-  destroyArtplayer()
-  await nextTick()
-
-  const container = artRef.value
-  if (token !== artInitToken || !container || !isVideo.value) return
-
-  let artplayerModule: typeof import('artplayer')
-  let vttPluginModule: typeof import('artplayer-plugin-vtt-thumbnail')
-  try {
-    const loadedModules = await Promise.all([
-      import('artplayer'),
-      import('artplayer-plugin-vtt-thumbnail'),
-    ])
-    artplayerModule = loadedModules[0]
-    vttPluginModule = loadedModules[1]
-  } catch (err) {
-    console.error('Failed to load video player:', err)
-    showToast('播放器加载失败，请重试')
-    return
-  }
-  if (token !== artInitToken) return
-
-  const ArtplayerConstructor = artplayerModule.default
-  const artplayerPluginVttThumbnail = vttPluginModule.default
-  const plugins = []
-  if (currentMedia.value.cover_path) {
-    try {
-      const vttRoute = `${API_BASE_URL}/thumbnails/${currentMedia.value.cover_path.replace('.jpg', '.vtt')}`
-      const res = await axios.get(vttRoute)
-      const text = String(res.data).replace(
-        /(?:\/thumbnails\/)?([^\s#]+\.jpg)(#xywh=[0-9,]+)?/g,
-        (_match, file, xywh = '') => `${authUrl(`${THUMBNAIL_URL}/${file}`)}${xywh}`,
-      )
-      const blob = new Blob([text], { type: 'text/vtt' })
-      const nextVttBlobUrl = URL.createObjectURL(blob)
-
-      if (token !== artInitToken) {
-        URL.revokeObjectURL(nextVttBlobUrl)
-        return
-      }
-
-      vttBlobUrl = nextVttBlobUrl
-      plugins.push(artplayerPluginVttThumbnail({ vtt: vttBlobUrl }))
-    } catch {
-      console.log('VTT thumbnail not available for this video.')
-    }
-  }
-
-  if (token !== artInitToken) return
-
-  container.replaceChildren()
-  artInstance = new ArtplayerConstructor({
-    container,
-    url: videoUrl.value,
-    volume: 0.5,
-    autoplay: true,
-    loop: playMode.value === 'loop',
-    pip: true,
-    autoSize: true,
-    autoMini: true,
-    screenshot: true,
-    setting: true,
-    playbackRate: true,
-    aspectRatio: true,
-    fullscreen: true,
-    fullscreenWeb: true,
-    miniProgressBar: true,
-    mutex: true,
-    backdrop: true,
-    playsInline: true,
-    autoPlayback: true,
-    airplay: true,
-    theme: '#818cf8',
-    controls: [
-      {
-        name: 'playMode',
-        position: 'right',
-        index: 10,
-        html: getPlayModeIconHtml(playMode.value),
-        tooltip: playModeLabel.value,
-        click: function (art: any, event: Event) {
-          togglePlayMode()
-          const btnEl = event.currentTarget as HTMLElement | null
-          if (btnEl) {
-            updatePlayModeControl(btnEl)
-          }
-          art.notice.show = `播放模式: ${playModeLabel.value}`
-        }
-      }
-    ],
-    plugins,
-  })
-
-  container.addEventListener('click', interceptClick, true)
-  container.addEventListener('dblclick', interceptClick, true)
-  volumeWheelElement = container.querySelector('.art-video-player') ?? container
-  volumeWheelElement.addEventListener('wheel', handleVolumeWheel, { capture: true, passive: false })
-  bindVideoProgressEvents((artInstance as unknown as { video?: HTMLVideoElement } | null)?.video)
-
-  if (containerResizeObserver) {
-    containerResizeObserver.disconnect()
-  }
-  containerResizeObserver = new ResizeObserver(() => {
-    if (artInstance && typeof (artInstance as unknown as { resize?: () => void }).resize === 'function') {
-      (artInstance as unknown as { resize: () => void }).resize()
-    }
-  })
-  containerResizeObserver.observe(container)
-}
-
-watch(
-  () => [currentMedia.value.id, currentMedia.value.media_type] as const,
-  async () => {
-    const newVal = currentMedia.value
-    currentPage.value = newVal.media_type === 'manga' ? Math.max(0, newVal.progress || 0) : 0
-
-    if (newVal.media_type === 'manga') {
-      totalMangaPages.value = null
-      if (!newVal.is_missing) {
-        try {
-          const res = await axios.get(`${API_BASE_URL}/manga/${newVal.id}/pages`)
-          totalMangaPages.value = res.data.total_pages
-          // Trigger batch thumbnail generation in background
-          axios.post(`${API_BASE_URL}/manga/${newVal.id}/thumbnails/generate`).catch(() => {})
-        } catch {
-          totalMangaPages.value = null
-        }
-      }
-    }
-
-    if (newVal.media_type === 'video' && !newVal.is_missing) {
-      await initArtplayer()
-    } else {
-      stopArtplayer()
-    }
-
-    if (newVal.media_type === 'image') {
-      preloadAdjacentImages()
-    }
-  },
-  { immediate: true },
-)
 
 const preloadedImageUrls = new Set<string>()
 
@@ -583,6 +273,47 @@ const preloadAdjacentImages = () => {
   }
 }
 
+watch(
+  () => [currentMedia.value.id, currentMedia.value.media_type] as const,
+  async () => {
+    const media = currentMedia.value
+    currentPage.value = media.media_type === 'manga' ? Math.max(0, media.progress || 0) : 0
+    if (media.media_type === 'image') preloadAdjacentImages()
+    if (media.media_type !== 'manga') return
+    totalMangaPages.value = null
+    if (media.is_missing) return
+    try {
+      const res = await axios.get(`${API_BASE_URL}/manga/${media.id}/pages`)
+      if (currentMedia.value.id !== media.id) return
+      totalMangaPages.value = res.data.total_pages
+      void axios.post(`${API_BASE_URL}/manga/${media.id}/thumbnails/generate`).catch(() => {})
+    } catch {
+      if (currentMedia.value.id === media.id) totalMangaPages.value = null
+    }
+  },
+  { immediate: true },
+)
+
+const {
+  playMode,
+  setArtContainer,
+  beginVideoLongPress,
+  finishVideoLongPress,
+  seekVideo,
+  isArtFullscreen,
+  exitArtFullscreen,
+  resizeVideoPlayer,
+} = useVideoPlayback({
+  media: currentMedia,
+  isVideo,
+  videoUrl,
+  videoElement: progressVideoElement,
+  bindVideo: bindVideoProgressEvents,
+  unbindVideo: unbindVideoProgressEvents,
+  saveProgress: saveVideoProgress,
+  onError: showToast,
+})
+
 const nextPage = () => {
   const step = localStorage.getItem('he_manga_read_mode') === 'double' ? 2 : 1
   if (totalMangaPages.value === null || currentPage.value < totalMangaPages.value - 1) {
@@ -593,93 +324,7 @@ const nextPage = () => {
 
 const prevPage = () => {
   const step = localStorage.getItem('he_manga_read_mode') === 'double' ? 2 : 1
-  if (currentPage.value > 0) {
-    currentPage.value = Math.max(0, currentPage.value - step)
-  }
-}
-
-const clearPendingLongPress = () => {
-  if (longPressTimer) {
-    window.clearTimeout(longPressTimer)
-    longPressTimer = undefined
-  }
-}
-
-const beginVideoLongPress = (direction: 'forward' | 'rewind') => {
-  const video = progressVideoElement.value
-  if (!video || longPressTimer || longPressDirection) return
-
-  longPressTimer = window.setTimeout(() => {
-    longPressTimer = undefined
-    const activeVideo = progressVideoElement.value
-    if (!activeVideo) return
-
-    longPressDirection = direction
-    if (direction === 'forward') {
-      originalPlaybackRate = activeVideo.playbackRate || 1
-      activeVideo.playbackRate = 2
-      if (artInstance) artInstance.notice.show = '2.0x 快进中'
-      return
-    }
-
-    // Douyin-style rewind: keep the current play/pause state and repeatedly
-    // jump backward in fixed chunks instead of simulating reverse playback.
-    rewoundSeconds = 0
-    const rewindOneStep = () => {
-      const rewindVideo = progressVideoElement.value
-      if (!rewindVideo || longPressDirection !== 'rewind') return true
-
-      const previousTime = rewindVideo.currentTime
-      const nextTime = Math.max(0, previousTime - VIDEO_SEEK_STEP_SECONDS)
-      rewindVideo.currentTime = nextTime
-      rewoundSeconds += previousTime - nextTime
-
-      if (artInstance) {
-        artInstance.notice.show = `连续快退 ${Math.round(rewoundSeconds)} 秒`
-      }
-      return nextTime === 0
-    }
-
-    if (!rewindOneStep()) {
-      rewindInterval = window.setInterval(() => {
-        if (rewindOneStep() && rewindInterval) {
-          window.clearInterval(rewindInterval)
-          rewindInterval = undefined
-        }
-      }, REWIND_REPEAT_INTERVAL_MS)
-    }
-  }, LONG_PRESS_DELAY_MS)
-}
-
-const finishVideoLongPress = (showNotice = true) => {
-  clearPendingLongPress()
-
-  const video = progressVideoElement.value
-  const direction = longPressDirection
-  if (!direction) return false
-
-  if (direction === 'forward' && video) {
-    video.playbackRate = originalPlaybackRate
-    if (showNotice && artInstance) {
-      artInstance.notice.show = `恢复播放 (${originalPlaybackRate}x)`
-    }
-  }
-
-  if (direction === 'rewind') {
-    if (rewindInterval) {
-      window.clearInterval(rewindInterval)
-      rewindInterval = undefined
-    }
-    if (video) {
-      void saveVideoProgress(true)
-      if (showNotice && artInstance) {
-        artInstance.notice.show = `已快退 ${Math.round(rewoundSeconds)} 秒`
-      }
-    }
-  }
-
-  longPressDirection = null
-  return true
+  if (currentPage.value > 0) currentPage.value = Math.max(0, currentPage.value - step)
 }
 
 const handleKeydown = (e: KeyboardEvent) => {
@@ -694,6 +339,13 @@ const handleKeydown = (e: KeyboardEvent) => {
   }
 
   if (e.key === 'Escape') {
+    if (document.fullscreenElement || (isVideo.value && isArtFullscreen())) {
+      if (isVideo.value) exitArtFullscreen()
+      else void document.exitFullscreen()
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      return
+    }
     emit('close')
     e.preventDefault()
     e.stopImmediatePropagation()
@@ -747,15 +399,7 @@ const handleKeyup = (e: KeyboardEvent) => {
     if (isVideo.value && progressVideoElement.value) {
       e.preventDefault()
       e.stopImmediatePropagation()
-      if (!finishVideoLongPress()) {
-        progressVideoElement.value.currentTime = Math.min(
-          progressVideoElement.value.duration || 0,
-          progressVideoElement.value.currentTime + VIDEO_SEEK_STEP_SECONDS
-        )
-        if (artInstance) {
-          artInstance.notice.show = `快进 ${VIDEO_SEEK_STEP_SECONDS} 秒`
-        }
-      }
+      seekVideo('forward')
     }
   }
 
@@ -763,15 +407,7 @@ const handleKeyup = (e: KeyboardEvent) => {
     if (isVideo.value && progressVideoElement.value) {
       e.preventDefault()
       e.stopImmediatePropagation()
-      if (!finishVideoLongPress()) {
-        progressVideoElement.value.currentTime = Math.max(
-          0,
-          progressVideoElement.value.currentTime - VIDEO_SEEK_STEP_SECONDS
-        )
-        if (artInstance) {
-          artInstance.notice.show = `快退 ${VIDEO_SEEK_STEP_SECONDS} 秒`
-        }
-      }
+      seekVideo('rewind')
     }
   }
 }
@@ -781,13 +417,8 @@ const handleWindowBlur = () => {
 }
 
 useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
+onUnmounted(() => preloadedImageUrls.clear())
 
-onUnmounted(() => {
-  preloadedImageUrls.clear()
-  finishVideoLongPress(false)
-  window.clearTimeout(clickTimer)
-  stopArtplayer()
-})
 </script>
 
 <template>
@@ -818,7 +449,7 @@ onUnmounted(() => {
                 <PanelRightClose v-if="showMetadataPanel" :size="19" class="mx-auto" />
                 <PanelRightOpen v-else :size="19" class="mx-auto" />
               </button>
-              <button @click="toggleFullscreen" class="w-11 h-11 rounded-xl bg-black/35 backdrop-blur-md hover:bg-black/55 text-white/65 hover:text-white transition-all" :title="isFullscreen ? '退出全屏' : '全屏'">
+              <button v-if="!isVideo" @click="toggleFullscreen" class="w-11 h-11 rounded-xl bg-black/35 backdrop-blur-md hover:bg-black/55 text-white/65 hover:text-white transition-all" :title="isFullscreen ? '退出全屏' : '全屏'">
                 <Minimize v-if="isFullscreen" :size="19" class="mx-auto" />
                 <Maximize v-else :size="19" class="mx-auto" />
               </button>
@@ -884,8 +515,8 @@ onUnmounted(() => {
             @controls-hover="setControlsHover"
           />
 
-          <div v-if="isVideo" class="min-[1100px]:hidden shrink-0 border-t border-white/10 bg-background/95 px-4 sm:px-6 py-4">
-            <div class="flex items-start justify-between gap-6">
+          <div v-if="isVideo" class="video-summary min-[1100px]:hidden shrink-0 border-t border-white/10 bg-background/95 px-4 sm:px-6 py-4">
+            <div class="flex items-start justify-between gap-6 flex-wrap">
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2 mb-2">
                   <span class="rounded-md bg-accent/15 px-2 py-1 text-[11px] font-black text-accent">{{ mediaTypeLabel }}</span>
@@ -897,7 +528,7 @@ onUnmounted(() => {
                 </div>
               </div>
 
-              <div class="grid grid-cols-3 gap-2 text-right shrink-0 min-w-[300px]">
+              <div class="video-summary-stats grid grid-cols-3 gap-2 text-right shrink-0 min-w-0 max-w-full">
                 <div class="rounded-xl bg-white/5 border border-white/10 px-4 py-3">
                   <p class="text-[11px] text-white/35 mb-1">进度</p>
                   <p class="text-sm font-bold text-white">{{ videoProgressPercent }}%</p>
@@ -933,3 +564,9 @@ onUnmounted(() => {
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+@media (max-height: 650px), (max-width: 640px) {
+  .video-summary { display: none; }
+}
+</style>
