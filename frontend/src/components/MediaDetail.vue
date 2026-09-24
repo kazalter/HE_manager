@@ -426,10 +426,7 @@ onUnmounted(() => preloadedImageUrls.clear())
     <div class="fixed inset-0 z-[200] flex items-center justify-center">
       <div class="absolute inset-0 bg-background/85 backdrop-blur-2xl" @click="emit('close')"></div>
 
-      <div
-        class="relative bg-[#060606] shadow-2xl flex overflow-hidden"
-        :class="isVideo ? 'video-detail-window' : 'w-full h-full'"
-      >
+      <div class="relative w-full h-full bg-[#060606] shadow-2xl flex overflow-hidden">
         <section class="relative flex-1 min-w-0 bg-black flex flex-col">
           <header
             @mouseenter="setControlsHover(true)"
@@ -550,7 +547,7 @@ onUnmounted(() => preloadedImageUrls.clear())
         </section>
 
         <MetadataPanel
-          v-if="showMetadataPanel && (isVideo || !isFullscreen)"
+          v-if="!isFullscreen && showMetadataPanel"
           :media="currentMedia"
           :cover-url="coverUrl"
           :media-type-label="mediaTypeLabel"
@@ -569,21 +566,6 @@ onUnmounted(() => preloadedImageUrls.clear())
 </template>
 
 <style scoped>
-.video-detail-window {
-  width: 100%;
-  height: 100%;
-}
-
-@media (min-width: 641px) {
-  .video-detail-window {
-    width: min(90vw, 1440px);
-    height: min(86vh, 840px);
-    height: min(86dvh, 840px);
-    border: 1px solid rgb(255 255 255 / 10%);
-    border-radius: 1rem;
-  }
-}
-
 @media (max-height: 650px), (max-width: 640px) {
   .video-summary { display: none; }
 }

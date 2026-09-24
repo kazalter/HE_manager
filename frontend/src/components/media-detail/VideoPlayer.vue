@@ -41,16 +41,6 @@ onBeforeUnmount(() => {
 .media-detail-player .art-video-player {
   background-color: transparent !important;
 }
-.media-detail-player .art-video-player:fullscreen,
-.media-detail-player .art-video-player:-webkit-full-screen,
-.media-detail-player .art-video-player.art-fullscreen {
-  width: 100vw !important;
-  height: 100vh !important;
-  background-color: #000 !important;
-}
-.media-detail-player .art-video-player:fullscreen::backdrop {
-  background-color: #000;
-}
 .media-detail-player video { object-fit: contain !important; }
 .media-detail-player.is-compact .art-control-pip,
 .media-detail-player.is-compact .art-control-screenshot,
