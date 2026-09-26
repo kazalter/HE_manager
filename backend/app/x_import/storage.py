@@ -158,7 +158,6 @@ def upsert_library_media(
             is_missing=False,
         )
         db.add(media)
-        db.flush()
 
     # Thumbnail (best-effort; image files use themselves, videos use scanner's frame finder).
     if not media.cover_path:

@@ -266,13 +266,17 @@ def _process_post(job: ImportJob, post_id: int, db: Session, folder: models.Fold
                 status="pending",
             )
             db.add(record)
-            db.flush()
         else:
             record.remote_url = media.url
             record.media_type = media.media_type
             record.width = media.width
             record.height = media.height
             record.duration_ms = media.duration_ms
+
+        # Persist the pending record before network I/O. A flush here keeps the
+        # SQLite writer lock for the entire download, blocking logins and all
+        # other writes when a remote video stalls.
+        db.commit()
 
         try:
             content, content_type = client.download_media(media.url, proxy=proxy)
@@ -312,7 +316,9 @@ def _process_post(job: ImportJob, post_id: int, db: Session, folder: models.Fold
         record.status = "downloaded"
         record.error_message = None
         record.downloaded_at = datetime.utcnow()
-        db.flush()
+        # The file is durable now. Release the writer lock before thumbnail
+        # extraction, which can take time for large videos.
+        db.commit()
 
         try:
             library_media = storage.upsert_library_media(
