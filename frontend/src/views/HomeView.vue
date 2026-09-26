@@ -2,12 +2,13 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import { Book, ChevronDown, ChevronLeft, ChevronRight, Filter, History, Play, Search, SortAsc, Star, X } from 'lucide-vue-next'
+import { Book, ChevronDown, ChevronLeft, ChevronRight, Columns3, Filter, History, LayoutGrid, List, Play, Rows3, Search, SortAsc, Star, X } from 'lucide-vue-next'
 import { API_BASE_URL, thumbnailUrl } from '../config'
 import { authState } from '../auth'
 import mediaPlaceholderUrl from '../assets/media-placeholder.svg?no-inline'
 import type { Media, Tag } from '../types'
 import MediaCard from '../components/MediaCard.vue'
+import MediaViewCard from '../components/MediaViewCard.vue'
 import { AsyncMediaDetail as MediaDetail } from '../components/asyncComponents'
 import PaginationControl from '../components/PaginationControl.vue'
 
@@ -34,6 +35,49 @@ const filtersExpanded = ref(false)
 const continueScrollRef = ref<HTMLElement | null>(null)
 const continueCollapsed = ref(localStorage.getItem('he_continue_collapsed') === 'true')
 const hiddenContinueIds = ref<Set<number>>(new Set())
+
+type MediaViewMode = 'poster' | 'list' | 'masonry' | 'wide'
+const viewMode = ref<MediaViewMode>('poster')
+const viewOptions = computed(() => {
+  const options: { mode: MediaViewMode; label: string; icon: typeof LayoutGrid }[] = [
+    { mode: 'poster', label: '海报网格', icon: LayoutGrid },
+    { mode: 'list', label: '紧凑列表', icon: List },
+  ]
+  if (props.mediaType === 'image' || props.mediaType === 'manga') {
+    options.push({ mode: 'masonry', label: '瀑布流', icon: Columns3 })
+  }
+  if (props.mediaType === 'video') {
+    options.push({ mode: 'wide', label: '宽幅卡片', icon: Rows3 })
+  }
+  return options
+})
+
+const viewStorageKey = () => `he_media_view_${props.mediaType || 'all'}`
+const isAvailableView = (value: unknown): value is MediaViewMode =>
+  typeof value === 'string' && viewOptions.value.some(option => option.mode === value)
+
+watch([() => props.mediaType, () => route.query.view], () => {
+  const queryView = Array.isArray(route.query.view) ? route.query.view[0] : route.query.view
+  let savedView: string | null = null
+  try {
+    savedView = localStorage.getItem(viewStorageKey())
+    if (isAvailableView(queryView)) localStorage.setItem(viewStorageKey(), queryView)
+  } catch {
+    // The current route still works when browser storage is unavailable.
+  }
+  viewMode.value = isAvailableView(queryView) ? queryView : isAvailableView(savedView) ? savedView : 'poster'
+}, { immediate: true })
+
+const selectViewMode = (mode: MediaViewMode) => {
+  if (!isAvailableView(mode) || mode === viewMode.value) return
+  viewMode.value = mode
+  try {
+    localStorage.setItem(viewStorageKey(), mode)
+  } catch {
+    // View switching does not depend on browser storage.
+  }
+  void router.replace({ path: route.path, query: { ...route.query, view: mode } })
+}
 
 watch(continueCollapsed, (val) => {
   localStorage.setItem('he_continue_collapsed', String(val))
@@ -619,8 +663,35 @@ onMounted(async () => {
     </div>
 
     <div ref="containerRef" class="px-6 md:px-8 pb-12">
-      <div v-if="loading" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 md:gap-7">
-        <div v-for="i in 12" :key="i" class="aspect-[3/4.5] bg-white/5 animate-pulse rounded-2xl border border-white/5"></div>
+      <div class="flex justify-end mb-5">
+        <div class="inline-flex items-center gap-1 rounded-xl border border-white/8 bg-white/4 p-1" role="group" aria-label="媒体显示视图">
+          <button
+            v-for="option in viewOptions"
+            :key="option.mode"
+            type="button"
+            class="flex min-w-9 h-9 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-bold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+            :class="viewMode === option.mode ? 'bg-accent text-white shadow-sm' : 'text-white/55 hover:bg-white/8 hover:text-white'"
+            :aria-label="option.label"
+            :aria-pressed="viewMode === option.mode"
+            :title="option.label"
+            @click="selectViewMode(option.mode)"
+          >
+            <component :is="option.icon" :size="16" aria-hidden="true" />
+            <span class="hidden lg:inline">{{ option.label }}</span>
+          </button>
+        </div>
+      </div>
+
+      <div
+        v-if="loading"
+        :class="viewMode === 'list' ? 'flex flex-col gap-2' : viewMode === 'wide' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 md:gap-7' : 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 md:gap-7'"
+      >
+        <div
+          v-for="i in 12"
+          :key="i"
+          class="animate-pulse rounded-xl border border-white/5 bg-white/5"
+          :class="viewMode === 'list' ? 'h-24' : viewMode === 'wide' ? 'aspect-video' : 'aspect-[3/4.5]'"
+        ></div>
       </div>
 
       <div v-else-if="mediaError" class="flex flex-col items-center justify-center py-32 text-amber-100 text-center">
@@ -632,12 +703,22 @@ onMounted(async () => {
       </div>
 
       <div v-else-if="mediaList.length > 0" class="flex flex-col gap-9">
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 md:gap-7">
+        <div v-if="viewMode === 'poster'" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 md:gap-7">
           <MediaCard
             v-for="(item, index) in mediaList"
             :key="item.id"
             :media="item"
             :index="index"
+            @click="openMedia(item)"
+          />
+        </div>
+        <div v-else :class="viewMode === 'masonry' ? 'masonry-grid' : viewMode === 'wide' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 md:gap-7' : 'flex flex-col gap-2'">
+          <MediaViewCard
+            v-for="item in mediaList"
+            :key="item.id"
+            :media="item"
+            :mode="viewMode"
+            :class="viewMode === 'masonry' ? 'masonry-grid-item' : ''"
             @click="openMedia(item)"
           />
         </div>
