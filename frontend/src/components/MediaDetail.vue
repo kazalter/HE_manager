@@ -60,6 +60,30 @@ const {
   toggleFullscreen,
 } = useMediaOverlayControls(isManga, isImage)
 
+const overlayHeader = ref<HTMLElement | null>(null)
+const isHeaderPointerOver = ref(false)
+const isHeaderFocusWithin = ref(false)
+const syncHeaderInteraction = () => setControlsHover(isHeaderPointerOver.value || isHeaderFocusWithin.value)
+const setHeaderPointerOver = (over: boolean) => {
+  isHeaderPointerOver.value = over
+  syncHeaderInteraction()
+}
+const onHeaderFocusIn = () => {
+  isHeaderFocusWithin.value = true
+  syncHeaderInteraction()
+}
+const onHeaderFocusOut = (event: FocusEvent) => {
+  if (overlayHeader.value?.contains(event.relatedTarget as Node | null)) return
+  isHeaderFocusWithin.value = false
+  syncHeaderInteraction()
+}
+
+watch(showControls, (visible) => {
+  if (visible || !clickOnlyViewerControls.value) return
+  const focused = document.activeElement
+  if (focused instanceof HTMLElement && overlayHeader.value?.contains(focused)) focused.blur()
+})
+
 const currentIndex = computed(() => props.allMedia.findIndex(m => m.id === currentMedia.value.id))
 const videoProgressPercent = computed(() => {
   if (!isVideo.value || !currentMedia.value.duration || currentMedia.value.progress <= 0) return 0
@@ -336,6 +360,10 @@ const autoAdvanceSeconds = ref(
 )
 const autoAdvanceSecondsInput = ref(String(autoAdvanceSeconds.value))
 const isAutoAdvancing = ref(false)
+const toggleAutoAdvance = (event: MouseEvent) => {
+  isAutoAdvancing.value = !isAutoAdvancing.value
+  if (event.detail > 0) (event.currentTarget as HTMLElement).blur()
+}
 const isEditingAutoAdvanceSeconds = ref(false)
 const isDocumentVisible = ref(!document.hidden)
 let autoAdvanceTimer: number | undefined
@@ -515,9 +543,12 @@ onUnmounted(() => preloadedImageUrls.clear())
       <div class="relative w-full h-full bg-[#060606] shadow-2xl flex overflow-hidden">
         <section class="relative flex-1 min-w-0 bg-black flex flex-col">
           <header
-            @mouseenter="setControlsHover(true)"
-            @mouseleave="setControlsHover(false)"
-            :class="showControls || isAutoAdvancing
+            ref="overlayHeader"
+            @mouseenter="setHeaderPointerOver(true)"
+            @mouseleave="setHeaderPointerOver(false)"
+            @focusin="onHeaderFocusIn"
+            @focusout="onHeaderFocusOut"
+            :class="showControls || (isAutoAdvancing && !clickOnlyViewerControls)
               ? 'opacity-100 translate-y-0'
               : clickOnlyViewerControls
                 ? 'opacity-0 -translate-y-3 pointer-events-none'
@@ -528,22 +559,26 @@ onUnmounted(() => preloadedImageUrls.clear())
             <div class="flex w-full sm:w-auto items-center justify-end gap-2">
               <div
                 v-if="(isImage || isManga) && !currentMedia.is_missing"
-                class="flex items-center gap-1 rounded-xl border border-white/15 bg-black/55 p-1 text-white/80 backdrop-blur-md"
+                role="group"
+                aria-label="自动播放设置"
+                class="flex items-center gap-2 rounded-xl border border-white/20 bg-black/70 p-1 text-white backdrop-blur-md"
                 @click.stop
               >
                 <button
                   type="button"
-                  class="flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40"
+                  class="inline-flex h-11 min-w-11 items-center justify-center gap-2 rounded-lg px-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-black disabled:cursor-not-allowed disabled:opacity-40"
+                  :class="isAutoAdvancing ? 'bg-accent/25 text-accent hover:bg-accent/35' : 'bg-white/10 text-white hover:bg-white/20'"
                   :disabled="!isAutoAdvancing && !canAutoAdvance"
                   :aria-label="isAutoAdvancing ? '暂停自动播放' : '开始自动播放'"
                   :aria-pressed="isAutoAdvancing"
                   :title="isAutoAdvancing ? '暂停自动播放' : canAutoAdvance ? '开始自动播放' : isManga ? '已到最后一页' : '没有下一张图片'"
-                  @click="isAutoAdvancing = !isAutoAdvancing"
+                  @click="toggleAutoAdvance"
                 >
                   <Pause v-if="isAutoAdvancing" :size="18" />
                   <Play v-else :size="18" />
+                  <span class="hidden min-[420px]:inline">{{ isAutoAdvancing ? '暂停' : '自动播放' }}</span>
                 </button>
-                <label class="flex items-center gap-1 pr-1 text-xs font-semibold text-white/75">
+                <label class="flex items-center gap-1.5 pr-1.5 text-sm font-medium text-white/80">
                   <span class="sr-only">自动播放间隔（秒）</span>
                   <input
                     v-model="autoAdvanceSecondsInput"
@@ -552,7 +587,7 @@ onUnmounted(() => preloadedImageUrls.clear())
                     max="300"
                     step="1"
                     inputmode="numeric"
-                    class="h-11 w-11 rounded-md border border-white/15 bg-white/10 text-center font-mono text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    class="h-11 w-12 rounded-lg border border-white/25 bg-white/10 text-center font-mono text-base text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                     aria-label="自动播放间隔，秒"
                     title="自动播放间隔，1 至 300 秒"
                     @focus="isEditingAutoAdvanceSeconds = true"
