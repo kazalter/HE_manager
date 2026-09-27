@@ -1,6 +1,7 @@
 import json
 import os
 from typing import Optional
+from urllib.parse import urlsplit
 
 def _get_config_path() -> str:
     db_url = os.getenv("HE_DATABASE_URL")
@@ -40,23 +41,50 @@ def _write_config(data: dict) -> None:
     os.replace(temp_path, CONFIG_PATH)
 
 
-def get_global_proxy() -> Optional[str]:
-    """Get the global proxy URL. Falls back to HE_BD2_PROXY env vars if not set."""
+def get_external_favorites_proxy() -> Optional[str]:
+    """Get the shared WNACG, X, and Pawchive proxy URL.
+
+    The Pawchive environment variable is retained as a migration fallback for
+    installations that configured its file CDN proxy before this setting was
+    unified. Once the Settings page saves a value (including blank), the
+    persisted value takes precedence.
+    """
     config = _read_config()
-    proxy = config.get("proxy")
-    if proxy:
-        return proxy.strip() or None
-    return None
+    if "proxy" in config:
+        proxy = config.get("proxy")
+        if isinstance(proxy, str):
+            return proxy.strip() or None
+        return None
+    return os.getenv("HE_PAWCHIVE_PROXY", "").strip() or None
 
 
-def update_global_proxy(proxy: Optional[str]) -> Optional[str]:
-    """Update the global proxy URL."""
+def validate_external_favorites_proxy(proxy: Optional[str]) -> Optional[str]:
+    """Normalize a proxy URL supported consistently by all external clients."""
+    value = (proxy or "").strip()
+    if not value:
+        return None
+    parsed = urlsplit(value)
+    if (parsed.scheme != "http" or not parsed.hostname or parsed.username or parsed.password
+            or parsed.path not in {"", "/"} or parsed.query or parsed.fragment):
+        raise ValueError("代理地址需为不带账号密码的 HTTP 代理，例如 http://127.0.0.1:7890")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("代理端口无效") from exc
+    if port is not None and not 1 <= port <= 65535:
+        raise ValueError("代理端口无效")
+    return value
+
+
+def update_external_favorites_proxy(proxy: Optional[str]) -> Optional[str]:
+    """Persist the shared external favorites proxy, including an explicit clear."""
     config = _read_config()
-    if proxy is not None:
-        val = proxy.strip()
-        if val:
-            config["proxy"] = val
-        else:
-            config.pop("proxy", None)
+    val = (proxy or "").strip()
+    config["proxy"] = val
     _write_config(config)
-    return get_global_proxy()
+    return get_external_favorites_proxy()
+
+
+# Retain the old helper names for internal extensions that may still import them.
+get_global_proxy = get_external_favorites_proxy
+update_global_proxy = update_external_favorites_proxy

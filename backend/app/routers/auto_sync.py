@@ -1,3 +1,5 @@
+import urllib.error
+import urllib.request
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -6,10 +8,19 @@ from sqlalchemy.orm import Session
 from .. import auto_sync as auto_sync_service
 from .. import models, schemas
 from ..database import get_db
-from ..external_config import get_global_proxy, update_global_proxy
+from ..external_config import (
+    get_external_favorites_proxy,
+    update_external_favorites_proxy,
+    validate_external_favorites_proxy,
+)
 from ..services.media_access import get_source_or_404, get_x_source_or_404
 
 router = APIRouter()
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 def init_scheduler() -> None:
@@ -76,9 +87,6 @@ def update_wnacg_auto_sync(
             raise HTTPException(status_code=400, detail="请先设置下载路径再启用自动同步")
 
     data = payload.dict(exclude_unset=True)
-    if "proxy" in data:
-        source.proxy = (data["proxy"] or "").strip() or None
-        db.commit()
 
     enabled = data.get("auto_sync_enabled", source.auto_sync_enabled or False)
     interval = data.get("auto_sync_interval_hours", source.auto_sync_interval_hours or 24)
@@ -104,9 +112,6 @@ def update_x_auto_sync(
             raise HTTPException(status_code=400, detail="请先设置下载路径再启用自动同步")
 
     data = payload.dict(exclude_unset=True)
-    if "proxy" in data:
-        source.proxy = (data["proxy"] or "").strip() or None
-        db.commit()
 
     enabled = data.get("auto_sync_enabled", source.auto_sync_enabled or False)
     interval = data.get("auto_sync_interval_hours", source.auto_sync_interval_hours or 24)
@@ -167,12 +172,57 @@ def get_auto_sync_logs(
     )
 
 
-@router.get("/auto-sync/proxy")
-def get_auto_sync_global_proxy():
-    return {"proxy": get_global_proxy()}
+@router.get("/external/proxy")
+@router.get("/auto-sync/proxy", include_in_schema=False)
+def get_external_favorites_proxy_config():
+    return {"proxy": get_external_favorites_proxy()}
 
 
-@router.patch("/auto-sync/proxy")
-def update_auto_sync_global_proxy(payload: schemas.GlobalProxyUpdate):
-    new_proxy = update_global_proxy(payload.proxy)
+@router.patch("/external/proxy")
+@router.patch("/auto-sync/proxy", include_in_schema=False)
+def update_external_favorites_proxy_config(payload: schemas.GlobalProxyUpdate):
+    try:
+        proxy = validate_external_favorites_proxy(payload.proxy)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    new_proxy = update_external_favorites_proxy(proxy)
     return {"proxy": new_proxy}
+
+
+@router.post("/external/proxy/test")
+def test_external_favorites_proxy_config(payload: schemas.GlobalProxyUpdate):
+    try:
+        proxy = validate_external_favorites_proxy(payload.proxy)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    proxy_map = {"http": proxy, "https": proxy} if proxy else {}
+    opener = urllib.request.build_opener(
+        urllib.request.ProxyHandler(proxy_map),
+        _NoRedirectHandler(),
+    )
+    request = urllib.request.Request(
+        "https://www.gstatic.com/generate_204",
+        headers={"User-Agent": "HE-Manager-Proxy-Test/1.0", "Cache-Control": "no-cache"},
+    )
+    try:
+        with opener.open(request, timeout=8) as response:
+            status = response.status
+    except urllib.error.HTTPError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"连通性测试失败：探测站点返回 HTTP {exc.code}",
+        ) from exc
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        reason = getattr(exc, "reason", exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"连通性测试失败：{reason}",
+        ) from exc
+
+    if not 200 <= status < 300:
+        raise HTTPException(
+            status_code=502,
+            detail=f"连通性测试失败：探测站点返回 HTTP {status}",
+        )
+    return {"ok": True, "status": status, "message": f"连通性正常（HTTP {status}）"}

@@ -121,7 +121,6 @@ def _resolve_wnacg_archive_urls(item: models.ExternalFavoriteItem, source: model
                 worker_request,
                 cookie=source.cookie or "",
                 referer=plan.get("download_page_url") or item.url,
-                proxy=source.proxy,
             )
             if signed_url:
                 urls.append(signed_url)
@@ -167,7 +166,6 @@ def _try_download_wnacg_archive(
                 source.cookie or "",
                 archive_path,
                 referer=plan.get("download_page_url") or item.url,
-                proxy=source.proxy,
                 on_chunk=on_chunk,
             )
             extracted = _extract_wnacg_zip_archive(archive_path, item_dir)
@@ -227,7 +225,7 @@ def prepare_wnacg_download_plan(item: models.ExternalFavoriteItem, source: model
     item_dir = external_item_download_dir(item, source, download_root_path)
 
     item_api_url = urljoin(item.url, f"/photos-item-aid-{item.external_id}.html")
-    item_html = external_sources.fetch_html(item_api_url, source.cookie or "", proxy=source.proxy)
+    item_html = external_sources.fetch_html(item_api_url, source.cookie or "")
     image_urls = external_sources.parse_wnacg_image_urls(item_html)
     if not image_urls:
         raise RuntimeError("没有解析到图片地址")
@@ -236,7 +234,7 @@ def prepare_wnacg_download_plan(item: models.ExternalFavoriteItem, source: model
     archive_urls: List[str] = []
     archive_worker_request = None
     try:
-        download_html = external_sources.fetch_html(download_page_url, source.cookie or "", proxy=source.proxy)
+        download_html = external_sources.fetch_html(download_page_url, source.cookie or "")
         archive_worker_request = external_sources.parse_wnacg_worker_archive_request(download_html)
         archive_urls = external_sources.parse_wnacg_archive_urls(download_html, base_url=download_page_url)
     except Exception as exc:  # noqa: BLE001 - the image downloader below remains the fallback
@@ -272,7 +270,7 @@ def download_wnacg_item(item: models.ExternalFavoriteItem, source: models.Extern
             skipped += 1
             _advance_wnacg_job_progress(job, task, pages=1)
             continue
-        content, content_type = external_sources.fetch_binary(image_url, source.cookie or "", referer=item.url, proxy=source.proxy)
+        content, content_type = external_sources.fetch_binary(image_url, source.cookie or "", referer=item.url)
         extension = get_image_extension(content_type, image_url)
         image_path = os.path.join(item_dir, f"{index:03d}{extension}")
         with open(image_path, "wb") as image_file:

@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import Request, build_opener, ProxyHandler
 
 # curl_cffi wraps libcurl with TLS fingerprint impersonation. Required for X's GraphQL:
 # Cloudflare drops the TLS connection mid-handshake when it sees Python's stdlib JA3/JA4
@@ -284,7 +284,7 @@ def _parse_media(payload: dict) -> List[TweetMedia]:
     return out
 
 
-def _graphql_get(url: str, headers: dict, timeout: int, *, what: str, proxy: Optional[str] = None) -> bytes:
+def _graphql_get(url: str, headers: dict, timeout: int, *, what: str) -> bytes:
     """GET via curl_cffi with Chrome 124 TLS/HTTP2 fingerprint.
 
     Cloudflare drops Python's stdlib TLS handshake, surfacing as SSL UNEXPECTED_EOF.
@@ -292,9 +292,9 @@ def _graphql_get(url: str, headers: dict, timeout: int, *, what: str, proxy: Opt
     framework-agnostic."""
     network_errors: List[str] = []
     response = None
-    from app.external_config import get_global_proxy
-    proxy = get_global_proxy()
-    proxies_dict = {"http": proxy, "https": proxy} if proxy else None
+    from app.external_config import get_external_favorites_proxy
+    proxy = get_external_favorites_proxy()
+    proxies_dict = {"http": proxy, "https": proxy} if proxy else {}
     for impersonate, keep_user_agent in GRAPHQL_IMPERSONATIONS:
         request_headers = dict(headers)
         if not keep_user_agent:
@@ -330,7 +330,7 @@ def _graphql_get(url: str, headers: dict, timeout: int, *, what: str, proxy: Opt
     raise TweetTransientError(f"{what} HTTP {code}")
 
 
-def _fetch_via_graphql(tweet_id: str, cookie: str, timeout: int, proxy: Optional[str] = None) -> TweetData:
+def _fetch_via_graphql(tweet_id: str, cookie: str, timeout: int) -> TweetData:
     """Authenticated path: GraphQL TweetResultByRestId. Honors session cookie so adult/age-gated
     content is visible (the syndication endpoint always treats requesters as anonymous and
     hides those tweets regardless of the cookie that's attached)."""
@@ -364,7 +364,7 @@ def _fetch_via_graphql(tweet_id: str, cookie: str, timeout: int, proxy: Optional
         "Origin": "https://x.com",
     }
 
-    raw = _graphql_get(url, headers, timeout, what=f"Tweet {tweet_id}", proxy=proxy)
+    raw = _graphql_get(url, headers, timeout, what=f"Tweet {tweet_id}")
 
     try:
         body = json.loads(raw.decode("utf-8", errors="replace"))
@@ -412,13 +412,13 @@ def _fetch_via_graphql(tweet_id: str, cookie: str, timeout: int, proxy: Optional
     )
 
 
-def fetch_tweet(tweet_id: str, *, cookie: Optional[str] = None, timeout: int = 20, proxy: Optional[str] = None) -> TweetData:
+def fetch_tweet(tweet_id: str, *, cookie: Optional[str] = None, timeout: int = 20) -> TweetData:
     """Fetch tweet metadata. With cookie: authenticated GraphQL (sees adult content).
     Without cookie: public syndication endpoint (anonymous, hides age-gated tweets)."""
-    from app.external_config import get_global_proxy
-    proxy = get_global_proxy()
+    from app.external_config import get_external_favorites_proxy
+    proxy = get_external_favorites_proxy()
     if cookie:
-        return _fetch_via_graphql(tweet_id, cookie, timeout, proxy=proxy)
+        return _fetch_via_graphql(tweet_id, cookie, timeout)
 
     params = urlencode({"id": tweet_id, "lang": "en", "token": _derive_token(tweet_id)})
     url = f"{SYNDICATION_BASE}?{params}"
@@ -431,14 +431,10 @@ def fetch_tweet(tweet_id: str, *, cookie: Optional[str] = None, timeout: int = 2
     request = Request(url, headers=headers)
 
     try:
-        if proxy:
-            from urllib.request import build_opener, ProxyHandler
-            opener = build_opener(ProxyHandler({"http": proxy, "https": proxy}))
-            with opener.open(request, timeout=timeout) as response:
-                raw = response.read()
-        else:
-            with urlopen(request, timeout=timeout) as response:
-                raw = response.read()
+        proxies = {"http": proxy, "https": proxy} if proxy else {}
+        opener = build_opener(ProxyHandler(proxies))
+        with opener.open(request, timeout=timeout) as response:
+            raw = response.read()
     except HTTPError as exc:
         if exc.code in (404, 403, 410):
             raise TweetUnavailable(f"Tweet {tweet_id} unavailable (HTTP {exc.code})") from exc
@@ -482,7 +478,6 @@ def fetch_likes_page(
     cursor: Optional[str] = None,
     count: int = 20,
     timeout: int = 30,
-    proxy: Optional[str] = None,
 ) -> Tuple[List[LikedTweet], Optional[str]]:
     """Pull one page of the authenticated user's Likes timeline. Returns (tweets, next_cursor).
 
@@ -524,7 +519,7 @@ def fetch_likes_page(
         "Origin": "https://x.com",
     }
 
-    raw = _graphql_get(url, headers, timeout, what="Likes timeline", proxy=proxy)
+    raw = _graphql_get(url, headers, timeout, what="Likes timeline")
     try:
         body = json.loads(raw.decode("utf-8", errors="replace"))
     except json.JSONDecodeError as exc:
@@ -587,10 +582,10 @@ def fetch_likes_page(
     return tweets, next_cursor
 
 
-def download_media(url: str, *, timeout: int = 60, retries: int = 2, proxy: Optional[str] = None) -> Tuple[bytes, str]:
+def download_media(url: str, *, timeout: int = 60, retries: int = 2) -> Tuple[bytes, str]:
     """Returns (content_bytes, content_type). Retries transient failures with linear backoff."""
-    from app.external_config import get_global_proxy
-    proxy = get_global_proxy()
+    from app.external_config import get_external_favorites_proxy
+    proxy = get_external_favorites_proxy()
     last_error: Optional[Exception] = None
     for attempt in range(retries + 1):
         try:
@@ -602,12 +597,9 @@ def download_media(url: str, *, timeout: int = 60, retries: int = 2, proxy: Opti
                     "Referer": "https://twitter.com/",
                 },
             )
-            if proxy:
-                from urllib.request import build_opener, ProxyHandler
-                opener = build_opener(ProxyHandler({"http": proxy, "https": proxy}))
-                response_ctx = opener.open(request, timeout=timeout)
-            else:
-                response_ctx = urlopen(request, timeout=timeout)
+            proxies = {"http": proxy, "https": proxy} if proxy else {}
+            opener = build_opener(ProxyHandler(proxies))
+            response_ctx = opener.open(request, timeout=timeout)
 
             with response_ctx as response:
                 content = response.read()

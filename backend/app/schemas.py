@@ -228,7 +228,6 @@ class ExternalFavoriteSource(BaseModel):
     auto_sync_next_run_at: Optional[datetime] = None
     auto_sync_last_status: Optional[str] = None
     auto_sync_last_message: Optional[str] = None
-    proxy: Optional[str] = None
 
 
     model_config = ConfigDict(from_attributes=True)
@@ -296,7 +295,6 @@ class ExternalFavoriteSourceUpdate(BaseModel):
     audio_version_filter: Optional[str] = None
     playlist_url: Optional[str] = None
     api_mirrors: Optional[str] = None
-    proxy: Optional[str] = None
 
 
 
@@ -342,7 +340,6 @@ class XImportSource(BaseModel):
     auto_sync_next_run_at: Optional[datetime] = None
     auto_sync_last_status: Optional[str] = None
     auto_sync_last_message: Optional[str] = None
-    proxy: Optional[str] = None
 
 
     model_config = ConfigDict(from_attributes=True)
@@ -352,7 +349,6 @@ class XImportSourceUpdate(BaseModel):
     name: Optional[str] = None
     download_root_path: Optional[str] = None
     cookie: Optional[str] = None
-    proxy: Optional[str] = None
 
 
 
@@ -525,7 +521,6 @@ class XPost(BaseModel):
 class AutoSyncConfigUpdate(BaseModel):
     auto_sync_enabled: Optional[bool] = None
     auto_sync_interval_hours: Optional[int] = Field(default=None, ge=1, le=168)
-    proxy: Optional[str] = None
 
 
 class GlobalProxyUpdate(BaseModel):

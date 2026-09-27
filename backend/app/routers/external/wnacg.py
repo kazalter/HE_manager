@@ -73,7 +73,7 @@ def sync_wnacg_favorites(payload: schemas.ExternalFavoriteSyncRequest, db: Sessi
         }
         existing_external_ids = set(existing_items.keys())
         base_url = get_url_base(source.favorites_url)
-        first_html = external_sources.fetch_html(source.favorites_url, cookie, proxy=source.proxy)
+        first_html = external_sources.fetch_html(source.favorites_url, cookie)
         categories = external_sources.parse_wnacg_categories(first_html)
         parsed_items: List[external_sources.ParsedExternalFavorite] = []
 
@@ -86,7 +86,7 @@ def sync_wnacg_favorites(payload: schemas.ExternalFavoriteSyncRequest, db: Sessi
             for category in categories:
                 for page in range(1, payload.page_limit + 1):
                     page_url = external_sources.wnacg_category_url(category.id, page, base_url=base_url)
-                    page_html = external_sources.fetch_html(page_url, cookie, proxy=source.proxy)
+                    page_html = external_sources.fetch_html(page_url, cookie)
                     page_items = external_sources.parse_wnacg_favorites(
                         page_html,
                         base_url=base_url,

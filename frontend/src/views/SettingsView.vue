@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
-import { FolderOpen, FolderPlus, HardDrive, Image as ImageIcon, Keyboard, Palette, RefreshCw, Sparkles, Timer, Trash2, X } from 'lucide-vue-next'
+import { Check, FolderOpen, FolderPlus, HardDrive, Image as ImageIcon, Keyboard, Loader2, Network, Palette, RefreshCw, Sparkles, Timer, Trash2, X } from 'lucide-vue-next'
 import { API_BASE_URL } from '../config'
 import { applyTheme, getStoredTheme, themes } from '../theme'
 import type { Folder } from '../types'
@@ -15,6 +15,14 @@ const loading = ref(false)
 const showAddModal = ref(false)
 const selectedTheme = ref<string>(getStoredTheme())
 const scanToast = ref<string | null>(null)
+const externalProxy = ref('')
+const loadingProxy = ref(false)
+const savingProxy = ref(false)
+const testingProxy = ref(false)
+const proxySaved = ref(false)
+const proxyError = ref('')
+const proxyTestMessage = ref('')
+const proxyTestSucceeded = ref(false)
 let toastTimer: number | undefined
 const prevScanning = ref<Set<number>>(new Set())
 
@@ -42,6 +50,65 @@ const scanModeLabel = (mode: Folder['scan_mode']) => {
 const selectTheme = (themeId: string) => {
   selectedTheme.value = themeId
   applyTheme(themeId)
+}
+
+const fetchExternalProxy = async () => {
+  loadingProxy.value = true
+  proxyError.value = ''
+  try {
+    const res = await axios.get(`${API_BASE_URL}/external/proxy`)
+    externalProxy.value = res.data.proxy || ''
+  } catch (err) {
+    console.error('无法读取外部收藏代理设置:', err)
+    proxyError.value = '无法读取代理设置，请检查后端连接。'
+  } finally {
+    loadingProxy.value = false
+  }
+}
+
+const saveExternalProxy = async () => {
+  savingProxy.value = true
+  proxySaved.value = false
+  proxyError.value = ''
+  proxyTestMessage.value = ''
+  try {
+    const res = await axios.patch(`${API_BASE_URL}/external/proxy`, {
+      proxy: externalProxy.value.trim()
+    })
+    externalProxy.value = res.data.proxy || ''
+    proxySaved.value = true
+    window.setTimeout(() => {
+      proxySaved.value = false
+    }, 2500)
+  } catch (err: any) {
+    console.error('无法保存外部收藏代理设置:', err)
+    const detail = err.response?.data?.detail
+    proxyError.value = typeof detail === 'string' ? detail : '保存代理设置失败。'
+  } finally {
+    savingProxy.value = false
+  }
+}
+
+const testExternalProxy = async () => {
+  testingProxy.value = true
+  proxySaved.value = false
+  proxyError.value = ''
+  proxyTestMessage.value = ''
+  proxyTestSucceeded.value = false
+  try {
+    const res = await axios.post(`${API_BASE_URL}/external/proxy/test`, {
+      proxy: externalProxy.value.trim()
+    })
+    proxyTestSucceeded.value = true
+    proxyTestMessage.value = res.data.message || '代理连通性正常。'
+  } catch (err: any) {
+    console.error('外部收藏代理连通性测试失败:', err)
+    const detail = err.response?.data?.detail
+    proxyTestSucceeded.value = false
+    proxyTestMessage.value = typeof detail === 'string' ? detail : '连通性测试失败，请检查代理地址和网络。'
+  } finally {
+    testingProxy.value = false
+  }
 }
 
 const fetchFolders = async () => {
@@ -177,7 +244,10 @@ const formatLocalTime = (timeStr: string | null) => {
   return timeStr.replace('T', ' ').split('.')[0]
 }
 
-onMounted(fetchFolders)
+onMounted(() => {
+  void fetchFolders()
+  void fetchExternalProxy()
+})
 </script>
 
 <template>
@@ -249,6 +319,65 @@ onMounted(fetchFolders)
             <span v-if="selectedTheme.startsWith('#')" class="w-2 h-2 rounded-full bg-accent shrink-0 ring-2 ring-accent/30"></span>
           </label>
         </div>
+      </section>
+
+      <section class="border border-white/6 bg-white/[0.02] backdrop-blur-3xl rounded-3xl p-6 md:p-8 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)]">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center border border-accent/20">
+              <Network :size="20" />
+            </div>
+            <div>
+              <h2 class="text-base font-bold text-white/90">外部收藏代理</h2>
+              <p class="text-xs text-white/45 mt-0.5">统一用于 WNACG、X 收藏和 Pawchive 的服务端请求</p>
+            </div>
+          </div>
+          <span v-if="loadingProxy" role="status" class="text-xs text-white/45 flex items-center gap-1.5">
+            <Loader2 :size="14" class="animate-spin text-accent" /> 正在读取
+          </span>
+          <span v-else-if="proxySaved" role="status" class="text-xs text-emerald-400 flex items-center gap-1.5">
+            <Check :size="14" /> 已保存
+          </span>
+        </div>
+
+        <form class="space-y-3" @submit.prevent="saveExternalProxy">
+          <label for="external-favorites-proxy" class="block text-xs font-semibold text-white/65">HTTP 代理地址</label>
+          <div class="flex flex-col sm:flex-row gap-3">
+            <input
+              id="external-favorites-proxy"
+              v-model="externalProxy"
+              @input="proxyTestMessage = ''; proxyTestSucceeded = false"
+              type="url"
+              autocomplete="url"
+              :disabled="loadingProxy || savingProxy || testingProxy"
+              placeholder="例如 http://127.0.0.1:7890"
+              class="flex-1 min-w-0 bg-black/25 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/35 focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:opacity-50"
+            />
+            <div class="grid grid-cols-2 gap-3 sm:flex">
+              <button
+                type="button"
+                :disabled="loadingProxy || savingProxy || testingProxy"
+                class="min-h-11 px-4 rounded-xl border border-white/10 bg-white/5 text-white/80 text-sm font-bold inline-flex items-center justify-center gap-2 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                @click="testExternalProxy"
+              >
+                <Loader2 v-if="testingProxy" :size="15" class="animate-spin" />
+                <RefreshCw v-else :size="15" />
+                测试连通性
+              </button>
+              <button
+                type="submit"
+                :disabled="loadingProxy || savingProxy || testingProxy"
+                class="min-h-11 px-5 rounded-xl bg-accent text-white text-sm font-bold inline-flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                <Loader2 v-if="savingProxy" :size="15" class="animate-spin" />
+                保存设置
+              </button>
+            </div>
+          </div>
+          <p class="text-xs text-white/40">留空表示直连。支持无账号密码的 HTTP 代理；该设置也会用于 Pawchive 登录、作者列表和媒体请求。</p>
+          <p v-if="proxyTestMessage" :role="proxyTestSucceeded ? 'status' : 'alert'" :class="proxyTestSucceeded ? 'text-xs text-emerald-300' : 'text-xs text-red-300'">{{ proxyTestMessage }}</p>
+          <p v-if="proxyError" role="alert" class="text-xs text-red-300">{{ proxyError }}</p>
+        </form>
       </section>
 
       <section class="border border-white/6 bg-white/[0.02] backdrop-blur-3xl rounded-3xl p-6 md:p-8 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)]">

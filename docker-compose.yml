@@ -25,6 +25,7 @@ services:
       # HE_ALLOWED_ORIGINS: "https://<your-sakura-subdomain>"  # only if you ever expose the web UI
       HE_DATABASE_URL: "sqlite:////data/library.db"
       HE_PAWCHIVE_ENABLED: "${HE_PAWCHIVE_ENABLED:-0}"
+      # Legacy migration fallback; use Settings → 外部收藏代理 after upgrading.
       HE_PAWCHIVE_PROXY: "${HE_PAWCHIVE_PROXY:-}"
       HE_PAWCHIVE_DOWNLOAD_ROOT: "${HE_PAWCHIVE_DOWNLOAD_ROOT:-}"
       HE_PAWCHIVE_STORAGE_SENTINEL: "${HE_PAWCHIVE_STORAGE_SENTINEL:-}"

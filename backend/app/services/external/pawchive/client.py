@@ -61,24 +61,26 @@ class PinnedHTTPSConnection(http.client.HTTPSConnection):
         raise PawchiveError("UPSTREAM_UNAVAILABLE", "无法连接 Pawchive", 502) from last_error
 
 
+def _new_connection(host: str) -> http.client.HTTPSConnection:
+    from app.external_config import get_external_favorites_proxy, validate_external_favorites_proxy
+
+    proxy = get_external_favorites_proxy()
+    if not proxy:
+        return PinnedHTTPSConnection(host, timeout=20)
+    try:
+        proxy = validate_external_favorites_proxy(proxy)
+        parsed = urlsplit(proxy or "")
+        connection = http.client.HTTPSConnection(parsed.hostname, parsed.port or 80, timeout=20)
+    except (ValueError, TypeError) as exc:
+        raise PawchiveError("INVALID_CONFIG", "外部收藏代理地址无效，请填写 HTTP 代理", 503) from exc
+    connection.set_tunnel(host, 443)
+    return connection
+
+
 def _request(host: str, target: str, *, range_header: str | None = None):
     if host not in {API_HOST, FILE_HOST, IMAGE_HOST} or not target.startswith("/") or ".." in target:
         raise PawchiveError("INVALID_REQUEST", "非法上游请求", 400)
-    # The API and thumbnail CDN are reachable directly on the deployment host;
-    # only the file CDN needs its existing mihomo route.
-    proxy = os.getenv("HE_PAWCHIVE_PROXY", "").strip() if host == FILE_HOST else ""
-    if proxy:
-        parsed = urlsplit(proxy)
-        if (parsed.scheme != "http" or not parsed.hostname or parsed.username or parsed.password
-                or parsed.path not in {"", "/"} or parsed.query or parsed.fragment):
-            raise PawchiveError("INVALID_CONFIG", "Pawchive 代理配置无效", 503)
-        try:
-            connection = http.client.HTTPSConnection(parsed.hostname, parsed.port or 80, timeout=20)
-        except ValueError as exc:
-            raise PawchiveError("INVALID_CONFIG", "Pawchive 代理端口无效", 503) from exc
-        connection.set_tunnel(host, 443)
-    else:
-        connection = PinnedHTTPSConnection(host, timeout=20)
+    connection = _new_connection(host)
     headers = {
         "Host": host,
         "Accept": "application/json" if host == API_HOST else "image/*, video/*",

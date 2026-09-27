@@ -7,7 +7,6 @@ import re
 import time
 from typing import Dict, Iterable, List, Optional
 from urllib.parse import urljoin
-from urllib.request import getproxies
 
 from curl_cffi import requests as cffi_requests
 
@@ -31,14 +30,6 @@ _FETCH_RETRY_BACKOFF_SECONDS = float(os.getenv("HE_WNACG_FETCH_RETRY_BACKOFF_SEC
 _RETRYABLE_HTTP_STATUSES = (403, 429, 500, 502, 503, 520, 521, 522, 523, 524)
 
 
-def _proxies() -> Optional[dict]:
-    # Honour both env (HTTP(S)_PROXY) and the Windows system-proxy registry that
-    # Clash/Mihomo sets when "set as system proxy" is on. Empty dict => direct,
-    # which is correct under TUN-mode tunnels that route transparently.
-    proxies = getproxies()
-    return proxies or None
-
-
 def _request(
     url: str,
     *,
@@ -50,15 +41,14 @@ def _request(
     extra_headers: Optional[dict] = None,
     retries: int = _FETCH_RETRIES,
     raise_on_status: bool = True,
-    proxy: Optional[str] = None,
     data: Optional[bytes | str] = None,
     stream: bool = False,
 ):
     """Perform a GET/HEAD with browser TLS impersonation, retrying past
     Cloudflare's intermittent 403/connection-reset and swapping fingerprint
     profiles on handshake failure. Returns the curl_cffi Response."""
-    from app.external_config import get_global_proxy
-    proxy = get_global_proxy()
+    from app.external_config import get_external_favorites_proxy
+    proxy = get_external_favorites_proxy()
 
     headers = {
         # Deliberately no User-Agent override: impersonate=chrome sets a Chrome
@@ -83,7 +73,7 @@ def _request(
                     "headers": headers,
                     "timeout": timeout,
                     "impersonate": impersonate,
-                    "proxies": {"http": proxy, "https": proxy} if proxy else _proxies(),
+                    "proxies": {"http": proxy, "https": proxy} if proxy else {},
                 }
                 if data is not None:
                     request_kwargs["data"] = data
@@ -335,7 +325,6 @@ def resolve_wnacg_worker_archive_url(
     cookie: str,
     referer: str,
     timeout: Optional[int] = None,
-    proxy: Optional[str] = None,
 ) -> Optional[str]:
     payload = json.dumps(
         {"file_key": request.file_key, "file_name": request.file_name},
@@ -350,7 +339,6 @@ def resolve_wnacg_worker_archive_url(
         method="POST",
         extra_headers={"Content-Type": "application/json"},
         data=payload.encode("utf-8"),
-        proxy=proxy,
     )
     try:
         data = json.loads(response.content.decode("utf-8", errors="replace"))
@@ -371,14 +359,13 @@ def html_has_next_page(html: str) -> bool:
     return ">後頁" in html or ">后页" in html or ">下一页" in html
 
 
-def fetch_html(url: str, cookie: str, timeout: Optional[int] = None, proxy: Optional[str] = None) -> str:
+def fetch_html(url: str, cookie: str, timeout: Optional[int] = None) -> str:
     response = _request(
         url,
         cookie=cookie,
         accept="text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         referer=WNACG_BASE_URL,
         timeout=timeout or _FETCH_TIMEOUT_SECONDS,
-        proxy=proxy,
     )
     raw = response.content
     content_type = response.headers.get("Content-Type", "")
@@ -387,14 +374,13 @@ def fetch_html(url: str, cookie: str, timeout: Optional[int] = None, proxy: Opti
     return raw.decode(encoding, errors="replace")
 
 
-def fetch_binary(url: str, cookie: str, referer: str = WNACG_BASE_URL, timeout: Optional[int] = None, proxy: Optional[str] = None) -> tuple[bytes, str]:
+def fetch_binary(url: str, cookie: str, referer: str = WNACG_BASE_URL, timeout: Optional[int] = None) -> tuple[bytes, str]:
     response = _request(
         url,
         cookie=cookie,
         accept="image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
         referer=referer,
         timeout=timeout or _FETCH_TIMEOUT_SECONDS,
-        proxy=proxy,
     )
     return response.content, response.headers.get("Content-Type", "application/octet-stream")
 
@@ -405,7 +391,6 @@ def fetch_file_to_path(
     destination_path: str,
     referer: str = WNACG_BASE_URL,
     timeout: Optional[int] = None,
-    proxy: Optional[str] = None,
     accept: str = "application/zip,application/octet-stream,*/*",
     on_chunk=None,
 ) -> tuple[int, str]:
@@ -415,7 +400,6 @@ def fetch_file_to_path(
         accept=accept,
         referer=referer,
         timeout=timeout or _FETCH_TIMEOUT_SECONDS,
-        proxy=proxy,
         stream=True,
     )
     total = 0
@@ -447,7 +431,7 @@ def _content_length_from_headers(headers) -> Optional[int]:
     return None
 
 
-def fetch_content_length(url: str, cookie: str, referer: str = WNACG_BASE_URL, timeout: int = 10, proxy: Optional[str] = None) -> Optional[int]:
+def fetch_content_length(url: str, cookie: str, referer: str = WNACG_BASE_URL, timeout: int = 10) -> Optional[int]:
     accept = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
     for method in ("HEAD", "GET"):
         extra = {"Range": "bytes=0-0"} if method == "GET" else None
@@ -464,7 +448,6 @@ def fetch_content_length(url: str, cookie: str, referer: str = WNACG_BASE_URL, t
                 extra_headers=extra,
                 retries=2,
                 raise_on_status=False,
-                proxy=proxy,
             )
             length = _content_length_from_headers(response.headers)
             if length is not None:

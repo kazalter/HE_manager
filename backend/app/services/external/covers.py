@@ -128,7 +128,6 @@ def ensure_external_cover_cache(item: models.ExternalFavoriteItem, source: model
                 item.cover_url,
                 source.cookie or "",
                 referer=item.url or source.favorites_url,
-                proxy=source.proxy,
             )
     except Exception as exc:  # noqa: BLE001
         logger.warning("Failed to cache external cover for %r: %s", item.title, exc)

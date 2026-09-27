@@ -53,8 +53,6 @@ def update_x_source(source_id: int, payload: schemas.XImportSourceUpdate, db: Se
             os.makedirs(x_storage.x_root_dir(normalized), exist_ok=True)
         else:
             source.download_root_path = None
-    if "proxy" in data:
-        source.proxy = (data["proxy"] or "").strip() or None
     db.commit()
     db.refresh(source)
     return source

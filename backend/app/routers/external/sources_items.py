@@ -72,8 +72,6 @@ def update_external_source(source_id: int, payload: schemas.ExternalFavoriteSour
         source.playlist_url = (data["playlist_url"] or "").strip() or None
     if "api_mirrors" in data:
         source.api_mirrors = (data["api_mirrors"] or "").strip() or None
-    if "proxy" in data:
-        source.proxy = (data["proxy"] or "").strip() or None
     db.commit()
     db.refresh(source)
     return source
