@@ -34,6 +34,19 @@ class FakeResponse:
 
 
 class DownloadTests(unittest.TestCase):
+    def test_target_rejects_symlink_before_creating_directories(self):
+        if os.name == "nt":
+            self.skipTest("Windows developer accounts may lack symlink privileges")
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as outside:
+            root = Path(directory)
+            (root / "pawchive").symlink_to(outside, target_is_directory=True)
+            post = models.PawchivePost(service="fanbox", creator_id="7", post_id="123")
+            row = models.PawchiveAttachment(original_index=0, attachment_key="a" * 24)
+            with self.assertRaises(client.PawchiveError) as blocked:
+                downloader._target(root, post, row, PATH)
+            self.assertEqual(blocked.exception.code, "INVALID_PATH")
+            self.assertFalse((Path(outside) / "fanbox").exists())
+
     def test_configured_sentinel_blocks_unmounted_directory(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {
             "HE_PAWCHIVE_DOWNLOAD_ROOT": directory,

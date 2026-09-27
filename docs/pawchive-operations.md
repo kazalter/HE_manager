@@ -80,7 +80,7 @@ existing data volume and media mount in place during redeployments.
 - An isolated rollback rehearsal started the previous image with a current
   database snapshot and returned a healthy `/healthz`; production remained on
   the new image.
-- Backend pytest: 147 passed. Frontend Vitest: 23 passed. Production build
+- Backend pytest: 148 passed. Frontend Vitest: 23 passed. Production build
   passed. Chrome layout and viewer close interaction passed at 320, 390, 768,
   and 1440 pixels using synthetic API responses; no horizontal page overflow
   was observed. Windows CI remains pending.

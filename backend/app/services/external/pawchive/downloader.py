@@ -201,6 +201,9 @@ def _target(root: Path, post: models.PawchivePost, row: models.PawchiveAttachmen
     extension = "." + path.rsplit(".", 1)[-1]
     filename = f"{row.original_index:03d}_{row.attachment_key[:16]}{extension}"
     directory = root / "pawchive" / post.service / post.creator_id / post.post_id
+    _ensure_download_storage(root)
+    if os.path.commonpath((str(root), str(directory.resolve()))) != str(root):
+        raise client.PawchiveError("INVALID_PATH", "下载路径越界", 400)
     directory.mkdir(parents=True, exist_ok=True)
     if os.path.commonpath((str(root), str(directory.resolve()))) != str(root):
         raise client.PawchiveError("INVALID_PATH", "下载路径越界", 400)
