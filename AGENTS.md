@@ -8,8 +8,8 @@
 - 代码必须跨平台可运行：Windows 本地开发和测试不能被 Linux-only 依赖打断；Linux 部署差异放在配置、脚本和 Docker 文件里。
 - 运行画像分开维护：
   - **Windows 开发/测试画像**：PowerShell 7、`he.ps1`、`he-server.ps1`、本机 Python、Vite、Android 构建脚本。
-  - **Linux 部署画像**：`docker-compose.yml`、`frontend/nginx.conf`、`deploy_to_linux.py`、NPM 外层反代、服务器数据卷。
-- 修改后端或网页前端时，若用户没特别说明，默认最终目标是 Linux 服务器 `/opt/stacks/he-manager/` 的 Docker 化服务；先本地改和验证，再按需部署。
+  - **Linux 部署画像**：当前本机上的 Docker Compose 服务、`frontend/nginx.conf`、NPM 外层反代和数据卷。
+- 当前 HE Manager 的代码库和 Docker 服务都在本机 `/opt/stacks/he-manager/`。修改后端或网页前端时，若用户没特别说明，默认目标是这台机器上的 Docker 服务；先本机构建，再按需更新本机容器。
 
 ## Git 硬规则
 
@@ -55,11 +55,12 @@ C:\Users\25768\AppData\Local\Programs\Python\Python312\python.exe
 
 ## 部署边界
 
-- Linux 服务器：`192.168.50.1`。
-- 远端目录：`/opt/stacks/he-manager/`。
+- Linux Docker 主机：当前本机。
+- 服务目录：本机 `/opt/stacks/he-manager/`。
 - 前端容器内部 nginx 配置：`frontend/nginx.conf`。
 - Nginx Proxy Manager 是外层入口，不在本仓库直接维护。
-- `deploy_to_linux.py` 会构建前端、上传 `frontend/dist`、后端源码、`docker-compose.yml`、`frontend/nginx.conf`、后端 requirements，并执行 `docker compose up -d --build`。
+- 本机前端容器把 `frontend/dist` 挂载为只读站点目录；后端由本机 Docker Compose 管理。
+- `deploy_to_linux.py` 是上传到另一个远端主机的工具，仅在用户指定远端目标且部署凭据已配置时使用；它不用于当前本机部署。
 
 ## 改动边界
 
