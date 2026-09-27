@@ -221,7 +221,7 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
        vnodes and they would re-introduce the multi-root blank-page bug. -->
   <!-- ===== list mode ===== -->
   <div v-if="!isDetail">
-    <header class="sticky top-0 z-40 bg-background/75 backdrop-blur-xl border-b border-white/10 px-6 md:px-8 py-5 mb-6">
+    <header class="he-page-header sticky top-0 z-40 bg-background/75 backdrop-blur-xl border-b border-white/10 px-6 md:px-8 py-5 mb-6">
       <div class="flex flex-wrap items-center justify-between gap-5">
         <div class="flex items-baseline gap-3">
           <h1 class="text-2xl md:text-3xl font-black text-white tracking-tight flex items-center gap-3">
@@ -232,8 +232,8 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
           </p>
         </div>
 
-        <div class="flex flex-1 min-w-[260px] max-w-3xl gap-3">
-          <div class="relative flex-1 group">
+        <div class="flex flex-col sm:flex-row w-full sm:w-auto sm:flex-1 min-w-0 max-w-3xl gap-3">
+          <div class="relative w-full sm:w-auto flex-1 group">
             <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 group-focus-within:text-accent transition-colors" :size="18" />
             <input
               v-model="search"
@@ -242,13 +242,13 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
               class="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-sm text-white placeholder-white/35 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:bg-white/10 transition-all"
             />
           </div>
-          <div class="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl p-1">
+          <div class="flex w-full sm:w-auto items-center gap-1 bg-white/5 border border-white/10 rounded-xl p-1">
             <button
               v-for="opt in [{ k: 'count', t: '作品数' }, { k: 'pending', t: '待入库' }, { k: 'name', t: '名称' }]"
               :key="opt.k"
               @click="sortBy = opt.k as any"
               :class="sortBy === opt.k ? 'bg-accent text-white' : 'text-white/45 hover:text-white'"
-              class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+              class="flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1"
             >
               <SortAsc v-if="opt.k === 'name'" :size="13" />{{ opt.t }}
             </button>

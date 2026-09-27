@@ -210,3 +210,14 @@ body {
   display: inline-block;
   width: 100%;
 }
+
+/* Reserve space for the fixed mobile navigation button above page titles. */
+@media (max-width: 899px) {
+  .he-page-header {
+    padding-top: 3.25rem;
+  }
+
+  .he-page-header.sticky {
+    padding-top: 4.5rem;
+  }
+}

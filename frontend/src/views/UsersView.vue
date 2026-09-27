@@ -103,7 +103,7 @@ onMounted(fetchUsers)
 
 <template>
   <div class="z-10 relative min-h-screen px-6 md:px-8 py-7">
-    <header class="flex flex-wrap items-center justify-between gap-4 mb-6">
+    <header class="he-page-header flex flex-wrap items-center justify-between gap-4 mb-6">
       <div>
         <h1 class="text-2xl md:text-3xl font-black text-white tracking-tight">用户管理</h1>
         <p class="text-sm text-white/45 mt-1">管理可以登录网页端和安卓端的账号</p>
@@ -137,17 +137,17 @@ onMounted(fetchUsers)
         <span class="text-xs text-white/40">{{ users.length }} 个用户</span>
       </div>
       <div class="divide-y divide-white/10">
-        <div v-for="user in users" :key="user.id" class="px-5 py-4 flex items-center justify-between gap-4">
-          <div class="flex items-center gap-3 min-w-0">
-            <div class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/70">
+        <div v-for="user in users" :key="user.id" class="px-5 py-4 flex flex-col items-stretch sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div class="flex w-full sm:w-auto items-center gap-3 min-w-0">
+            <div class="w-10 h-10 shrink-0 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/70">
               <UserRound :size="19" />
             </div>
             <div class="min-w-0">
               <p class="font-black text-white truncate">{{ user.username }}</p>
-              <p class="text-xs text-white/40">创建于 {{ new Date(user.created_at).toLocaleString() }}</p>
+              <p class="text-xs text-white/60">创建于 {{ new Date(user.created_at).toLocaleString() }}</p>
             </div>
           </div>
-          <div class="flex items-center gap-4 shrink-0">
+          <div class="flex w-full sm:w-auto items-center justify-between sm:justify-end gap-4 shrink-0">
             <div class="flex items-center gap-2">
               <span v-if="user.is_admin" class="rounded-lg bg-accent/15 border border-accent/20 text-accent px-2 py-1 text-[11px] font-black flex items-center gap-1">
                 <ShieldCheck :size="13" />
@@ -159,13 +159,15 @@ onMounted(fetchUsers)
             </div>
             
             <div class="flex items-center gap-1">
-              <button @click="openDialog(user)" class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 flex items-center justify-center transition-all">
+              <button type="button" @click="openDialog(user)" :aria-label="`编辑用户 ${user.username}`" class="w-11 h-11 rounded-lg bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent flex items-center justify-center transition-all">
                 <Edit :size="14" />
               </button>
               <button 
                 v-if="user.id !== authState.user?.id"
+                type="button"
                 @click="deleteUser(user)" 
-                class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-red-400/60 hover:text-red-400 hover:bg-red-400/10 flex items-center justify-center transition-all"
+                :aria-label="`删除用户 ${user.username}`"
+                class="w-11 h-11 rounded-lg bg-white/5 border border-white/10 text-red-400/80 hover:text-red-400 hover:bg-red-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent flex items-center justify-center transition-all"
               >
                 <Trash2 :size="14" />
               </button>

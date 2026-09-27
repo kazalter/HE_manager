@@ -73,7 +73,7 @@ onMounted(() => {
 
 <template>
   <div class="z-10 relative min-h-screen">
-    <header class="sticky top-0 z-40 bg-background/75 backdrop-blur-xl border-b border-white/10 px-6 md:px-8 py-5 mb-6">
+    <header class="he-page-header sticky top-0 z-40 bg-background/75 backdrop-blur-xl border-b border-white/10 px-6 md:px-8 py-5 mb-6">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-baseline gap-3">
           <h1 class="text-2xl md:text-3xl font-black text-white tracking-tight">外部收藏</h1>

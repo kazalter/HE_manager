@@ -184,7 +184,7 @@ const removeTag = async (t: Tag) => {
 
 <template>
   <div class="p-6 md:p-8 max-w-5xl mx-auto">
-    <div class="flex items-center justify-between mb-8">
+    <div class="he-page-header flex items-center justify-between mb-8">
       <div>
         <h1 class="text-2xl font-black text-white flex items-center gap-3">
           <TagsIcon :size="26" class="text-accent" />

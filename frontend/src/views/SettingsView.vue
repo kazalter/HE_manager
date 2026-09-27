@@ -182,7 +182,7 @@ onMounted(fetchFolders)
 
 <template>
   <div class="p-6 md:p-8 max-w-5xl mx-auto z-10 relative">
-    <header class="mb-10 flex flex-wrap justify-between items-end gap-5">
+    <header class="he-page-header mb-10 flex flex-wrap justify-between items-end gap-5">
       <div>
         <h1 class="text-3xl md:text-4xl font-black mb-3 text-white">偏好设置</h1>
         <p class="text-white/50 text-base md:text-lg">配置媒体库来源、扫描行为和界面主题。</p>
@@ -252,7 +252,7 @@ onMounted(fetchFolders)
       </section>
 
       <section class="border border-white/6 bg-white/[0.02] backdrop-blur-3xl rounded-3xl p-6 md:p-8 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)]">
-        <div class="flex items-center justify-between gap-4 mb-6">
+        <div class="flex flex-col items-start sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <h2 class="text-xs font-black tracking-wider uppercase text-white/55 flex items-center gap-3">
             <HardDrive class="text-emerald-400" :size="18" />
             已挂载目录
@@ -263,7 +263,7 @@ onMounted(fetchFolders)
             v-if="folders.length > 0"
             @click="scanAllFolders"
             :disabled="isAnyScanning"
-            class="h-9 px-3.5 rounded-xl bg-white/5 hover:bg-accent/20 hover:text-accent border border-white/10 hover:border-accent/30 flex items-center gap-2 transition-all disabled:opacity-50 disabled:pointer-events-none active:scale-95 text-xs font-bold text-white/80 cursor-pointer shadow-sm"
+            class="min-h-9 w-full sm:w-auto px-3.5 rounded-xl bg-white/5 hover:bg-accent/20 hover:text-accent border border-white/10 hover:border-accent/30 flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:pointer-events-none active:scale-95 text-xs font-bold text-white/80 cursor-pointer shadow-sm"
             :title="isAnyScanning ? '正在扫描目录中' : '一键刷新扫描所有已挂载目录'"
           >
             <RefreshCw :class="{ 'animate-spin text-accent': isAnyScanning }" :size="14" />
@@ -279,10 +279,10 @@ onMounted(fetchFolders)
           <div
             v-for="folder in folders"
             :key="folder.id"
-            class="group relative flex flex-wrap items-center justify-between gap-4 p-5 bg-white/[0.01] hover:bg-white/5 border rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] transition-all duration-300"
+            class="group relative flex flex-col items-stretch sm:flex-row sm:items-center sm:justify-between gap-4 p-5 bg-white/[0.01] hover:bg-white/5 border rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] transition-all duration-300"
             :class="folder.status === 'scanning' ? 'border-accent/40 bg-accent/[0.04]' : 'border-white/8'"
           >
-            <div class="min-w-0 flex-1">
+            <div class="min-w-0 w-full sm:w-auto sm:flex-1">
               <p class="font-mono text-sm md:text-base text-white/90 break-all" :title="folder.path">{{ folder.path }}</p>
               <div class="flex flex-wrap items-center gap-3 mt-2">
                 <span class="text-[10px] font-black bg-white/10 px-2 py-0.5 rounded border border-white/10 text-white/65">
@@ -291,7 +291,7 @@ onMounted(fetchFolders)
                 <span v-if="folder.scan_mode === 'video' || folder.scan_mode === 'auto'" class="text-[10px] font-black bg-white/10 px-2 py-0.5 rounded border border-white/10 text-white/65">
                   {{ folder.thumbnail_enabled ? `预览间隔 ${folder.thumbnail_interval} 秒` : '进度预览关闭' }}
                 </span>
-                <p class="text-sm flex items-center gap-2" :class="folder.status === 'scanning' ? 'text-accent font-bold' : 'text-white/80'">
+                <p class="text-sm flex flex-wrap items-center gap-2" :class="folder.status === 'scanning' ? 'text-accent font-bold' : 'text-white/80'">
                   <span v-if="folder.status === 'scanning'" class="relative flex h-2.5 w-2.5">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-accent"></span>
@@ -305,7 +305,7 @@ onMounted(fetchFolders)
               </div>
             </div>
 
-            <div class="flex gap-2 shrink-0">
+            <div class="flex w-full sm:w-auto justify-end gap-2 shrink-0">
               <button
                 @click="scanFolder(folder.id)"
                 :disabled="folder.status === 'scanning'"

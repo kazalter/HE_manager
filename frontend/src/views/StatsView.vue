@@ -530,7 +530,7 @@ const lastOpenedText = (item: StatAttentionItem) => {
 
 <template>
   <div class="p-6 md:p-8 max-w-7xl mx-auto">
-    <div class="flex items-center justify-between mb-6">
+    <div class="he-page-header flex items-center justify-between mb-6">
       <div>
         <h1 class="text-2xl font-black text-white flex items-center gap-3">
           <BarChart3 :size="26" class="text-accent" />
@@ -591,7 +591,7 @@ const lastOpenedText = (item: StatAttentionItem) => {
             ]"
           >
             <component :is="card.icon" :size="18" class="text-accent mb-3" />
-            <div class="text-2xl font-black text-white truncate" :title="String(card.value)">
+            <div class="text-xl sm:text-2xl font-black text-white leading-tight break-words" :title="String(card.value)">
               {{ card.value }}
             </div>
             <div class="text-xs text-white/45 mt-1 font-semibold">{{ card.label }}</div>
