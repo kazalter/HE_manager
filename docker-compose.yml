@@ -24,6 +24,9 @@ services:
       HE_ENABLE_DOCS: "0"           # keep /docs /redoc /openapi.json closed on the public net
       # HE_ALLOWED_ORIGINS: "https://<your-sakura-subdomain>"  # only if you ever expose the web UI
       HE_DATABASE_URL: "sqlite:////data/library.db"
+      HE_PAWCHIVE_ENABLED: "${HE_PAWCHIVE_ENABLED:-0}"
+      HE_PAWCHIVE_PROXY: "${HE_PAWCHIVE_PROXY:-}"
+      HE_PAWCHIVE_DOWNLOAD_ROOT: "${HE_PAWCHIVE_DOWNLOAD_ROOT:-}"
       HE_AI_CONFIG_PATH: "/data/deepseek.json"
       HF_HOME: "/data/huggingface"
       SENTENCE_TRANSFORMERS_HOME: "/data/huggingface"

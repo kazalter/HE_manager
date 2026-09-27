@@ -251,6 +251,18 @@ const handleLogout = () => {
         </router-link>
 
         <router-link
+          v-if="user?.is_admin"
+          to="/external/pawchive"
+          :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
+          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
+          active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold"
+          title="Pawchive"
+        >
+          <Globe2 :size="20" class="shrink-0" />
+          <span v-if="!collapsed || isCompact" class="font-medium text-sm whitespace-nowrap overflow-hidden">Pawchive</span>
+        </router-link>
+
+        <router-link
           to="/recommend"
           :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
           class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"

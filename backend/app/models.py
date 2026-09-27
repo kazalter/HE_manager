@@ -263,6 +263,46 @@ class ExternalFavoriteItem(Base):
     source = relationship("ExternalFavoriteSource", back_populates="items")
 
 
+class PawchivePost(Base):
+    __tablename__ = "pawchive_posts"
+    __table_args__ = (
+        UniqueConstraint("service", "creator_id", "post_id", name="uq_pawchive_post_identity"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    service = Column(String, nullable=False)
+    creator_id = Column(String, nullable=False)
+    post_id = Column(String, nullable=False)
+    title = Column(String)
+    creator_name = Column(String)
+    source_url = Column(String)
+    observed_at = Column(DateTime, default=datetime.utcnow)
+    attachments = relationship("PawchiveAttachment", back_populates="post", cascade="all, delete-orphan")
+
+
+class PawchiveAttachment(Base):
+    __tablename__ = "pawchive_attachments"
+    __table_args__ = (
+        UniqueConstraint("post_id", "attachment_key", name="uq_pawchive_attachment_identity"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    post_id = Column(Integer, ForeignKey("pawchive_posts.id"), nullable=False, index=True)
+    attachment_key = Column(String, nullable=False)
+    original_index = Column(Integer, nullable=False)
+    filename = Column(String)
+    media_type = Column(String)
+    status = Column(String, default="queued", index=True)
+    job_id = Column(String, nullable=True, index=True)
+    error = Column(Text, nullable=True)
+    local_path = Column(String, nullable=True)
+    file_size = Column(Integer, nullable=True)
+    sha256 = Column(String, nullable=True)
+    media_id = Column(Integer, ForeignKey("media.id", ondelete="SET NULL"), nullable=True, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    post = relationship("PawchivePost", back_populates="attachments")
+
+
 class XImportSource(Base):
     __tablename__ = "x_import_sources"
 

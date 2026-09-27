@@ -21,6 +21,7 @@ from .routers import creators as creators_routes
 from .routers import dedup as dedup_routes
 from .routers import external as external_routes
 from .routers import media as media_routes
+from .routers import pawchive as pawchive_routes
 from .routers import recommend as recommend_routes
 from .routers import root as root_routes
 from .routers import stats as stats_routes
@@ -28,6 +29,7 @@ from .routers import system as system_routes
 from .routers import x_import as x_import_routes
 from .dedup import worker as dedup_worker
 from .services import job_lifecycle
+from .services.external.pawchive import downloader as pawchive_downloader
 from .services.thumbnails import THUMBNAIL_DIR, cleanup_orphaned_thumbnails
 
 logging.basicConfig(
@@ -52,6 +54,7 @@ async def lifespan(app: FastAPI):
 
     # Startup tasks
     job_lifecycle.recover_interrupted_jobs()
+    pawchive_downloader.recover_interrupted_attachments()
     job_lifecycle.cleanup_job_history()
     dedup_worker.recover_checking_jobs()
     auto_sync_routes.init_scheduler()
@@ -91,6 +94,7 @@ app.include_router(stats_routes.router)
 app.include_router(creators_routes.router)
 app.include_router(dedup_routes.router)
 app.include_router(external_routes.router)
+app.include_router(pawchive_routes.router)
 app.include_router(auto_sync_routes.router)
 app.include_router(bd2_routes.router)
 app.include_router(auth_routes.router)

@@ -1,5 +1,6 @@
 from sqlalchemy import inspect, text
 from .database import engine
+from . import models
 
 def ensure_folder_option_columns():
     inspector = inspect(engine)
@@ -175,6 +176,12 @@ def ensure_tag_columns():
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tags_name_namespace ON tags (name, namespace)"))
 
 
+def ensure_pawchive_tables():
+    """Idempotent creation for source identity and per-attachment state."""
+    models.PawchivePost.__table__.create(bind=engine, checkfirst=True)
+    models.PawchiveAttachment.__table__.create(bind=engine, checkfirst=True)
+
+
 def run_schema_migrations():
     """Runs all manual idempotent schema migrations."""
     ensure_folder_option_columns()
@@ -189,4 +196,4 @@ def run_schema_migrations():
     ensure_dedup_columns()
     ensure_dedup_indexes()
     ensure_tag_columns()
-
+    ensure_pawchive_tables()

@@ -63,6 +63,15 @@ forward that header to clients nor send HE Manager Authorization/Cookie headers
 upstream. Requests are unauthenticated. HTTP 403 and 429 stop or pause work;
 the adapter does not bypass access controls.
 
+On the Linux host, direct TCP to `file.pawchive.pw:443` timed out while the
+existing mihomo proxy on the HE Manager Docker network gateway
+(`172.19.0.1:7897`) delivered a `206` byte range. Set
+`HE_PAWCHIVE_PROXY=http://172.19.0.1:7897` in that host's Compose `.env`.
+The adapter uses HTTP CONNECT only for the fixed file hostname and TLS still
+authenticates that upstream hostname. The API and thumbnail CDN use direct
+connections. This address is deployment-specific;
+Windows development can leave the setting empty or supply its own local proxy.
+
 ## Supported capability matrix
 
 | Capability | Status |

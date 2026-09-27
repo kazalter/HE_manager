@@ -40,6 +40,8 @@ def query_token_allowed(method: str, path: str) -> bool:
         return True
     if len(parts) == 4 and parts[:2] == ["external", "favorites"] and parts[3] == "cover":
         return True
+    if len(parts) == 4 and parts[:3] == ["external", "pawchive", "media"]:
+        return True
     return False
 
 

@@ -1,0 +1,128 @@
+<script setup lang="ts">
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { ArrowLeft, ArrowRight, Download, ExternalLink, Pause, Play, X } from 'lucide-vue-next'
+import ImageViewer from '../../media-detail/ImageViewer.vue'
+import type { PawchiveAttachment, PawchivePost } from '../../../types/pawchive'
+import { pawchiveMediaUrl } from '../../../utils/pawchiveApi'
+
+const props = defineProps<{
+  post: PawchivePost
+  attachment: PawchiveAttachment
+  attachmentIndex: number
+  attachmentTotal: number
+  scopeLabel: string
+  busy: boolean
+  error: string
+  hasPrevious: boolean
+  ended: boolean
+  autoplay: boolean
+  interval: number
+  downloadBusy: boolean
+  downloadMessage: string
+  downloadError: boolean
+}>()
+const emit = defineEmits<{
+  close: []
+  next: []
+  previous: []
+  'update:autoplay': [value: boolean]
+  'update:interval': [value: number]
+  playbackError: [message: string]
+  downloadCurrent: []
+  downloadPost: []
+}>()
+const closeRef = ref<HTMLButtonElement | null>(null)
+const videoRef = ref<HTMLVideoElement | null>(null)
+const imageReady = ref(false)
+let imageTimer: number | undefined
+
+const clearTimer = () => { window.clearTimeout(imageTimer); imageTimer = undefined }
+const scheduleImage = () => {
+  clearTimer()
+  if (props.autoplay && props.attachment.media_type === 'image' && imageReady.value && !document.hidden && !props.busy) {
+    imageTimer = window.setTimeout(() => emit('next'), props.interval * 1000)
+  }
+}
+const startVideo = async () => {
+  if (!props.autoplay || props.attachment.media_type !== 'video') return
+  await nextTick()
+  try { await videoRef.value?.play() }
+  catch { emit('playbackError', '浏览器阻止自动播放，请点击视频继续播放。') }
+}
+const onImageLoaded = () => { imageReady.value = true; scheduleImage() }
+const onImageError = () => { clearTimer(); emit('playbackError', '图片加载失败，可手动跳到下一项。') }
+const onVideoEnded = () => { if (props.autoplay) emit('next') }
+const onVideoPaused = () => {
+  if (props.autoplay && !document.hidden && videoRef.value && !videoRef.value.ended) emit('update:autoplay', false)
+}
+const onVisibility = () => {
+  if (document.hidden) { clearTimer(); videoRef.value?.pause() }
+  else { scheduleImage(); void startVideo() }
+}
+const onKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Tab') {
+    const focusable = [...document.querySelectorAll<HTMLElement>('[role="dialog"] a[href], [role="dialog"] button:not([disabled]), [role="dialog"] input:not([disabled])')]
+    if (!focusable.length) return
+    if (event.shiftKey && document.activeElement === focusable[0]) { event.preventDefault(); focusable[focusable.length - 1]?.focus() }
+    else if (!event.shiftKey && document.activeElement === focusable[focusable.length - 1]) { event.preventDefault(); focusable[0]?.focus() }
+    return
+  }
+  const target = event.target as HTMLElement | null
+  if (target?.closest('input, textarea, select, video, [contenteditable="true"]')) return
+  if (event.key === 'Escape') { event.preventDefault(); emit('close') }
+  else if (event.key === 'ArrowRight') { event.preventDefault(); emit('next') }
+  else if (event.key === 'ArrowLeft') { event.preventDefault(); emit('previous') }
+}
+watch(() => props.attachment.attachment_key, () => {
+  clearTimer()
+  imageReady.value = false
+  void startVideo()
+})
+watch(() => [props.autoplay, props.interval, props.busy], () => { scheduleImage(); void startVideo() })
+onMounted(() => {
+  closeRef.value?.focus()
+  document.addEventListener('visibilitychange', onVisibility)
+  window.addEventListener('keydown', onKeydown)
+  if (props.attachment.media_type === 'video') void startVideo()
+})
+onBeforeUnmount(() => {
+  clearTimer()
+  videoRef.value?.pause()
+  document.removeEventListener('visibilitychange', onVisibility)
+  window.removeEventListener('keydown', onKeydown)
+})
+</script>
+
+<template>
+  <div role="dialog" aria-modal="true" :aria-label="`Pawchive 查看器：${post.title}`" class="fixed inset-0 z-[70] bg-black/95 text-white flex flex-col">
+    <header class="shrink-0 px-3 sm:px-5 py-3 border-b border-white/15 flex items-center gap-3">
+      <button ref="closeRef" type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-xl hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" aria-label="返回列表" @click="emit('close')"><X :size="21" /></button>
+      <div class="min-w-0 flex-1"><p class="text-xs text-white/55 truncate">{{ post.creator_name }} · {{ scopeLabel }}</p><h2 class="text-sm sm:text-base font-bold truncate">{{ post.title }}</h2></div>
+      <a :href="post.source_url" target="_blank" rel="noopener noreferrer" class="min-h-11 px-3 rounded-xl border border-white/15 text-xs font-semibold flex items-center gap-2 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent"><ExternalLink :size="15" />来源</a>
+    </header>
+    <div class="flex-1 min-h-0 relative flex">
+      <ImageViewer v-if="attachment.media_type === 'image'" :key="attachment.attachment_key" :media="{ title: attachment.filename }" :image-url="pawchiveMediaUrl(attachment.stream_ref)" :show-controls="true" :click-only-controls="false" @previous="emit('previous')" @next="emit('next')" @viewer-click="() => {}" @viewer-double-click="() => {}" @controls-hover="() => {}" @loaded="onImageLoaded" @load-error="onImageError" />
+      <div v-else class="w-full h-full flex items-center justify-center bg-black">
+        <video ref="videoRef" :key="attachment.attachment_key" :src="pawchiveMediaUrl(attachment.stream_ref)" controls playsinline preload="metadata" class="w-full h-full object-contain" @ended="onVideoEnded" @pause="onVideoPaused" @error="emit('playbackError', '视频无法播放，请尝试来源页面或下一项。')" />
+      </div>
+      <div v-if="busy" role="status" class="absolute inset-0 bg-black/65 flex items-center justify-center text-sm">正在查找下一项…</div>
+    </div>
+    <footer class="shrink-0 border-t border-white/15 px-3 sm:px-5 py-3 space-y-2">
+      <p v-if="error" role="alert" class="text-sm text-amber-300">{{ error }}</p>
+      <p v-if="downloadMessage" :role="downloadError ? 'alert' : 'status'" :class="downloadError ? 'text-red-300' : 'text-emerald-300'" class="text-sm">{{ downloadMessage }}</p>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <p class="text-xs text-white/65">本帖可播放附件 {{ attachmentIndex + 1 }} / {{ attachmentTotal }}<span class="ml-2">· {{ attachment.filename }}</span></p>
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" :disabled="downloadBusy" class="min-h-11 px-3 rounded-xl border border-white/15 flex items-center gap-1 text-sm disabled:opacity-50 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" @click="emit('downloadCurrent')"><Download :size="15" />当前附件</button>
+          <button type="button" :disabled="downloadBusy" class="min-h-11 px-3 rounded-xl border border-white/15 flex items-center gap-1 text-sm disabled:opacity-50 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" @click="emit('downloadPost')">下载本帖</button>
+          <label class="text-xs text-white/70 flex items-center gap-2">图片间隔
+            <input type="number" min="1" max="300" :value="interval" class="w-16 min-h-11 rounded-lg bg-white/10 border border-white/15 px-2 text-white" @change="emit('update:interval', Math.min(300, Math.max(1, Number(($event.target as HTMLInputElement).value) || 5)))" />秒
+          </label>
+          <button type="button" class="min-h-11 px-3 rounded-xl border border-white/15 flex items-center gap-2 text-sm cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" :aria-pressed="autoplay" @click="emit('update:autoplay', !autoplay)"><Pause v-if="autoplay" :size="16" /><Play v-else :size="16" />{{ autoplay ? '暂停连播' : '自动连播' }}</button>
+          <button type="button" :disabled="!hasPrevious || busy" class="min-h-11 px-3 rounded-xl border border-white/15 flex items-center gap-1 text-sm disabled:opacity-40 cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" @click="emit('previous')"><ArrowLeft :size="16" />上一项</button>
+          <button type="button" :disabled="ended || busy" class="min-h-11 px-3 rounded-xl bg-accent flex items-center gap-1 text-sm font-bold disabled:opacity-40 cursor-pointer focus-visible:ring-2 focus-visible:ring-white" @click="emit('next')">{{ ended ? '范围末尾' : '下一项' }}<ArrowRight :size="16" /></button>
+        </div>
+      </div>
+    </footer>
+  </div>
+</template>

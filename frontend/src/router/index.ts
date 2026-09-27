@@ -26,6 +26,11 @@ const router = createRouter({
       component: () => import('../views/ExternalFavoritesView.vue')
     },
     {
+      path: '/external/pawchive',
+      name: 'pawchive',
+      component: () => import('../views/PawchiveView.vue')
+    },
+    {
       path: '/dedup',
       name: 'dedup',
       component: () => import('../views/DedupView.vue')

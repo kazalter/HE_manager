@@ -5,7 +5,7 @@ import type { Media } from '../../types'
 import { useImageViewerZoom } from '../../composables/useImageViewerZoom'
 
 const props = defineProps<{
-  media: Media
+  media: Pick<Media, 'title'>
   imageUrl: string
   showControls: boolean
   clickOnlyControls: boolean
@@ -17,6 +17,8 @@ const emit = defineEmits<{
   viewerClick: []
   viewerDoubleClick: []
   controlsHover: [hovering: boolean]
+  loaded: []
+  loadError: []
 }>()
 
 const imgRef = ref<HTMLImageElement | null>(null)
@@ -63,11 +65,13 @@ const resetAll = () => {
 const onImageLoad = () => {
   clearLoadingTimer()
   showLoading.value = false
+  emit('loaded')
 }
 
 const onImageError = () => {
   clearLoadingTimer()
   showLoading.value = false
+  emit('loadError')
 }
 
 const toggleActualSize = () => {
