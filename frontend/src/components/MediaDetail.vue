@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import axios from 'axios'
-import { Maximize, Minimize, Trash2, X, FileQuestion, RefreshCw, PanelRightClose, PanelRightOpen, Pause, Play } from 'lucide-vue-next'
+import { Maximize, Minimize, Trash2, X, FileQuestion, RefreshCw, PanelRightClose, PanelRightOpen, Pause, Play, Loader2 } from 'lucide-vue-next'
 import { API_BASE_URL, STREAM_URL, authUrl, thumbnailUrl } from '../config'
 import type { Media } from '../types'
 import AudioPlayer from './media-detail/AudioPlayer.vue'
@@ -18,6 +18,8 @@ import { nextVideo } from '../utils/videoSequence'
 const props = defineProps<{
   initialMedia: Media
   allMedia: Media[]
+  hasAdjacentMediaPage?: (direction: -1 | 1) => boolean
+  loadAdjacentMediaPage?: (direction: -1 | 1) => Promise<boolean>
 }>()
 
 const emit = defineEmits<{
@@ -185,25 +187,35 @@ const removeTag = async (tagId: number) => {
   applyMediaPatch(res.data)
 }
 
-const nextMedia = () => {
-  if (currentIndex.value < props.allMedia.length - 1) {
-    if (isVideo.value) void saveVideoProgress(true)
-    const next = props.allMedia[currentIndex.value + 1]
-    currentMedia.value = next
-    currentPage.value = 0
-    emit('navigate', next)
+const isNavigatingMedia = ref(false)
+const navigateMedia = async (direction: -1 | 1) => {
+  if (isNavigatingMedia.value) return
+
+  let targetIndex = currentIndex.value + direction
+  if (targetIndex < 0 || targetIndex >= props.allMedia.length) {
+    if (!props.hasAdjacentMediaPage?.(direction) || !props.loadAdjacentMediaPage) return
+    isNavigatingMedia.value = true
+    try {
+      if (!await props.loadAdjacentMediaPage(direction)) {
+        if (props.hasAdjacentMediaPage(direction)) showToast('相邻页面加载失败，请重试')
+        return
+      }
+      targetIndex = currentIndex.value + direction
+    } finally {
+      isNavigatingMedia.value = false
+    }
   }
+
+  const target = props.allMedia[targetIndex]
+  if (!target) return
+  if (isVideo.value) void saveVideoProgress(true)
+  currentMedia.value = target
+  currentPage.value = 0
+  emit('navigate', target)
 }
 
-const prevMedia = () => {
-  if (currentIndex.value > 0) {
-    if (isVideo.value) void saveVideoProgress(true)
-    const prev = props.allMedia[currentIndex.value - 1]
-    currentMedia.value = prev
-    currentPage.value = 0
-    emit('navigate', prev)
-  }
-}
+const nextMedia = () => { void navigateMedia(1) }
+const prevMedia = () => { void navigateMedia(-1) }
 
 const recheckMedia = async () => {
   if (isRechecking.value) return
@@ -373,7 +385,7 @@ const nextImageIndex = computed(() => currentIndex.value === -1 ? -1 : props.all
 ))
 const canAutoAdvance = computed(() => {
   if (currentMedia.value.is_missing) return false
-  if (isImage.value) return nextImageIndex.value !== -1
+  if (isImage.value) return nextImageIndex.value !== -1 || !!props.hasAdjacentMediaPage?.(1)
   if (isManga.value) return mangaPageTotal.value > 0 && currentPage.value < mangaPageTotal.value - 1
   return false
 })
@@ -401,15 +413,31 @@ const finishEditingAutoAdvanceSeconds = () => {
   isEditingAutoAdvanceSeconds.value = false
 }
 
-const advanceAutomatically = () => {
+const advanceAutomatically = async () => {
   autoAdvanceTimer = undefined
   if (!isAutoAdvancing.value || !isDocumentVisible.value || !canAutoAdvance.value) return
   if (isImage.value) {
-    const next = props.allMedia[nextImageIndex.value]
-    if (next) {
-      currentMedia.value = next
-      currentPage.value = 0
-      emit('navigate', next)
+    if (isNavigatingMedia.value) return
+    isNavigatingMedia.value = true
+    try {
+      let nextIndex = nextImageIndex.value
+      while (nextIndex === -1 && props.hasAdjacentMediaPage?.(1) && props.loadAdjacentMediaPage) {
+        if (!await props.loadAdjacentMediaPage(1)) {
+          if (props.hasAdjacentMediaPage(1)) showToast('后续图片加载失败，自动播放已暂停')
+          break
+        }
+        nextIndex = nextImageIndex.value
+      }
+      const next = props.allMedia[nextIndex]
+      if (next) {
+        currentMedia.value = next
+        currentPage.value = 0
+        emit('navigate', next)
+      } else {
+        isAutoAdvancing.value = false
+      }
+    } finally {
+      isNavigatingMedia.value = false
     }
   } else if (isManga.value) {
     nextPage()
@@ -616,6 +644,16 @@ onUnmounted(() => preloadedImageUrls.clear())
               </button>
             </div>
           </header>
+
+          <div
+            v-if="isNavigatingMedia"
+            role="status"
+            aria-live="polite"
+            class="absolute bottom-6 left-1/2 z-[120] flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/80 px-4 py-2 text-sm text-white/85 shadow-xl backdrop-blur-md"
+          >
+            <Loader2 :size="16" class="animate-spin text-accent" />
+            <span>正在加载媒体…</span>
+          </div>
 
           <div v-if="currentMedia.is_missing" class="absolute inset-0 z-[100] bg-black/85 flex flex-col items-center justify-center p-8 backdrop-blur-md">
             <div class="bg-red-500/10 border border-red-500/20 rounded-3xl p-8 max-w-md w-full text-center shadow-2xl">

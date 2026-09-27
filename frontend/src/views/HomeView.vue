@@ -148,8 +148,13 @@ const routePage = (value: unknown) => {
 
 const currentPage = ref(routePage(route.query.page))
 const pageCount = computed(() => Math.max(1, Math.ceil(totalItems.value / pageSize)))
+const viewerMediaList = ref<Media[]>([])
+const viewerFirstPage = ref(currentPage.value)
+const viewerLastPage = ref(currentPage.value)
+const viewerPageLoading = ref(false)
 let hasCompletedInitialFetch = false
 let mediaRequestId = 0
+let viewerPageRequestId = 0
 
 const syncPageQuery = (page: number, replace = false) => {
   const query = { ...route.query }
@@ -157,6 +162,26 @@ const syncPageQuery = (page: number, replace = false) => {
   else query.page = String(page)
   const location = { path: route.path, query }
   void (replace ? router.replace(location) : router.push(location))
+}
+
+const mediaParamsForPage = (page: number): Record<string, string | number | boolean | undefined> => ({
+  media_type: props.mediaType,
+  search: searchQuery.value.trim() || undefined,
+  tag: selectedTag.value || undefined,
+  favorite: favoriteOnly.value ? true : undefined,
+  source_site: sourceFilter.value || undefined,
+  sort: sortBy.value,
+  limit: pageSize,
+  offset: (page - 1) * pageSize,
+})
+
+const resetViewerMediaList = (media?: Media) => {
+  viewerPageRequestId += 1
+  viewerPageLoading.value = false
+  const pageItems = [...mediaList.value]
+  viewerMediaList.value = media && !pageItems.some(item => item.id === media.id) ? [media] : pageItems
+  viewerFirstPage.value = currentPage.value
+  viewerLastPage.value = currentPage.value
 }
 
 const scrollToTop = (behavior: ScrollBehavior = 'auto') => {
@@ -233,17 +258,7 @@ const fetchMedia = async (scrollBehavior: ScrollBehavior = 'auto') => {
   loading.value = true
   mediaError.value = ''
   try {
-    const params: Record<string, string | number | boolean | undefined> = {
-      media_type: props.mediaType,
-      search: searchQuery.value.trim() || undefined,
-      tag: selectedTag.value || undefined,
-      favorite: favoriteOnly.value ? true : undefined,
-      source_site: sourceFilter.value || undefined,
-      sort: sortBy.value,
-      limit: pageSize,
-      offset: (currentPage.value - 1) * pageSize,
-    }
-    const res = await axios.get<Media[]>(`${API_BASE_URL}/media`, { params })
+    const res = await axios.get<Media[]>(`${API_BASE_URL}/media`, { params: mediaParamsForPage(currentPage.value) })
     if (requestId !== mediaRequestId) return
 
     const headerTotal = Number(res.headers['x-total-count'])
@@ -278,6 +293,40 @@ const fetchMedia = async (scrollBehavior: ScrollBehavior = 'auto') => {
   }
 }
 
+const hasAdjacentViewerPage = (direction: -1 | 1) => {
+  const targetPage = direction < 0 ? viewerFirstPage.value - 1 : viewerLastPage.value + 1
+  return targetPage >= 1 && targetPage <= pageCount.value
+}
+
+const loadAdjacentViewerPage = async (direction: -1 | 1) => {
+  if (viewerPageLoading.value || !hasAdjacentViewerPage(direction)) return false
+  const targetPage = direction < 0 ? viewerFirstPage.value - 1 : viewerLastPage.value + 1
+  const requestId = ++viewerPageRequestId
+  viewerPageLoading.value = true
+  try {
+    const res = await axios.get<Media[]>(`${API_BASE_URL}/media`, { params: mediaParamsForPage(targetPage) })
+    if (requestId !== viewerPageRequestId) return false
+    const headerTotal = Number(res.headers['x-total-count'])
+    if (Number.isSafeInteger(headerTotal) && headerTotal >= 0) totalItems.value = headerTotal
+    if (res.data.length === 0) {
+      if (direction < 0) viewerFirstPage.value = targetPage
+      else viewerLastPage.value = targetPage
+      return false
+    }
+    viewerMediaList.value = direction < 0
+      ? [...res.data, ...viewerMediaList.value]
+      : [...viewerMediaList.value, ...res.data]
+    if (direction < 0) viewerFirstPage.value = targetPage
+    else viewerLastPage.value = targetPage
+    return true
+  } catch (err) {
+    if (requestId === viewerPageRequestId) console.error('Failed to load adjacent media page:', err)
+    return false
+  } finally {
+    if (requestId === viewerPageRequestId) viewerPageLoading.value = false
+  }
+}
+
 const goToPage = (page: number) => {
   const target = Math.max(1, Math.min(page, pageCount.value))
   if (target === currentPage.value || loading.value) return
@@ -298,6 +347,8 @@ const updateMediaInList = (media: Media) => {
   if (index >= 0) {
     mediaList.value[index] = media
   }
+  const viewerIndex = viewerMediaList.value.findIndex(item => item.id === media.id)
+  if (viewerIndex >= 0) viewerMediaList.value[viewerIndex] = media
   const continueIndex = continueMedia.value.findIndex(item => item.id === media.id)
   if (continueIndex >= 0) {
     continueMedia.value[continueIndex] = media
@@ -311,6 +362,7 @@ const updateMediaInList = (media: Media) => {
 }
 
 const openMedia = (media: Media, replace = false) => {
+  if (!replace || viewerMediaList.value.length === 0) resetViewerMediaList(media)
   selectedMedia.value = media
   const location = {
     path: route.path,
@@ -329,6 +381,7 @@ const openMedia = (media: Media, replace = false) => {
 
 const closeMedia = () => {
   selectedMedia.value = null
+  resetViewerMediaList()
   const query = { ...route.query }
   delete query.media
   router.push({ path: route.path, query })
@@ -345,6 +398,7 @@ const syncSelectedMediaFromRoute = async () => {
 
   const localMedia = mediaList.value.find(item => item.id === mediaId)
   if (localMedia) {
+    resetViewerMediaList(localMedia)
     selectedMedia.value = localMedia
     return
   }
@@ -352,6 +406,7 @@ const syncSelectedMediaFromRoute = async () => {
   try {
     const res = await axios.get(`${API_BASE_URL}/media/${mediaId}`)
     selectedMedia.value = res.data
+    resetViewerMediaList(res.data)
   } catch (err) {
     console.error('Failed to fetch selected media:', err)
   }
@@ -798,7 +853,9 @@ onMounted(async () => {
     <MediaDetail
       v-if="selectedMedia"
       :initial-media="selectedMedia"
-      :all-media="mediaList"
+      :all-media="viewerMediaList"
+      :has-adjacent-media-page="hasAdjacentViewerPage"
+      :load-adjacent-media-page="loadAdjacentViewerPage"
       @close="closeMedia"
       @updated="updateMediaInList"
       @navigate="openMedia($event, true)"
