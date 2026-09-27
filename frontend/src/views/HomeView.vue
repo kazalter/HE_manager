@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { Book, ChevronDown, ChevronLeft, ChevronRight, Columns3, Filter, History, LayoutGrid, List, Play, Rows3, Search, SortAsc, Star, X } from 'lucide-vue-next'
@@ -29,6 +29,9 @@ const sortBy = ref<'date' | 'title' | 'rating' | 'opened'>('date')
 const selectedTag = ref('')
 const tagDropdownOpen = ref(false)
 const tagSearchQuery = ref('')
+const tagDropdownRef = ref<HTMLElement | null>(null)
+const tagButtonRef = ref<HTMLButtonElement | null>(null)
+const tagSearchRef = ref<HTMLInputElement | null>(null)
 const favoriteOnly = ref(false)
 const sourceFilter = ref<'' | 'x' | 'wnacg' | 'local'>('')
 const filtersExpanded = ref(false)
@@ -184,6 +187,24 @@ const selectTag = (tagName: string) => {
   tagSearchQuery.value = ''
   tagDropdownOpen.value = false
 }
+
+const closeTagDropdown = async () => {
+  tagDropdownOpen.value = false
+  await nextTick()
+  tagButtonRef.value?.focus()
+}
+
+const handleTagOutsidePointer = (event: PointerEvent) => {
+  if (tagDropdownOpen.value && !tagDropdownRef.value?.contains(event.target as Node)) {
+    tagDropdownOpen.value = false
+  }
+}
+
+watch(tagDropdownOpen, async (open) => {
+  if (!open) return
+  await nextTick()
+  tagSearchRef.value?.focus()
+})
 
 const fetchTags = async () => {
   try {
@@ -371,7 +392,10 @@ watch(() => route.query.media, () => {
   syncSelectedMediaFromRoute()
 })
 
-onUnmounted(() => window.clearTimeout(searchTimer))
+onUnmounted(() => {
+  window.clearTimeout(searchTimer)
+  document.removeEventListener('pointerdown', handleTagOutsidePointer)
+})
 
 const triggerMissingRecheck = async () => {
   if (!authState.user?.is_admin) return
@@ -386,6 +410,7 @@ const triggerMissingRecheck = async () => {
 }
 
 onMounted(async () => {
+  document.addEventListener('pointerdown', handleTagOutsidePointer)
   scrollToTop('auto')
   await Promise.all([fetchMedia(), fetchContinueMedia()])
   await syncSelectedMediaFromRoute()
@@ -396,7 +421,7 @@ onMounted(async () => {
 
 <template>
   <div class="z-10 relative">
-    <header class="sticky top-0 z-40 bg-background/55 backdrop-blur-2xl border-b border-white/5 px-6 md:px-8 py-4 mb-6 shadow-[0_4px_30px_rgba(0,0,0,0.4)]">
+    <header class="he-home-header sticky top-0 z-40 bg-background/55 backdrop-blur-2xl border-b border-white/5 px-6 md:px-8 py-4 mb-6 shadow-[0_4px_30px_rgba(0,0,0,0.4)]">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-baseline gap-3">
           <h1 class="text-xl md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-white/60 tracking-tight">
@@ -407,14 +432,15 @@ onMounted(async () => {
           </span>
         </div>
 
-        <div class="flex flex-1 min-w-[260px] max-w-3xl gap-3">
+        <div class="he-home-search flex flex-1 min-w-0 w-full md:min-w-[260px] max-w-3xl gap-3">
           <div class="relative flex-1 group">
             <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-white/25 group-focus-within:text-accent transition-colors duration-300" :size="16" />
             <input
               v-model="searchQuery"
               type="text"
               placeholder="搜索标题、文件名..."
-              class="w-full bg-white/4 border border-white/5 rounded-xl pl-11 pr-10 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-accent/25 focus:bg-white/6 focus:border-white/12 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)] transition-all duration-300"
+              aria-label="搜索标题或文件名"
+              class="w-full bg-white/4 border border-white/5 rounded-xl pl-11 pr-10 py-2.5 text-sm text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:bg-white/6 focus:border-white/12 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)] transition-all duration-300"
             />
             <button
               v-if="searchQuery"
@@ -422,6 +448,7 @@ onMounted(async () => {
               @click="searchQuery = ''"
               class="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/30 hover:text-white rounded-md transition-colors cursor-pointer"
               title="清空搜索"
+              aria-label="清空搜索"
             >
               <X :size="14" />
             </button>
@@ -432,6 +459,8 @@ onMounted(async () => {
             :class="favoriteOnly ? 'bg-gradient-to-tr from-accent to-indigo-500 text-white shadow-md shadow-accent/15 border border-accent/20 scale-102' : 'bg-white/4 border border-white/5 text-white/50 hover:bg-white/6 hover:text-white hover:border-white/10 hover:shadow-md'"
             class="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 cursor-pointer"
             title="只看收藏"
+            aria-label="只看收藏"
+            :aria-pressed="favoriteOnly"
           >
             <Star :size="16" :fill="favoriteOnly ? 'currentColor' : 'none'" />
           </button>
@@ -442,6 +471,7 @@ onMounted(async () => {
             class="md:hidden relative w-10 h-10 rounded-xl border flex items-center justify-center transition-all"
             :aria-expanded="filtersExpanded"
             title="展开筛选"
+            aria-label="展开筛选"
           >
             <Filter :size="16" />
             <span v-if="activeFilterCount" class="absolute -right-1 -top-1 min-w-4 h-4 px-1 rounded-full bg-accent text-[10px] font-black text-white flex items-center justify-center">
@@ -455,29 +485,36 @@ onMounted(async () => {
         :class="filtersExpanded ? 'flex' : 'hidden md:flex'"
         class="mt-3.5 flex-wrap items-center gap-3 text-xs rounded-2xl md:rounded-none bg-white/[0.025] md:bg-transparent border border-white/5 md:border-0 p-3 md:p-0"
       >
-        <div class="flex items-center gap-1.5 text-white/35 font-bold">
+        <div class="flex items-center gap-1.5 text-white/55 font-bold">
           <Filter :size="13" />
           <span class="text-xs uppercase tracking-wider">筛选</span>
         </div>
 
         <!-- Tag Dropdown -->
-        <div class="relative">
+        <div ref="tagDropdownRef" class="relative" @keydown.esc.prevent.stop="closeTagDropdown">
           <button
+            ref="tagButtonRef"
             @click="tagDropdownOpen = !tagDropdownOpen"
             class="min-w-32 bg-white/4 border border-white/5 rounded-xl px-3 py-2 text-xs text-white/70 focus:outline-none focus:ring-2 focus:ring-accent/20 flex items-center justify-between gap-3 hover:bg-white/6 hover:border-white/10 transition-all duration-300 cursor-pointer font-bold"
+            :aria-expanded="tagDropdownOpen"
+            aria-controls="he-tag-options"
+            aria-label="按标签筛选"
           >
             <span class="truncate">{{ selectedTagLabel }}</span>
             <ChevronDown :size="12" :class="tagDropdownOpen ? 'rotate-180' : ''" class="transition-transform text-white/35" />
           </button>
           <div
             v-if="tagDropdownOpen"
+            id="he-tag-options"
             class="absolute left-0 top-full mt-1.5 z-50 min-w-56 max-h-72 flex flex-col rounded-2xl border border-white/10 bg-sidebar/95 backdrop-blur-3xl shadow-2xl p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
           >
             <div class="px-1 py-1 mb-1 border-b border-white/8">
               <input
+                ref="tagSearchRef"
                 v-model="tagSearchQuery"
                 type="text"
                 placeholder="过滤标签..."
+                aria-label="搜索标签"
                 class="w-full bg-white/6 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-accent/40"
                 @click.stop
               />
@@ -508,9 +545,10 @@ onMounted(async () => {
         </div>
 
         <!-- Source Filter (Slide segmented Pill) -->
-        <div class="flex bg-white/3 rounded-xl p-0.5 border border-white/5 shadow-inner">
+        <div class="flex bg-white/3 rounded-xl p-0.5 border border-white/5 shadow-inner" role="group" aria-label="来源筛选">
           <button
             @click="sourceFilter = ''"
+            :aria-pressed="sourceFilter === ''"
             :class="sourceFilter === '' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
             class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
           >
@@ -518,6 +556,7 @@ onMounted(async () => {
           </button>
           <button
             @click="sourceFilter = 'local'"
+            :aria-pressed="sourceFilter === 'local'"
             :class="sourceFilter === 'local' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
             class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
             title="本地扫描的媒体"
@@ -526,6 +565,7 @@ onMounted(async () => {
           </button>
           <button
             @click="sourceFilter = 'x'"
+            :aria-pressed="sourceFilter === 'x'"
             :class="sourceFilter === 'x' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
             class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
             title="X (Twitter) 导入"
@@ -534,6 +574,7 @@ onMounted(async () => {
           </button>
           <button
             @click="sourceFilter = 'wnacg'"
+            :aria-pressed="sourceFilter === 'wnacg'"
             :class="sourceFilter === 'wnacg' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
             class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
             title="wnacg 下载"
@@ -543,9 +584,10 @@ onMounted(async () => {
         </div>
 
         <!-- Sort Filter -->
-        <div class="flex bg-white/3 rounded-xl p-0.5 border border-white/5 shadow-inner">
+        <div class="flex bg-white/3 rounded-xl p-0.5 border border-white/5 shadow-inner" role="group" aria-label="排序方式">
           <button
             @click="sortBy = 'date'"
+            :aria-pressed="sortBy === 'date'"
             :class="sortBy === 'date' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
             class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
           >
@@ -553,6 +595,7 @@ onMounted(async () => {
           </button>
           <button
             @click="sortBy = 'opened'"
+            :aria-pressed="sortBy === 'opened'"
             :class="sortBy === 'opened' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
             class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
           >
@@ -560,6 +603,7 @@ onMounted(async () => {
           </button>
           <button
             @click="sortBy = 'rating'"
+            :aria-pressed="sortBy === 'rating'"
             :class="sortBy === 'rating' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
             class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
           >
@@ -567,6 +611,7 @@ onMounted(async () => {
           </button>
           <button
             @click="sortBy = 'title'"
+            :aria-pressed="sortBy === 'title'"
             :class="sortBy === 'title' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
             class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 flex items-center gap-1 cursor-pointer"
           >
@@ -617,17 +662,23 @@ onMounted(async () => {
         <div
           v-for="item in recentlyOpened"
           :key="item.id"
-          class="shrink-0 w-52 sm:w-60 bg-gradient-to-b from-white/5 to-white/[0.01] rounded-xl border border-white/5 p-2.5 hover:border-white/15 transition-all duration-300 cursor-pointer flex gap-3 relative shadow-md hover:shadow-[0_12px_24px_-10px_rgba(var(--color-accent),0.15)] group"
-          @click="openMedia(item)"
+          class="shrink-0 w-52 sm:w-60 bg-gradient-to-b from-white/5 to-white/[0.01] rounded-xl border border-white/5 p-2.5 hover:border-white/15 focus-within:border-accent/60 transition-all duration-300 cursor-pointer flex gap-3 relative shadow-md hover:shadow-[0_12px_24px_-10px_rgba(var(--color-accent),0.15)] group"
         >
+          <button
+            type="button"
+            class="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            :aria-label="`打开媒体：${item.title}`"
+            @click="openMedia(item)"
+          ></button>
           <!-- 临时忽略/移除按钮 -->
           <button
             type="button"
             @click="dismissContinueItem(item.id, $event)"
-            class="absolute top-2 right-2 w-5 h-5 rounded-full bg-black/75 border border-white/10 text-white/40 hover:text-white hover:bg-red-500/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-20 cursor-pointer"
+            class="he-continue-dismiss absolute top-1.5 right-1.5 w-8 h-8 rounded-full bg-black/85 border border-white/20 text-white/80 hover:text-white hover:bg-red-500/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent flex items-center justify-center z-20 cursor-pointer"
             title="从列表中移除"
+            :aria-label="`从继续观看中移除：${item.title}`"
           >
-            <X :size="11" />
+            <X :size="16" />
           </button>
 
           <div class="w-14 h-18 shrink-0 rounded-lg overflow-hidden bg-black/40 border border-white/5 relative">
@@ -639,16 +690,16 @@ onMounted(async () => {
           </div>
           <div class="flex-1 min-w-0 flex flex-col justify-between py-0.5">
             <div>
-              <h3 class="text-sm font-bold text-white/85 group-hover:text-accent truncate transition-colors leading-tight mb-1" :title="item.title">{{ item.title }}</h3>
-              <p class="text-[10.5px] font-bold text-white/35 uppercase tracking-wider">
+              <h3 class="text-sm font-bold text-white/85 group-hover:text-accent truncate pr-7 transition-colors leading-tight mb-1" :title="item.title">{{ item.title }}</h3>
+              <p class="text-[10.5px] font-bold text-white/60 uppercase tracking-wider">
                 {{ item.media_type === 'manga' ? '漫画' : item.media_type === 'video' ? '视频' : item.media_type === 'audio' ? '音频' : '杂图' }}
               </p>
             </div>
             <div v-if="progressPercent(item) > 0" class="space-y-1">
-              <div class="flex items-center justify-between text-[10px] font-bold text-white/40">
+              <div class="flex items-center justify-between text-[10px] font-bold text-white/60">
                 <span>已看 {{ progressPercent(item) }}%</span>
               </div>
-              <div class="h-1 w-full bg-white/10 rounded-full overflow-hidden">
+              <div class="h-1 w-full bg-white/10 rounded-full overflow-hidden" role="progressbar" :aria-label="`${item.title}观看进度`" :aria-valuenow="progressPercent(item)" aria-valuemin="0" aria-valuemax="100">
                 <div
                   class="h-full rounded-full transition-all duration-300"
                   :class="item.media_type === 'manga' ? 'bg-purple-400' : 'bg-accent'"
@@ -754,3 +805,29 @@ onMounted(async () => {
     />
   </div>
 </template>
+
+<style scoped>
+@media (max-width: 899px) {
+  .he-home-header {
+    padding-left: 4.5rem;
+  }
+
+  .he-home-search {
+    flex: 1 0 100%;
+  }
+}
+
+.he-continue-dismiss {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .he-continue-dismiss {
+    opacity: 0;
+  }
+  .group:hover .he-continue-dismiss,
+  .group:focus-within .he-continue-dismiss {
+    opacity: 1;
+  }
+}
+</style>

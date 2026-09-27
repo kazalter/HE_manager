@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { authState, logout } from './auth'
 import { ChevronUp, Menu } from 'lucide-vue-next'
@@ -9,6 +9,7 @@ import AuthView from './views/AuthView.vue'
 const desktopCollapsed = ref(localStorage.getItem('he_sidebar_collapsed') === 'true')
 const isCompactViewport = ref(false)
 const mobileSidebarOpen = ref(false)
+const menuTriggerRef = ref<HTMLButtonElement | null>(null)
 
 const isCollapsed = computed({
   get: () => isCompactViewport.value ? !mobileSidebarOpen.value : desktopCollapsed.value,
@@ -39,6 +40,39 @@ watch(() => route.fullPath, () => {
   if (isCompactViewport.value) mobileSidebarOpen.value = false
 })
 
+watch(mobileSidebarOpen, async (open) => {
+  if (!isCompactViewport.value) return
+  await nextTick()
+  if (open) {
+    document.querySelector<HTMLButtonElement>('#he-sidebar [data-mobile-close]')?.focus()
+  } else {
+    menuTriggerRef.value?.focus()
+  }
+})
+
+const handleMenuKeydown = (event: KeyboardEvent) => {
+  if (!isCompactViewport.value || !mobileSidebarOpen.value) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    mobileSidebarOpen.value = false
+    return
+  }
+  if (event.key !== 'Tab') return
+
+  const sidebar = document.getElementById('he-sidebar')
+  const focusable = sidebar?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])')
+  if (!focusable?.length) return
+  const first = focusable[0]!
+  const last = focusable[focusable.length - 1]!
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
 watch(() => route.path, () => {
   if (mainScrollRef.value) {
     mainScrollRef.value.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
@@ -61,13 +95,18 @@ const scrollToTop = () => {
 onMounted(() => {
   updateResponsiveShell()
   window.addEventListener('resize', updateResponsiveShell, { passive: true })
+  window.addEventListener('keydown', handleMenuKeydown)
 })
 
-onUnmounted(() => window.removeEventListener('resize', updateResponsiveShell))
+onUnmounted(() => {
+  window.removeEventListener('resize', updateResponsiveShell)
+  window.removeEventListener('keydown', handleMenuKeydown)
+})
 
 const isEmbed = computed(() => {
   return route.path.endsWith('/embed') || route.query.embed === 'true'
 })
+const mobileMenuOpen = computed(() => isCompactViewport.value && mobileSidebarOpen.value && !isEmbed.value)
 </script>
 
 <template>
@@ -76,6 +115,11 @@ const isEmbed = computed(() => {
     v-else-if="authState.ready"
     class="h-screen w-full bg-background text-white/90 font-sans selection:bg-accent selection:text-white relative overflow-hidden flex"
   >
+    <a
+      v-if="!mobileMenuOpen"
+      href="#he-main-content"
+      class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-accent focus:px-4 focus:py-3 focus:text-white focus:ring-2 focus:ring-white"
+    >跳转到主要内容</a>
     <!-- Apple-style Dynamic Ambient Glow -->
     <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
       <div class="glow-sphere sphere-1"></div>
@@ -85,8 +129,11 @@ const isEmbed = computed(() => {
 
     <Sidebar
       v-if="!isEmbed"
+      id="he-sidebar"
       v-model:collapsed="isCollapsed"
       :is-compact="isCompactViewport"
+      :inert="isCompactViewport && isCollapsed"
+      :aria-hidden="isCompactViewport && isCollapsed ? 'true' : undefined"
       :class="isCompactViewport ? 'fixed left-0 top-0 z-50' : 'shrink-0 relative z-40'"
       class="transition-all duration-300 ease-in-out"
       :user="authState.user"
@@ -94,26 +141,33 @@ const isEmbed = computed(() => {
     />
 
     <!-- Mobile Drawer Overlay Backdrop -->
-    <button
-      v-if="isCompactViewport && !isCollapsed && !isEmbed"
+    <div
+      v-if="mobileMenuOpen"
       class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm cursor-default transition-opacity"
-      aria-label="关闭导航菜单"
+      aria-hidden="true"
       @click="isCollapsed = true"
-    ></button>
+    ></div>
 
     <!-- Mobile Hamburger Trigger (Only on compact screen when collapsed) -->
     <button
       v-if="isCompactViewport && isCollapsed && !isEmbed"
+      ref="menuTriggerRef"
+      type="button"
       @click="isCollapsed = false"
-      class="fixed z-50 left-4 top-4 w-11 h-11 rounded-xl border border-white/15 bg-sidebar/85 backdrop-blur-xl flex items-center justify-center text-white shadow-md shadow-accent/20 transition-all duration-200 cursor-pointer hover:bg-white/10"
+      class="fixed z-50 left-4 top-4 w-11 h-11 rounded-xl border border-white/15 bg-sidebar/85 backdrop-blur-xl flex items-center justify-center text-white shadow-md shadow-accent/20 transition-all duration-200 cursor-pointer hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       title="展开侧边栏"
       aria-label="展开侧边栏"
+      aria-controls="he-sidebar"
+      :aria-expanded="mobileMenuOpen"
     >
       <Menu :size="20" />
     </button>
 
     <main
+      id="he-main-content"
       ref="mainScrollRef"
+      tabindex="-1"
+      :inert="mobileMenuOpen"
       @scroll="handleMainScroll"
       class="flex-1 min-w-0 relative z-10 box-border main-scroll-container"
       :class="isEmbed ? 'h-screen overflow-hidden' : 'h-screen overflow-y-auto overflow-x-hidden scroll-smooth custom-scrollbar'"
@@ -129,7 +183,7 @@ const isEmbed = computed(() => {
     <!-- Smooth Back To Top Floating Action Button -->
     <transition name="page-fade">
       <button
-        v-if="showBackToTop && !isEmbed"
+        v-if="showBackToTop && !isEmbed && !mobileMenuOpen"
         type="button"
         @click="scrollToTop"
         class="fixed bottom-7 right-7 z-40 w-11 h-11 rounded-2xl bg-sidebar/85 hover:bg-accent backdrop-blur-2xl border border-white/15 text-white/70 hover:text-white shadow-2xl shadow-black/60 flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer"

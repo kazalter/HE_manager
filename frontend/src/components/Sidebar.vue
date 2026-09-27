@@ -20,6 +20,7 @@ import {
   Star,
   Tags,
   Users,
+  X,
 } from 'lucide-vue-next'
 import type { User } from '../types'
 
@@ -53,20 +54,26 @@ const handleLogout = () => {
 
 <template>
   <aside
+    :role="isCompact && !collapsed ? 'dialog' : undefined"
+    :aria-modal="isCompact && !collapsed ? 'true' : undefined"
+    :aria-label="isCompact && !collapsed ? '主导航菜单' : undefined"
     :class="[
       isCompact
         ? (collapsed ? 'w-64 -translate-x-full opacity-0 pointer-events-none fixed left-0 top-0 z-50 h-full my-0 ml-0 rounded-none border-r border-white/10' : 'w-64 translate-x-0 opacity-100 fixed left-0 top-0 z-50 h-full my-0 ml-0 rounded-none border-r border-white/10 shadow-2xl')
         : (collapsed ? 'w-[4.5rem] p-2.5' : 'w-64 p-4'),
       !isCompact ? 'h-[calc(100vh-2rem)] my-4 ml-4 rounded-2xl border border-white/8 shadow-[0_15px_35px_-10px_rgba(0,0,0,0.6)]' : ''
     ]"
-    class="bg-sidebar/85 backdrop-blur-2xl flex flex-col transition-all duration-300 ease-in-out relative group z-40 select-none"
+    class="bg-sidebar/85 backdrop-blur-2xl flex flex-col transition-all duration-300 ease-in-out group z-40 select-none"
   >
     <!-- Toggle Collapse Floating Button (Desktop) -->
     <button
       v-if="!isCompact"
+      type="button"
       @click="toggle"
-      class="absolute -right-3 top-9 w-6 h-6 rounded-full bg-accent border border-white/20 flex items-center justify-center text-white shadow-md shadow-accent/25 hover:scale-110 active:scale-95 transition-all z-50 opacity-0 group-hover:opacity-100 cursor-pointer"
+      class="absolute -right-4 top-8 w-8 h-8 rounded-full bg-accent border border-white/20 flex items-center justify-center text-white shadow-md shadow-accent/25 hover:scale-110 active:scale-95 transition-all z-50 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white cursor-pointer"
       :title="collapsed ? '展开侧边栏' : '收起侧边栏'"
+      :aria-label="collapsed ? '展开侧边栏' : '收起侧边栏'"
+      :aria-expanded="!collapsed"
     >
       <ChevronLeft v-if="!collapsed" :size="13" />
       <ChevronRight v-else :size="13" />
@@ -89,13 +96,23 @@ const handleLogout = () => {
           <p class="text-xs text-white/45 font-medium -mt-0.5">个人媒体中心</p>
         </div>
       </div>
+      <button
+        v-if="isCompact && !collapsed"
+        data-mobile-close
+        type="button"
+        class="ml-auto w-11 h-11 shrink-0 rounded-xl text-white/70 hover:bg-white/10 hover:text-white flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        aria-label="关闭导航菜单"
+        @click="toggle"
+      >
+        <X :size="20" />
+      </button>
     </div>
 
     <!-- Navigation Scroll Area -->
-    <nav class="flex-1 space-y-1 overflow-x-hidden overflow-y-auto custom-scrollbar pr-0.5">
+    <nav aria-label="主导航" class="flex-1 space-y-1 overflow-x-hidden overflow-y-auto custom-scrollbar pr-0.5">
       <!-- Section 1: 媒体库 -->
       <div class="space-y-1">
-        <div v-if="!collapsed || isCompact" class="px-3 pt-2 pb-1 text-xs font-bold uppercase tracking-wider text-white/40">
+        <div v-if="!collapsed || isCompact" class="px-3 pt-2 pb-1 text-xs font-bold uppercase tracking-wider text-white/55">
           媒体库
         </div>
 
@@ -105,7 +122,7 @@ const handleLogout = () => {
             collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5',
             isHomeActive ? 'bg-accent/20 text-white border-accent/40 font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]' : 'text-white/60 hover:text-white hover:bg-white/6 border-transparent'
           ]"
-          class="flex items-center rounded-xl border transition-all duration-200 group relative"
+          class="flex items-center rounded-xl border transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
           title="全部媒体"
         >
           <Home :size="20" class="group-hover:scale-110 transition-transform shrink-0" />
@@ -121,7 +138,7 @@ const handleLogout = () => {
         <router-link
           to="/type/video"
           :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative text-white/60 hover:text-white hover:bg-white/6"
+          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
           active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
           title="视频"
         >
@@ -138,7 +155,7 @@ const handleLogout = () => {
         <router-link
           to="/type/manga"
           :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative text-white/60 hover:text-white hover:bg-white/6"
+          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
           active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
           title="漫画"
         >
@@ -155,7 +172,7 @@ const handleLogout = () => {
         <router-link
           to="/type/image"
           :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative text-white/60 hover:text-white hover:bg-white/6"
+          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
           active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
           title="杂图"
         >
@@ -172,7 +189,7 @@ const handleLogout = () => {
         <router-link
           to="/type/audio"
           :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative text-white/60 hover:text-white hover:bg-white/6"
+          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
           active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
           title="音频"
         >
@@ -192,7 +209,7 @@ const handleLogout = () => {
             collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5',
             isFavoriteActive ? 'bg-accent/20 text-white border-accent/40 font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]' : 'text-white/60 hover:text-white hover:bg-white/6 border-transparent'
           ]"
-          class="flex items-center rounded-xl border transition-all duration-200 group relative"
+          class="flex items-center rounded-xl border transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
           title="收藏"
         >
           <Star :size="20" class="group-hover:scale-110 transition-transform shrink-0 text-amber-300" :fill="isFavoriteActive ? 'currentColor' : 'none'" />
@@ -211,7 +228,7 @@ const handleLogout = () => {
 
       <!-- Section 2: 发现与整理 -->
       <div class="space-y-1">
-        <div v-if="!collapsed || isCompact" class="px-3 pt-1 pb-1 text-xs font-bold uppercase tracking-wider text-white/40">
+        <div v-if="!collapsed || isCompact" class="px-3 pt-1 pb-1 text-xs font-bold uppercase tracking-wider text-white/55">
           发现与整理
         </div>
 
@@ -219,7 +236,7 @@ const handleLogout = () => {
           v-if="user?.is_admin"
           to="/external"
           :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative text-white/60 hover:text-white hover:bg-white/6"
+          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
           active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
           title="外部收藏"
         >
@@ -236,7 +253,7 @@ const handleLogout = () => {
         <router-link
           to="/recommend"
           :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative text-white/60 hover:text-white hover:bg-white/6"
+          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
           active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
           title="AI 推荐"
         >
@@ -253,7 +270,7 @@ const handleLogout = () => {
         <router-link
           to="/creators"
           :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative text-white/60 hover:text-white hover:bg-white/6"
+          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
           active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
           title="创作者"
         >
@@ -270,7 +287,7 @@ const handleLogout = () => {
         <router-link
           to="/tags"
           :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative text-white/60 hover:text-white hover:bg-white/6"
+          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
           active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
           title="标签管理"
         >
@@ -290,14 +307,14 @@ const handleLogout = () => {
 
       <!-- Section 3: 系统与工具 -->
       <div class="space-y-1">
-        <div v-if="!collapsed || isCompact" class="px-3 pt-1 pb-1 text-xs font-bold uppercase tracking-wider text-white/40">
+        <div v-if="!collapsed || isCompact" class="px-3 pt-1 pb-1 text-xs font-bold uppercase tracking-wider text-white/55">
           系统与工具
         </div>
 
         <router-link
           to="/bd2-spine"
           :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative text-white/60 hover:text-white hover:bg-white/6"
+          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
           active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
           title="BD2 动态"
         >
@@ -314,7 +331,7 @@ const handleLogout = () => {
         <router-link
           to="/stats"
           :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative text-white/60 hover:text-white hover:bg-white/6"
+          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
           active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
           title="统计看板"
         >
@@ -332,7 +349,7 @@ const handleLogout = () => {
           v-if="user?.is_admin"
           to="/dedup"
           :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative text-white/60 hover:text-white hover:bg-white/6"
+          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
           active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
           title="重复管理"
         >
@@ -354,7 +371,7 @@ const handleLogout = () => {
         v-if="user?.is_admin"
         to="/settings"
         :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-        class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative text-white/60 hover:text-white hover:bg-white/6"
+        class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
         active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
         title="设置"
       >
@@ -372,7 +389,7 @@ const handleLogout = () => {
         v-if="user?.is_admin"
         to="/users"
         :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-        class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative text-white/60 hover:text-white hover:bg-white/6"
+        class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
         active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
         title="用户管理"
       >
@@ -390,7 +407,7 @@ const handleLogout = () => {
         type="button"
         @click="handleLogout"
         :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-        class="w-full flex items-center rounded-xl border border-transparent transition-all duration-200 group relative text-white/55 hover:text-red-300 hover:bg-red-500/10 cursor-pointer text-left"
+        class="w-full flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/55 hover:text-red-300 hover:bg-red-500/10 cursor-pointer text-left"
         title="退出登录"
       >
         <LogOut :size="20" class="group-hover:scale-110 transition-transform shrink-0" />
