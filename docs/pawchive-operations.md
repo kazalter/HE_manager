@@ -83,4 +83,5 @@ existing data volume and media mount in place during redeployments.
 - Backend pytest: 148 passed. Frontend Vitest: 23 passed. Production build
   passed. Chrome layout and viewer close interaction passed at 320, 390, 768,
   and 1440 pixels using synthetic API responses; no horizontal page overflow
-  was observed. Windows CI remains pending.
+  was observed. [Final Linux and Windows CI](https://github.com/kazalter/HE_manager/actions/runs/36313940700)
+  passed on the final application code.
