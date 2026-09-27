@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { API_BASE_URL, authUrl } from '../config'
-import type { PawchiveCapabilities, PawchiveDownloadJob, PawchiveDownloadPreview, PawchiveDownloadSelection, PawchivePage, PawchivePost, PawchiveScope } from '../types/pawchive'
+import type { PawchiveAccountStatus, PawchiveCapabilities, PawchiveCreatorFavorite, PawchiveDownloadJob, PawchiveDownloadPreview, PawchiveDownloadSelection, PawchivePage, PawchivePost, PawchiveScope } from '../types/pawchive'
 
 const root = `${API_BASE_URL}/external/pawchive`
 
@@ -10,6 +10,33 @@ export const pawchiveMediaUrl = (ref: string | null | undefined) =>
 export async function fetchPawchiveCapabilities(signal?: AbortSignal): Promise<PawchiveCapabilities> {
   const response = await axios.get<PawchiveCapabilities>(`${root}/capabilities`, { signal })
   return response.data
+}
+
+export async function fetchPawchiveAccountStatus(signal?: AbortSignal): Promise<PawchiveAccountStatus> {
+  const response = await axios.get<PawchiveAccountStatus>(`${root}/account/status`, { signal })
+  return response.data
+}
+
+export async function loginPawchiveAccount(username: string, password: string): Promise<{ connected: boolean; items: PawchiveCreatorFavorite[] }> {
+  const response = await axios.post(`${root}/account/login`, { username, password })
+  return response.data
+}
+
+export async function logoutPawchiveAccount(): Promise<void> {
+  await axios.delete(`${root}/account/session`)
+}
+
+export async function fetchPawchiveAccountFavorites(signal?: AbortSignal): Promise<PawchiveCreatorFavorite[]> {
+  const response = await axios.get<{ items: PawchiveCreatorFavorite[] }>(`${root}/account/favorites`, { signal })
+  return response.data.items
+}
+
+export async function setPawchiveAccountFavorite(creator: Pick<PawchiveCreatorFavorite, 'service' | 'creator_id'>): Promise<void> {
+  await axios.put(`${root}/account/favorites/${encodeURIComponent(creator.service)}/${encodeURIComponent(creator.creator_id)}`)
+}
+
+export async function removePawchiveAccountFavorite(creator: Pick<PawchiveCreatorFavorite, 'service' | 'creator_id'>): Promise<void> {
+  await axios.delete(`${root}/account/favorites/${encodeURIComponent(creator.service)}/${encodeURIComponent(creator.creator_id)}`)
 }
 
 export async function fetchPawchivePosts(scope: PawchiveScope, cursor = '', signal?: AbortSignal): Promise<PawchivePage> {

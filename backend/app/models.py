@@ -303,6 +303,21 @@ class PawchiveAttachment(Base):
     post = relationship("PawchivePost", back_populates="attachments")
 
 
+class PawchiveCreatorFavorite(Base):
+    __tablename__ = "pawchive_creator_favorites"
+    __table_args__ = (
+        UniqueConstraint("user_id", "service", "creator_id", name="uq_pawchive_creator_favorite_user"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    service = Column(String, nullable=False)
+    creator_id = Column(String, nullable=False)
+    creator_name = Column(String, nullable=False)
+    source_url = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class XImportSource(Base):
     __tablename__ = "x_import_sources"
 

@@ -7,13 +7,13 @@ import re
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 from starlette.background import BackgroundTask
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 from sqlalchemy.orm import Session
 
-from .. import models
+from .. import auth, models
 from ..database import get_db
 from ..services import job_lifecycle
-from ..services.external.pawchive import client, downloader, normalize, provider, refs
+from ..services.external.pawchive import account, client, downloader, normalize, provider, refs
 
 router = APIRouter(prefix="/external/pawchive", tags=["pawchive"])
 
@@ -41,6 +41,53 @@ def get_capabilities():
     return _run(provider.capabilities)
 
 
+class PawchiveAccountLogin(BaseModel):
+    username: str = Field(min_length=1, max_length=200)
+    password: SecretStr = Field(min_length=1, max_length=1024)
+
+
+@router.get("/account/status")
+def pawchive_account_status(user: models.User = Depends(auth.get_current_user)):
+    return _run(account.status, user.id)
+
+
+@router.post("/account/login")
+def pawchive_account_login(
+    payload: PawchiveAccountLogin,
+    user: models.User = Depends(auth.get_current_user),
+):
+    return _run(account.login, user.id, payload.username, payload.password.get_secret_value())
+
+
+@router.delete("/account/session", status_code=204)
+def pawchive_account_logout(user: models.User = Depends(auth.get_current_user)):
+    _run(account.logout, user.id)
+    return Response(status_code=204)
+
+
+@router.get("/account/favorites")
+def pawchive_account_favorites(user: models.User = Depends(auth.get_current_user)):
+    return {"items": _run(account.favorites, user.id), "source": "pawchive_account"}
+
+
+@router.put("/account/favorites/{service}/{creator_id}")
+def set_pawchive_account_favorite(
+    service: str,
+    creator_id: str,
+    user: models.User = Depends(auth.get_current_user),
+):
+    return _run(account.set_favorite, user.id, service, creator_id, True)
+
+
+@router.delete("/account/favorites/{service}/{creator_id}")
+def remove_pawchive_account_favorite(
+    service: str,
+    creator_id: str,
+    user: models.User = Depends(auth.get_current_user),
+):
+    return _run(account.set_favorite, user.id, service, creator_id, False)
+
+
 @router.get("/posts")
 def get_posts(q: str = "", service: str = "", creator_id: str = "", tag: str = "",
               media_type: str = "all", cursor: str = ""):
@@ -56,6 +103,87 @@ def get_creator(service: str, creator_id: str):
 @router.get("/posts/{service}/{creator_id}/{post_id}")
 def get_post(service: str, creator_id: str, post_id: str):
     return _run(provider.post_detail, service, creator_id, post_id)
+
+
+class CreatorFavoriteRequest(BaseModel):
+    service: str = Field(min_length=1, max_length=100)
+    creator_id: str = Field(min_length=1, max_length=100)
+    creator_name: str = Field(default="", max_length=240)
+
+
+def _serialize_creator_favorite(row: models.PawchiveCreatorFavorite) -> dict:
+    return {
+        "service": row.service,
+        "creator_id": row.creator_id,
+        "creator_name": row.creator_name,
+        "source_url": row.source_url,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+@router.get("/favorites")
+def list_creator_favorites(
+    db: Session = Depends(get_db),
+    user: models.User = Depends(auth.get_current_user),
+):
+    rows = (db.query(models.PawchiveCreatorFavorite)
+            .filter_by(user_id=user.id)
+            .order_by(models.PawchiveCreatorFavorite.created_at.desc(),
+                      models.PawchiveCreatorFavorite.id.desc())
+            .all())
+    return {"items": [_serialize_creator_favorite(row) for row in rows], "source": "he_manager"}
+
+
+@router.put("/favorites")
+def save_creator_favorite(
+    payload: CreatorFavoriteRequest,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(auth.get_current_user),
+):
+    try:
+        service = provider.validate_id(payload.service.strip())
+        creator_id = provider.validate_id(payload.creator_id.strip())
+    except client.PawchiveError as exc:
+        raise HTTPException(status_code=exc.status, detail={"code": exc.code, "message": str(exc)}) from exc
+    creator_name = payload.creator_name.strip()[:240] or creator_id
+    row = (db.query(models.PawchiveCreatorFavorite)
+           .filter_by(user_id=user.id, service=service, creator_id=creator_id)
+           .first())
+    if row is None:
+        row = models.PawchiveCreatorFavorite(
+            user_id=user.id,
+            service=service,
+            creator_id=creator_id,
+            creator_name=creator_name,
+            source_url=f"https://pawchive.pw/{service}/user/{creator_id}",
+        )
+        db.add(row)
+    else:
+        row.creator_name = creator_name
+    db.commit()
+    db.refresh(row)
+    return _serialize_creator_favorite(row)
+
+
+@router.delete("/favorites/{service}/{creator_id}", status_code=204)
+def remove_creator_favorite(
+    service: str,
+    creator_id: str,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(auth.get_current_user),
+):
+    try:
+        service = provider.validate_id(service)
+        creator_id = provider.validate_id(creator_id)
+    except client.PawchiveError as exc:
+        raise HTTPException(status_code=exc.status, detail={"code": exc.code, "message": str(exc)}) from exc
+    row = (db.query(models.PawchiveCreatorFavorite)
+           .filter_by(user_id=user.id, service=service, creator_id=creator_id)
+           .first())
+    if row is not None:
+        db.delete(row)
+        db.commit()
+    return Response(status_code=204)
 
 
 _SINGLE_RANGE = re.compile(r"^bytes=(?:\d+-\d*|-\d+)$")

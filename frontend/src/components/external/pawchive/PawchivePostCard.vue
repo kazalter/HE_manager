@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { Film, Image as ImageIcon, UserRound } from 'lucide-vue-next'
+import { Film, Heart, Image as ImageIcon, Loader2, UserRound } from 'lucide-vue-next'
 import type { PawchivePost } from '../../../types/pawchive'
 import { pawchiveMediaUrl } from '../../../utils/pawchiveApi'
 
-defineProps<{ post: PawchivePost; selected: boolean }>()
-const emit = defineEmits<{ open: []; creator: []; select: [] }>()
+defineProps<{ post: PawchivePost; selected: boolean; favorite: boolean; canFavorite: boolean; favoriteBusy: boolean }>()
+const emit = defineEmits<{ open: []; creator: []; select: []; favorite: [] }>()
 </script>
 
 <template>
@@ -23,6 +23,19 @@ const emit = defineEmits<{ open: []; creator: []; select: [] }>()
     <div class="px-4 pb-4 flex items-center justify-between gap-2">
       <button type="button" class="min-h-11 max-w-full flex items-center gap-1.5 text-xs font-semibold text-accent hover:text-white cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-lg" :aria-label="`查看创作者 ${post.creator_name} 的帖子`" @click="emit('creator')">
         <UserRound :size="14" aria-hidden="true" /><span class="truncate">{{ post.creator_name }}</span>
+      </button>
+      <button
+        type="button"
+        :disabled="!canFavorite || favoriteBusy"
+        :aria-label="favorite ? `取消收藏作者 ${post.creator_name}` : `收藏作者 ${post.creator_name}`"
+        :aria-pressed="favorite"
+        :title="canFavorite ? (favorite ? '取消收藏作者' : '收藏作者') : '登录 Pawchive 账号后可收藏作者'"
+        class="min-h-11 shrink-0 inline-flex items-center gap-1.5 rounded-lg px-2 text-xs text-white/70 hover:text-pink-200 disabled:opacity-45 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        @click="emit('favorite')"
+      >
+        <Loader2 v-if="favoriteBusy" :size="14" class="animate-spin" aria-hidden="true" />
+        <Heart v-else :size="14" :fill="favorite ? 'currentColor' : 'none'" aria-hidden="true" />
+        {{ favoriteBusy ? '处理中…' : favorite ? '已收藏' : '收藏作者' }}
       </button>
       <label class="min-h-11 shrink-0 flex items-center gap-2 text-xs text-white/75 cursor-pointer"><input type="checkbox" :checked="selected" class="accent-current w-5 h-5" :aria-label="`选择帖子 ${post.title} 下载`" @change="emit('select')" />选择</label>
     </div>

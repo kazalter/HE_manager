@@ -5,23 +5,28 @@ public metadata on demand and does not write `Media` rows. A user must confirm
 an attachment, post, or selected-post download before files are stored under
 `HE_PAWCHIVE_DOWNLOAD_ROOT/pawchive/{service}/{creator_id}/{post_id}`.
 
+On the Pawchive page, sign in to the Pawchive account to see its favorite
+authors. Select an author to browse their posts; search results can also be
+grouped by author, and an author page URL or `service/creator_id` opens that
+author directly. Favorite buttons update the Pawchive account. The password is
+used only for login. Session cookies stay in backend memory per HE Manager user
+and are sent only to the fixed Pawchive account endpoints. After a backend
+restart or expired session, sign in again.
+
 ## Linux Compose configuration
 
 Set these values in `/opt/stacks/he-manager/.env` before restarting the stack:
 
 ```dotenv
 HE_PAWCHIVE_ENABLED=1
-HE_PAWCHIVE_PROXY=http://172.19.0.1:7897
 HE_PAWCHIVE_DOWNLOAD_ROOT=/mnt/hdd/hhh
 HE_PAWCHIVE_STORAGE_SENTINEL=.mounted
 ```
 
-The proxy is the existing mihomo HTTP listener reachable from the HE Manager
-Docker network on this host. Only `file.pawchive.pw` downloads/streams use it;
-public metadata and thumbnail calls use direct TLS. Recheck the Docker gateway
-address if Compose recreates the network. For Windows development, set a
-Windows-accessible HTTP proxy if the file CDN needs it, or leave it empty when
-direct access works. No source-platform credentials are needed.
+Configure an HTTP proxy through **偏好设置 → 外部收藏代理** if Pawchive is not
+reachable directly. That setting is shared with WNACG and X, and covers all
+Pawchive account, metadata, thumbnail, and media requests. Windows development
+can use its own local HTTP proxy.
 
 The download directory must exist, be writable from the backend container,
 and remain mounted. Create `/mnt/hdd/.mounted` on the mounted disk once. The
@@ -41,6 +46,8 @@ After `docker compose up -d --build`, check:
 4. Download one small image, then verify its task completes and the linked
    ordinary media item opens in the library. Repeating it should report an
    already downloaded attachment without a duplicate media row.
+5. Sign in to Pawchive and confirm the account's favorite authors appear. Open
+   an author, search for an author, and add or remove a favorite.
 
 Media URLs use short-lived signed references and the same HE Manager access
 token as other binary routes. Do not place the token or source media URL in

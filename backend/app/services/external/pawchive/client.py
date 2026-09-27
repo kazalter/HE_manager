@@ -1,15 +1,16 @@
-"""Fixed-host Pawchive HTTP client with bounded JSON and pinned public DNS.
+"""Fixed-host Pawchive HTTP client with bounded responses and pinned DNS.
 
-No caller supplies a URL. Redirects, cookies and proxy environment variables
-are intentionally unsupported. Media streams keep the connection open only
-while their response iterator is consumed.
+All requests use the shared external-favorites proxy when configured. Without
+one, direct connections keep pinned DNS checks. Account cookies are handled
+only by the separate allowlisted account_request. Media streams keep their
+connection open only while the response iterator runs.
 """
 from __future__ import annotations
 
 import http.client
 import ipaddress
 import json
-import os
+import re
 import socket
 import threading
 import time
@@ -27,6 +28,9 @@ _cache_bytes = 0
 _cache_lock = threading.Lock()
 _rate_lock = threading.Lock()
 _next_api_request = 0.0
+_ACCOUNT_CREATOR_PATH = re.compile(r"^/api/v1/favorites/creator/[A-Za-z0-9_-]{1,100}/[A-Za-z0-9_-]{1,100}$")
+_ACCOUNT_COOKIE_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$")
+_ACCOUNT_COOKIE_VALUE = re.compile(r"^[!\x23-\x2B\x2D-\x3A\x3C-\x5B\x5D-\x7E]*$")
 
 
 class PawchiveError(Exception):
@@ -160,6 +164,90 @@ def get_json(path: str, params: dict[str, str | int] | None = None):
                 _, (_, removed) = _cache.popitem(last=False)
                 _cache_bytes -= len(removed)
     return value
+
+
+def account_request(
+    target: str,
+    *,
+    method: str = "GET",
+    cookies: dict[str, str] | None = None,
+    form: dict[str, str] | None = None,
+    body_limit: int = JSON_LIMIT,
+):
+    """Make a bounded request to Pawchive's fixed-host account endpoints.
+
+    Account cookies are accepted only for the login, logout, and creator-favorite
+    endpoints on API_HOST. The public metadata and media clients never receive
+    these cookies.
+    """
+    parsed = urlsplit(target)
+    if (parsed.scheme or parsed.netloc or not parsed.path.startswith("/")
+            or ".." in parsed.path or "\r" in target or "\n" in target):
+        raise PawchiveError("INVALID_REQUEST", "非法 Pawchive 账号请求", 400)
+    if parsed.path == "/account/login":
+        if method not in {"GET", "POST"} or parsed.query not in {"", "location=%2Ffavorites"}:
+            raise PawchiveError("INVALID_REQUEST", "非法 Pawchive 登录请求", 400)
+    elif parsed.path == "/account/logout":
+        if method != "GET" or parsed.query:
+            raise PawchiveError("INVALID_REQUEST", "非法 Pawchive 退出请求", 400)
+    elif parsed.path == "/api/v1/account/favorites":
+        if method != "GET" or parsed.query != "type=artist":
+            raise PawchiveError("INVALID_REQUEST", "非法 Pawchive 收藏请求", 400)
+    elif _ACCOUNT_CREATOR_PATH.fullmatch(parsed.path):
+        if method not in {"POST", "DELETE"} or parsed.query:
+            raise PawchiveError("INVALID_REQUEST", "非法 Pawchive 作者收藏请求", 400)
+    else:
+        raise PawchiveError("INVALID_REQUEST", "不支持的 Pawchive 账号请求", 400)
+    if body_limit < 1 or body_limit > JSON_LIMIT:
+        raise PawchiveError("INVALID_REQUEST", "Pawchive 响应大小限制无效", 400)
+
+    headers = {
+        "Host": API_HOST,
+        "Accept": "text/html, application/json;q=0.9, */*;q=0.1",
+        "Accept-Encoding": "identity",
+        "User-Agent": "HE-Manager-Pawchive/1.0",
+        "Origin": f"https://{API_HOST}",
+    }
+    if parsed.path.startswith("/api/v1/"):
+        headers["Accept"] = "application/json"
+        headers["Referer"] = f"https://{API_HOST}/favorites"
+    elif parsed.path == "/account/login":
+        headers["Referer"] = f"https://{API_HOST}/account/login?location=%2Ffavorites"
+    if cookies:
+        if len(cookies) > 32:
+            raise PawchiveError("INVALID_REQUEST", "Pawchive 会话 Cookie 无效", 400)
+        if any(not _ACCOUNT_COOKIE_NAME.fullmatch(name) or not _ACCOUNT_COOKIE_VALUE.fullmatch(value)
+               for name, value in cookies.items()):
+            raise PawchiveError("INVALID_REQUEST", "Pawchive 会话 Cookie 无效", 400)
+        cookie_header = "; ".join(f"{name}={value}" for name, value in cookies.items())
+        if len(cookie_header) > 4096 or "\r" in cookie_header or "\n" in cookie_header:
+            raise PawchiveError("INVALID_REQUEST", "Pawchive 会话 Cookie 无效", 400)
+        headers["Cookie"] = cookie_header
+    body = None
+    if form is not None:
+        if method != "POST" or parsed.path != "/account/login":
+            raise PawchiveError("INVALID_REQUEST", "非法 Pawchive 表单请求", 400)
+        body = urlencode(form).encode("utf-8")
+        if len(body) > 8192:
+            raise PawchiveError("INVALID_REQUEST", "Pawchive 登录表单过长", 400)
+        headers["Content-Type"] = "application/x-www-form-urlencoded"
+        headers["Content-Length"] = str(len(body))
+
+    _throttle_api()
+    connection = _new_connection(API_HOST)
+    try:
+        connection.request(method, target, body=body, headers=headers)
+        response = connection.getresponse()
+        response_body = response.read(body_limit + 1)
+        if len(response_body) > body_limit:
+            raise PawchiveError("UPSTREAM_INVALID", "Pawchive 账号响应超出限制", 502)
+        return response.status, response.getheaders(), response_body
+    except PawchiveError:
+        raise
+    except (OSError, TimeoutError, http.client.HTTPException) as exc:
+        raise PawchiveError("UPSTREAM_UNAVAILABLE", "无法连接 Pawchive 账号服务", 502) from exc
+    finally:
+        connection.close()
 
 
 def open_media(path: str, *, preview: bool = False, range_header: str | None = None):

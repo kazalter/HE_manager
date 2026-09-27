@@ -1,9 +1,10 @@
 # Pawchive public API contract (verified 2026-09-27)
 
-This records observed public behavior for the HE Manager adapter. The site's
-OpenAPI document is embedded in `https://pawchive.pw/api/swagger_schema` and
-declares `https://pawchive.pw/api/v1` as its server. Only public endpoints are
-used. No Pawchive account cookie or source-platform credential is accepted.
+This records observed Pawchive behavior used by the HE Manager adapter. The
+site's OpenAPI document is embedded in `https://pawchive.pw/api/swagger_schema`
+and declares `https://pawchive.pw/api/v1` as its server. Public post and media
+requests remain unauthenticated; a separate allowlisted client handles the
+Pawchive account login and favorite-author endpoints.
 
 ## Metadata
 
@@ -16,7 +17,24 @@ used. No Pawchive account cookie or source-platform credential is accepted.
 
 The global `/creators` endpoint returns the entire creator set and its own API
 description warns against loading it in the Swagger browser. HE Manager does
-not use it for global creator search. Creator scope is entered from a post card.
+not load that full set. Keyword author search groups public post-search results;
+a creator profile URL or `service/ID` can also be entered directly.
+
+## Pawchive account favorites
+
+The account flow uses the Pawchive login page (`GET /account/login` followed by
+`POST /account/login`) and the site's account-favorites API
+(`GET /api/v1/account/favorites?type=artist`). Favorite changes use `POST` or
+`DELETE /api/v1/favorites/creator/{service}/{creator_id}`. These routes were
+verified in the site's login form and bundled client; an actual account login
+requires the account owner.
+
+HE Manager shows the signed-in account's favorite authors and lets the user
+open each author's posts. Favorite buttons update that Pawchive account. The
+password is used only for login and is not stored. Session cookies are kept in
+backend process memory per HE Manager user and sent only to the fixed account
+endpoints, never to media hosts. A backend restart or expired Pawchive session
+requires logging in again.
 
 The site does not expose a documented total or next cursor in these list
 responses. HE Manager probes the next offset before reporting `has_more` and
@@ -63,14 +81,13 @@ forward that header to clients nor send HE Manager Authorization/Cookie headers
 upstream. Requests are unauthenticated. HTTP 403 and 429 stop or pause work;
 the adapter does not bypass access controls.
 
-On the Linux host, direct TCP to `file.pawchive.pw:443` timed out while the
-existing mihomo proxy on the HE Manager Docker network gateway
-(`172.19.0.1:7897`) delivered a `206` byte range. Set
-`HE_PAWCHIVE_PROXY=http://172.19.0.1:7897` in that host's Compose `.env`.
-The adapter uses HTTP CONNECT only for the fixed file hostname and TLS still
-authenticates that upstream hostname. The API and thumbnail CDN use direct
-connections. This address is deployment-specific;
-Windows development can leave the setting empty or supply its own local proxy.
+Configure the shared HTTP proxy under **偏好设置 → 外部收藏代理** when the
+Pawchive hosts are not reachable directly. The same setting is used for
+Pawchive API, account, thumbnail, and media requests as well as the other
+external favorites integrations. Pawchive requests use HTTP CONNECT to fixed
+hosts, and TLS still authenticates each upstream hostname. Windows development
+can use a Windows-accessible HTTP proxy or leave the setting empty when direct
+access works.
 
 ## Supported capability matrix
 
