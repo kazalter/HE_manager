@@ -34,6 +34,17 @@ class FakeResponse:
 
 
 class DownloadTests(unittest.TestCase):
+    def test_configured_sentinel_blocks_unmounted_directory(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {
+            "HE_PAWCHIVE_DOWNLOAD_ROOT": directory,
+            "HE_PAWCHIVE_STORAGE_SENTINEL": ".mounted",
+        }):
+            with self.assertRaises(client.PawchiveError) as blocked:
+                downloader.download_root()
+            self.assertEqual(blocked.exception.code, "STORAGE_UNAVAILABLE")
+            (Path(directory) / ".mounted").touch()
+            self.assertEqual(downloader.download_root(), Path(directory).resolve())
+
     def test_rate_limit_stops_remaining_attachments(self):
         models.Base.metadata.create_all(database.engine)
         raw = {"id": "rate123", "user": "456", "service": "fanbox", "title": "Rate test",

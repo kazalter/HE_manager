@@ -13,6 +13,7 @@ Set these values in `/opt/stacks/he-manager/.env` before restarting the stack:
 HE_PAWCHIVE_ENABLED=1
 HE_PAWCHIVE_PROXY=http://172.19.0.1:7897
 HE_PAWCHIVE_DOWNLOAD_ROOT=/mnt/hdd/hhh
+HE_PAWCHIVE_STORAGE_SENTINEL=.mounted
 ```
 
 The proxy is the existing mihomo HTTP listener reachable from the HE Manager
@@ -23,8 +24,10 @@ Windows-accessible HTTP proxy if the file CDN needs it, or leave it empty when
 direct access works. No source-platform credentials are needed.
 
 The download directory must exist, be writable from the backend container,
-and remain mounted. The storage guard refuses writes when it detects an
-unavailable mount. Keep `/mnt/hdd` mounted before starting downloads.
+and remain mounted. Create `/mnt/hdd/.mounted` on the mounted disk once. The
+Pawchive storage check requires that marker before download and again before
+the final file move, so a missing mount cannot fall back to the system disk.
+Keep `/mnt/hdd` mounted before starting downloads.
 
 ## Verification
 
@@ -77,7 +80,7 @@ existing data volume and media mount in place during redeployments.
 - An isolated rollback rehearsal started the previous image with a current
   database snapshot and returned a healthy `/healthz`; production remained on
   the new image.
-- Backend pytest: 146 passed. Frontend Vitest: 23 passed. Production build
+- Backend pytest: 147 passed. Frontend Vitest: 23 passed. Production build
   passed. Chrome layout and viewer close interaction passed at 320, 390, 768,
   and 1440 pixels using synthetic API responses; no horizontal page overflow
   was observed. Windows CI remains pending.

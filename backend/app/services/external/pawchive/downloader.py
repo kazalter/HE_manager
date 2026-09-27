@@ -33,6 +33,14 @@ class DownloadCanceled(Exception):
     pass
 
 
+def _ensure_download_storage(root: Path) -> None:
+    sentinel = os.getenv("HE_PAWCHIVE_STORAGE_SENTINEL", "").strip() or None
+    try:
+        storage_guard.ensure_storage_available(str(root), purpose="pawchive_download", sentinel_name=sentinel)
+    except storage_guard.StorageNotMountedError as exc:
+        raise client.PawchiveError("STORAGE_UNAVAILABLE", "Pawchive 存储不可用", 503) from exc
+
+
 def download_root() -> Path:
     configured = os.getenv("HE_PAWCHIVE_DOWNLOAD_ROOT", "").strip()
     if not configured or not os.path.isabs(configured):
@@ -40,10 +48,7 @@ def download_root() -> Path:
     root = Path(configured).resolve()
     if not root.is_dir():
         raise client.PawchiveError("STORAGE_UNAVAILABLE", "Pawchive 下载根目录不存在", 503)
-    try:
-        storage_guard.ensure_storage_available(str(root), purpose="pawchive_download")
-    except storage_guard.StorageNotMountedError as exc:
-        raise client.PawchiveError("STORAGE_UNAVAILABLE", "Pawchive 存储不可用", 503) from exc
+    _ensure_download_storage(root)
     if not os.access(root, os.W_OK):
         raise client.PawchiveError("STORAGE_UNAVAILABLE", "Pawchive 下载根目录不可写", 503)
     return root
@@ -249,7 +254,7 @@ def _fetch_file(path: str, target: Path, manifest: Path, row: models.PawchiveAtt
     existing = _reusable(target, manifest, row.attachment_key, row.media_type)
     if existing:
         return existing
-    storage_guard.ensure_storage_available(str(root), purpose="pawchive_download")
+    _ensure_download_storage(root)
     temp = target.with_name(f".{target.name}.{uuid.uuid4().hex}.part")
     connection = None
     try:
@@ -280,7 +285,7 @@ def _fetch_file(path: str, target: Path, manifest: Path, row: models.PawchiveAtt
             raise client.PawchiveError("UPSTREAM_INVALID", "文件校验失败", 502)
         if stop.is_set():
             raise DownloadCanceled()
-        storage_guard.ensure_storage_available(str(root), purpose="pawchive_download")
+        _ensure_download_storage(root)
         if shutil.disk_usage(root).free < RESERVE_BYTES:
             raise client.PawchiveError("STORAGE_UNAVAILABLE", "磁盘剩余空间不足", 503)
         record = {"attachment_key": row.attachment_key, "size": size, "sha256": digest.hexdigest()}
