@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import axios from 'axios'
-import { Maximize, Minimize, Trash2, X, FileQuestion, RefreshCw, PanelRightClose, PanelRightOpen } from 'lucide-vue-next'
+import { Maximize, Minimize, Trash2, X, FileQuestion, RefreshCw, PanelRightClose, PanelRightOpen, Pause, Play } from 'lucide-vue-next'
 import { API_BASE_URL, STREAM_URL, authUrl, thumbnailUrl } from '../config'
 import type { Media } from '../types'
 import AudioPlayer from './media-detail/AudioPlayer.vue'
@@ -327,6 +327,92 @@ const prevPage = () => {
   if (currentPage.value > 0) currentPage.value = Math.max(0, currentPage.value - step)
 }
 
+const AUTO_ADVANCE_SECONDS_KEY = 'he_auto_advance_seconds'
+const savedAutoAdvanceSeconds = Number(localStorage.getItem(AUTO_ADVANCE_SECONDS_KEY))
+const autoAdvanceSeconds = ref(
+  Number.isFinite(savedAutoAdvanceSeconds) && savedAutoAdvanceSeconds >= 1
+    ? Math.min(300, Math.round(savedAutoAdvanceSeconds))
+    : 5,
+)
+const autoAdvanceSecondsInput = ref(String(autoAdvanceSeconds.value))
+const isAutoAdvancing = ref(false)
+const isEditingAutoAdvanceSeconds = ref(false)
+const isDocumentVisible = ref(!document.hidden)
+let autoAdvanceTimer: number | undefined
+
+const nextImageIndex = computed(() => currentIndex.value === -1 ? -1 : props.allMedia.findIndex(
+  (item, index) => index > currentIndex.value && item.media_type === 'image' && !item.is_missing,
+))
+const canAutoAdvance = computed(() => {
+  if (currentMedia.value.is_missing) return false
+  if (isImage.value) return nextImageIndex.value !== -1
+  if (isManga.value) return mangaPageTotal.value > 0 && currentPage.value < mangaPageTotal.value - 1
+  return false
+})
+
+const clearAutoAdvanceTimer = () => {
+  if (autoAdvanceTimer !== undefined) {
+    window.clearTimeout(autoAdvanceTimer)
+    autoAdvanceTimer = undefined
+  }
+}
+
+const commitAutoAdvanceSeconds = () => {
+  const seconds = Number(autoAdvanceSecondsInput.value)
+  if (!Number.isFinite(seconds) || seconds < 1) {
+    autoAdvanceSecondsInput.value = String(autoAdvanceSeconds.value)
+    return
+  }
+  autoAdvanceSeconds.value = Math.min(300, Math.max(1, Math.round(seconds)))
+  autoAdvanceSecondsInput.value = String(autoAdvanceSeconds.value)
+  localStorage.setItem(AUTO_ADVANCE_SECONDS_KEY, String(autoAdvanceSeconds.value))
+}
+
+const finishEditingAutoAdvanceSeconds = () => {
+  commitAutoAdvanceSeconds()
+  isEditingAutoAdvanceSeconds.value = false
+}
+
+const advanceAutomatically = () => {
+  autoAdvanceTimer = undefined
+  if (!isAutoAdvancing.value || !isDocumentVisible.value || !canAutoAdvance.value) return
+  if (isImage.value) {
+    const next = props.allMedia[nextImageIndex.value]
+    if (next) {
+      currentMedia.value = next
+      currentPage.value = 0
+      emit('navigate', next)
+    }
+  } else if (isManga.value) {
+    nextPage()
+  }
+}
+
+watch(
+  [isAutoAdvancing, autoAdvanceSeconds, isEditingAutoAdvanceSeconds, isDocumentVisible, canAutoAdvance,
+    () => currentMedia.value.id, currentPage, mangaPageTotal],
+  () => {
+    clearAutoAdvanceTimer()
+    if (!canAutoAdvance.value) {
+      isAutoAdvancing.value = false
+      return
+    }
+    if (isAutoAdvancing.value && isDocumentVisible.value && !isEditingAutoAdvanceSeconds.value) {
+      autoAdvanceTimer = window.setTimeout(advanceAutomatically, autoAdvanceSeconds.value * 1000)
+    }
+  },
+)
+
+const onVisibilityChange = () => {
+  isDocumentVisible.value = !document.hidden
+}
+
+onMounted(() => document.addEventListener('visibilitychange', onVisibilityChange))
+onUnmounted(() => {
+  clearAutoAdvanceTimer()
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
+
 const handleKeydown = (e: KeyboardEvent) => {
   const target = e.target as HTMLElement | null
   if (
@@ -431,15 +517,52 @@ onUnmounted(() => preloadedImageUrls.clear())
           <header
             @mouseenter="setControlsHover(true)"
             @mouseleave="setControlsHover(false)"
-            :class="showControls
+            :class="showControls || isAutoAdvancing
               ? 'opacity-100 translate-y-0'
               : clickOnlyViewerControls
                 ? 'opacity-0 -translate-y-3 pointer-events-none'
                 : 'opacity-0 -translate-y-3 hover:opacity-100 hover:translate-y-0'"
-            class="absolute top-0 left-0 right-0 flex items-center justify-between px-6 py-5 z-50 bg-gradient-to-b from-black/80 to-transparent transition-all duration-300"
+            class="absolute top-0 left-0 right-0 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-5 z-50 bg-gradient-to-b from-black/80 to-transparent transition-all duration-300 focus-within:opacity-100 focus-within:translate-y-0 focus-within:pointer-events-auto"
           >
-            <h2 class="text-lg font-bold truncate pr-4 grow text-white/95 drop-shadow-xl select-none">{{ currentMedia.title }}</h2>
-            <div class="flex items-center gap-2">
+            <h2 class="w-full sm:w-auto sm:grow min-w-0 text-lg font-bold truncate sm:pr-4 text-white/95 drop-shadow-xl select-none">{{ currentMedia.title }}</h2>
+            <div class="flex w-full sm:w-auto items-center justify-end gap-2">
+              <div
+                v-if="(isImage || isManga) && !currentMedia.is_missing"
+                class="flex items-center gap-1 rounded-xl border border-white/15 bg-black/55 p-1 text-white/80 backdrop-blur-md"
+                @click.stop
+              >
+                <button
+                  type="button"
+                  class="flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40"
+                  :disabled="!isAutoAdvancing && !canAutoAdvance"
+                  :aria-label="isAutoAdvancing ? '暂停自动播放' : '开始自动播放'"
+                  :aria-pressed="isAutoAdvancing"
+                  :title="isAutoAdvancing ? '暂停自动播放' : canAutoAdvance ? '开始自动播放' : isManga ? '已到最后一页' : '没有下一张图片'"
+                  @click="isAutoAdvancing = !isAutoAdvancing"
+                >
+                  <Pause v-if="isAutoAdvancing" :size="18" />
+                  <Play v-else :size="18" />
+                </button>
+                <label class="flex items-center gap-1 pr-1 text-xs font-semibold text-white/75">
+                  <span class="sr-only">自动播放间隔（秒）</span>
+                  <input
+                    v-model="autoAdvanceSecondsInput"
+                    type="number"
+                    min="1"
+                    max="300"
+                    step="1"
+                    inputmode="numeric"
+                    class="h-11 w-11 rounded-md border border-white/15 bg-white/10 text-center font-mono text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    aria-label="自动播放间隔，秒"
+                    title="自动播放间隔，1 至 300 秒"
+                    @focus="isEditingAutoAdvanceSeconds = true"
+                    @change="commitAutoAdvanceSeconds"
+                    @blur="finishEditingAutoAdvanceSeconds"
+                    @keydown.enter="finishEditingAutoAdvanceSeconds"
+                  />
+                  <span>秒</span>
+                </label>
+              </div>
               <button
                 v-if="!isFullscreen"
                 @click="toggleMetadataPanel"
