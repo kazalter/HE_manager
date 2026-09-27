@@ -59,3 +59,25 @@ They are created idempotently at startup. The ordinary media library retains
 `source_url`, `source_site=pawchive`, and artist metadata. Back up
 `data/library.db` with SQLite's online backup before deployment; keep the
 existing data volume and media mount in place during redeployments.
+
+## 2026-09-27 deployment record
+
+- The production database was backed up online before deployment; the backup
+  and post-migration database both passed `PRAGMA integrity_check`.
+- The backend and frontend containers were healthy. The production adapter
+  returned 50 recent posts and three playable attachments on a public sample;
+  image and video proxy samples each returned `206` with a 1024-byte range.
+- A real image download in a disposable container completed, created one
+  ordinary media row, and a repeated submission returned `already_downloaded`.
+  This did not add sample media to the production library.
+- The existing backend image `he-manager-backend:fixed-20260926` supplied the
+  same pinned dependencies while the application layer was rebuilt. A full
+  Dockerfile rebuild stalled on downloading the PyTorch wheel, so this deploy
+  used the application-layer image and `docker compose up -d --no-build`.
+- An isolated rollback rehearsal started the previous image with a current
+  database snapshot and returned a healthy `/healthz`; production remained on
+  the new image.
+- Backend pytest: 146 passed. Frontend Vitest: 23 passed. Production build
+  passed. Chrome layout and viewer close interaction passed at 320, 390, 768,
+  and 1440 pixels using synthetic API responses; no horizontal page overflow
+  was observed. Windows CI remains pending.
