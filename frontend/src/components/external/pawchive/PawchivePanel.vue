@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Globe2, Heart, Loader2, LogOut, RefreshCw, UserRound, X } from 'lucide-vue-next'
+import axios from 'axios'
+import { computed, nextTick, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
+import { Loader2, LogOut, UserRound, X } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
-import PawchiveBrowser from '../components/external/pawchive/PawchiveBrowser.vue'
-import PawchiveDownloads from '../components/external/pawchive/PawchiveDownloads.vue'
-import PawchiveMediaViewer from '../components/external/pawchive/PawchiveMediaViewer.vue'
-import { usePawchiveBrowse } from '../composables/usePawchiveBrowse'
-import { usePawchiveSequence } from '../composables/usePawchiveSequence'
-import type { PawchiveCapabilities, PawchiveCreatorFavorite, PawchiveDownloadSelection, PawchivePost, PawchiveScope } from '../types/pawchive'
+import PawchiveBrowser from './PawchiveBrowser.vue'
+import PawchiveDownloads from './PawchiveDownloads.vue'
+import PawchiveMediaViewer from './PawchiveMediaViewer.vue'
+import { usePawchiveBrowse } from '../../../composables/usePawchiveBrowse'
+import { usePawchiveSequence } from '../../../composables/usePawchiveSequence'
+import type { PawchiveCapabilities, PawchiveCreator, PawchiveCreatorFavorite, PawchiveDownloadSelection, PawchivePost, PawchiveScope } from '../../../types/pawchive'
 import {
   createPawchiveDownload,
   fetchPawchiveAccountFavorites,
@@ -19,7 +20,7 @@ import {
   previewPawchiveDownload,
   removePawchiveAccountFavorite,
   setPawchiveAccountFavorite,
-} from '../utils/pawchiveApi'
+} from '../../../utils/pawchiveApi'
 
 const route = useRoute()
 const router = useRouter()
@@ -46,11 +47,11 @@ const accountFavorites = ref<PawchiveCreatorFavorite[]>([])
 const accountFavoriteBusyKeys = ref<string[]>([])
 const accountError = ref('')
 const accountMessage = ref('')
-const accountFavoriteKeys = computed(() => accountFavorites.value.map(favoriteCreatorKey))
+const lastAuthorQuery = ref('')
 let opener: HTMLElement | null = null
 
 function favoriteCreatorKey(creator: Pick<PawchiveCreatorFavorite, 'service' | 'creator_id'>) {
-  return `${creator.service}/${creator.creator_id}`
+  return `${creator.service}:${creator.creator_id}`
 }
 
 const refreshAccountFavorites = async () => {
@@ -61,6 +62,10 @@ const refreshAccountFavorites = async () => {
     return true
   } catch (cause) {
     accountError.value = pawchiveError(cause)
+    if (axios.isAxiosError(cause) && cause.response?.status === 401) {
+      accountConnected.value = false
+      accountFavorites.value = []
+    }
     return false
   } finally {
     accountFavoritesLoading.value = false
@@ -94,7 +99,7 @@ const loginAccount = async () => {
     accountConnected.value = result.connected
     accountFavorites.value = result.items || []
     accountPassword.value = ''
-    accountMessage.value = '已连接 Pawchive 账号。作者列表同步自该账号的收藏。'
+    accountMessage.value = '已连接 Pawchive 账号。会话状态会在 HE Manager 重启后恢复。'
   } catch (cause) {
     accountError.value = pawchiveError(cause) || 'Pawchive 登录失败，请检查账号信息。'
   } finally {
@@ -132,7 +137,7 @@ const toggleAccountFavorite = async (post: Pick<PawchiveCreatorFavorite, 'servic
   accountError.value = ''
   accountMessage.value = ''
   try {
-    const exists = accountFavoriteKeys.value.includes(key)
+    const exists = accountFavorites.value.some(item => favoriteCreatorKey(item) === key)
     if (exists) {
       await removePawchiveAccountFavorite(creator)
       accountFavorites.value = accountFavorites.value.filter(item => favoriteCreatorKey(item) !== key)
@@ -144,6 +149,7 @@ const toggleAccountFavorite = async (post: Pick<PawchiveCreatorFavorite, 'servic
         creator_name: post.creator_name,
         source_url: post.source_url,
       }]
+      await refreshAccountFavorites()
       accountMessage.value = `已收藏作者 ${post.creator_name}。`
     }
   } catch (cause) {
@@ -153,15 +159,25 @@ const toggleAccountFavorite = async (post: Pick<PawchiveCreatorFavorite, 'servic
   }
 }
 
-const openFavoriteCreator = (creator: PawchiveCreatorFavorite) => {
-  setTab('browse')
-  changeScope({ query: '', service: creator.service, creatorId: creator.creator_id, tag: '', mediaType: 'all' })
-}
 const changeScope = (scope: PawchiveScope) => {
   sequence.close()
   selectedKeys.value = []
-  void browse.setScope(scope)
+  if (scope.creatorId) {
+    void browse.setScope(scope)
+  } else if (scope.query.trim()) {
+    lastAuthorQuery.value = scope.query.trim()
+    void browse.setScope(scope)
+  } else {
+    lastAuthorQuery.value = ''
+    browse.resetScope()
+  }
 }
+const returnToAuthors = (fromCreator: boolean) => changeScope({
+  query: fromCreator ? lastAuthorQuery.value : '', service: '', creatorId: '', tag: '', mediaType: 'all',
+})
+const openCreator = (creator: PawchiveCreator) => changeScope({
+  query: '', service: creator.service, creatorId: creator.creator_id, tag: '', mediaType: 'all',
+})
 const toggleSelected = (post: PawchivePost) => {
   selectedKeys.value = selectedKeys.value.includes(post.post_key)
     ? selectedKeys.value.filter(key => key !== post.post_key)
@@ -221,26 +237,19 @@ const downloadPost = () => {
 onMounted(() => {
   void fetchPawchiveCapabilities().then(value => { capabilities.value = value }).catch(() => { capabilities.value = null })
   void refreshAccountStatus()
-  void browse.setScope(browse.scope.value)
 })
+onDeactivated(() => { sequence.close(); autoplay.value = false })
 onBeforeUnmount(() => { browse.dispose(); sequence.close() })
 </script>
 
 <template>
-  <div class="min-h-screen relative z-10">
-    <header class="he-page-header sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-white/10 px-6 md:px-8 py-5 mb-6">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center"><Globe2 :size="20" aria-hidden="true" /></div>
-        <div><h1 class="text-2xl md:text-3xl font-black text-white">Pawchive</h1><p class="text-xs text-white/50">账号收藏作者 · 搜索作者 · 浏览帖子附件</p></div>
-      </div>
-    </header>
-    <main class="px-4 sm:px-6 md:px-8 pb-12">
-      <nav aria-label="Pawchive 页面" class="flex gap-2 mb-5 border-b border-white/10 pb-3">
+  <section class="relative z-10 space-y-5">
+      <nav aria-label="Pawchive 页面" class="flex gap-2 border-b border-white/10 pb-3">
         <button type="button" :aria-current="tab === 'browse' ? 'page' : undefined" :class="tab === 'browse' ? 'bg-accent text-white' : 'bg-white/5 text-white/70'" class="min-h-11 px-5 rounded-xl text-sm font-bold cursor-pointer focus-visible:ring-2 focus-visible:ring-white" @click="setTab('browse')">作者</button>
         <button type="button" :aria-current="tab === 'downloads' ? 'page' : undefined" :class="tab === 'downloads' ? 'bg-accent text-white' : 'bg-white/5 text-white/70'" class="min-h-11 px-5 rounded-xl text-sm font-bold cursor-pointer focus-visible:ring-2 focus-visible:ring-white" @click="setTab('downloads')">下载</button>
       </nav>
-      <p v-if="downloadMessage && !sequence.active.value" :role="downloadError ? 'alert' : 'status'" :class="downloadError ? 'text-red-300' : 'text-emerald-300'" class="text-sm mb-4">{{ downloadMessage }}</p>
-      <section v-if="tab === 'browse'" aria-label="Pawchive 账号连接" class="mb-5 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+      <p v-if="downloadMessage && !sequence.active.value" :role="downloadError ? 'alert' : 'status'" :class="downloadError ? 'text-red-300' : 'text-emerald-300'" class="text-sm">{{ downloadMessage }}</p>
+      <section v-if="tab === 'browse'" aria-label="Pawchive 账号连接" class="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
         <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div class="flex items-center gap-2 text-white"><UserRound :size="18" class="text-accent" aria-hidden="true" /><h2 class="text-base font-bold">Pawchive 账号连接</h2></div>
           <button v-if="accountConnected" type="button" :disabled="accountBusy" class="min-h-10 px-4 inline-flex items-center gap-2 rounded-xl border border-white/15 text-sm text-white/75 disabled:opacity-50 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" @click="logoutAccount">
@@ -248,24 +257,7 @@ onBeforeUnmount(() => { browse.dispose(); sequence.close() })
           </button>
         </div>
         <p v-if="accountLoading" role="status" class="flex items-center gap-2 text-sm text-white/60"><Loader2 :size="16" class="animate-spin" aria-hidden="true" />正在检查 Pawchive 登录状态…</p>
-        <template v-else-if="accountConnected">
-          <p class="text-sm text-emerald-200 mb-4">已连接 Pawchive 账号。主页列表同步自 Pawchive 的作者收藏。</p>
-          <div class="flex items-center justify-between gap-3 mb-3">
-            <h3 class="text-sm font-bold text-white">账号收藏作者</h3>
-            <button type="button" :disabled="accountFavoritesLoading" class="min-h-10 px-3 inline-flex items-center gap-2 rounded-lg border border-white/15 text-xs text-white/75 disabled:opacity-50" @click="refreshAccountFavorites">
-              <RefreshCw :size="14" :class="accountFavoritesLoading ? 'animate-spin' : ''" aria-hidden="true" />刷新
-            </button>
-          </div>
-          <p v-if="accountFavoritesLoading" role="status" class="text-sm text-white/55">正在读取收藏作者…</p>
-          <p v-else-if="accountFavorites.length === 0" class="text-sm text-white/55">Pawchive 账号还没有收藏作者。搜索作者后，点击作者卡片上的心形即可收藏到 Pawchive。</p>
-          <div v-else class="flex flex-wrap gap-2">
-            <button v-for="creator in accountFavorites" :key="favoriteCreatorKey(creator)" type="button" class="min-h-11 inline-flex items-center gap-2 rounded-xl border border-pink-300/25 bg-pink-300/5 px-3 text-sm text-white hover:bg-pink-300/10 focus-visible:ring-2 focus-visible:ring-accent" @click="openFavoriteCreator(creator)">
-              <Heart :size="14" class="text-pink-300" fill="currentColor" aria-hidden="true" />
-              <span class="max-w-48 truncate">{{ creator.creator_name }}</span>
-              <span class="text-xs text-white/45">{{ creator.service }}</span>
-            </button>
-          </div>
-        </template>
+        <p v-else-if="accountConnected" class="text-sm text-emerald-200">已连接 Pawchive 账号。账号收藏作者会显示在下方。</p>
         <form v-else class="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end" @submit.prevent="loginAccount">
           <label class="min-w-0"><span class="block text-xs font-semibold text-white/65 mb-2">Pawchive 用户名</span><input v-model="accountUsername" autocomplete="username" required maxlength="200" class="w-full min-h-11 rounded-xl border border-white/15 bg-black/20 px-3 text-sm text-white" /></label>
           <label class="min-w-0"><span class="block text-xs font-semibold text-white/65 mb-2">Pawchive 密码</span><input v-model="accountPassword" type="password" autocomplete="current-password" required maxlength="1024" class="w-full min-h-11 rounded-xl border border-white/15 bg-black/20 px-3 text-sm text-white" /></label>
@@ -275,16 +267,15 @@ onBeforeUnmount(() => { browse.dispose(); sequence.close() })
         </form>
         <p v-if="accountMessage" role="status" class="mt-3 text-sm text-emerald-200">{{ accountMessage }}</p>
         <p v-if="accountError" role="alert" class="mt-3 text-sm text-red-200">{{ accountError }}</p>
-        <p v-if="!accountConnected && !accountLoading" class="mt-3 text-xs text-white/45">登录后可查看 Pawchive 账号收藏的作者，并直接浏览他们的帖子。登录凭据只用于本次 Pawchive 登录。</p>
+        <p v-if="!accountConnected && !accountLoading" class="mt-3 text-xs text-white/45">登录后可查看账号收藏的作者。HE Manager 仅在本机数据库保存 Pawchive 会话，不保存用户名或密码；退出登录会删除会话。会话过期后需要重新登录。</p>
       </section>
-      <PawchiveBrowser v-if="tab === 'browse'" :scope="browse.scope.value" :posts="browse.posts.value" :status="browse.status.value" :loading-more="browse.loadingMore.value" :has-more="browse.hasMore.value" :error="browse.error.value" :warnings="browse.warnings.value" :capabilities="capabilities" :selected-keys="selectedKeys" :download-busy="downloadBusy" :favorite-creator-keys="accountFavoriteKeys" :favorite-busy-keys="accountFavoriteBusyKeys" :account-connected="accountConnected" @scope="changeScope" @more="browse.loadMore" @open="open" @select="toggleSelected" @favorite="toggleAccountFavorite" @download-selected="downloadSelected" />
+      <PawchiveBrowser v-if="tab === 'browse'" :scope="browse.scope.value" :posts="browse.posts.value" :favorites="accountFavorites" :favorites-loading="accountFavoritesLoading || accountLoading" :account-connected="accountConnected" :favorite-busy-keys="accountFavoriteBusyKeys" :favorite-message="accountError" :status="browse.status.value" :loading-more="browse.loadingMore.value" :has-more="browse.hasMore.value" :error="browse.error.value" :warnings="browse.warnings.value" :capabilities="capabilities" :selected-keys="selectedKeys" :download-busy="downloadBusy" @scope="changeScope" @home="returnToAuthors" @more="browse.loadMore" @open="open" @open-creator="openCreator" @favorite="toggleAccountFavorite" @refresh="refreshAccountFavorites" @select="toggleSelected" @download-selected="downloadSelected" />
       <PawchiveDownloads v-else :refresh-key="refreshKey" />
-    </main>
     <Teleport to="body">
     <PawchiveMediaViewer v-if="sequence.active.value && sequence.current.value" :post="sequence.current.value.post" :attachment="sequence.current.value.attachment" :attachment-index="sequence.current.value.index" :attachment-total="sequence.current.value.total" :scope-label="sequence.scopeLabel.value" :busy="sequence.busy.value" :error="playbackError || sequence.error.value || sequence.notice.value" :has-previous="sequence.history.value.length > 0" :ended="sequence.ended.value" :autoplay="autoplay" :interval="interval" :download-busy="downloadBusy" :download-message="downloadMessage" :download-error="downloadError" @close="close" @next="advance" @previous="sequence.previous" @update:autoplay="autoplay = $event" @update:interval="interval = $event" @playback-error="playbackError = $event" @download-current="downloadCurrent" @download-post="downloadPost" />
     <div v-else-if="sequence.active.value" role="dialog" aria-modal="true" aria-label="正在打开 Pawchive 帖子" class="fixed inset-0 z-[70] bg-black/95 text-white flex items-center justify-center p-6">
       <div class="text-center space-y-4"><Loader2 v-if="sequence.busy.value" :size="28" class="animate-spin mx-auto text-accent" /><p>{{ sequence.error.value || '正在读取帖子…' }}</p><div class="flex justify-center gap-3"><button type="button" class="min-h-11 px-4 rounded-xl border border-white/20" @click="close"><X :size="16" class="inline" /> 返回列表</button><button v-if="sequence.error.value" type="button" class="min-h-11 px-4 rounded-xl bg-accent" @click="advance">继续查找</button></div></div>
     </div>
     </Teleport>
-  </div>
+  </section>
 </template>

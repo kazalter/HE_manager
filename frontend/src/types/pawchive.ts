@@ -35,11 +35,6 @@ export interface PawchivePost {
   attachments: PawchiveAttachment[]
 }
 
-export interface PawchiveCreatorCandidate extends PawchiveCreatorFavorite {
-  post_count: number
-  latest_post: PawchivePost
-}
-
 export interface PawchivePage {
   items: PawchivePost[]
   next_cursor: string | null
@@ -62,13 +57,18 @@ export interface PawchiveCapabilities {
   video: string[]
 }
 
-export interface PawchiveCreatorFavorite {
+export interface PawchiveCreator {
   service: string
   creator_id: string
   creator_name: string
   source_url: string
+  updated_at?: string | null
   banner_url?: string
   icon_url?: string
+}
+
+export interface PawchiveCreatorFavorite extends PawchiveCreator {
+  created_at?: string | null
 }
 
 export interface PawchiveAccountStatus {

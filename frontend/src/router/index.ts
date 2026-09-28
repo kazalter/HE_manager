@@ -28,7 +28,7 @@ const router = createRouter({
     {
       path: '/external/pawchive',
       name: 'pawchive',
-      component: () => import('../views/PawchiveView.vue')
+      redirect: to => ({ name: 'external-favorites', query: { ...to.query, source: 'pawchive' } })
     },
     {
       path: '/dedup',

@@ -318,6 +318,15 @@ class PawchiveCreatorFavorite(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class PawchiveAccountSession(Base):
+    """Pawchive session cookies retained across HE Manager restarts."""
+    __tablename__ = "pawchive_account_sessions"
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    cookies_json = Column(Text, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
 class XImportSource(Base):
     __tablename__ = "x_import_sources"
 

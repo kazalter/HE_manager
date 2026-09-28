@@ -39,7 +39,17 @@ export function usePawchiveBrowse() {
     posts.value = []
     nextCursor.value = null
     hasMore.value = false
+    loadingMore.value = false
     error.value = ''
+    warnings.value = []
+    if (!scope.value.query.trim() && !scope.value.creatorId.trim()) {
+      status.value = 'idle'
+      return
+    }
+    if (!next.creatorId && next.query.trim().length < 3) {
+      status.value = 'ready'
+      return
+    }
     status.value = 'loading'
     try {
       const page = await fetchPawchivePosts(scope.value, '', controller.signal)
@@ -51,6 +61,20 @@ export function usePawchiveBrowse() {
       error.value = pawchiveError(cause)
       status.value = 'error'
     }
+  }
+
+  const resetScope = () => {
+    version++
+    controller?.abort()
+    controller = null
+    scope.value = initialScope()
+    posts.value = []
+    nextCursor.value = null
+    hasMore.value = false
+    loadingMore.value = false
+    error.value = ''
+    warnings.value = []
+    status.value = 'idle'
   }
 
   const loadMore = async () => {
@@ -76,5 +100,5 @@ export function usePawchiveBrowse() {
     controller?.abort()
   }
 
-  return { scope, posts, nextCursor, hasMore, status, loadingMore, error, warnings, setScope, loadMore, dispose }
+  return { scope, posts, nextCursor, hasMore, status, loadingMore, error, warnings, setScope, resetScope, loadMore, dispose }
 }

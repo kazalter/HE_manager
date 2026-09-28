@@ -177,10 +177,11 @@ def ensure_tag_columns():
 
 
 def ensure_pawchive_tables():
-    """Idempotent creation for source identity, attachments, and local creator favorites."""
+    """Idempotently create Pawchive content, favorites, and account-session tables."""
     models.PawchivePost.__table__.create(bind=engine, checkfirst=True)
     models.PawchiveAttachment.__table__.create(bind=engine, checkfirst=True)
     models.PawchiveCreatorFavorite.__table__.create(bind=engine, checkfirst=True)
+    models.PawchiveAccountSession.__table__.create(bind=engine, checkfirst=True)
 
 
 def run_schema_migrations():

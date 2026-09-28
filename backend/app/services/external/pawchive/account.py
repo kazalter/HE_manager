@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from http.cookies import SimpleCookie
 from urllib.parse import quote
 
+from .... import models
+from ....database import SessionLocal
 from . import client, provider
 
 _sessions: dict[int, "AccountSession"] = {}
@@ -20,9 +22,71 @@ _COOKIE_VALUE = re.compile(r"^[!\x23-\x2B\x2D-\x3A\x3C-\x5B\x5D-\x7E]*$")
 class AccountSession:
     cookies: dict[str, str] = field(default_factory=dict)
     lock: threading.RLock = field(default_factory=threading.RLock)
+    user_id: int | None = None
 
 
-def _merge_cookies(session: AccountSession, headers: list[tuple[str, str]]) -> None:
+def _write_persisted_session(user_id: int, cookies: dict[str, str] | None) -> None:
+    db = SessionLocal()
+    try:
+        row = db.get(models.PawchiveAccountSession, user_id)
+        if cookies is None:
+            if row is not None:
+                db.delete(row)
+        else:
+            serialized = json.dumps(cookies, separators=(",", ":"), sort_keys=True)
+            if row is None:
+                db.add(models.PawchiveAccountSession(user_id=user_id, cookies_json=serialized))
+            else:
+                row.cookies_json = serialized
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise client.PawchiveError("SESSION_STORAGE_FAILED", "无法保存 Pawchive 登录状态", 500) from exc
+    finally:
+        db.close()
+
+
+def _load_persisted_session(user_id: int) -> AccountSession | None:
+    db = SessionLocal()
+    try:
+        row = db.get(models.PawchiveAccountSession, user_id)
+        if row is None:
+            return None
+        try:
+            cookies = json.loads(row.cookies_json)
+        except (TypeError, ValueError):
+            db.delete(row)
+            db.commit()
+            return None
+        if not isinstance(cookies, dict) or any(
+            not isinstance(name, str) or not isinstance(value, str)
+            or not _COOKIE_NAME.fullmatch(name) or not _COOKIE_VALUE.fullmatch(value)
+            for name, value in cookies.items()
+        ):
+            db.delete(row)
+            db.commit()
+            return None
+        return AccountSession(cookies=cookies, user_id=user_id)
+    except client.PawchiveError:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise client.PawchiveError("SESSION_STORAGE_FAILED", "无法读取已保存的 Pawchive 登录状态", 500) from exc
+    finally:
+        db.close()
+
+
+def _persist_if_current(session: AccountSession) -> None:
+    user_id = session.user_id
+    if user_id is None:
+        return
+    with _sessions_lock:
+        if _sessions.get(user_id) is session:
+            _write_persisted_session(user_id, session.cookies)
+
+
+def _merge_cookies(session: AccountSession, headers: list[tuple[str, str]]) -> bool:
+    changed = False
     for header, value in headers:
         if header.lower() != "set-cookie":
             continue
@@ -36,9 +100,13 @@ def _merge_cookies(session: AccountSession, headers: list[tuple[str, str]]) -> N
             if not _COOKIE_NAME.fullmatch(name) or not _COOKIE_VALUE.fullmatch(cookie_value):
                 continue
             if morsel["max-age"] == "0":
-                session.cookies.pop(name, None)
-            else:
+                if name in session.cookies:
+                    session.cookies.pop(name, None)
+                    changed = True
+            elif session.cookies.get(name) != cookie_value:
                 session.cookies[name] = cookie_value
+                changed = True
+    return changed
 
 
 def _request(session: AccountSession, target: str, *, method: str = "GET", form: dict[str, str] | None = None):
@@ -48,7 +116,8 @@ def _request(session: AccountSession, target: str, *, method: str = "GET", form:
         cookies=session.cookies,
         form=form,
     )
-    _merge_cookies(session, headers)
+    if _merge_cookies(session, headers):
+        _persist_if_current(session)
     return status, body
 
 
@@ -74,15 +143,26 @@ def _require_ok(status: int) -> None:
 def _session_for(user_id: int) -> AccountSession:
     with _sessions_lock:
         session = _sessions.get(user_id)
-    if session is None:
-        raise client.PawchiveError("ACCOUNT_AUTH_REQUIRED", "请先登录 Pawchive 账号", 401)
+    if session is not None:
+        return session
+
+    session = _load_persisted_session(user_id)
+    with _sessions_lock:
+        current = _sessions.get(user_id)
+        if current is not None:
+            return current
+        if session is None:
+            raise client.PawchiveError("ACCOUNT_AUTH_REQUIRED", "请先登录 Pawchive 账号", 401)
+        _sessions[user_id] = session
     return session
 
 
 def _forget_if_same(user_id: int, session: AccountSession) -> None:
     with _sessions_lock:
         if _sessions.get(user_id) is session:
+            _write_persisted_session(user_id, None)
             _sessions.pop(user_id, None)
+            session.user_id = None
 
 
 def _parse_creator_list(body: bytes) -> list[dict]:
@@ -127,8 +207,13 @@ def _fetch_favorites(session: AccountSession) -> list[dict]:
 
 
 def status(user_id: int) -> dict:
-    with _sessions_lock:
-        return {"connected": user_id in _sessions}
+    try:
+        _session_for(user_id)
+    except client.PawchiveError as exc:
+        if exc.code == "ACCOUNT_AUTH_REQUIRED":
+            return {"connected": False}
+        raise
+    return {"connected": True}
 
 
 def login(user_id: int, username: str, password: str) -> dict:
@@ -162,6 +247,12 @@ def login(user_id: int, username: str, password: str) -> dict:
             raise
 
     with _sessions_lock:
+        session.user_id = user_id
+        try:
+            _write_persisted_session(user_id, session.cookies)
+        except client.PawchiveError:
+            session.user_id = None
+            raise
         _sessions[user_id] = session
     return {"connected": True, "items": favorites}
 
@@ -196,11 +287,15 @@ def set_favorite(user_id: int, service: str, creator_id: str, favorite: bool) ->
 
 def logout(user_id: int) -> None:
     with _sessions_lock:
-        session = _sessions.pop(user_id, None)
+        session = _sessions.get(user_id)
+        _write_persisted_session(user_id, None)
+        if session is not None:
+            _sessions.pop(user_id, None)
+            session.user_id = None
     if session is None:
         return
     # Revoke the Pawchive-side session where the site accepts its logout route;
-    # always discard the local copy, even if the site is temporarily unavailable.
+    # always discard the local and persisted copy, even if the site is unavailable.
     try:
         with session.lock:
             _request(session, "/account/logout")
