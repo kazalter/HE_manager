@@ -18,6 +18,7 @@ export function usePawchiveSequence() {
   const notice = ref('')
   const ended = ref(false)
   const current = ref<CurrentItem | null>(null)
+  const nextPost = ref<PawchivePost | null>(null)
   const history = ref<Position[]>([])
   const scope = ref<PawchiveScope>({ query: '', service: '', creatorId: '', tag: '', mediaType: 'all' })
   const posts = ref<PawchivePost[]>([])
@@ -31,12 +32,15 @@ export function usePawchiveSequence() {
   let controller: AbortController | null = null
   let postIndex = -1
   let searchIndex: number | null = null
+  let nextLookup = 0
+  let pagePromise: Promise<boolean> | null = null
 
   const playable = (post: PawchivePost) => post.attachments.filter(attachment =>
     attachment.availability === 'playable' &&
     (scope.value.mediaType === 'all' || attachment.media_type === scope.value.mediaType))
 
   const postAttachments = computed(() => current.value ? playable(current.value.post) : [])
+  const nextPostAttachments = computed(() => nextPost.value ? playable(nextPost.value) : [])
 
   const detailAt = async (index: number): Promise<PawchivePost> => {
     const summary = posts.value[index]
@@ -53,6 +57,7 @@ export function usePawchiveSequence() {
     const attachments = playable(post)
     const next = attachments[attachmentIndex]
     if (!next) return false
+    const postChanged = current.value?.post.post_key !== post.post_key
     if (saveHistory && current.value) history.value.push({ postKey: current.value.post.post_key, attachmentKey: current.value.attachment.attachment_key })
     notice.value = current.value && current.value.post.post_key !== post.post_key ? '已进入下一篇帖子' : ''
     current.value = { post, attachment: next, index: attachmentIndex, total: attachments.length }
@@ -60,6 +65,7 @@ export function usePawchiveSequence() {
     searchIndex = null
     ended.value = false
     error.value = ''
+    if (postChanged) prepareNextPost()
     return true
   }
 
@@ -70,17 +76,62 @@ export function usePawchiveSequence() {
   }
 
   const loadPage = async () => {
+    if (pagePromise) return pagePromise
     if (!hasMore.value || !cursor.value) return false
-    const page = await fetchPawchivePosts(scope.value, cursor.value, controller?.signal)
-    const seen = new Set(posts.value.map(post => post.post_key))
-    posts.value.push(...page.items.filter(post => {
-      if (seen.has(post.post_key)) return false
-      seen.add(post.post_key)
+    const requestedVersion = version
+    const pending = (async () => {
+      const page = await fetchPawchivePosts(scope.value, cursor.value!, controller?.signal)
+      if (requestedVersion !== version) return false
+      const seen = new Set(posts.value.map(post => post.post_key))
+      posts.value.push(...page.items.filter(post => {
+        if (seen.has(post.post_key)) return false
+        seen.add(post.post_key)
+        return true
+      }))
+      cursor.value = page.next_cursor
+      hasMore.value = page.has_more
       return true
-    }))
-    cursor.value = page.next_cursor
-    hasMore.value = page.has_more
-    return true
+    })()
+    pagePromise = pending
+    try { return await pending }
+    finally { if (pagePromise === pending) pagePromise = null }
+  }
+
+  function prepareNextPost() {
+    const ownerKey = current.value?.post.post_key
+    const requestedVersion = version
+    const lookup = ++nextLookup
+    nextPost.value = null
+    if (!ownerKey) return
+    void (async () => {
+      let index = postIndex + 1
+      let checked = 0
+      let pages = 0
+      const stale = () => requestedVersion !== version || lookup !== nextLookup || current.value?.post.post_key !== ownerKey
+      while (checked < 10 && pages <= 2 && !stale()) {
+        if (index >= posts.value.length) {
+          if (!hasMore.value || pages >= 2) return
+          try { await loadPage() }
+          catch { return }
+          pages++
+          if (stale() || (index >= posts.value.length && !hasMore.value)) return
+          if (index >= posts.value.length) continue
+        }
+        let detail: PawchivePost
+        try { detail = await detailAt(index) }
+        catch (cause) {
+          if (axios.isAxiosError(cause) && cause.response?.status === 404) { index++; checked++; continue }
+          return
+        }
+        if (stale()) return
+        checked++
+        if (playable(detail).length) {
+          nextPost.value = detail
+          return
+        }
+        index++
+      }
+    })()
   }
 
   const next = async () => {
@@ -183,6 +234,9 @@ export function usePawchiveSequence() {
 
   const close = () => {
     version++
+    nextLookup++
+    nextPost.value = null
+    pagePromise = null
     controller?.abort()
     controller = new AbortController()
     active.value = false
@@ -197,5 +251,5 @@ export function usePawchiveSequence() {
     searchIndex = null
   }
 
-  return { active, busy, error, notice, ended, current, postAttachments, history, scopeLabel, open, next, previous, selectAttachment, close }
+  return { active, busy, error, notice, ended, current, nextPost, postAttachments, nextPostAttachments, history, scopeLabel, open, next, previous, selectAttachment, close }
 }

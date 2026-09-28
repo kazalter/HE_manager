@@ -11,6 +11,8 @@ const props = defineProps<{
   attachmentIndex: number
   attachmentTotal: number
   attachments: PawchiveAttachment[]
+  nextPostKey?: string | null
+  nextPostAttachments?: PawchiveAttachment[]
   scopeLabel: string
   busy: boolean
   error: string
@@ -42,8 +44,10 @@ let controlsTimer: number | undefined
 const videoRef = ref<HTMLVideoElement | null>(null)
 const imageReady = ref(false)
 const displayImageUrl = ref('')
-const preloadedImageUrls = new Map<string, string>()
+const preloadedImageUrls = new Map<string, Map<string, string>>()
+const attemptedImageKeys = new Map<string, Set<string>>()
 let preloadController: AbortController | null = null
+let preloadPending = false
 const thumbnailNavRef = ref<HTMLElement | null>(null)
 const thumbnailStripRef = ref<HTMLDivElement | null>(null)
 const hoverPreviewIndex = ref(-1)
@@ -55,37 +59,72 @@ let wheelGestureTimer: number | undefined
 let wheelGestureUsed = false
 let wheelDelta = 0
 
-const stopPostPreload = () => {
+const abortPostPreload = () => {
   preloadController?.abort()
   preloadController = null
-  for (const url of preloadedImageUrls.values()) URL.revokeObjectURL(url)
-  preloadedImageUrls.clear()
+  preloadPending = false
+}
+const releaseOtherPosts = (keep: Set<string>) => {
+  for (const [postKey, images] of preloadedImageUrls) {
+    if (keep.has(postKey)) continue
+    for (const url of images.values()) URL.revokeObjectURL(url)
+    preloadedImageUrls.delete(postKey)
+  }
+  for (const postKey of attemptedImageKeys.keys()) {
+    if (!keep.has(postKey)) attemptedImageKeys.delete(postKey)
+  }
+}
+const stopPostPreload = () => {
+  abortPostPreload()
+  releaseOtherPosts(new Set())
 }
 const setDisplayImageUrl = () => {
-  displayImageUrl.value = preloadedImageUrls.get(props.attachment.attachment_key)
+  displayImageUrl.value = preloadedImageUrls.get(props.post.post_key)?.get(props.attachment.attachment_key)
     || pawchiveMediaUrl(props.attachment.stream_ref)
+}
+const preloadImages = async (postKey: string, items: PawchiveAttachment[], controller: AbortController) => {
+  const images = preloadedImageUrls.get(postKey) || new Map<string, string>()
+  const attempted = attemptedImageKeys.get(postKey) || new Set<string>()
+  preloadedImageUrls.set(postKey, images)
+  attemptedImageKeys.set(postKey, attempted)
+  for (const item of items) {
+    if (controller.signal.aborted) return
+    if (item.media_type !== 'image' || !item.stream_ref || images.has(item.attachment_key) || attempted.has(item.attachment_key)) continue
+    try {
+      const response = await fetch(pawchiveMediaUrl(item.stream_ref), { signal: controller.signal })
+      if (response.status !== 200 || !response.headers.get('content-type')?.startsWith('image/')) continue
+      const blob = await response.blob()
+      if (controller.signal.aborted) return
+      images.set(item.attachment_key, URL.createObjectURL(blob))
+    } catch {
+      if (controller.signal.aborted) return
+    } finally {
+      if (!controller.signal.aborted) attempted.add(item.attachment_key)
+    }
+  }
 }
 const preloadPostImages = () => {
   if (preloadController) return
   const controller = new AbortController()
   preloadController = controller
+  const postKey = props.post.post_key
   const nextIndex = props.attachmentIndex + 1
   const ordered = [...props.attachments.slice(nextIndex), ...props.attachments.slice(0, nextIndex)]
   void (async () => {
-    for (const item of ordered) {
-      if (controller.signal.aborted) return
-      if (item.media_type !== 'image' || !item.stream_ref) continue
-      try {
-        const response = await fetch(pawchiveMediaUrl(item.stream_ref), { signal: controller.signal })
-        if (response.status !== 200 || !response.headers.get('content-type')?.startsWith('image/')) continue
-        const blob = await response.blob()
-        if (controller.signal.aborted) return
-        preloadedImageUrls.set(item.attachment_key, URL.createObjectURL(blob))
-      } catch {
-        if (controller.signal.aborted) return
-      }
+    await preloadImages(postKey, ordered, controller)
+    if (controller.signal.aborted) return
+    const nextPostKey = props.nextPostKey
+    if (nextPostKey && nextPostKey !== postKey) {
+      await preloadImages(nextPostKey, props.nextPostAttachments || [], controller)
     }
-  })()
+  })().finally(() => {
+    if (preloadController !== controller) return
+    preloadController = null
+    if (preloadPending) {
+      preloadPending = false
+      preloadPostImages()
+    }
+  })
 }
 
 const resetWheelGesture = () => {
@@ -227,10 +266,16 @@ const onKeydown = (event: KeyboardEvent) => {
   else if (event.key === 'ArrowLeft') { event.preventDefault(); emit('previous') }
 }
 watch(() => props.post.post_key, () => {
-  stopPostPreload()
+  abortPostPreload()
+  releaseOtherPosts(new Set([props.post.post_key]))
   setDisplayImageUrl()
   if (props.attachment.media_type !== 'image') preloadPostImages()
 }, { immediate: true })
+watch(() => props.nextPostKey, (postKey) => {
+  if (!postKey || postKey === props.post.post_key) return
+  if (preloadController) preloadPending = true
+  else if (props.attachment.media_type !== 'image' || imageReady.value) preloadPostImages()
+})
 watch(() => props.attachment.attachment_key, () => {
   setDisplayImageUrl()
   clearTimer()
