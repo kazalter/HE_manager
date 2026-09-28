@@ -312,6 +312,15 @@ onBeforeUnmount(() => {
       <button ref="closeRef" type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-xl hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" aria-label="返回列表" @click="emit('close')"><X :size="21" /></button>
       <div class="min-w-0 flex-1"><p class="text-xs text-white/55 truncate">{{ post.creator_name }} · {{ scopeLabel }}</p><h2 class="text-sm sm:text-base font-bold truncate">{{ post.title }}</h2></div>
       <a :href="post.source_url" target="_blank" rel="noopener noreferrer" class="min-h-11 px-3 rounded-xl border border-white/15 text-xs font-semibold flex items-center gap-2 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent"><ExternalLink :size="15" />来源</a>
+      <button
+        v-if="attachment.media_type === 'image'"
+        type="button"
+        :disabled="downloadBusy || busy || !attachment.stream_ref"
+        class="min-w-11 min-h-11 px-2 sm:px-3 flex items-center justify-center gap-2 rounded-xl border border-white/15 text-xs sm:text-sm font-semibold hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        aria-label="下载当前图片到媒体库"
+        title="下载当前图片到媒体库"
+        @click="emit('downloadCurrent')"
+      ><Download :size="17" aria-hidden="true" /><span class="hidden sm:inline">{{ downloadBusy ? '正在核对…' : '下载此图' }}</span></button>
       <button type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-xl border border-white/15 hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" :aria-label="isFullscreen ? '退出全屏' : '进入全屏'" :title="isFullscreen ? '退出全屏' : '进入全屏'" :aria-pressed="isFullscreen" @click="toggleFullscreen"><Minimize2 v-if="isFullscreen" :size="18" aria-hidden="true" /><Maximize2 v-else :size="18" aria-hidden="true" /></button>
     </header>
     <div class="flex-1 min-h-0 relative flex" @wheel.capture="onMediaWheel">
@@ -377,7 +386,7 @@ onBeforeUnmount(() => {
       <div class="flex flex-wrap items-center justify-between gap-3">
         <p class="text-xs text-white/65">本帖可播放附件 {{ attachmentIndex + 1 }} / {{ attachmentTotal }}<span class="ml-2">· {{ attachment.filename }}</span></p>
         <div class="flex flex-wrap items-center gap-2">
-          <button type="button" :disabled="downloadBusy" class="min-h-11 px-3 rounded-xl border border-white/15 flex items-center gap-1 text-sm disabled:opacity-50 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" @click="emit('downloadCurrent')"><Download :size="15" />当前附件</button>
+          <button v-if="attachment.media_type !== 'image'" type="button" :disabled="downloadBusy || busy" class="min-h-11 px-3 rounded-xl border border-white/15 flex items-center gap-1 text-sm disabled:opacity-50 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" @click="emit('downloadCurrent')"><Download :size="15" />当前附件</button>
           <button type="button" :disabled="downloadBusy" class="min-h-11 px-3 rounded-xl border border-white/15 flex items-center gap-1 text-sm disabled:opacity-50 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" @click="emit('downloadPost')">下载本帖</button>
           <label class="text-xs text-white/70 flex items-center gap-2">图片间隔
             <input type="number" min="1" max="300" :value="interval" class="w-16 min-h-11 rounded-lg bg-white/10 border border-white/15 px-2 text-white" @change="emit('update:interval', Math.min(300, Math.max(1, Number(($event.target as HTMLInputElement).value) || 5)))" />秒
