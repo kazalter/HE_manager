@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { AtSign, Check, ChevronDown, Globe2, Headphones } from 'lucide-vue-next'
+import { Check, ChevronDown } from 'lucide-vue-next'
+import wnacgLogo from '../assets/external-sources/wnacg.png'
+import xLogo from '../assets/external-sources/x.svg'
+import asmrOneLogo from '../assets/external-sources/asmr-one.png'
+import pawchiveLogo from '../assets/external-sources/pawchive.png'
 import { useRoute, useRouter } from 'vue-router'
 import WnacgPanel from '../components/external/WnacgPanel.vue'
 import XImportPanel from '../components/external/XImportPanel.vue'
@@ -13,14 +17,14 @@ interface SiteOption {
   key: SiteKey
   label: string
   description: string
-  icon: any
+  logo: string
 }
 
 const sites: SiteOption[] = [
-  { key: 'wnacg', label: 'WNACG', description: '漫画收藏夹同步与下载', icon: Globe2 },
-  { key: 'x', label: 'X (Twitter)', description: '喜欢媒体一键导入', icon: AtSign },
-  { key: 'asmr', label: 'ASMR.one', description: 'ASMR 标记作品同步与下载', icon: Headphones },
-  { key: 'pawchive', label: 'Pawchive', description: '作者收藏、帖子浏览与下载', icon: Globe2 },
+  { key: 'wnacg', label: 'WNACG', description: '漫画收藏夹同步与下载', logo: wnacgLogo },
+  { key: 'x', label: 'X (Twitter)', description: '喜欢媒体一键导入', logo: xLogo },
+  { key: 'asmr', label: 'ASMR.one', description: 'ASMR 标记作品同步与下载', logo: asmrOneLogo },
+  { key: 'pawchive', label: 'Pawchive', description: '作者收藏、帖子浏览与下载', logo: pawchiveLogo },
 ]
 
 const route = useRoute()
@@ -105,8 +109,8 @@ onBeforeUnmount(() => {
             @keydown.up.prevent="openSelector"
             @keydown.esc.prevent.stop="closeSelector(true)"
           >
-            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
-              <component :is="activeOption.icon" :size="18" aria-hidden="true" />
+            <span class="flex h-10 w-16 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/30">
+              <img :src="activeOption.logo" alt="" draggable="false" class="object-contain" :class="activeSite === 'wnacg' ? 'w-14' : 'h-8 w-8'" />
             </span>
             <span class="min-w-0 flex-1">
               <span class="block truncate text-sm font-bold text-white">{{ activeOption.label }}</span>
@@ -136,8 +140,8 @@ onBeforeUnmount(() => {
               :class="activeSite === site.key ? 'border-accent/35 bg-accent/12' : 'border-transparent hover:border-white/10 hover:bg-white/7'"
               @click="selectSite(site.key)"
             >
-              <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" :class="activeSite === site.key ? 'bg-accent/20 text-accent' : 'bg-white/7 text-white/65'">
-                <component :is="site.icon" :size="19" aria-hidden="true" />
+              <span class="flex h-10 w-16 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/30">
+                <img :src="site.logo" alt="" draggable="false" class="object-contain" :class="site.key === 'wnacg' ? 'w-14' : 'h-8 w-8'" />
               </span>
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-sm font-semibold text-white">{{ site.label }}</span>
