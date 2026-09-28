@@ -49,4 +49,20 @@ describe('Pawchive media sequence', () => {
     expect(session.current.value?.attachment.attachment_key).toBe('b')
     session.close()
   })
+
+  it('jumps to a thumbnail in the current post and preserves previous navigation', async () => {
+    const first = post('one', [attachment('a'), attachment('b'), attachment('c')])
+    vi.spyOn(axios, 'get').mockImplementation(async url => {
+      if (url.endsWith('/one')) return { data: first }
+      throw new Error('unexpected post request')
+    })
+    const session = usePawchiveSequence()
+    await session.open(0, [first], null, false, scope)
+    expect(session.postAttachments.value.map(item => item.attachment_key)).toEqual(['a', 'b', 'c'])
+    session.selectAttachment(2)
+    expect(session.current.value?.attachment.attachment_key).toBe('c')
+    await session.previous()
+    expect(session.current.value?.attachment.attachment_key).toBe('a')
+    session.close()
+  })
 })

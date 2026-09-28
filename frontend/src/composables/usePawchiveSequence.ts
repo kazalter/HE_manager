@@ -36,6 +36,8 @@ export function usePawchiveSequence() {
     attachment.availability === 'playable' &&
     (scope.value.mediaType === 'all' || attachment.media_type === scope.value.mediaType))
 
+  const postAttachments = computed(() => current.value ? playable(current.value.post) : [])
+
   const detailAt = async (index: number): Promise<PawchivePost> => {
     const summary = posts.value[index]
     if (!summary) throw new Error('missing post')
@@ -59,6 +61,12 @@ export function usePawchiveSequence() {
     ended.value = false
     error.value = ''
     return true
+  }
+
+  const selectAttachment = (attachmentIndex: number) => {
+    if (!active.value || busy.value || !current.value || !Number.isInteger(attachmentIndex)) return
+    if (attachmentIndex === current.value.index) return
+    setCurrent(postIndex, current.value.post, attachmentIndex, true)
   }
 
   const loadPage = async () => {
@@ -189,5 +197,5 @@ export function usePawchiveSequence() {
     searchIndex = null
   }
 
-  return { active, busy, error, notice, ended, current, history, scopeLabel, open, next, previous, close }
+  return { active, busy, error, notice, ended, current, postAttachments, history, scopeLabel, open, next, previous, selectAttachment, close }
 }

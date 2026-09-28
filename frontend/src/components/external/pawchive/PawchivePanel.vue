@@ -197,6 +197,10 @@ const close = async () => {
   opener?.focus()
 }
 const advance = () => { playbackError.value = ''; void sequence.next() }
+const selectAttachment = (index: number) => {
+  playbackError.value = ''
+  sequence.selectAttachment(index)
+}
 const submitDownload = async (selections: PawchiveDownloadSelection[], goToDownloads = false) => {
   if (!selections.length || downloadBusy.value) return
   downloadBusy.value = true
@@ -272,7 +276,7 @@ onBeforeUnmount(() => { browse.dispose(); sequence.close() })
       <PawchiveBrowser v-if="tab === 'browse'" :scope="browse.scope.value" :posts="browse.posts.value" :favorites="accountFavorites" :favorites-loading="accountFavoritesLoading || accountLoading" :account-connected="accountConnected" :favorite-busy-keys="accountFavoriteBusyKeys" :favorite-message="accountError" :status="browse.status.value" :loading-more="browse.loadingMore.value" :has-more="browse.hasMore.value" :error="browse.error.value" :warnings="browse.warnings.value" :capabilities="capabilities" :selected-keys="selectedKeys" :download-busy="downloadBusy" @scope="changeScope" @home="returnToAuthors" @more="browse.loadMore" @open="open" @open-creator="openCreator" @favorite="toggleAccountFavorite" @refresh="refreshAccountFavorites" @select="toggleSelected" @download-selected="downloadSelected" />
       <PawchiveDownloads v-else :refresh-key="refreshKey" />
     <Teleport to="body">
-    <PawchiveMediaViewer v-if="sequence.active.value && sequence.current.value" :post="sequence.current.value.post" :attachment="sequence.current.value.attachment" :attachment-index="sequence.current.value.index" :attachment-total="sequence.current.value.total" :scope-label="sequence.scopeLabel.value" :busy="sequence.busy.value" :error="playbackError || sequence.error.value || sequence.notice.value" :has-previous="sequence.history.value.length > 0" :ended="sequence.ended.value" :autoplay="autoplay" :interval="interval" :download-busy="downloadBusy" :download-message="downloadMessage" :download-error="downloadError" @close="close" @next="advance" @previous="sequence.previous" @update:autoplay="autoplay = $event" @update:interval="interval = $event" @playback-error="playbackError = $event" @download-current="downloadCurrent" @download-post="downloadPost" />
+    <PawchiveMediaViewer v-if="sequence.active.value && sequence.current.value" :post="sequence.current.value.post" :attachment="sequence.current.value.attachment" :attachment-index="sequence.current.value.index" :attachment-total="sequence.current.value.total" :attachments="sequence.postAttachments.value" :scope-label="sequence.scopeLabel.value" :busy="sequence.busy.value" :error="playbackError || sequence.error.value || sequence.notice.value" :has-previous="sequence.history.value.length > 0" :ended="sequence.ended.value" :autoplay="autoplay" :interval="interval" :download-busy="downloadBusy" :download-message="downloadMessage" :download-error="downloadError" @close="close" @next="advance" @previous="sequence.previous" @select-attachment="selectAttachment" @update:autoplay="autoplay = $event" @update:interval="interval = $event" @playback-error="playbackError = $event" @download-current="downloadCurrent" @download-post="downloadPost" />
     <div v-else-if="sequence.active.value" role="dialog" aria-modal="true" aria-label="正在打开 Pawchive 帖子" class="fixed inset-0 z-[70] bg-black/95 text-white flex items-center justify-center p-6">
       <div class="text-center space-y-4"><Loader2 v-if="sequence.busy.value" :size="28" class="animate-spin mx-auto text-accent" /><p>{{ sequence.error.value || '正在读取帖子…' }}</p><div class="flex justify-center gap-3"><button type="button" class="min-h-11 px-4 rounded-xl border border-white/20" @click="close"><X :size="16" class="inline" /> 返回列表</button><button v-if="sequence.error.value" type="button" class="min-h-11 px-4 rounded-xl bg-accent" @click="advance">继续查找</button></div></div>
     </div>

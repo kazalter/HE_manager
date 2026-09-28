@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ArrowLeft, ArrowRight, Download, ExternalLink, Maximize2, Minimize2, Pause, Play, X } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, Download, ExternalLink, Image as ImageIcon, Maximize2, Minimize2, Pause, Play, X } from 'lucide-vue-next'
 import ImageViewer from '../../media-detail/ImageViewer.vue'
 import type { PawchiveAttachment, PawchivePost } from '../../../types/pawchive'
 import { pawchiveMediaUrl } from '../../../utils/pawchiveApi'
@@ -10,6 +10,7 @@ const props = defineProps<{
   attachment: PawchiveAttachment
   attachmentIndex: number
   attachmentTotal: number
+  attachments: PawchiveAttachment[]
   scopeLabel: string
   busy: boolean
   error: string
@@ -25,6 +26,7 @@ const emit = defineEmits<{
   close: []
   next: []
   previous: []
+  selectAttachment: [index: number]
   'update:autoplay': [value: boolean]
   'update:interval': [value: number]
   playbackError: [message: string]
@@ -38,7 +40,55 @@ const controlsVisible = ref(true)
 let controlsTimer: number | undefined
 const videoRef = ref<HTMLVideoElement | null>(null)
 const imageReady = ref(false)
+const thumbnailStripRef = ref<HTMLDivElement | null>(null)
+const failedPreviewKeys = ref(new Set<string>())
 let imageTimer: number | undefined
+let wheelGestureTimer: number | undefined
+let wheelGestureUsed = false
+let wheelDelta = 0
+
+const resetWheelGesture = () => {
+  window.clearTimeout(wheelGestureTimer)
+  wheelGestureTimer = undefined
+  wheelGestureUsed = false
+  wheelDelta = 0
+}
+const onMediaWheel = (event: WheelEvent) => {
+  if (props.attachment.media_type !== 'image' || event.ctrlKey || event.metaKey) return
+  event.preventDefault()
+  event.stopPropagation()
+  if ((event.target as HTMLElement | null)?.closest('button, .image-viewer-toolbar')) return
+  const rawDelta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX
+  if (!rawDelta) return
+  wheelDelta += rawDelta * (event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? window.innerHeight : 1)
+  window.clearTimeout(wheelGestureTimer)
+  wheelGestureTimer = window.setTimeout(resetWheelGesture, 350)
+  if (wheelGestureUsed || props.busy || Math.abs(wheelDelta) < 8) return
+  wheelGestureUsed = true
+  wheelDelta > 0 ? emit('next') : emit('previous')
+  wheelDelta = 0
+}
+const markPreviewFailed = (key: string) => {
+  failedPreviewKeys.value = new Set(failedPreviewKeys.value).add(key)
+}
+const scrollActiveThumbnail = () => {
+  void nextTick(() => {
+    const strip = thumbnailStripRef.value
+    const active = strip?.querySelector<HTMLButtonElement>('[aria-current="true"]')
+    if (!strip || !active) return
+    const stripRect = strip.getBoundingClientRect()
+    const activeRect = active.getBoundingClientRect()
+    strip.scrollTo({
+      left: strip.scrollLeft + activeRect.left - stripRect.left - (stripRect.width - activeRect.width) / 2,
+      behavior: 'smooth',
+    })
+  })
+}
+const selectAttachment = (index: number) => {
+  if (props.busy || index === props.attachmentIndex) return
+  emit('selectAttachment', index)
+  scheduleControlsAutoHide()
+}
 
 const clearTimer = () => { window.clearTimeout(imageTimer); imageTimer = undefined }
 const scheduleImage = () => {
@@ -117,6 +167,8 @@ watch(() => props.attachment.attachment_key, () => {
   imageReady.value = false
   void startVideo()
 })
+watch(() => [props.post.post_key, props.attachmentIndex], scrollActiveThumbnail, { immediate: true })
+watch(() => props.post.post_key, () => { failedPreviewKeys.value = new Set() })
 watch(() => [props.autoplay, props.interval, props.busy], () => { scheduleImage(); void startVideo() })
 onMounted(() => {
   closeRef.value?.focus()
@@ -128,6 +180,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearTimer()
   clearControlsTimer()
+  resetWheelGesture()
   videoRef.value?.pause()
   document.removeEventListener('visibilitychange', onVisibility)
   document.removeEventListener('fullscreenchange', syncFullscreen)
@@ -144,14 +197,39 @@ onBeforeUnmount(() => {
       <a :href="post.source_url" target="_blank" rel="noopener noreferrer" class="min-h-11 px-3 rounded-xl border border-white/15 text-xs font-semibold flex items-center gap-2 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent"><ExternalLink :size="15" />来源</a>
       <button type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-xl border border-white/15 hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" :aria-label="isFullscreen ? '退出全屏' : '进入全屏'" :title="isFullscreen ? '退出全屏' : '进入全屏'" :aria-pressed="isFullscreen" @click="toggleFullscreen"><Minimize2 v-if="isFullscreen" :size="18" aria-hidden="true" /><Maximize2 v-else :size="18" aria-hidden="true" /></button>
     </header>
-    <div class="flex-1 min-h-0 relative flex" @click="onMediaSurfaceClick">
-      <ImageViewer v-if="attachment.media_type === 'image'" :key="attachment.attachment_key" :media="{ title: attachment.filename }" :image-url="pawchiveMediaUrl(attachment.stream_ref)" :show-controls="true" :click-only-controls="false" :controls-visible="!isFullscreen || controlsVisible" wheel-behavior="zoom" @previous="emit('previous')" @next="emit('next')" @viewer-double-click="() => {}" @controls-hover="() => {}" @loaded="onImageLoaded" @load-error="onImageError" />
+    <div class="flex-1 min-h-0 relative flex" @wheel.capture="onMediaWheel">
+      <ImageViewer v-if="attachment.media_type === 'image'" :key="attachment.attachment_key" :media="{ title: attachment.filename }" :image-url="pawchiveMediaUrl(attachment.stream_ref)" :show-controls="true" :click-only-controls="false" :controls-visible="!isFullscreen || controlsVisible" @viewer-click="onMediaSurfaceClick" @previous="emit('previous')" @next="emit('next')" @viewer-double-click="() => {}" @controls-hover="() => {}" @loaded="onImageLoaded" @load-error="onImageError" />
       <div v-else class="w-full h-full flex items-center justify-center bg-black">
-        <video ref="videoRef" :key="attachment.attachment_key" :src="pawchiveMediaUrl(attachment.stream_ref)" controls playsinline preload="metadata" class="w-full h-full object-contain" @ended="onVideoEnded" @pause="onVideoPaused" @error="emit('playbackError', '视频无法播放，请尝试来源页面或下一项。')" />
+        <video ref="videoRef" :key="attachment.attachment_key" :src="pawchiveMediaUrl(attachment.stream_ref)" controls playsinline preload="metadata" class="w-full h-full object-contain" @click="onMediaSurfaceClick" @ended="onVideoEnded" @pause="onVideoPaused" @error="emit('playbackError', '视频无法播放，请尝试来源页面或下一项。')" />
       </div>
       <div v-if="busy" role="status" class="absolute inset-0 bg-black/65 flex items-center justify-center text-sm">正在查找下一项…</div>
     </div>
     <footer :class="isFullscreen ? ['absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 via-black/65 to-transparent border-t-0', controlsVisible ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'] : ''" class="shrink-0 border-t border-white/15 px-3 sm:px-5 py-3 space-y-2 transition-[transform,opacity] duration-300">
+      <nav v-if="attachments.length > 1" aria-label="本帖媒体预览" class="border-b border-white/10 pb-2">
+        <div class="mb-2 flex items-center justify-between gap-3 text-xs text-white/70">
+          <span class="font-semibold">本帖媒体</span>
+          <span>{{ attachmentIndex + 1 }} / {{ attachments.length }}</span>
+        </div>
+        <div ref="thumbnailStripRef" class="flex gap-2 overflow-x-auto pb-2 custom-scrollbar" @wheel.stop>
+          <button
+            v-for="(item, index) in attachments"
+            :key="item.attachment_key"
+            type="button"
+            :disabled="busy"
+            :aria-current="index === attachmentIndex ? 'true' : undefined"
+            :aria-label="`查看本帖第 ${index + 1} 个媒体：${item.filename}`"
+            :title="item.filename"
+            :class="index === attachmentIndex ? 'border-accent ring-2 ring-accent/40' : 'border-white/15 hover:border-white/45'"
+            class="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 bg-white/5 transition-colors sm:h-20 sm:w-20 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white cursor-pointer"
+            @click="selectAttachment(index)"
+          >
+            <img v-if="item.preview_ref && !failedPreviewKeys.has(item.attachment_key)" :src="pawchiveMediaUrl(item.preview_ref)" alt="" loading="lazy" decoding="async" draggable="false" class="h-full w-full object-cover" @error="markPreviewFailed(item.attachment_key)" />
+            <span v-else class="flex h-full w-full items-center justify-center text-white/50"><ImageIcon :size="24" aria-hidden="true" /></span>
+            <span v-if="item.media_type === 'video'" class="absolute inset-0 flex items-center justify-center bg-black/35"><Play :size="22" fill="currentColor" aria-hidden="true" /></span>
+            <span class="absolute bottom-1 right-1 rounded bg-black/75 px-1 text-[10px] font-bold text-white">{{ index + 1 }}</span>
+          </button>
+        </div>
+      </nav>
       <p v-if="error" role="alert" class="text-sm text-amber-300">{{ error }}</p>
       <p v-if="downloadMessage" :role="downloadError ? 'alert' : 'status'" :class="downloadError ? 'text-red-300' : 'text-emerald-300'" class="text-sm">{{ downloadMessage }}</p>
       <div class="flex flex-wrap items-center justify-between gap-3">
