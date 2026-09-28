@@ -4,12 +4,15 @@ import { ChevronLeft, ChevronRight, Loader2, RotateCcw, RotateCw, ZoomIn, ZoomOu
 import type { Media } from '../../types'
 import { useImageViewerZoom } from '../../composables/useImageViewerZoom'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   media: Pick<Media, 'title'>
   imageUrl: string
   showControls: boolean
   clickOnlyControls: boolean
-}>()
+  wheelBehavior?: 'navigate' | 'zoom'
+}>(), {
+  wheelBehavior: 'navigate',
+})
 
 const emit = defineEmits<{
   previous: []
@@ -101,6 +104,11 @@ const toggleActualSize = () => {
 }
 
 const onWheel = (event: WheelEvent) => {
+  if (props.wheelBehavior === 'zoom') {
+    if ((event.target as HTMLElement | null)?.closest('.image-viewer-toolbar')) return
+    handleZoomWheel(event)
+    return
+  }
   if (event.ctrlKey || event.metaKey) {
     handleZoomWheel(event)
     return
@@ -239,7 +247,7 @@ onBeforeUnmount(() => {
         :class="showControls || isZoomed || rotation !== 0
           ? 'opacity-100 translate-y-0'
           : 'opacity-0 translate-y-3 pointer-events-none'"
-        class="absolute bottom-6 right-6 z-20 flex items-center gap-1.5 rounded-2xl bg-black/70 backdrop-blur-md border border-white/10 px-3 py-1.5 shadow-2xl transition-all duration-300 select-none text-white/80"
+        class="image-viewer-toolbar absolute bottom-6 right-6 z-20 flex items-center gap-1.5 rounded-2xl bg-black/70 backdrop-blur-md border border-white/10 px-3 py-1.5 shadow-2xl transition-all duration-300 select-none text-white/80"
         @click.stop
         @mouseenter="emit('controlsHover', true)"
         @mouseleave="emit('controlsHover', false)"
@@ -262,7 +270,7 @@ onBeforeUnmount(() => {
           @click="zoomOut()"
           :disabled="zoomScale <= 1"
           class="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/10 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
-          title="缩小 (Ctrl + 滚轮向下 / 快捷键: -)"
+          :title="wheelBehavior === 'zoom' ? '缩小 (滚轮向下 / 快捷键: -)' : '缩小 (Ctrl + 滚轮向下 / 快捷键: -)'"
         >
           <ZoomOut :size="15" />
         </button>
@@ -284,7 +292,7 @@ onBeforeUnmount(() => {
           @click="zoomIn()"
           :disabled="zoomScale >= 5"
           class="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/10 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
-          title="放大 (Ctrl + 滚轮向上 / 快捷键: +)"
+          :title="wheelBehavior === 'zoom' ? '放大 (滚轮向上 / 快捷键: +)' : '放大 (Ctrl + 滚轮向上 / 快捷键: +)'"
         >
           <ZoomIn :size="15" />
         </button>

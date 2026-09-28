@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ArrowLeft, ArrowRight, Download, ExternalLink, Pause, Play, X } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, Download, ExternalLink, Maximize2, Minimize2, Pause, Play, X } from 'lucide-vue-next'
 import ImageViewer from '../../media-detail/ImageViewer.vue'
 import type { PawchiveAttachment, PawchivePost } from '../../../types/pawchive'
 import { pawchiveMediaUrl } from '../../../utils/pawchiveApi'
@@ -31,7 +31,9 @@ const emit = defineEmits<{
   downloadCurrent: []
   downloadPost: []
 }>()
+const viewerRef = ref<HTMLDivElement | null>(null)
 const closeRef = ref<HTMLButtonElement | null>(null)
+const isFullscreen = ref(false)
 const videoRef = ref<HTMLVideoElement | null>(null)
 const imageReady = ref(false)
 let imageTimer: number | undefined
@@ -59,6 +61,17 @@ const onVisibility = () => {
   if (document.hidden) { clearTimer(); videoRef.value?.pause() }
   else { scheduleImage(); void startVideo() }
 }
+const syncFullscreen = () => {
+  isFullscreen.value = document.fullscreenElement === viewerRef.value
+}
+const toggleFullscreen = async () => {
+  try {
+    if (document.fullscreenElement === viewerRef.value) await document.exitFullscreen()
+    else await viewerRef.value?.requestFullscreen()
+  } catch {
+    emit('playbackError', '无法切换全屏，请检查浏览器是否允许全屏显示。')
+  }
+}
 const onKeydown = (event: KeyboardEvent) => {
   if (event.key === 'Tab') {
     const focusable = [...document.querySelectorAll<HTMLElement>('[role="dialog"] a[href], [role="dialog"] button:not([disabled]), [role="dialog"] input:not([disabled])')]
@@ -69,7 +82,15 @@ const onKeydown = (event: KeyboardEvent) => {
   }
   const target = event.target as HTMLElement | null
   if (target?.closest('input, textarea, select, video, [contenteditable="true"]')) return
-  if (event.key === 'Escape') { event.preventDefault(); emit('close') }
+  if (event.key === 'Escape') {
+    if (document.fullscreenElement === viewerRef.value) {
+      event.preventDefault()
+      void document.exitFullscreen()
+      return
+    }
+    event.preventDefault()
+    emit('close')
+  }
   else if (event.key === 'ArrowRight') { event.preventDefault(); emit('next') }
   else if (event.key === 'ArrowLeft') { event.preventDefault(); emit('previous') }
 }
@@ -82,6 +103,7 @@ watch(() => [props.autoplay, props.interval, props.busy], () => { scheduleImage(
 onMounted(() => {
   closeRef.value?.focus()
   document.addEventListener('visibilitychange', onVisibility)
+  document.addEventListener('fullscreenchange', syncFullscreen)
   window.addEventListener('keydown', onKeydown)
   if (props.attachment.media_type === 'video') void startVideo()
 })
@@ -89,19 +111,22 @@ onBeforeUnmount(() => {
   clearTimer()
   videoRef.value?.pause()
   document.removeEventListener('visibilitychange', onVisibility)
+  document.removeEventListener('fullscreenchange', syncFullscreen)
   window.removeEventListener('keydown', onKeydown)
+  if (document.fullscreenElement === viewerRef.value) void document.exitFullscreen()
 })
 </script>
 
 <template>
-  <div role="dialog" aria-modal="true" :aria-label="`Pawchive 查看器：${post.title}`" class="fixed inset-0 z-[70] bg-black/95 text-white flex flex-col">
+  <div ref="viewerRef" role="dialog" aria-modal="true" :aria-label="`Pawchive 查看器：${post.title}`" :class="isFullscreen ? 'h-screen w-screen' : ''" class="fixed inset-0 z-[70] bg-black/95 text-white flex flex-col">
     <header class="shrink-0 px-3 sm:px-5 py-3 border-b border-white/15 flex items-center gap-3">
       <button ref="closeRef" type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-xl hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" aria-label="返回列表" @click="emit('close')"><X :size="21" /></button>
       <div class="min-w-0 flex-1"><p class="text-xs text-white/55 truncate">{{ post.creator_name }} · {{ scopeLabel }}</p><h2 class="text-sm sm:text-base font-bold truncate">{{ post.title }}</h2></div>
       <a :href="post.source_url" target="_blank" rel="noopener noreferrer" class="min-h-11 px-3 rounded-xl border border-white/15 text-xs font-semibold flex items-center gap-2 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent"><ExternalLink :size="15" />来源</a>
+      <button type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-xl border border-white/15 hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" :aria-label="isFullscreen ? '退出全屏' : '进入全屏'" :title="isFullscreen ? '退出全屏' : '进入全屏'" :aria-pressed="isFullscreen" @click="toggleFullscreen"><Minimize2 v-if="isFullscreen" :size="18" aria-hidden="true" /><Maximize2 v-else :size="18" aria-hidden="true" /></button>
     </header>
     <div class="flex-1 min-h-0 relative flex">
-      <ImageViewer v-if="attachment.media_type === 'image'" :key="attachment.attachment_key" :media="{ title: attachment.filename }" :image-url="pawchiveMediaUrl(attachment.stream_ref)" :show-controls="true" :click-only-controls="false" @previous="emit('previous')" @next="emit('next')" @viewer-click="() => {}" @viewer-double-click="() => {}" @controls-hover="() => {}" @loaded="onImageLoaded" @load-error="onImageError" />
+      <ImageViewer v-if="attachment.media_type === 'image'" :key="attachment.attachment_key" :media="{ title: attachment.filename }" :image-url="pawchiveMediaUrl(attachment.stream_ref)" :show-controls="true" :click-only-controls="false" wheel-behavior="zoom" @previous="emit('previous')" @next="emit('next')" @viewer-click="() => {}" @viewer-double-click="() => {}" @controls-hover="() => {}" @loaded="onImageLoaded" @load-error="onImageError" />
       <div v-else class="w-full h-full flex items-center justify-center bg-black">
         <video ref="videoRef" :key="attachment.attachment_key" :src="pawchiveMediaUrl(attachment.stream_ref)" controls playsinline preload="metadata" class="w-full h-full object-contain" @ended="onVideoEnded" @pause="onVideoPaused" @error="emit('playbackError', '视频无法播放，请尝试来源页面或下一项。')" />
       </div>
