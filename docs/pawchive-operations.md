@@ -53,6 +53,24 @@ Media URLs use short-lived signed references and the same HE Manager access
 token as other binary routes. Do not place the token or source media URL in
 logs. The nginx media location disables access logs and response buffering.
 
+## Temporary image cache
+
+Pawchive full-resolution images and preview thumbnails are cached on the
+server after a complete, authenticated 200 response. The cache key is the
+validated source path and media kind, not the short-lived signed URL. Videos
+and partial media responses are streamed without being cached. Cached images
+still pass through HE Manager authentication and signed-reference validation.
+
+The backend uses /mnt/hdd/.he-manager/pawchive-cache and requires
+/mnt/hdd/.mounted. It removes only that cache directory when the backend
+starts; a browser refresh does not clear it. If the mount or sentinel is
+missing, the cache is disabled and media continues to stream from Pawchive.
+The original-image limit defaults to 10 GiB and the thumbnail limit to
+1 GiB. Least-recently-used files are removed when either limit is reached.
+Set HE_PAWCHIVE_IMAGE_CACHE_BYTES or HE_PAWCHIVE_PREVIEW_CACHE_BYTES on the
+backend service to change these limits. No cache files are stored on the
+system disk.
+
 ## Failure and recovery
 
 - `PROVIDER_DISABLED`: set `HE_PAWCHIVE_ENABLED=1` and recreate the backend.

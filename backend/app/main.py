@@ -30,6 +30,7 @@ from .routers import x_import as x_import_routes
 from .dedup import worker as dedup_worker
 from .services import job_lifecycle
 from .services.external.pawchive import downloader as pawchive_downloader
+from .services.external.pawchive.media_cache import media_cache as pawchive_media_cache
 from .services.thumbnails import THUMBNAIL_DIR, cleanup_orphaned_thumbnails
 
 logging.basicConfig(
@@ -55,6 +56,7 @@ async def lifespan(app: FastAPI):
     # Startup tasks
     job_lifecycle.recover_interrupted_jobs()
     pawchive_downloader.recover_interrupted_attachments()
+    pawchive_media_cache.reset_for_startup()
     job_lifecycle.cleanup_job_history()
     dedup_worker.recover_checking_jobs()
     auto_sync_routes.init_scheduler()
