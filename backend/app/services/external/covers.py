@@ -171,6 +171,27 @@ def external_item_download_dir(item: models.ExternalFavoriteItem, source: models
         audio_dir = os.path.join(root, "audio")
         return os.path.join(audio_dir, f"{safe_filename(item.title, 'asmr')}_{item.external_id}")
     manga_dir = os.path.join(root, "manga")
+    # Titles can exceed filesystem component limits even after character-count
+    # truncation (for example, CJK characters use multiple UTF-8 bytes). Use the
+    # site's short numeric ID as the storage key and keep the title in metadata.
+    external_id = str(item.external_id or "")
+    if not re.fullmatch(r"\d{1,20}", external_id):
+        external_id = str(item.id or "unknown")
+    return os.path.join(manga_dir, f"wnacg-{external_id}")
+
+
+def external_item_legacy_wnacg_download_dir(
+    item: models.ExternalFavoriteItem,
+    source: models.ExternalFavoriteSource,
+    download_root_path: Optional[str] = None,
+) -> str:
+    """Return the former title-based path so existing WNACG downloads stay discoverable."""
+    source_type = source.source_type or "wnacg"
+    root = normalize_download_root(
+        download_root_path if download_root_path is not None else source.download_root_path,
+        source_type,
+    )
+    manga_dir = os.path.join(root, "manga")
     return os.path.join(manga_dir, f"{safe_filename(item.title, 'wnacg')}_{item.external_id}")
 
 

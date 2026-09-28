@@ -12,6 +12,7 @@ from .covers import (
     ensure_asmr_cover_file,
     ensure_external_cover_cache,
     external_item_download_dir,
+    external_item_legacy_wnacg_download_dir,
     get_asmr_storage_dirs,
     get_external_storage_dirs,
 )
@@ -122,7 +123,7 @@ def upsert_external_downloaded_audio_media(
 
 
 def wnacg_download_is_complete(item_dir: str) -> bool:
-    return os.path.isfile(os.path.join(item_dir, "source.txt"))
+    return bool(item_dir and os.path.isfile(os.path.join(item_dir, "source.txt")))
 
 
 def ensure_wnacg_source_marker(item: models.ExternalFavoriteItem, item_dir: str) -> None:
@@ -144,17 +145,21 @@ def find_local_media_for_external_items(
         return {}
 
     urls = {item.url for item in items if item.url}
-    expected_paths: dict[int, str] = {}
+    expected_paths: dict[int, list[str]] = {}
     for item in items:
         source = item.source
         if source and source.download_root_path:
-            expected_paths[item.id] = external_item_download_dir(item, source)
+            candidates = [external_item_download_dir(item, source)]
+            if (source.source_type or item.source_type or "wnacg") != "asmr":
+                candidates.append(external_item_legacy_wnacg_download_dir(item, source))
+            expected_paths[item.id] = list(dict.fromkeys(candidates))
 
     filters = []
     if urls:
         filters.append(models.Media.source_url.in_(urls))
     if expected_paths:
-        filters.append(models.Media.absolute_path.in_(set(expected_paths.values())))
+        all_paths = {path for candidates in expected_paths.values() for path in candidates}
+        filters.append(models.Media.absolute_path.in_(all_paths))
     if not filters:
         return {}
 
@@ -182,8 +187,11 @@ def find_local_media_for_external_items(
     for item in items:
         expected_type = "audio" if (item.source_type or "") == "asmr" else "manga"
         media = by_source.get((item.url, item.source_type, expected_type))
-        if media is None and item.id in expected_paths:
-            media = by_path.get((expected_paths[item.id], expected_type))
+        if media is None:
+            for path in expected_paths.get(item.id, []):
+                media = by_path.get((path, expected_type))
+                if media is not None:
+                    break
         if media is not None:
             resolved[item.id] = media
     return resolved
@@ -194,12 +202,12 @@ def find_local_media_for_external_item(item: models.ExternalFavoriteItem, db: Se
     is_manga = expected_media_type == "manga"
 
     source = item.source
-    item_dir = (
-        external_item_download_dir(item, source)
-        if source and source.download_root_path
-        else None
-    )
-    manga_complete = bool(is_manga and item_dir and wnacg_download_is_complete(item_dir))
+    item_dirs = []
+    if source and source.download_root_path:
+        item_dirs = [external_item_download_dir(item, source)]
+        if (source.source_type or item.source_type or "wnacg") != "asmr":
+            item_dirs.append(external_item_legacy_wnacg_download_dir(item, source))
+        item_dirs = list(dict.fromkeys(item_dirs))
 
     media = (
         db.query(models.Media)
@@ -212,42 +220,62 @@ def find_local_media_for_external_item(item: models.ExternalFavoriteItem, db: Se
         .first()
     )
     if media:
-        if is_manga and not manga_complete:
-            media.is_missing = True
-            db.commit()
-            return None
-        return media
+        if not is_manga:
+            return media
 
-    if not source or not source.download_root_path or not item_dir:
-        return None
+        # Existing downloads may still be in the former title-based directory.
+        # Trust the stored path before checking the new ID-based directory.
+        if wnacg_download_is_complete(media.absolute_path):
+            return media
 
-    if not os.path.isdir(item_dir):
-        return None
-
-    media = (
-        db.query(models.Media)
-        .filter(
-            models.Media.absolute_path == item_dir,
-            models.Media.media_type == expected_media_type,
-            models.Media.is_missing == False,
+        completed_candidate = next(
+            (
+                item_dir
+                for item_dir in item_dirs
+                if item_dir != media.absolute_path and wnacg_download_is_complete(item_dir)
+            ),
+            None,
         )
-        .first()
-    )
-    if media:
-        if not media.source_url or not media.source_site:
-            media.source_url = item.url
-            media.source_site = item.source_type
-            db.commit()
-            db.refresh(media)
-        return media
+        if completed_candidate and source:
+            return upsert_external_downloaded_media(
+                item, source, completed_candidate, source.download_root_path, db
+            )
 
-    if expected_media_type == "audio":
+        media.is_missing = True
+        db.commit()
         return None
 
-    if not manga_complete:
+    if not source or not source.download_root_path or not item_dirs:
         return None
 
-    return upsert_external_downloaded_media(item, source, item_dir, source.download_root_path, db)
+    for item_dir in item_dirs:
+        if not os.path.isdir(item_dir):
+            continue
+
+        media = (
+            db.query(models.Media)
+            .filter(
+                models.Media.absolute_path == item_dir,
+                models.Media.media_type == expected_media_type,
+                models.Media.is_missing == False,
+            )
+            .first()
+        )
+        if media:
+            if not media.source_url or not media.source_site:
+                media.source_url = item.url
+                media.source_site = item.source_type
+                db.commit()
+                db.refresh(media)
+            return media
+
+        if expected_media_type == "audio":
+            continue
+
+        if wnacg_download_is_complete(item_dir):
+            return upsert_external_downloaded_media(item, source, item_dir, source.download_root_path, db)
+
+    return None
 
 
 def serialize_external_favorite_item(
@@ -301,15 +329,30 @@ def upsert_external_downloaded_media(
         .filter(models.Media.absolute_path == item_dir, models.Media.media_type == "manga")
         .first()
     )
+    if media is None:
+        # Reuse the existing database record when a failed/legacy download is
+        # retried into the new ID-based directory.
+        media = (
+            db.query(models.Media)
+            .filter(
+                models.Media.source_url == item.url,
+                models.Media.source_site == source.source_type,
+                models.Media.media_type == "manga",
+            )
+            .order_by(models.Media.id.desc())
+            .first()
+        )
     if media:
         media.folder_id = folder.id
         media.title = item.title
         media.relative_path = rel_path
+        media.absolute_path = item_dir
         media.file_size = total_bytes
         media.page_count = page_count
         media.source_url = item.url
         media.source_site = source.source_type
         media.is_missing = False
+        media.missing_since = None
     else:
         media = models.Media(
             folder_id=folder.id,
