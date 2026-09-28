@@ -9,6 +9,7 @@ const props = withDefaults(defineProps<{
   imageUrl: string
   showControls: boolean
   clickOnlyControls: boolean
+  controlsVisible?: boolean
   wheelBehavior?: 'navigate' | 'zoom'
 }>(), {
   wheelBehavior: 'navigate',
@@ -194,11 +195,13 @@ onBeforeUnmount(() => {
         @click.stop="emit('previous')"
         @mouseenter="emit('controlsHover', true)"
         @mouseleave="emit('controlsHover', false)"
-        :class="showControls
-          ? 'opacity-100 translate-x-0'
-          : clickOnlyControls
-            ? 'opacity-0 -translate-x-6 pointer-events-none'
-            : 'opacity-0 -translate-x-6 hover:opacity-100 hover:translate-x-0'"
+        :class="controlsVisible !== undefined
+          ? (controlsVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-6 pointer-events-none')
+          : (showControls
+            ? 'opacity-100 translate-x-0'
+            : clickOnlyControls
+              ? 'opacity-0 -translate-x-6 pointer-events-none'
+              : 'opacity-0 -translate-x-6 hover:opacity-100 hover:translate-x-0')"
         class="absolute left-5 z-20 w-14 h-14 rounded-2xl bg-black/45 backdrop-blur-md text-white/55 hover:text-white hover:bg-black/70 transition-all duration-300 cursor-pointer"
         title="上一项"
       >
@@ -231,11 +234,13 @@ onBeforeUnmount(() => {
         @click.stop="emit('next')"
         @mouseenter="emit('controlsHover', true)"
         @mouseleave="emit('controlsHover', false)"
-        :class="showControls
-          ? 'opacity-100 translate-x-0'
-          : clickOnlyControls
-            ? 'opacity-0 translate-x-6 pointer-events-none'
-            : 'opacity-0 translate-x-6 hover:opacity-100 hover:translate-x-0'"
+        :class="controlsVisible !== undefined
+          ? (controlsVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-6 pointer-events-none')
+          : (showControls
+            ? 'opacity-100 translate-x-0'
+            : clickOnlyControls
+              ? 'opacity-0 translate-x-6 pointer-events-none'
+              : 'opacity-0 translate-x-6 hover:opacity-100 hover:translate-x-0')"
         class="absolute right-5 z-20 w-14 h-14 rounded-2xl bg-black/45 backdrop-blur-md text-white/55 hover:text-white hover:bg-black/70 transition-all duration-300 cursor-pointer"
         title="下一项"
       >
@@ -244,7 +249,7 @@ onBeforeUnmount(() => {
 
       <!-- Floating Toolbar Pill -->
       <div
-        :class="showControls || isZoomed || rotation !== 0
+        :class="(controlsVisible === undefined ? showControls || isZoomed || rotation !== 0 : controlsVisible)
           ? 'opacity-100 translate-y-0'
           : 'opacity-0 translate-y-3 pointer-events-none'"
         class="image-viewer-toolbar absolute bottom-6 right-6 z-20 flex items-center gap-1.5 rounded-2xl bg-black/70 backdrop-blur-md border border-white/10 px-3 py-1.5 shadow-2xl transition-all duration-300 select-none text-white/80"

@@ -34,6 +34,8 @@ const emit = defineEmits<{
 const viewerRef = ref<HTMLDivElement | null>(null)
 const closeRef = ref<HTMLButtonElement | null>(null)
 const isFullscreen = ref(false)
+const controlsVisible = ref(true)
+let controlsTimer: number | undefined
 const videoRef = ref<HTMLVideoElement | null>(null)
 const imageReady = ref(false)
 let imageTimer: number | undefined
@@ -61,8 +63,24 @@ const onVisibility = () => {
   if (document.hidden) { clearTimer(); videoRef.value?.pause() }
   else { scheduleImage(); void startVideo() }
 }
+const clearControlsTimer = () => { window.clearTimeout(controlsTimer); controlsTimer = undefined }
+const scheduleControlsAutoHide = () => {
+  clearControlsTimer()
+  if (!isFullscreen.value || !controlsVisible.value) return
+  controlsTimer = window.setTimeout(() => { controlsVisible.value = false; controlsTimer = undefined }, 3000)
+}
+const toggleControls = () => {
+  if (!isFullscreen.value) return
+  controlsVisible.value = !controlsVisible.value
+  if (controlsVisible.value) scheduleControlsAutoHide()
+  else clearControlsTimer()
+}
+const onMediaSurfaceClick = () => toggleControls()
 const syncFullscreen = () => {
   isFullscreen.value = document.fullscreenElement === viewerRef.value
+  controlsVisible.value = true
+  clearControlsTimer()
+  scheduleControlsAutoHide()
 }
 const toggleFullscreen = async () => {
   try {
@@ -109,6 +127,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   clearTimer()
+  clearControlsTimer()
   videoRef.value?.pause()
   document.removeEventListener('visibilitychange', onVisibility)
   document.removeEventListener('fullscreenchange', syncFullscreen)
@@ -119,20 +138,20 @@ onBeforeUnmount(() => {
 
 <template>
   <div ref="viewerRef" role="dialog" aria-modal="true" :aria-label="`Pawchive 查看器：${post.title}`" :class="isFullscreen ? 'h-screen w-screen' : ''" class="fixed inset-0 z-[70] bg-black/95 text-white flex flex-col">
-    <header class="shrink-0 px-3 sm:px-5 py-3 border-b border-white/15 flex items-center gap-3">
+    <header :class="isFullscreen ? ['absolute inset-x-0 top-0 z-30 bg-gradient-to-b from-black/90 via-black/65 to-transparent border-b-0', controlsVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'] : ''" class="shrink-0 px-3 sm:px-5 py-3 border-b border-white/15 flex items-center gap-3 transition-[transform,opacity] duration-300">
       <button ref="closeRef" type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-xl hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" aria-label="返回列表" @click="emit('close')"><X :size="21" /></button>
       <div class="min-w-0 flex-1"><p class="text-xs text-white/55 truncate">{{ post.creator_name }} · {{ scopeLabel }}</p><h2 class="text-sm sm:text-base font-bold truncate">{{ post.title }}</h2></div>
       <a :href="post.source_url" target="_blank" rel="noopener noreferrer" class="min-h-11 px-3 rounded-xl border border-white/15 text-xs font-semibold flex items-center gap-2 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent"><ExternalLink :size="15" />来源</a>
       <button type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-xl border border-white/15 hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" :aria-label="isFullscreen ? '退出全屏' : '进入全屏'" :title="isFullscreen ? '退出全屏' : '进入全屏'" :aria-pressed="isFullscreen" @click="toggleFullscreen"><Minimize2 v-if="isFullscreen" :size="18" aria-hidden="true" /><Maximize2 v-else :size="18" aria-hidden="true" /></button>
     </header>
-    <div class="flex-1 min-h-0 relative flex">
-      <ImageViewer v-if="attachment.media_type === 'image'" :key="attachment.attachment_key" :media="{ title: attachment.filename }" :image-url="pawchiveMediaUrl(attachment.stream_ref)" :show-controls="true" :click-only-controls="false" wheel-behavior="zoom" @previous="emit('previous')" @next="emit('next')" @viewer-click="() => {}" @viewer-double-click="() => {}" @controls-hover="() => {}" @loaded="onImageLoaded" @load-error="onImageError" />
+    <div class="flex-1 min-h-0 relative flex" @click="onMediaSurfaceClick">
+      <ImageViewer v-if="attachment.media_type === 'image'" :key="attachment.attachment_key" :media="{ title: attachment.filename }" :image-url="pawchiveMediaUrl(attachment.stream_ref)" :show-controls="true" :click-only-controls="false" :controls-visible="!isFullscreen || controlsVisible" wheel-behavior="zoom" @previous="emit('previous')" @next="emit('next')" @viewer-double-click="() => {}" @controls-hover="() => {}" @loaded="onImageLoaded" @load-error="onImageError" />
       <div v-else class="w-full h-full flex items-center justify-center bg-black">
         <video ref="videoRef" :key="attachment.attachment_key" :src="pawchiveMediaUrl(attachment.stream_ref)" controls playsinline preload="metadata" class="w-full h-full object-contain" @ended="onVideoEnded" @pause="onVideoPaused" @error="emit('playbackError', '视频无法播放，请尝试来源页面或下一项。')" />
       </div>
       <div v-if="busy" role="status" class="absolute inset-0 bg-black/65 flex items-center justify-center text-sm">正在查找下一项…</div>
     </div>
-    <footer class="shrink-0 border-t border-white/15 px-3 sm:px-5 py-3 space-y-2">
+    <footer :class="isFullscreen ? ['absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 via-black/65 to-transparent border-t-0', controlsVisible ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'] : ''" class="shrink-0 border-t border-white/15 px-3 sm:px-5 py-3 space-y-2 transition-[transform,opacity] duration-300">
       <p v-if="error" role="alert" class="text-sm text-amber-300">{{ error }}</p>
       <p v-if="downloadMessage" :role="downloadError ? 'alert' : 'status'" :class="downloadError ? 'text-red-300' : 'text-emerald-300'" class="text-sm">{{ downloadMessage }}</p>
       <div class="flex flex-wrap items-center justify-between gap-3">
