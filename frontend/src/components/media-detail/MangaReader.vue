@@ -23,6 +23,7 @@ const props = defineProps<{
   media: Media
   currentPage: number
   totalPages: number | null
+  pageDimensions: Array<[number, number] | null>
   showControls: boolean
   clickOnlyControls: boolean
   progressText: string
@@ -66,6 +67,8 @@ let dragMoved = false
 let lastWheelAt = 0
 let isProgrammaticScroll = false
 let programmaticScrollTimer: number | undefined
+let scrollReportedPage: number | null = null
+let webtoonScrollRafId: number | null = null
 let scrollRafId: number | null = null
 let dragRafId: number | null = null
 let pendingDragScroll = 0
@@ -143,7 +146,7 @@ const setReadMode = (mode: MangaReadMode) => {
   resetZoom()
   if (mode === 'webtoon') {
     nextTick(() => {
-      scrollWebtoonToPage(props.currentPage, false)
+      scrollWebtoonToPage(props.currentPage)
     })
   }
 }
@@ -336,33 +339,43 @@ const onWheel = (event: WheelEvent) => {
 }
 
 const onWebtoonScroll = () => {
-  if (isProgrammaticScroll || readMode.value !== 'webtoon') return
-  const container = webtoonContainerRef.value
-  if (!container || !props.totalPages) return
-  const containerTop = container.scrollTop + 100
-  const children = container.children
-  for (let i = 0; i < children.length; i++) {
-    const el = children[i] as HTMLElement
-    if (el.offsetTop + el.offsetHeight >= containerTop) {
-      if (i !== props.currentPage) {
-        emit('update:currentPage', i)
-      }
-      break
+  if (isProgrammaticScroll || readMode.value !== 'webtoon' || webtoonScrollRafId !== null) return
+  webtoonScrollRafId = requestAnimationFrame(() => {
+    webtoonScrollRafId = null
+    if (isProgrammaticScroll || readMode.value !== 'webtoon') return
+    const container = webtoonContainerRef.value
+    if (!container || !props.totalPages) return
+    const containerTop = container.scrollTop + 100
+    const children = container.children
+    if (!children.length) return
+    let low = 0
+    let high = children.length - 1
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2)
+      const el = children[mid] as HTMLElement
+      if (el.offsetTop + el.offsetHeight < containerTop) low = mid + 1
+      else high = mid
     }
-  }
+    if (low !== props.currentPage) {
+      // Scrolling reports progress; it must not trigger the page-navigation watcher.
+      scrollReportedPage = low
+      emit('update:currentPage', low)
+    }
+  })
 }
 
-const scrollWebtoonToPage = (page: number, smooth = true) => {
+const scrollWebtoonToPage = (page: number) => {
   if (readMode.value !== 'webtoon') return
-  const el = document.getElementById(`webtoon-page-${page}`)
-  if (el) {
-    isProgrammaticScroll = true
-    window.clearTimeout(programmaticScrollTimer)
-    el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' })
-    programmaticScrollTimer = window.setTimeout(() => {
-      isProgrammaticScroll = false
-    }, 450)
-  }
+  const container = webtoonContainerRef.value
+  const el = container?.children[page] as HTMLElement | undefined
+  if (!container || !el) return
+  isProgrammaticScroll = true
+  window.clearTimeout(programmaticScrollTimer)
+  // Only move the reader. scrollIntoView can also move the surrounding overlay.
+  container.scrollTo({ top: el.offsetTop, behavior: 'auto' })
+  programmaticScrollTimer = window.setTimeout(() => {
+    isProgrammaticScroll = false
+  }, 100)
 }
 
 const onViewerClick = () => {
@@ -393,17 +406,25 @@ const preloadAdjacentMangaPages = (page: number) => {
 watch(() => props.currentPage, page => {
   if (readMode.value !== 'webtoon') {
     resetZoom()
+  } else if (page === scrollReportedPage) {
+    scrollReportedPage = null
   } else if (!isProgrammaticScroll) {
+    scrollReportedPage = null
     scrollWebtoonToPage(page)
   }
   scrollToPage(page)
   preloadAdjacentMangaPages(page)
 }, { immediate: true })
 watch(() => props.totalPages, total => {
-  if (total) scrollToPage(props.currentPage, false)
+  if (!total) return
+  scrollToPage(props.currentPage, false)
+  if (readMode.value === 'webtoon') {
+    void nextTick(() => scrollWebtoonToPage(props.currentPage))
+  }
 })
 watch(() => props.media.id, () => {
   preloadedMangaPages.clear()
+  scrollReportedPage = null
   hoverThumbIndex.value = -1
   thumbStripScroll.value = 0
   scrollToPage(props.currentPage, false)
@@ -431,6 +452,7 @@ onBeforeUnmount(() => {
   window.clearTimeout(programmaticScrollTimer)
   window.clearTimeout(hoverTimer)
   if (scrollRafId !== null) cancelAnimationFrame(scrollRafId)
+  if (webtoonScrollRafId !== null) cancelAnimationFrame(webtoonScrollRafId)
   if (dragRafId !== null) cancelAnimationFrame(dragRafId)
   if (stripResizeObserver) {
     stripResizeObserver.disconnect()
@@ -478,9 +500,11 @@ onBeforeUnmount(() => {
         >
           <img
             :src="pageUrlFor(pageIndex)"
+            :width="pageDimensions[pageIndex]?.[0] || 2"
+            :height="pageDimensions[pageIndex]?.[1] || 3"
             loading="lazy"
             decoding="async"
-            class="w-full h-auto object-contain block shadow-2xl rounded-sm bg-neutral-900 min-h-[300px]"
+            class="w-full h-auto object-contain block shadow-2xl rounded-sm bg-neutral-900"
             :alt="`第 ${pageIndex + 1} 页`"
           />
           <div class="absolute top-2 right-2 bg-black/75 backdrop-blur-md text-white/70 text-[11px] font-mono px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">

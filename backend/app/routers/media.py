@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from .. import auth, database, media_cleanup, models, scanner, schemas, tagging
 from ..database import get_db
-from ..services.manga_pages import get_manga_image_files
+from ..services.manga_pages import get_manga_image_files, get_manga_page_dimensions
 from ..services.media_access import get_media_or_404
 from ..services.range_response import get_ranged_file_response
 from ..services.thumbnails import THUMBNAIL_DIR, remove_cover_thumbnails, remove_manga_page_thumbnails
@@ -535,18 +535,29 @@ def stream_mobile_media(
 
 
 @router.get("/manga/{media_id}/pages")
-def get_manga_pages_count(media_id: int, db: Session = Depends(get_db)):
+def get_manga_pages_count(
+    media_id: int,
+    db: Session = Depends(get_db),
+    include_dimensions: bool = False,
+):
     media = get_media_or_404(media_id, db)
     if media.media_type != "manga":
-        return {"total_pages": 0}
+        return {"total_pages": 0, **({"page_dimensions": []} if include_dimensions else {})}
 
     try:
-        total_pages = len(get_manga_image_files(media))
+        files = get_manga_image_files(media)
+        total_pages = len(files)
         media.page_count = total_pages
         db.commit()
-        return {"total_pages": total_pages}
+        result = {"total_pages": total_pages}
+        if include_dimensions:
+            result["page_dimensions"] = get_manga_page_dimensions(media, files)
+        return result
     except Exception:
-        return {"total_pages": media.page_count or 0}
+        return {
+            "total_pages": media.page_count or 0,
+            **({"page_dimensions": []} if include_dimensions else {}),
+        }
 
 
 @router.get("/mobile/manga/{media_id}/pages")

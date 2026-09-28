@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir \
         --index-url https://download.pytorch.org/whl/cpu \
         "torch==${TORCH_VERSION}" \
     && pip install --no-cache-dir \
-        -i https://pypi.tuna.tsinghua.edu.cn/simple \
+        -i https://pypi.org/simple \
         -r requirements.txt
 
 # App package only — DB and media live on mounted volumes, never in the image.

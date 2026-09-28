@@ -31,6 +31,7 @@ const emit = defineEmits<{
 const currentMedia = ref<Media>(props.initialMedia)
 const currentPage = ref(0)
 const totalMangaPages = ref<number | null>(null)
+const mangaPageDimensions = ref<Array<[number, number] | null>>([])
 const showMetadataPanel = ref(localStorage.getItem('he_detail_meta_panel') !== 'false')
 const toggleMetadataPanel = () => {
   showMetadataPanel.value = !showMetadataPanel.value
@@ -317,10 +318,12 @@ watch(
     if (media.media_type === 'image') preloadAdjacentImages()
     if (media.media_type !== 'manga') return
     totalMangaPages.value = null
+    mangaPageDimensions.value = []
     if (media.is_missing) return
     try {
-      const res = await axios.get(`${API_BASE_URL}/manga/${media.id}/pages`)
+      const res = await axios.get(`${API_BASE_URL}/manga/${media.id}/pages`, { params: { include_dimensions: true } })
       if (currentMedia.value.id !== media.id) return
+      mangaPageDimensions.value = res.data.page_dimensions || []
       totalMangaPages.value = res.data.total_pages
       void axios.post(`${API_BASE_URL}/manga/${media.id}/thumbnails/generate`).catch(() => {})
     } catch {
@@ -694,6 +697,7 @@ onUnmounted(() => preloadedImageUrls.clear())
             v-model:current-page="currentPage"
             :media="currentMedia"
             :total-pages="totalMangaPages"
+            :page-dimensions="mangaPageDimensions"
             :show-controls="showControls"
             :click-only-controls="clickOnlyViewerControls"
             :progress-text="mangaProgressText"
