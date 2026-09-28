@@ -110,6 +110,7 @@ def _parse_creator_list(body: bytes) -> list[dict]:
             "service": service,
             "creator_id": creator_id,
             "creator_name": creator_name,
+            "updated_at": item.get("updated") if isinstance(item.get("updated"), str) else None,
             "source_url": f"https://pawchive.pw/{quote(service)}/user/{quote(creator_id)}",
             "banner_url": f"https://pawchive.pw/banners/{quote(service)}/{quote(creator_id)}",
             "icon_url": f"https://pawchive.pw/icons/{quote(service)}/{quote(creator_id)}",
