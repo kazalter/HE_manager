@@ -328,27 +328,23 @@ onBeforeUnmount(() => {
       @ended="onEnded"
     />
 
-    <!-- Header info banner -->
-    <div class="flex items-center gap-4 px-6 py-4 border-b border-white/10 bg-black/40 backdrop-blur-md">
-      <div class="min-w-0 flex-1">
-        <h3 class="text-lg font-black text-white truncate">{{ media.title }}</h3>
-        <p class="text-xs text-white/45 truncate mt-0.5">{{ media.relative_path }}</p>
-      </div>
-      <div v-if="tracks.length > 0" class="flex items-center gap-3 shrink-0">
-        <!-- Lyrics toggle button -->
-        <button
-          v-if="currentTrack?.lyrics"
-          type="button"
-          @click="showLyrics = !showLyrics"
-          class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer"
-          :class="showLyrics ? 'bg-accent text-white shadow-md' : 'bg-white/8 text-white/70 hover:bg-white/15 hover:text-white'"
-          title="切换歌词/唱片视图"
-        >
-          <FileText :size="13" />
-          <span>歌词</span>
-        </button>
-        <span class="text-xs font-mono text-white/50">音轨 {{ currentIndex }} / {{ tracks.length }}</span>
-      </div>
+    <!-- Track tools sit below the viewer header in the normal layout flow. -->
+    <div class="flex min-h-12 items-center justify-between gap-3 border-b border-white/10 bg-black/40 px-4 py-2 sm:px-6">
+      <span class="min-w-0 truncate text-xs font-semibold text-white/60">
+        {{ tracks.length ? `音轨 ${currentIndex} / ${tracks.length}` : loading ? '正在读取音轨…' : '播放列表' }}
+      </span>
+      <button
+        v-if="currentTrack?.lyrics"
+        type="button"
+        @click="showLyrics = !showLyrics"
+        class="flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-bold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        :class="showLyrics ? 'bg-accent text-white' : 'bg-white/8 text-white/70 hover:bg-white/15 hover:text-white'"
+        :aria-pressed="showLyrics"
+        title="切换歌词/唱片视图"
+      >
+        <FileText :size="14" aria-hidden="true" />
+        <span>歌词</span>
+      </button>
     </div>
 
     <!-- Center Stage: Vinyl Disc or Synchronized Lyrics View -->

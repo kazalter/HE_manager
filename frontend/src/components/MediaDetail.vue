@@ -576,12 +576,17 @@ onUnmounted(() => preloadedImageUrls.clear())
             @mouseleave="setHeaderPointerOver(false)"
             @focusin="onHeaderFocusIn"
             @focusout="onHeaderFocusOut"
-            :class="showControls || (isAutoAdvancing && !clickOnlyViewerControls)
-              ? 'opacity-100 translate-y-0'
-              : clickOnlyViewerControls
-                ? 'opacity-0 -translate-y-3 pointer-events-none'
-                : 'opacity-0 -translate-y-3 hover:opacity-100 hover:translate-y-0'"
-            class="absolute top-0 left-0 right-0 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-5 z-50 bg-gradient-to-b from-black/80 to-transparent transition-all duration-300 focus-within:opacity-100 focus-within:translate-y-0 focus-within:pointer-events-auto"
+            :class="isAudio
+              ? 'relative shrink-0 border-b border-white/10 bg-black/80 opacity-100 translate-y-0'
+              : [
+                  'absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent',
+                  showControls || (isAutoAdvancing && !clickOnlyViewerControls)
+                    ? 'opacity-100 translate-y-0'
+                    : clickOnlyViewerControls
+                      ? 'opacity-0 -translate-y-3 pointer-events-none'
+                      : 'opacity-0 -translate-y-3 hover:opacity-100 hover:translate-y-0',
+                ]"
+            class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-5 z-50 transition-all duration-300 focus-within:opacity-100 focus-within:translate-y-0 focus-within:pointer-events-auto"
           >
             <h2 class="w-full sm:w-auto sm:grow min-w-0 text-lg font-bold truncate sm:pr-4 text-white/95 drop-shadow-xl select-none">{{ currentMedia.title }}</h2>
             <div class="flex w-full sm:w-auto items-center justify-end gap-2">
