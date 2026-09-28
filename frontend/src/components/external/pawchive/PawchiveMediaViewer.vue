@@ -41,6 +41,9 @@ const controlsHovered = ref(false)
 let controlsTimer: number | undefined
 const videoRef = ref<HTMLVideoElement | null>(null)
 const imageReady = ref(false)
+const displayImageUrl = ref('')
+const preloadedImageUrls = new Map<string, string>()
+let preloadController: AbortController | null = null
 const thumbnailNavRef = ref<HTMLElement | null>(null)
 const thumbnailStripRef = ref<HTMLDivElement | null>(null)
 const hoverPreviewIndex = ref(-1)
@@ -51,6 +54,39 @@ let imageTimer: number | undefined
 let wheelGestureTimer: number | undefined
 let wheelGestureUsed = false
 let wheelDelta = 0
+
+const stopPostPreload = () => {
+  preloadController?.abort()
+  preloadController = null
+  for (const url of preloadedImageUrls.values()) URL.revokeObjectURL(url)
+  preloadedImageUrls.clear()
+}
+const setDisplayImageUrl = () => {
+  displayImageUrl.value = preloadedImageUrls.get(props.attachment.attachment_key)
+    || pawchiveMediaUrl(props.attachment.stream_ref)
+}
+const preloadPostImages = () => {
+  if (preloadController) return
+  const controller = new AbortController()
+  preloadController = controller
+  const nextIndex = props.attachmentIndex + 1
+  const ordered = [...props.attachments.slice(nextIndex), ...props.attachments.slice(0, nextIndex)]
+  void (async () => {
+    for (const item of ordered) {
+      if (controller.signal.aborted) return
+      if (item.media_type !== 'image' || !item.stream_ref) continue
+      try {
+        const response = await fetch(pawchiveMediaUrl(item.stream_ref), { signal: controller.signal })
+        if (response.status !== 200 || !response.headers.get('content-type')?.startsWith('image/')) continue
+        const blob = await response.blob()
+        if (controller.signal.aborted) return
+        preloadedImageUrls.set(item.attachment_key, URL.createObjectURL(blob))
+      } catch {
+        if (controller.signal.aborted) return
+      }
+    }
+  })()
+}
 
 const resetWheelGesture = () => {
   window.clearTimeout(wheelGestureTimer)
@@ -126,8 +162,8 @@ const startVideo = async () => {
   try { await videoRef.value?.play() }
   catch { emit('playbackError', '浏览器阻止自动播放，请点击视频继续播放。') }
 }
-const onImageLoaded = () => { imageReady.value = true; scheduleImage() }
-const onImageError = () => { clearTimer(); emit('playbackError', '图片加载失败，可手动跳到下一项。') }
+const onImageLoaded = () => { imageReady.value = true; scheduleImage(); preloadPostImages() }
+const onImageError = () => { clearTimer(); preloadPostImages(); emit('playbackError', '图片加载失败，可手动跳到下一项。') }
 const onVideoEnded = () => { if (props.autoplay) emit('next') }
 const onVideoPaused = () => {
   if (props.autoplay && !document.hidden && videoRef.value && !videoRef.value.ended) emit('update:autoplay', false)
@@ -190,9 +226,16 @@ const onKeydown = (event: KeyboardEvent) => {
   else if (event.key === 'ArrowRight') { event.preventDefault(); emit('next') }
   else if (event.key === 'ArrowLeft') { event.preventDefault(); emit('previous') }
 }
+watch(() => props.post.post_key, () => {
+  stopPostPreload()
+  setDisplayImageUrl()
+  if (props.attachment.media_type !== 'image') preloadPostImages()
+}, { immediate: true })
 watch(() => props.attachment.attachment_key, () => {
+  setDisplayImageUrl()
   clearTimer()
   imageReady.value = false
+  if (props.attachment.media_type !== 'image') preloadPostImages()
   void startVideo()
 })
 watch(() => [props.post.post_key, props.attachmentIndex], scrollActiveThumbnail, { immediate: true })
@@ -206,6 +249,7 @@ onMounted(() => {
   if (props.attachment.media_type === 'video') void startVideo()
 })
 onBeforeUnmount(() => {
+  stopPostPreload()
   clearTimer()
   clearControlsTimer()
   resetWheelGesture()
@@ -226,7 +270,7 @@ onBeforeUnmount(() => {
       <button type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-xl border border-white/15 hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" :aria-label="isFullscreen ? '退出全屏' : '进入全屏'" :title="isFullscreen ? '退出全屏' : '进入全屏'" :aria-pressed="isFullscreen" @click="toggleFullscreen"><Minimize2 v-if="isFullscreen" :size="18" aria-hidden="true" /><Maximize2 v-else :size="18" aria-hidden="true" /></button>
     </header>
     <div class="flex-1 min-h-0 relative flex" @wheel.capture="onMediaWheel">
-      <ImageViewer v-if="attachment.media_type === 'image'" :key="attachment.attachment_key" :media="{ title: attachment.filename }" :image-url="pawchiveMediaUrl(attachment.stream_ref)" :show-controls="true" :click-only-controls="false" :controls-visible="!isFullscreen || controlsVisible" @viewer-click="onMediaSurfaceClick" @previous="emit('previous')" @next="emit('next')" @viewer-double-click="() => {}" @controls-hover="onControlsHover" @loaded="onImageLoaded" @load-error="onImageError" />
+      <ImageViewer v-if="attachment.media_type === 'image'" :key="attachment.attachment_key" :media="{ title: attachment.filename }" :image-url="displayImageUrl" :show-controls="true" :click-only-controls="false" :controls-visible="!isFullscreen || controlsVisible" @viewer-click="onMediaSurfaceClick" @previous="emit('previous')" @next="emit('next')" @viewer-double-click="() => {}" @controls-hover="onControlsHover" @loaded="onImageLoaded" @load-error="onImageError" />
       <div v-else class="w-full h-full flex items-center justify-center bg-black">
         <video ref="videoRef" :key="attachment.attachment_key" :src="pawchiveMediaUrl(attachment.stream_ref)" controls playsinline preload="metadata" class="w-full h-full object-contain" @click="onMediaSurfaceClick" @ended="onVideoEnded" @pause="onVideoPaused" @error="emit('playbackError', '视频无法播放，请尝试来源页面或下一项。')" />
       </div>
