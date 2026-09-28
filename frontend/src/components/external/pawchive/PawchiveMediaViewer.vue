@@ -40,7 +40,11 @@ const controlsVisible = ref(true)
 let controlsTimer: number | undefined
 const videoRef = ref<HTMLVideoElement | null>(null)
 const imageReady = ref(false)
+const thumbnailNavRef = ref<HTMLElement | null>(null)
 const thumbnailStripRef = ref<HTMLDivElement | null>(null)
+const hoverPreviewIndex = ref(-1)
+const hoverPreviewX = ref(0)
+const hoverPreviewWidth = ref(200)
 const failedPreviewKeys = ref(new Set<string>())
 let imageTimer: number | undefined
 let wheelGestureTimer: number | undefined
@@ -70,6 +74,24 @@ const onMediaWheel = (event: WheelEvent) => {
 }
 const markPreviewFailed = (key: string) => {
   failedPreviewKeys.value = new Set(failedPreviewKeys.value).add(key)
+}
+const updateHoverPreviewPosition = () => {
+  const nav = thumbnailNavRef.value
+  const button = thumbnailStripRef.value?.children.item(hoverPreviewIndex.value) as HTMLElement | null
+  if (!nav || !button || hoverPreviewIndex.value < 0) return
+  const navRect = nav.getBoundingClientRect()
+  const buttonRect = button.getBoundingClientRect()
+  const width = Math.min(200, Math.max(0, navRect.width - 16))
+  const center = buttonRect.left + buttonRect.width / 2 - navRect.left
+  hoverPreviewWidth.value = width
+  hoverPreviewX.value = Math.max(width / 2 + 8, Math.min(navRect.width - width / 2 - 8, center))
+}
+const showHoverPreview = (index: number) => {
+  hoverPreviewIndex.value = index
+  updateHoverPreviewPosition()
+}
+const hideHoverPreview = (index: number) => {
+  if (hoverPreviewIndex.value === index) hoverPreviewIndex.value = -1
 }
 const scrollActiveThumbnail = () => {
   void nextTick(() => {
@@ -168,7 +190,7 @@ watch(() => props.attachment.attachment_key, () => {
   void startVideo()
 })
 watch(() => [props.post.post_key, props.attachmentIndex], scrollActiveThumbnail, { immediate: true })
-watch(() => props.post.post_key, () => { failedPreviewKeys.value = new Set() })
+watch(() => props.post.post_key, () => { failedPreviewKeys.value = new Set(); hoverPreviewIndex.value = -1 })
 watch(() => [props.autoplay, props.interval, props.busy], () => { scheduleImage(); void startVideo() })
 onMounted(() => {
   closeRef.value?.focus()
@@ -205,12 +227,33 @@ onBeforeUnmount(() => {
       <div v-if="busy" role="status" class="absolute inset-0 bg-black/65 flex items-center justify-center text-sm">正在查找下一项…</div>
     </div>
     <footer :class="isFullscreen ? ['absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 via-black/65 to-transparent border-t-0', controlsVisible ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'] : ''" class="shrink-0 border-t border-white/15 px-3 sm:px-5 py-3 space-y-2 transition-[transform,opacity] duration-300">
-      <nav v-if="attachments.length > 1" aria-label="本帖媒体预览" class="border-b border-white/10 pb-2">
+      <nav v-if="attachments.length > 1" ref="thumbnailNavRef" aria-label="本帖媒体预览" class="relative border-b border-white/10 pb-2">
         <div class="mb-2 flex items-center justify-between gap-3 text-xs text-white/70">
           <span class="font-semibold">本帖媒体</span>
           <span>{{ attachmentIndex + 1 }} / {{ attachments.length }}</span>
         </div>
-        <div ref="thumbnailStripRef" class="flex gap-2 overflow-x-auto pb-2 custom-scrollbar" @wheel.stop>
+        <div
+          v-if="hoverPreviewIndex >= 0 && attachments[hoverPreviewIndex] && (!isFullscreen || controlsVisible)"
+          aria-hidden="true"
+          class="pointer-events-none absolute bottom-[calc(100%+8px)] z-50 -translate-x-1/2 overflow-hidden rounded-xl border border-white/15 bg-black/95 p-1 shadow-2xl"
+          :style="{ left: hoverPreviewX + 'px', width: hoverPreviewWidth + 'px', height: '268px' }"
+        >
+          <div class="relative h-full w-full overflow-hidden rounded-lg bg-white/5">
+            <img
+              v-if="attachments[hoverPreviewIndex].preview_ref && !failedPreviewKeys.has(attachments[hoverPreviewIndex].attachment_key)"
+              :src="pawchiveMediaUrl(attachments[hoverPreviewIndex].preview_ref)"
+              alt=""
+              decoding="async"
+              draggable="false"
+              class="h-full w-full object-contain"
+              @error="markPreviewFailed(attachments[hoverPreviewIndex].attachment_key)"
+            />
+            <span v-else class="flex h-full w-full items-center justify-center text-white/50"><ImageIcon :size="40" aria-hidden="true" /></span>
+            <span v-if="attachments[hoverPreviewIndex].media_type === 'video'" class="absolute inset-0 flex items-center justify-center"><Play :size="38" fill="currentColor" aria-hidden="true" /></span>
+            <span class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-2 pb-2 pt-5 text-center text-xs font-semibold text-white">第 {{ hoverPreviewIndex + 1 }} / {{ attachments.length }} 项</span>
+          </div>
+        </div>
+        <div ref="thumbnailStripRef" class="flex gap-2 overflow-x-auto pb-2 custom-scrollbar" @wheel.stop @scroll="updateHoverPreviewPosition">
           <button
             v-for="(item, index) in attachments"
             :key="item.attachment_key"
@@ -221,6 +264,10 @@ onBeforeUnmount(() => {
             :title="item.filename"
             :class="index === attachmentIndex ? 'border-accent ring-2 ring-accent/40' : 'border-white/15 hover:border-white/45'"
             class="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 bg-white/5 transition-colors sm:h-20 sm:w-20 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white cursor-pointer"
+            @mouseenter="showHoverPreview(index)"
+            @mouseleave="hideHoverPreview(index)"
+            @focus="showHoverPreview(index)"
+            @blur="hideHoverPreview(index)"
             @click="selectAttachment(index)"
           >
             <img v-if="item.preview_ref && !failedPreviewKeys.has(item.attachment_key)" :src="pawchiveMediaUrl(item.preview_ref)" alt="" loading="lazy" decoding="async" draggable="false" class="h-full w-full object-cover" @error="markPreviewFailed(item.attachment_key)" />
