@@ -113,6 +113,18 @@ const errorMessage = ref('')
 const sources = ref<ExternalFavoriteSource[]>([])
 const activeSourceId = ref<number | null>(null)
 const downloadPanelOpen = ref(false)
+const downloadButtonRef = ref<HTMLButtonElement | null>(null)
+const downloadCloseButtonRef = ref<HTMLButtonElement | null>(null)
+const openDownloadPanel = () => { downloadPanelOpen.value = true }
+const closeDownloadPanel = () => { downloadPanelOpen.value = false }
+const onDownloadKeydown = (event: KeyboardEvent) => {
+  if (downloadPanelOpen.value && event.key === 'Escape') closeDownloadPanel()
+}
+watch(downloadPanelOpen, async open => {
+  await nextTick()
+  if (open) downloadCloseButtonRef.value?.focus()
+  else downloadButtonRef.value?.focus()
+})
 const selectedDownloadIds = ref<Set<number>>(new Set())
 const {
   items,
@@ -328,7 +340,7 @@ const toggleSelectAll = () => {
 const startDownload = async () => {
   if (selectedDownloadItems.value.length === 0 || downloadInProgress.value) return
   if (!downloadRootPath.value.trim()) {
-    downloadPanelOpen.value = true
+    openDownloadPanel()
     errorMessage.value = '请先设置下载位置'
     return
   }
@@ -382,6 +394,7 @@ let unsubscribeCompleted: (() => void) | null = null
 
 onMounted(async () => {
   asmrDownloadStore.ensureResumed()
+  window.addEventListener('keydown', onDownloadKeydown)
   unsubscribeCompleted = asmrDownloadStore.onCompleted(async () => {
     await fetchItems()
     await fetchLocalAudioList()
@@ -391,6 +404,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('keydown', onDownloadKeydown)
   if (unsubscribeCompleted) { unsubscribeCompleted(); unsubscribeCompleted = null }
   if (saveTimer) clearTimeout(saveTimer)
 })
@@ -603,7 +617,8 @@ watch(favoritesError, message => { errorMessage.value = message })
             <RefreshCw :size="16" />
           </button>
           <button
-            @click="downloadPanelOpen = true"
+            ref="downloadButtonRef"
+            @click="openDownloadPanel"
             class="h-10 px-3.5 rounded-xl bg-accent text-white font-black border border-white/10 flex items-center gap-2 hover:brightness-110 transition-all text-sm"
             title="下载选择"
           >
@@ -705,27 +720,42 @@ watch(favoritesError, message => { errorMessage.value = message })
       </div>
     </div>
 
-    <div
-      v-if="downloadPanelOpen"
-      class="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex justify-end"
-      @click.self="downloadPanelOpen = false"
-    >
-      <aside class="w-full max-w-2xl h-full bg-sidebar border-l border-white/10 shadow-2xl flex flex-col">
-        <div class="px-5 py-4 border-b border-white/10 flex items-center justify-between gap-3">
-          <div>
-            <h2 class="text-xl font-black text-white">下载选择</h2>
-            <p class="text-xs text-white/45 mt-1">已选 {{ selectedDownloadItems.length }} 个 · 当前列表 {{ filteredItems.length }} 个</p>
+    <Teleport to="body">
+      <div
+        v-if="downloadPanelOpen"
+        class="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-6"
+        role="presentation"
+        @click.self="closeDownloadPanel"
+      >
+        <section
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="asmr-download-title"
+          class="w-full max-w-5xl min-h-0 bg-sidebar border border-white/15 rounded-2xl sm:rounded-3xl shadow-2xl shadow-black/60 flex flex-col overflow-hidden"
+          style="height: min(900px, calc(100dvh - 1rem))"
+        >
+          <div class="px-5 sm:px-7 py-5 border-b border-white/10 flex items-center justify-between gap-3 bg-white/[0.03]">
+            <div class="flex items-center gap-4 min-w-0">
+              <div class="w-11 h-11 rounded-2xl bg-accent/15 border border-accent/25 text-accent flex items-center justify-center shrink-0">
+                <Download :size="21" />
+              </div>
+              <div class="min-w-0">
+                <p class="text-[11px] font-black tracking-[0.18em] text-accent uppercase">ASMR · asmr.one</p>
+                <h2 id="asmr-download-title" class="text-xl sm:text-2xl font-black text-white">选择下载作品</h2>
+                <p class="text-xs text-white/45 mt-1">当前列表 {{ filteredItems.length }} 个作品，已选 {{ selectedDownloadItems.length }} 个</p>
+              </div>
+            </div>
+            <button
+              ref="downloadCloseButtonRef"
+              @click="closeDownloadPanel"
+              class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white flex items-center justify-center shrink-0 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              aria-label="关闭下载界面"
+            >
+              <X :size="18" />
+            </button>
           </div>
-          <button
-            @click="downloadPanelOpen = false"
-            class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white flex items-center justify-center transition-all"
-            title="关闭"
-          >
-            <X :size="18" />
-          </button>
-        </div>
 
-        <div class="px-5 py-4 border-b border-white/10 space-y-2">
+        <div class="px-5 sm:px-7 py-4 border-b border-white/10 space-y-2">
           <label class="block space-y-2">
             <span class="text-xs font-bold text-white/70">下载位置 <span class="text-red-300">*</span></span>
             <input
@@ -739,7 +769,7 @@ watch(favoritesError, message => { errorMessage.value = message })
           <p class="text-[11px] text-white/35">音频保存到该路径下的 audio 目录，单作品可能数百 MB~数 GB。</p>
         </div>
 
-        <div class="px-5 py-3 border-b border-white/10 flex flex-wrap items-center gap-2">
+        <div class="px-5 sm:px-7 py-3 border-b border-white/10 flex flex-wrap items-center gap-2">
           <button
             @click="toggleSelectAll"
             :disabled="downloadableItems.length === 0"
@@ -755,14 +785,6 @@ watch(favoritesError, message => { errorMessage.value = message })
             class="h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed text-xs font-bold transition-all"
           >
             清空选择
-          </button>
-          <button
-            @click="startDownload"
-            :disabled="selectedDownloadItems.length === 0 || !downloadRootPath.trim() || downloadInProgress"
-            class="h-10 px-4 rounded-xl bg-accent text-white disabled:opacity-45 disabled:cursor-not-allowed flex items-center gap-2 text-xs font-black transition-all"
-          >
-            <Download :size="16" :class="downloadInProgress ? 'animate-pulse' : ''" />
-            {{ downloadInProgress ? '下载中' : '开始下载' }}
           </button>
         </div>
 
@@ -787,12 +809,12 @@ watch(favoritesError, message => { errorMessage.value = message })
           </p>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-5 space-y-3">
+        <div class="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 sm:px-7 space-y-3">
           <label
             v-for="item in filteredItems"
             :key="item.id"
             :class="item.local_media_id ? 'opacity-70 cursor-default' : 'cursor-pointer hover:border-accent/35'"
-            class="grid grid-cols-[auto,56px,1fr,auto] gap-3 items-center rounded-2xl border border-white/10 bg-white/[0.04] p-3 transition-all"
+            class="grid grid-cols-[auto_56px_minmax(0,1fr)_auto] gap-3 items-center rounded-2xl border border-white/10 bg-white/[0.04] p-3 transition-all"
           >
             <input
               type="checkbox"
@@ -829,8 +851,24 @@ watch(favoritesError, message => { errorMessage.value = message })
             </a>
           </label>
         </div>
-      </aside>
-    </div>
+
+        <div class="px-5 sm:px-7 py-4 border-t border-white/10 bg-sidebar flex flex-wrap items-center justify-between gap-3">
+          <p class="text-xs text-white/50">
+            <span class="font-bold text-white">{{ selectedDownloadItems.length }}</span> 个作品待下载
+            <span v-if="!downloadRootPath.trim()" class="block text-amber-300 mt-1">请先填写下载位置</span>
+          </p>
+          <button
+            @click="startDownload"
+            :disabled="selectedDownloadItems.length === 0 || !downloadRootPath.trim() || downloadInProgress"
+            class="h-11 min-w-36 px-5 rounded-xl bg-accent text-white disabled:opacity-45 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-black transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar focus-visible:ring-accent"
+          >
+            <Download :size="17" :class="downloadInProgress ? 'animate-pulse' : ''" />
+            {{ downloadInProgress ? '下载中' : '开始下载' }}
+          </button>
+        </div>
+        </section>
+      </div>
+    </Teleport>
 
     <MediaDetail
       v-if="selectedLocalMedia"
