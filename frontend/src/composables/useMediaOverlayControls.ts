@@ -8,7 +8,7 @@ export function useMediaOverlayControls(
   const isFullscreen = ref(false)
   const showControls = ref(true)
   const isHoveringControls = ref(false)
-  const clickOnlyControls = computed(() => isFullscreen.value && (isManga.value || isImage.value))
+  const clickOnlyControls = computed(() => isManga.value || (isFullscreen.value && isImage.value))
   let controlTimer: number | undefined
   let viewerClickTimer: number | undefined
 
