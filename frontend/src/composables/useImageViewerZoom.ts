@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, type Ref } from 'vue'
 export interface UseImageViewerZoomOptions {
   minScale?: number
   maxScale?: number
+  onSwipe?: (direction: -1 | 1) => void
   zoomStep?: number
 }
 
@@ -141,6 +142,55 @@ export function useImageViewerZoom(
     return dragged
   }
 
+  let pinchDistance = 0
+  let pinchScale = 1
+  let touchX = 0, touchY = 0, touchTx = 0, touchTy = 0
+  let multipleTouches = false
+  let suppressTouchClick = false
+  const distance = (touches: TouchList) => Math.hypot(touches[0]!.clientX - touches[1]!.clientX, touches[0]!.clientY - touches[1]!.clientY)
+  const onTouchStart = (event: TouchEvent) => {
+    if (!event.touches.length) return
+    if (event.touches.length === 1) {
+      touchX = event.touches[0]!.clientX; touchY = event.touches[0]!.clientY
+      touchTx = translateX.value; touchTy = translateY.value
+      multipleTouches = false; suppressTouchClick = false
+      isPanning.value = isZoomed.value
+    } else {
+      multipleTouches = true; suppressTouchClick = true
+      pinchDistance = distance(event.touches); pinchScale = scale.value
+      isPanning.value = true
+      if (event.cancelable) event.preventDefault()
+    }
+  }
+  const onTouchMove = (event: TouchEvent) => {
+    if (event.touches.length >= 2 && pinchDistance > 0) {
+      if (event.cancelable) event.preventDefault()
+      const x = (event.touches[0]!.clientX + event.touches[1]!.clientX) / 2
+      const y = (event.touches[0]!.clientY + event.touches[1]!.clientY) / 2
+      setScale(pinchScale * distance(event.touches) / pinchDistance, x, y)
+    } else if (event.touches.length === 1 && isZoomed.value && !multipleTouches) {
+      if (event.cancelable) event.preventDefault()
+      const dx = event.touches[0]!.clientX - touchX, dy = event.touches[0]!.clientY - touchY
+      if (Math.hypot(dx, dy) > 8) suppressTouchClick = true
+      clampTranslation(touchTx + dx, touchTy + dy, scale.value)
+    }
+  }
+  const onTouchEnd = (event: TouchEvent) => {
+    isPanning.value = false
+    if (event.type === 'touchcancel') { suppressTouchClick = true; multipleTouches = true; return }
+    if (event.touches.length || multipleTouches || isZoomed.value || !event.changedTouches.length) return
+    const dx = event.changedTouches[0]!.clientX - touchX, dy = event.changedTouches[0]!.clientY - touchY
+    if (Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      suppressTouchClick = true
+      options.onSwipe?.(dx < 0 ? 1 : -1)
+    }
+  }
+  const wasTouchGesture = () => {
+    const suppressed = suppressTouchClick
+    suppressTouchClick = false
+    return suppressed
+  }
+
   const onKeydown = (event: KeyboardEvent) => {
     const target = event.target as HTMLElement | null
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
@@ -181,6 +231,7 @@ export function useImageViewerZoom(
     setScale,
     handleZoomWheel,
     onMouseDown,
+    onTouchStart, onTouchMove, onTouchEnd, wasTouchGesture,
     wasDragging,
   }
 }

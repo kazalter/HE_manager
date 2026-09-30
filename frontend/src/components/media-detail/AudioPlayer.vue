@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import {
   FileText,
@@ -19,6 +19,7 @@ import {
 } from 'lucide-vue-next'
 import { API_BASE_URL, authUrl } from '../../config'
 import type { Media } from '../../types'
+import { audioPlaybackStore } from '../../stores/audioPlaybackStore'
 
 interface AudioTrack {
   index: number
@@ -46,6 +47,12 @@ const loading = ref(false)
 const error = ref('')
 const audioRef = ref<HTMLAudioElement | null>(null)
 let requestId = 0
+let lyricsRequestId = 0
+let resumeTime = 0
+let lastSavedAt = 0
+const playbackError = ref('')
+let playingMediaId = props.media.id
+const resumeKey = () => `he_audio_resume_${playingMediaId}`
 
 const isPlaying = ref(false)
 const currentTime = ref(0)
@@ -87,14 +94,26 @@ const formatTime = (seconds: number) => {
 
 const fetchTracks = async () => {
   const activeRequest = ++requestId
+  saveResume(true)
+  playingMediaId = props.media.id
+  audioRef.value?.pause()
+  isPlaying.value = false
+  currentTime.value = 0; duration.value = 0; bufferedTime.value = 0
+  playbackError.value = ''
   loading.value = true
   error.value = ''
   try {
     const response = await axios.get(`${API_BASE_URL}/audio/${props.media.id}/tracks`)
     if (activeRequest !== requestId) return
     tracks.value = response.data?.tracks || []
-    currentIndex.value = tracks.value[0]?.index ?? 1
-    fetchLyrics()
+    let saved: { index?: number; time?: number } = {}
+    try { saved = JSON.parse(localStorage.getItem(resumeKey()) || '{}') } catch { /* optional */ }
+    const track = tracks.value.find(track => track.index === saved.index)
+    currentIndex.value = track?.index ?? tracks.value[0]?.index ?? 1
+    resumeTime = track && Number.isFinite(saved.time) ? Math.max(0, saved.time || 0) : 0
+    await nextTick()
+    audioRef.value?.load()
+    void fetchLyrics()
   } catch (err: any) {
     if (activeRequest !== requestId) return
     error.value = err.response?.data?.detail || '读取音轨失败'
@@ -105,16 +124,18 @@ const fetchTracks = async () => {
 }
 
 const fetchLyrics = async () => {
+  const activeRequest = ++lyricsRequestId
+  lyricsLoading.value = false
   lyrics.value = []
   if (!currentTrack.value?.lyrics) return
   lyricsLoading.value = true
   try {
     const res = await axios.get(`${API_BASE_URL}/audio/${props.media.id}/track/${currentIndex.value}/lyrics`)
-    lyrics.value = res.data?.lines || []
+    if (activeRequest === lyricsRequestId) lyrics.value = res.data?.lines || []
   } catch {
-    lyrics.value = []
+    if (activeRequest === lyricsRequestId) lyrics.value = []
   } finally {
-    lyricsLoading.value = false
+    if (activeRequest === lyricsRequestId) lyricsLoading.value = false
   }
 }
 
@@ -148,6 +169,9 @@ const seekToLyric = (time: number) => {
 }
 
 const playTrack = (index: number) => {
+  saveResume(true)
+  resumeTime = 0
+  playbackError.value = ''
   currentIndex.value = index
   currentTime.value = 0
   duration.value = 0
@@ -157,15 +181,16 @@ const playTrack = (index: number) => {
     if (!audio) return
     audio.load()
     audio.playbackRate = playbackRate.value
-    audio.play().catch(() => {})
+    audio.play().catch(() => { playbackError.value = '播放未开始，请点击播放按钮重试。' })
   })
 }
 
 const togglePlay = () => {
   const audio = audioRef.value
   if (!audio) return
+  playbackError.value = ''
   if (audio.paused) {
-    audio.play().catch(() => {})
+    audio.play().catch(() => { playbackError.value = '播放未开始，请点击播放按钮重试。' })
   } else {
     audio.pause()
   }
@@ -256,6 +281,8 @@ const toggleMute = () => {
 const onTimeUpdate = () => {
   const audio = audioRef.value
   if (!audio || isScrubbing.value) return
+  saveResume()
+  syncPositionState()
   currentTime.value = audio.currentTime
   if (audio.buffered.length > 0) {
     bufferedTime.value = audio.buffered.end(audio.buffered.length - 1)
@@ -265,7 +292,12 @@ const onTimeUpdate = () => {
 const onLoadedMetadata = () => {
   const audio = audioRef.value
   if (!audio) return
-  duration.value = audio.duration || 0
+  duration.value = Number.isFinite(audio.duration) ? audio.duration : 0
+  if (resumeTime > 0 && resumeTime < duration.value - 2) {
+    audio.currentTime = resumeTime
+    currentTime.value = resumeTime
+  }
+  resumeTime = 0
   audio.volume = volume.value
   audio.muted = isMuted.value
   audio.playbackRate = playbackRate.value
@@ -291,12 +323,58 @@ const onEnded = () => {
     const audio = audioRef.value
     if (audio) {
       audio.currentTime = 0
-      audio.play().catch(() => {})
+      audio.play().catch(() => { playbackError.value = '播放未开始，请点击播放按钮重试。' })
     }
     return
   }
   nextTrack()
 }
+
+const saveResume = (force = false) => {
+  const audio = audioRef.value
+  if (!audio || !tracks.value.length || (!force && Date.now() - lastSavedAt < 5000)) return
+  lastSavedAt = Date.now()
+  try { localStorage.setItem(resumeKey(), JSON.stringify({ index: currentIndex.value, time: audio.currentTime || 0 })) } catch { /* optional */ }
+}
+const syncPositionState = () => {
+  if (!('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) return
+  const audio = audioRef.value
+  if (!audio || !Number.isFinite(audio.duration) || audio.duration <= 0) return
+  try { navigator.mediaSession.setPositionState({ duration: audio.duration, playbackRate: audio.playbackRate, position: Math.min(audio.duration, Math.max(0, audio.currentTime)) }) } catch { /* unavailable on some WebKit versions */ }
+}
+const syncSystemPlayback = (playing: boolean) => {
+  isPlaying.value = playing
+  if (!playing) saveResume(true)
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'
+}
+watch([isPlaying, currentTime, duration, currentTrack], () => {
+  if (audioPlaybackStore.state.media?.id !== props.media.id) return
+  Object.assign(audioPlaybackStore.state, { playing: isPlaying.value, trackTitle: currentTrack.value?.title || '', currentTime: currentTime.value, duration: duration.value })
+})
+watch([() => props.media.title, () => props.coverUrl, currentTrack], () => {
+  if (!('mediaSession' in navigator) || typeof MediaMetadata === 'undefined') return
+  navigator.mediaSession.metadata = new MediaMetadata({ title: currentTrack.value?.title || props.media.title, artist: props.media.title, album: 'HE Manager', artwork: props.coverUrl ? [{ src: new URL(props.coverUrl, window.location.href).href }] : [] })
+}, { immediate: true })
+const saveBeforePageHide = () => saveResume(true)
+onMounted(() => {
+  window.addEventListener('pagehide', saveBeforePageHide)
+  audioPlaybackStore.bind({ togglePlay, nextTrack, prevTrack })
+  if (!('mediaSession' in navigator)) return
+  const handlers: Partial<Record<MediaSessionAction, MediaSessionActionHandler>> = {
+    play: () => { audioRef.value?.play().catch(() => { playbackError.value = '请打开播放器后点击播放。' }) },
+    pause: () => audioRef.value?.pause(),
+    previoustrack: prevTrack, nexttrack: nextTrack,
+    seekbackward: details => seekRelative(-(details.seekOffset || 10)),
+    seekforward: details => seekRelative(details.seekOffset || 10),
+    seekto: details => {
+      if (audioRef.value && details.seekTime !== undefined) { audioRef.value.currentTime = details.seekTime; currentTime.value = details.seekTime }
+    },
+    stop: () => audioPlaybackStore.stop(),
+  }
+  for (const [action, handler] of Object.entries(handlers)) {
+    try { navigator.mediaSession.setActionHandler(action as MediaSessionAction, handler!) } catch { /* unsupported action */ }
+  }
+})
 
 watch(currentIndex, () => {
   fetchLyrics()
@@ -305,6 +383,17 @@ watch(currentIndex, () => {
 watch(() => props.media.id, fetchTracks, { immediate: true })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('pagehide', saveBeforePageHide)
+  saveResume(true)
+  requestId++; lyricsRequestId++
+  audioPlaybackStore.bind(null)
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = null
+    navigator.mediaSession.playbackState = 'none'
+    for (const action of ['play', 'pause', 'previoustrack', 'nexttrack', 'seekbackward', 'seekforward', 'seekto', 'stop']) {
+      try { navigator.mediaSession.setActionHandler(action as MediaSessionAction, null) } catch { /* unsupported */ }
+    }
+  }
   const audio = audioRef.value
   if (audio) {
     audio.pause()
@@ -314,18 +403,19 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="relative flex-1 min-h-0 bg-gradient-to-b from-[#0e0e12] to-black overflow-hidden flex flex-col">
+  <div class="he-audio-player relative flex-1 min-h-0 bg-gradient-to-b from-[#0e0e12] to-black overflow-hidden flex flex-col">
     <!-- Hidden native audio element -->
     <audio
       ref="audioRef"
       :src="streamUrl"
       preload="metadata"
       class="hidden"
-      @play="isPlaying = true"
-      @pause="isPlaying = false"
+      @play="syncSystemPlayback(true)"
+      @pause="syncSystemPlayback(false)"
       @timeupdate="onTimeUpdate"
       @loadedmetadata="onLoadedMetadata"
       @ended="onEnded"
+      @error="playbackError = tracks.length ? '音轨加载失败，请切换音轨或重试。' : ''"
     />
 
     <!-- Track tools sit below the viewer header in the normal layout flow. -->
@@ -347,8 +437,9 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
+    <p v-if="playbackError" role="alert" class="px-4 py-2 text-sm text-red-300">{{ playbackError }}</p>
     <!-- Center Stage: Vinyl Disc or Synchronized Lyrics View -->
-    <div class="flex flex-col items-center justify-center py-4 px-6 relative shrink-0 min-h-[220px]">
+    <div class="he-audio-stage flex flex-col items-center justify-center py-4 px-6 relative shrink-0 min-h-[220px]">
       <!-- Glow backlight -->
       <div
         class="absolute w-64 h-64 rounded-full bg-accent/20 blur-3xl pointer-events-none transition-opacity duration-700"
@@ -439,7 +530,8 @@ onBeforeUnmount(() => {
               :max="duration || 1"
               :value="currentTime"
               step="0.1"
-              @mousedown="isScrubbing = true"
+              @pointerdown="isScrubbing = true" @pointercancel="isScrubbing = false"
+              aria-label="音频播放进度"
               @input="onScrubInput"
               @change="onScrubChange"
               class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
@@ -452,7 +544,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Buttons Row -->
-        <div class="flex items-center justify-between gap-1.5">
+        <div class="he-audio-controls flex items-center justify-between gap-1.5">
           <!-- Loop / Shuffle Mode Button -->
           <button
             type="button"
@@ -471,7 +563,7 @@ onBeforeUnmount(() => {
             type="button"
             @click="prevTrack"
             class="w-8 h-8 rounded-xl flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-            title="上一首"
+            aria-label="上一首" title="上一首"
           >
             <SkipBack :size="17" />
           </button>
@@ -491,7 +583,7 @@ onBeforeUnmount(() => {
             type="button"
             @click="togglePlay"
             class="w-11 h-11 rounded-full bg-accent text-white shadow-xl shadow-accent/30 hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
-            :title="isPlaying ? '暂停' : '播放'"
+            :aria-label="isPlaying ? '暂停' : '播放'" :title="isPlaying ? '暂停' : '播放'"
           >
             <Pause v-if="isPlaying" :size="20" class="fill-current" />
             <Play v-else :size="20" class="fill-current ml-0.5" />
@@ -512,7 +604,7 @@ onBeforeUnmount(() => {
             type="button"
             @click="nextTrack"
             class="w-8 h-8 rounded-xl flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-            title="下一首"
+            aria-label="下一首" title="下一首"
           >
             <SkipForward :size="17" />
           </button>
@@ -523,13 +615,13 @@ onBeforeUnmount(() => {
             @click="cyclePlaybackRate"
             class="px-2 py-1 rounded-lg text-xs font-mono font-bold text-white/70 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
             :class="playbackRate !== 1.0 ? 'text-accent bg-accent/15' : ''"
-            title="点击切换播放倍速"
+            data-audio-rate title="点击切换播放倍速"
           >
             {{ playbackRate }}x
           </button>
 
           <!-- Volume Controls -->
-          <div class="flex items-center gap-1 pl-1">
+          <div class="he-audio-volume flex items-center gap-1 pl-1">
             <button
               type="button"
               @click="toggleMute"
@@ -595,3 +687,18 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+@media (max-width: 899px) {
+  .he-audio-player { overflow-y: auto; padding-bottom: env(safe-area-inset-bottom); }
+  .he-audio-stage { padding: 20px 16px; }
+  .he-audio-stage h4 { white-space: normal; font-size: 18px; }
+  .he-audio-controls { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+  .he-audio-controls > button { min-width: 44px; min-height: 44px; justify-self: center; }
+  .he-audio-controls > button:first-child { grid-column: 1; grid-row: 2; }
+  .he-audio-controls [data-audio-rate] { grid-column: 5; grid-row: 2; }
+  .he-audio-controls > button:nth-child(4) { width: 56px; height: 56px; }
+  .he-audio-volume { display: none; }
+  .he-audio-stage input[type="range"] { min-height: 32px; }
+}
+</style>

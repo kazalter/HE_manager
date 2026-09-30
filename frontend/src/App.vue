@@ -6,6 +6,8 @@ import { ChevronUp } from 'lucide-vue-next'
 import Sidebar from './components/Sidebar.vue'
 import MobileNavigation from './components/MobileNavigation.vue'
 import AuthView from './views/AuthView.vue'
+import GlobalAudioPlayer from './components/GlobalAudioPlayer.vue'
+import { audioPlaybackStore } from './stores/audioPlaybackStore'
 import { useCompactViewport } from './composables/useCompactViewport'
 const compact = useCompactViewport()
 const desktopCollapsed = ref(localStorage.getItem('he_sidebar_collapsed') === 'true')
@@ -38,20 +40,21 @@ watch(() => route.fullPath, async (next, previous) => {
 const onContentReady = () => { restoreScroll(); pendingPosition = null }
 const handleMainScroll = (event: Event) => { showBackToTop.value = (event.target as HTMLElement).scrollTop > 360 }
 const scrollToTop = () => mainScrollRef.value?.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
-onMounted(() => window.addEventListener('he:content-ready', onContentReady))
-onBeforeUnmount(() => window.removeEventListener('he:content-ready', onContentReady))
+const pauseAudioForVideo = (event: Event) => { if (event.target instanceof HTMLVideoElement && audioPlaybackStore.state.playing) audioPlaybackStore.togglePlay() }
+onMounted(() => { window.addEventListener('he:content-ready', onContentReady); document.addEventListener('play', pauseAudioForVideo, true) })
+onBeforeUnmount(() => { window.removeEventListener('he:content-ready', onContentReady); document.removeEventListener('play', pauseAudioForVideo, true) })
 </script>
 <template>
   <AuthView v-if="authState.ready && !authState.user" :has-users="authState.hasUsers" :startup-error="authState.error" />
-  <div v-else-if="authState.ready" class="he-app-shell w-full bg-background text-white/90 font-sans selection:bg-accent selection:text-white relative overflow-hidden flex" :class="{ 'he-compact-shell': compact && !isEmbed }">
+  <div v-else-if="authState.ready" class="he-app-shell w-full bg-background text-white/90 font-sans selection:bg-accent selection:text-white relative overflow-hidden flex" :class="{ 'he-compact-shell': compact && !isEmbed, 'he-has-mini': audioPlaybackStore.state.media && !audioPlaybackStore.state.expanded }">
     <a href="#he-main-content" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-accent focus:px-4 focus:py-3 focus:text-white">跳转到主要内容</a>
     <div class="fixed inset-0 pointer-events-none overflow-hidden z-0" aria-hidden="true"><div class="glow-sphere sphere-1"></div><div class="glow-sphere sphere-2"></div><div class="glow-sphere sphere-3"></div></div>
     <Sidebar v-if="!isEmbed && !compact" v-model:collapsed="desktopCollapsed" class="shrink-0 relative z-40" :user="authState.user" @logout="logout" />
-    <main id="he-main-content" ref="mainScrollRef" tabindex="-1" @scroll="handleMainScroll" class="flex-1 min-w-0 relative z-10 box-border main-scroll-container" :class="isEmbed ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden custom-scrollbar'">
+    <main id="he-main-content" ref="mainScrollRef" :inert="audioPlaybackStore.state.expanded || !!route.query.media" tabindex="-1" @scroll="handleMainScroll" class="flex-1 min-w-0 relative z-10 box-border main-scroll-container" :class="isEmbed ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden custom-scrollbar'">
       <router-view v-slot="{ Component }"><transition name="page-fade" mode="out-in"><component :is="Component" /></transition></router-view>
       <div v-if="!isEmbed" class="h-8 w-full"></div>
     </main>
-    <MobileNavigation v-if="compact && !isEmbed" />
+    <MobileNavigation v-if="compact && !isEmbed" :inert="audioPlaybackStore.state.expanded || !!route.query.media" /><GlobalAudioPlayer v-if="!isEmbed" />
     <button v-if="showBackToTop && !isEmbed && !route.query.media" type="button" @click="scrollToTop" class="he-back-top fixed right-4 z-30 w-11 h-11 rounded-2xl bg-sidebar/95 border border-white/20 flex items-center justify-center focus-visible:ring-2 focus-visible:ring-accent" aria-label="返回顶部"><ChevronUp :size="20" aria-hidden="true" /></button>
   </div>
   <div v-else class="he-app-shell bg-background text-white/60 flex items-center justify-center">正在检查登录状态</div>

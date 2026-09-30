@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
-import { Plus, Star, Tag as TagIcon, Trash2 } from 'lucide-vue-next'
+import { Plus, Star, Tag as TagIcon, Trash2, X } from 'lucide-vue-next'
 import { API_BASE_URL } from '../../config'
 import type { Media, Tag } from '../../types'
 
@@ -16,12 +16,14 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  close: []
   toggleFavorite: []
   setRating: [score: number]
   addTag: [name: string]
   removeTag: [tagId: number]
 }>()
 
+const closeRef = ref<HTMLButtonElement | null>(null)
 const tagInput = ref('')
 const hoverScore = ref(0)
 const allKnownTags = ref<Tag[]>([])
@@ -36,7 +38,7 @@ const fetchAllTags = async () => {
   }
 }
 
-onMounted(fetchAllTags)
+onMounted(() => { void fetchAllTags(); if (window.innerWidth < 900) closeRef.value?.focus() })
 
 const tagSuggestions = computed(() => {
   const query = tagInput.value.trim().toLowerCase()
@@ -77,7 +79,8 @@ const onTagInputBlur = () => {
 </script>
 
 <template>
-  <aside class="hidden min-[1100px]:flex w-[340px] 2xl:w-[380px] shrink-0 border-l border-white/10 bg-background/95 p-5 flex-col gap-5 overflow-y-auto custom-scrollbar animate-fluid-entrance">
+  <aside class="he-metadata-panel hidden min-[1100px]:flex w-[340px] 2xl:w-[380px] shrink-0 border-l border-white/10 bg-background/95 p-5 flex-col gap-5 overflow-y-auto custom-scrollbar animate-fluid-entrance">
+    <div class="flex items-center justify-between min-[900px]:hidden"><h2 class="text-base font-bold">媒体信息</h2><button ref="closeRef" type="button" class="min-h-11 min-w-11 rounded-xl bg-white/10" aria-label="关闭媒体信息" @click="emit('close')"><X :size="20" class="mx-auto" aria-hidden="true" /></button></div>
     <div class="flex gap-4">
       <div class="w-24 h-24 rounded-xl bg-white/5 border border-white/10 overflow-hidden shrink-0">
         <img v-if="coverUrl" :src="coverUrl" class="w-full h-full object-cover" :alt="media.title" />
@@ -213,3 +216,10 @@ const onTagInputBlur = () => {
     </div>
   </aside>
 </template>
+
+<style scoped>
+@media (max-width: 899px) {
+  .he-metadata-panel { display: flex; position: absolute; z-index: 60; inset: auto 0 0; width: 100%; max-height: 75dvh; border-radius: 24px 24px 0 0; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+  .he-metadata-panel button { min-width: 44px; min-height: 44px; }
+}
+</style>

@@ -4,7 +4,9 @@ import axios from 'axios'
 import { Maximize, Minimize, Trash2, X, FileQuestion, RefreshCw, PanelRightClose, PanelRightOpen, Pause, Play, Loader2 } from 'lucide-vue-next'
 import { API_BASE_URL, STREAM_URL, authUrl, thumbnailUrl } from '../config'
 import type { Media } from '../types'
-import AudioPlayer from './media-detail/AudioPlayer.vue'
+import { audioPlaybackStore } from '../stores/audioPlaybackStore'
+import { useCompactViewport } from '../composables/useCompactViewport'
+const compact = useCompactViewport()
 import ImageViewer from './media-detail/ImageViewer.vue'
 import MangaReader from './media-detail/MangaReader.vue'
 import MetadataPanel from './media-detail/MetadataPanel.vue'
@@ -32,7 +34,7 @@ const currentMedia = ref<Media>(props.initialMedia)
 const currentPage = ref(0)
 const totalMangaPages = ref<number | null>(null)
 const mangaPageDimensions = ref<Array<[number, number] | null>>([])
-const showMetadataPanel = ref(localStorage.getItem('he_detail_meta_panel') !== 'false')
+const showMetadataPanel = ref(!compact.value && localStorage.getItem('he_detail_meta_panel') !== 'false')
 const toggleMetadataPanel = () => {
   showMetadataPanel.value = !showMetadataPanel.value
   localStorage.setItem('he_detail_meta_panel', String(showMetadataPanel.value))
@@ -53,6 +55,11 @@ const isImage = computed(() => currentMedia.value.media_type === 'image')
 const isManga = computed(() => currentMedia.value.media_type === 'manga')
 const isVideo = computed(() => currentMedia.value.media_type === 'video')
 const isAudio = computed(() => currentMedia.value.media_type === 'audio')
+watch(() => currentMedia.value, media => {
+  if (media.media_type !== 'audio' || media.is_missing) return
+  audioPlaybackStore.open(media)
+  void nextTick(() => emit('close'))
+}, { immediate: true })
 const {
   isFullscreen,
   showControls,
@@ -354,7 +361,7 @@ const {
 })
 
 const nextPage = () => {
-  const step = localStorage.getItem('he_manga_read_mode') === 'double' ? 2 : 1
+  const step = localStorage.getItem(compact.value ? 'he_manga_read_mode_mobile' : 'he_manga_read_mode') === 'double' ? 2 : 1
   if (totalMangaPages.value === null || currentPage.value < totalMangaPages.value - 1) {
     const max = totalMangaPages.value === null ? Number.MAX_SAFE_INTEGER : totalMangaPages.value - 1
     currentPage.value = Math.min(max, currentPage.value + step)
@@ -362,7 +369,7 @@ const nextPage = () => {
 }
 
 const prevPage = () => {
-  const step = localStorage.getItem('he_manga_read_mode') === 'double' ? 2 : 1
+  const step = localStorage.getItem(compact.value ? 'he_manga_read_mode_mobile' : 'he_manga_read_mode') === 'double' ? 2 : 1
   if (currentPage.value > 0) currentPage.value = Math.max(0, currentPage.value - step)
 }
 
@@ -568,10 +575,10 @@ onUnmounted(() => preloadedImageUrls.clear())
 
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 z-[200] flex items-center justify-center">
+    <div v-if="!isAudio || currentMedia.is_missing" role="dialog" aria-modal="true" :aria-label="currentMedia.title" class="he-media-overlay fixed inset-0 z-[200] flex items-center justify-center">
       <div class="absolute inset-0 bg-background/85 backdrop-blur-2xl" @click="emit('close')"></div>
 
-      <div class="relative w-full h-full bg-[#060606] shadow-2xl flex overflow-hidden">
+      <div class="he-media-layout relative w-full h-full bg-[#060606] shadow-2xl flex overflow-hidden" :class="{ 'is-video': isVideo, 'show-mobile-metadata': compact && showMetadataPanel }">
         <section class="relative flex-1 min-w-0 bg-black flex flex-col">
           <header
             ref="overlayHeader"
@@ -589,7 +596,7 @@ onUnmounted(() => preloadedImageUrls.clear())
                       ? 'opacity-0 -translate-y-3 pointer-events-none'
                       : 'opacity-0 -translate-y-3 hover:opacity-100 hover:translate-y-0',
                 ]"
-            class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-5 z-50 transition-all duration-300 focus-within:opacity-100 focus-within:translate-y-0 focus-within:pointer-events-auto"
+            class="he-viewer-header flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-5 z-50 transition-all duration-300 focus-within:opacity-100 focus-within:translate-y-0 focus-within:pointer-events-auto"
           >
             <h2 class="w-full sm:w-auto sm:grow min-w-0 text-lg font-bold truncate sm:pr-4 text-white/95 drop-shadow-xl select-none">{{ currentMedia.title }}</h2>
             <div class="flex w-full sm:w-auto items-center justify-end gap-2">
@@ -638,6 +645,7 @@ onUnmounted(() => preloadedImageUrls.clear())
                 v-if="!isFullscreen"
                 @click="toggleMetadataPanel"
                 class="w-11 h-11 rounded-xl bg-black/35 backdrop-blur-md hover:bg-black/55 text-white/65 hover:text-white transition-all"
+                :aria-label="showMetadataPanel ? '收起媒体信息' : '显示媒体信息'" :aria-expanded="showMetadataPanel"
                 :title="showMetadataPanel ? '收起信息侧栏' : '展开信息侧栏'"
               >
                 <PanelRightClose v-if="showMetadataPanel" :size="19" class="mx-auto" />
@@ -647,7 +655,7 @@ onUnmounted(() => preloadedImageUrls.clear())
                 <Minimize v-if="isFullscreen" :size="19" class="mx-auto" />
                 <Maximize v-else :size="19" class="mx-auto" />
               </button>
-              <button @click="emit('close')" class="w-11 h-11 rounded-xl bg-red-500/20 backdrop-blur-md hover:bg-red-500/40 text-red-100 hover:text-white transition-all" title="关闭">
+              <button @click="emit('close')" class="w-11 h-11 rounded-xl bg-red-500/20 backdrop-blur-md hover:bg-red-500/40 text-red-100 hover:text-white transition-all" aria-label="返回媒体列表" title="关闭">
                 <X :size="20" class="mx-auto" />
               </button>
             </div>
@@ -689,8 +697,6 @@ onUnmounted(() => preloadedImageUrls.clear())
           </div>
 
           <VideoPlayer v-else-if="isVideo" :cover-url="coverUrl" @ready="setArtContainer" />
-
-          <AudioPlayer v-else-if="isAudio" :media="currentMedia" :cover-url="coverUrl" />
 
           <MangaReader
             v-else-if="isManga"
@@ -751,6 +757,7 @@ onUnmounted(() => preloadedImageUrls.clear())
           </div>
         </section>
 
+        <button v-if="compact && showMetadataPanel" type="button" class="he-metadata-scrim" aria-label="关闭媒体信息背景" tabindex="-1" @click="toggleMetadataPanel"></button>
         <MetadataPanel
           v-if="!isFullscreen && showMetadataPanel"
           :media="currentMedia"
@@ -760,6 +767,7 @@ onUnmounted(() => preloadedImageUrls.clear())
           :manga-progress-percent="mangaProgressPercent"
           :manga-progress-text="mangaProgressText"
           :manga-page-total="mangaPageTotal"
+          @close="toggleMetadataPanel"
           @toggle-favorite="updateMedia({ favorite: !currentMedia.favorite })"
           @set-rating="setRating"
           @add-tag="addTag"
@@ -771,6 +779,29 @@ onUnmounted(() => preloadedImageUrls.clear())
 </template>
 
 <style scoped>
+.he-media-overlay { height: 100dvh; }
+.he-viewer-header { padding-top: calc(12px + env(safe-area-inset-top)); }
+.he-metadata-scrim { position: absolute; inset: 0; z-index: 55; background: rgba(0,0,0,.6); }
+@media (max-width: 899px) {
+  .he-viewer-header { flex-wrap: nowrap; padding-inline: 12px; gap: 8px; }
+  .he-viewer-header h2 { width: auto; font-size: 14px; flex: 1; }
+  .he-viewer-header > div { width: auto; gap: 4px; }
+  .he-media-layout:not(.is-video) .he-viewer-header { flex-wrap: wrap; }
+  .he-media-layout:not(.is-video) .he-viewer-header h2 { flex-basis: 100%; }
+  .he-media-layout:not(.is-video) .he-viewer-header > div { width: 100%; }
+  .he-viewer-header [aria-label="自动播放设置"] button span { display: none; }
+  .he-media-layout.is-video > section { overflow-y: auto; }
+  .he-media-layout.is-video .he-viewer-header { position: relative; opacity: 1; transform: none; pointer-events: auto; background: #060606; }
+  .he-media-layout.is-video :deep(.he-video-stage) { flex: 0 0 auto; aspect-ratio: 16 / 9; width: 100%; }
+  .video-summary { display: block !important; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .video-summary-stats { width: 100%; text-align: left; }
+  .video-summary-stats > div { padding: 10px; }
+  .video-summary h3 { white-space: normal; font-size: 18px; }
+}
+@media (max-width: 899px) and (orientation: landscape) {
+  .he-media-layout.is-video :deep(.he-video-stage) { flex: 1 1 0; aspect-ratio: auto; min-height: 0; }
+  .he-media-layout.is-video .video-summary { display: none !important; }
+}
 @media (max-height: 650px), (max-width: 640px) {
   .video-summary { display: none; }
 }

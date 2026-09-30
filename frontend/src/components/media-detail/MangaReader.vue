@@ -37,16 +37,18 @@ const emit = defineEmits<{
   controlsHover: [hovering: boolean]
 }>()
 
-const readMode = ref<MangaReadMode>(
-  (localStorage.getItem('he_manga_read_mode') as MangaReadMode) || 'single'
-)
+const mobileReader = window.innerWidth < 900
+const modeKey = mobileReader ? 'he_manga_read_mode_mobile' : 'he_manga_read_mode'
+const savedMode = localStorage.getItem(modeKey)
+const readMode = ref<MangaReadMode>(savedMode === 'single' || savedMode === 'double' || savedMode === 'webtoon' ? savedMode : mobileReader ? 'webtoon' : 'single')
 const isRtl = ref(localStorage.getItem('he_manga_rtl') === 'true')
 const showShortcutGuide = ref(false)
 
-const isStripCollapsed = ref(localStorage.getItem('he_manga_strip_collapsed') === 'true')
+const stripKey = mobileReader ? 'he_manga_strip_collapsed_mobile' : 'he_manga_strip_collapsed'
+const isStripCollapsed = ref(localStorage.getItem(stripKey) === 'true' || (mobileReader && localStorage.getItem(stripKey) === null))
 const toggleStripCollapsed = () => {
   isStripCollapsed.value = !isStripCollapsed.value
-  localStorage.setItem('he_manga_strip_collapsed', String(isStripCollapsed.value))
+  localStorage.setItem(stripKey, String(isStripCollapsed.value))
 }
 const isStripOpen = computed(() => (props.showControls || !props.clickOnlyControls) && !isStripCollapsed.value)
 
@@ -86,7 +88,8 @@ const {
   handleZoomWheel,
   onMouseDown: onZoomMouseDown,
   wasDragging: wasZoomDragging,
-} = useImageViewerZoom(imageContainerRef)
+  onTouchStart, onTouchMove, onTouchEnd, wasTouchGesture,
+} = useImageViewerZoom(imageContainerRef, { onSwipe: direction => { if ((direction === 1) !== isRtl.value) nextPage(); else previousPage() } })
 
 const THUMB_W = 110
 const THUMB_H = 148
@@ -142,7 +145,7 @@ const nextPage = () => {
 
 const setReadMode = (mode: MangaReadMode) => {
   readMode.value = mode
-  localStorage.setItem('he_manga_read_mode', mode)
+  localStorage.setItem(modeKey, mode)
   resetZoom()
   if (mode === 'webtoon') {
     nextTick(() => {
@@ -379,7 +382,7 @@ const scrollWebtoonToPage = (page: number) => {
 }
 
 const onViewerClick = () => {
-  if (wasZoomDragging()) return
+  if (wasZoomDragging() || wasTouchGesture()) return
   emit('viewerClick')
 }
 
@@ -520,6 +523,8 @@ onBeforeUnmount(() => {
         class="w-full h-full flex items-center justify-center overflow-hidden select-none"
         :style="{ cursor: isZoomed ? (isZoomPanning ? 'grabbing' : 'grab') : 'default' }"
         @mousedown="onZoomMouseDown"
+        @touchstart="onTouchStart" @touchmove="onTouchMove" @touchend="onTouchEnd" @touchcancel="onTouchEnd"
+        style="touch-action: none"
       >
         <!-- Single Mode -->
         <div
@@ -594,9 +599,9 @@ onBeforeUnmount(() => {
       <!-- Bottom Floating Control Pill (Slider + Mode Switcher + Shortcuts) -->
       <div
         :class="showControls || !clickOnlyControls ? 'opacity-100' : 'opacity-0 pointer-events-none'"
-        class="absolute left-1/2 z-20 w-[min(620px,calc(100%-2rem))] rounded-2xl bg-black/75 backdrop-blur-xl border border-white/12 p-3 sm:px-4 sm:py-3 shadow-2xl transition-[transform,opacity] duration-250 ease-out flex flex-col gap-2.5 select-none"
+        class="he-manga-controls absolute left-1/2 z-20 w-[min(620px,calc(100%-2rem))] rounded-2xl bg-black/75 backdrop-blur-xl border border-white/12 p-3 sm:px-4 sm:py-3 shadow-2xl transition-[transform,opacity] duration-250 ease-out flex flex-col gap-2.5 select-none"
         :style="{
-          bottom: '24px',
+          bottom: 'calc(12px + env(safe-area-inset-bottom))',
           transform: `translate3d(-50%, ${isStripOpen ? '-184px' : (showControls || !clickOnlyControls ? '0px' : '12px')}, 0)`,
         }"
         style="will-change: transform, opacity;"
@@ -662,7 +667,7 @@ onBeforeUnmount(() => {
             @click="toggleShortcutGuide"
             class="w-7 h-7 rounded-lg flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
             :class="{ 'bg-white/15 text-white': showShortcutGuide }"
-            title="快捷键指南"
+            title="快捷键指南" data-keyboard-guide
           >
             <Keyboard :size="15" />
           </button>
@@ -745,9 +750,9 @@ onBeforeUnmount(() => {
         :class="showControls || isZoomed
           ? 'opacity-100'
           : 'opacity-0 pointer-events-none'"
-        class="absolute right-6 z-20 flex items-center gap-1 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 px-2 py-1.5 shadow-2xl transition-[transform,opacity] duration-250 ease-out select-none text-white/80"
+        class="he-manga-zoom absolute right-6 z-20 flex items-center gap-1 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 px-2 py-1.5 shadow-2xl transition-[transform,opacity] duration-250 ease-out select-none text-white/80"
         :style="{
-          bottom: '24px',
+          bottom: 'calc(12px + env(safe-area-inset-bottom))',
           transform: `translate3d(0, ${isStripOpen ? '-184px' : (showControls || isZoomed ? '0px' : '12px')}, 0)`,
         }"
         style="will-change: transform, opacity;"
@@ -799,7 +804,7 @@ onBeforeUnmount(() => {
       :class="isStripOpen
         ? 'translate-y-0 opacity-100'
         : 'translate-y-full opacity-0 pointer-events-none'"
-      class="absolute bottom-0 inset-x-0 z-30 border-t border-white/10 bg-[#0c0c0e]/95 backdrop-blur-2xl transition-[transform,opacity] duration-250 ease-out flex flex-col shadow-2xl select-none"
+      class="he-manga-strip absolute bottom-0 inset-x-0 z-30 border-t border-white/10 bg-[#0c0c0e]/95 backdrop-blur-2xl transition-[transform,opacity] duration-250 ease-out flex flex-col shadow-2xl select-none"
       style="will-change: transform, opacity;"
       @click.stop
       @mouseenter="onStripMouseEnter"
@@ -874,3 +879,18 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+@media (max-width: 899px) {
+  .he-manga-controls > div:first-child { flex-wrap: wrap; gap: 4px; }
+  .he-manga-controls button { min-height: 44px; min-width: 44px; }
+  .he-manga-controls input[type="range"] { min-height: 30px; }
+  [data-keyboard-guide] { display: none; }
+  .he-manga-zoom { right: 12px; bottom: calc(156px + env(safe-area-inset-bottom)) !important; }
+  .he-manga-zoom button { min-height: 44px; min-width: 44px; }
+  .he-manga-strip { padding-bottom: env(safe-area-inset-bottom); }
+  .he-manga-strip button { min-height: 44px; }
+  button.absolute.left-5 { left: 8px; width: 44px; height: 44px; }
+  button.absolute.right-5 { right: 8px; width: 44px; height: 44px; }
+}
+</style>

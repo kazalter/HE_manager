@@ -6,6 +6,7 @@ export function useMediaOverlayControls(
   isImage: ComputedRef<boolean>,
 ) {
   const isFullscreen = ref(false)
+  let immersiveFallback = false
   const showControls = ref(true)
   const isHoveringControls = ref(false)
   const clickOnlyControls = computed(() => isManga.value || (isFullscreen.value && isImage.value))
@@ -68,9 +69,13 @@ export function useMediaOverlayControls(
     }, 240)
   }
 
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) void document.documentElement.requestFullscreen()
-    else void document.exitFullscreen()
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen()
+      else if (!isFullscreen.value && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen()
+      else { immersiveFallback = !isFullscreen.value; isFullscreen.value = immersiveFallback }
+    } catch { immersiveFallback = !isFullscreen.value; isFullscreen.value = immersiveFallback }
+    showControls.value = true
   }
 
   const handleViewerDoubleClick = () => {
@@ -80,7 +85,7 @@ export function useMediaOverlayControls(
   }
 
   const onFullscreenChange = () => {
-    isFullscreen.value = !!document.fullscreenElement || (typeof screen !== 'undefined' && window.innerHeight >= screen.height - 2)
+    isFullscreen.value = immersiveFallback || !!document.fullscreenElement || (window.matchMedia('(pointer: fine)').matches && typeof screen !== 'undefined' && window.innerHeight >= screen.height - 2)
     clearTimer()
     showControls.value = true
     if (clickOnlyControls.value) {

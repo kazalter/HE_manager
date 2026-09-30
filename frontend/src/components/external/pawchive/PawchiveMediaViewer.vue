@@ -405,7 +405,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="viewerRef" role="dialog" aria-modal="true" :aria-label="`Pawchive 查看器：${post.title}`" :class="isFullscreen ? 'h-screen w-screen' : ''" class="fixed inset-0 z-[70] bg-black/95 text-white flex flex-col">
+  <div ref="viewerRef" role="dialog" aria-modal="true" :aria-label="`Pawchive 查看器：${post.title}`" :class="isFullscreen ? 'h-screen w-screen' : ''" class="he-pawchive-viewer fixed inset-0 z-[70] bg-black/95 text-white flex flex-col">
     <header :class="isFullscreen ? ['absolute inset-x-0 top-0 z-30 bg-gradient-to-b from-black/90 via-black/65 to-transparent border-b-0', controlsVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'] : ''" class="shrink-0 px-3 sm:px-5 py-3 border-b border-white/15 flex items-center gap-3 transition-[transform,opacity] duration-300" @mouseenter="onControlsHover(true)" @mouseleave="onControlsHover(false)">
       <button ref="closeRef" type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-xl hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" aria-label="返回列表" @click="emit('close')"><X :size="21" /></button>
       <div class="min-w-0 flex-1"><p class="text-xs text-white/55 truncate">{{ post.creator_name }} · {{ scopeLabel }}</p><h2 class="text-sm sm:text-base font-bold truncate">{{ post.title }}</h2></div>
@@ -529,4 +529,11 @@ onBeforeUnmount(() => {
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
 }
+</style>
+
+<style scoped>
+.he-pawchive-viewer { height: 100dvh; }
+.he-pawchive-viewer > header { padding-top: calc(12px + env(safe-area-inset-top)); }
+.he-pawchive-viewer > footer { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+@media (max-width: 599px) { .he-pawchive-viewer > header { gap: 4px; } }
 </style>

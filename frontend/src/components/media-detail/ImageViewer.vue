@@ -54,7 +54,8 @@ const {
   handleZoomWheel,
   onMouseDown: onZoomMouseDown,
   wasDragging: wasZoomDragging,
-} = useImageViewerZoom(imageContainerRef)
+  onTouchStart, onTouchMove, onTouchEnd, wasTouchGesture,
+} = useImageViewerZoom(imageContainerRef, { onSwipe: direction => { if (direction === 1) emit('next'); else emit('previous') } })
 
 const rotateClockwise = () => {
   rotation.value = (rotation.value + 90) % 360
@@ -124,7 +125,7 @@ const onWheel = (event: WheelEvent) => {
 }
 
 const onViewerClick = () => {
-  if (wasZoomDragging()) return
+  if (wasZoomDragging() || wasTouchGesture()) return
   emit('viewerClick')
 }
 
@@ -214,6 +215,8 @@ onBeforeUnmount(() => {
         class="w-full h-full flex items-center justify-center overflow-hidden select-none"
         :style="{ cursor: isZoomed ? (isZoomPanning ? 'grabbing' : 'grab') : 'default' }"
         @mousedown="onZoomMouseDown"
+        @touchstart="onTouchStart" @touchmove="onTouchMove" @touchend="onTouchEnd" @touchcancel="onTouchEnd"
+        style="touch-action: none"
       >
         <img
           ref="imgRef"
@@ -327,3 +330,12 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+@media (max-width: 899px) {
+  .image-viewer-toolbar { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); justify-content: center; gap: 2px; padding-inline: 4px; }
+  .image-viewer-toolbar button { min-width: 44px; min-height: 44px; }
+  button.absolute.left-5 { left: 8px; width: 44px; height: 44px; }
+  button.absolute.right-5 { right: 8px; width: 44px; height: 44px; }
+}
+</style>

@@ -28,7 +28,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="relative flex-1 min-h-0 bg-black overflow-hidden">
+  <div class="he-video-stage relative flex-1 min-h-0 bg-black overflow-hidden">
     <div v-if="props.coverUrl" class="absolute inset-0 pointer-events-none" aria-hidden="true">
       <img :src="props.coverUrl" class="w-full h-full object-cover scale-110 blur-3xl opacity-25" alt="" />
       <div class="absolute inset-0 bg-black/60"></div>

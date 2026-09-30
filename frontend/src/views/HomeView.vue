@@ -386,7 +386,7 @@ const closeMedia = () => {
   resetViewerMediaList()
   const query = { ...route.query }
   delete query.media
-  router.push({ path: route.path, query })
+  router.replace({ path: route.path, query })
 }
 
 const syncSelectedMediaFromRoute = async () => {
@@ -474,7 +474,9 @@ watch(() => route.query.media, () => {
   syncSelectedMediaFromRoute()
 })
 
+const onGlobalMediaUpdated = (event: Event) => updateMediaInList((event as CustomEvent<Media>).detail)
 onUnmounted(() => {
+  window.removeEventListener('he:media-updated', onGlobalMediaUpdated)
   window.clearTimeout(searchTimer)
   document.removeEventListener('pointerdown', handleTagOutsidePointer)
 })
@@ -492,6 +494,7 @@ const triggerMissingRecheck = async () => {
 }
 
 onMounted(async () => {
+  window.addEventListener('he:media-updated', onGlobalMediaUpdated)
   document.addEventListener('pointerdown', handleTagOutsidePointer)
   await Promise.all([fetchMedia(), fetchContinueMedia()])
   await syncSelectedMediaFromRoute()
@@ -728,7 +731,7 @@ onMounted(async () => {
       <div class="flex items-center justify-between gap-3 mb-3.5">
         <div class="flex items-center gap-2">
           <History class="text-accent" :size="15" />
-          <h2 class="text-xs font-black text-white/50 tracking-wider uppercase">继续观看 / 阅读</h2>
+          <h2 class="text-xs font-black text-white/50 tracking-wider uppercase">继续观看 / 阅读 / 收听</h2>
         </div>
         <div class="flex items-center gap-1.5">
           <button
