@@ -886,7 +886,7 @@ onBeforeUnmount(() => {
   .he-manga-controls button { min-height: 44px; min-width: 44px; }
   .he-manga-controls input[type="range"] { min-height: 30px; }
   [data-keyboard-guide] { display: none; }
-  .he-manga-zoom { right: 12px; bottom: calc(156px + env(safe-area-inset-bottom)) !important; }
+  .he-manga-zoom { right: 12px; top: calc(140px + env(safe-area-inset-top)); bottom: auto !important; transform: none !important; }
   .he-manga-zoom button { min-height: 44px; min-width: 44px; }
   .he-manga-strip { padding-bottom: env(safe-area-inset-bottom); }
   .he-manga-strip button { min-height: 44px; }

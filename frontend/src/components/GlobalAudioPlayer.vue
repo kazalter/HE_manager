@@ -76,9 +76,10 @@ onBeforeUnmount(() => player.stop())
 </template>
 <style>
 .he-audio-host { position: fixed; z-index: 65; bottom: 20px; left: 50%; transform: translateX(-50%); width: min(600px, calc(100% - 32px)); }
+.he-audio-host.is-mobile:not(.is-expanded) { left: calc(16px + env(safe-area-inset-left)); right: calc(16px + env(safe-area-inset-right)); width: auto; transform: none; }
 .he-audio-host.is-mobile { bottom: calc(var(--he-nav-height) + env(safe-area-inset-bottom) + 8px); }
 .he-audio-host.is-expanded { inset: 0; width: 100%; height: 100dvh; transform: none; z-index: 210; }
-.he-audio-panel { height: 100%; }
+.he-audio-panel { height: 100%; padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
 .he-audio-header { padding-top: calc(12px + env(safe-area-inset-top)); }
 .he-mini-player { position: relative; overflow: hidden; }
 .he-mini-progress { position: absolute; bottom: 0; left: 0; height: 2px; background: rgb(var(--color-accent)); }

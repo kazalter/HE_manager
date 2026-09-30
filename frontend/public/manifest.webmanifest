@@ -1,0 +1,47 @@
+{
+  "id": "/",
+  "name": "HE Manager",
+  "short_name": "HE",
+  "description": "个人媒体库：阅读、观看与收听",
+  "lang": "zh-CN",
+  "start_url": "/#/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#050507",
+  "theme_color": "#111114",
+  "icons": [
+    {
+      "src": "/app-icons/he-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icons/he-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icons/he-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "我的收藏",
+      "url": "/#/?favorite=true"
+    },
+    {
+      "name": "发现",
+      "url": "/#/external"
+    },
+    {
+      "name": "下载任务",
+      "url": "/#/downloads"
+    }
+  ]
+}

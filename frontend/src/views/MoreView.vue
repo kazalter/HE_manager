@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { BarChart3, Book, ChevronRight, CopyMinus, Download, Palette, Settings, Sparkles, Tags, Users, LogOut } from 'lucide-vue-next'
+const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true
 import { authState, logout } from '../auth'
 const links = [
   { to: '/downloads', label: '下载任务', hint: '查看服务器下载进度', icon: Download },
@@ -24,6 +25,11 @@ const signOut = () => { if (window.confirm('确定退出当前账号吗？')) vo
         <router-link to="/users" class="flex items-center gap-4 p-4 min-h-16"><Users :size="22" class="text-accent" aria-hidden="true" /><span class="flex-1">用户管理</span><ChevronRight :size="18" aria-hidden="true" /></router-link>
       </template>
     </div>
+    <details v-if="!standalone" class="mt-6 rounded-2xl border border-accent/25 bg-accent/5 p-4">
+      <summary class="min-h-11 flex items-center font-semibold cursor-pointer">添加到 iPhone 主屏幕</summary>
+      <ol class="list-decimal pl-5 space-y-2 mt-3 text-sm text-white/75 leading-relaxed"><li>用 Safari 打开当前 HE Manager 地址。</li><li>点击「分享」，选择「添加到主屏幕」。</li><li>若有「作为 Web App 打开」选项，保持开启，然后点「添加」。</li></ol>
+      <p class="mt-3 text-xs text-white/65">从桌面图标打开即可使用，无需开发者模式。手机需要能连接到服务器；首次打开可能需要重新登录。</p>
+    </details>
     <button type="button" class="mt-6 min-h-12 w-full rounded-xl border border-white/15 flex items-center justify-center gap-2 text-white/75" @click="signOut"><LogOut :size="18" aria-hidden="true" />退出登录</button>
   </div>
 </template>

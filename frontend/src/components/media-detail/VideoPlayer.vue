@@ -48,7 +48,7 @@ onBeforeUnmount(() => {
 .media-detail-player.is-compact .art-control-playMode { display: none !important; }
 .media-detail-player.is-compact .art-video-player {
   --art-bottom-height: 72px;
-  --art-control-height: 36px;
+  --art-control-height: 44px;
   --art-control-icon-size: 30px;
   --art-padding: 5px;
 }

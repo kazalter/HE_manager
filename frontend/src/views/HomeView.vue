@@ -916,7 +916,12 @@ onMounted(async () => {
   .he-home-search button { min-width: 44px; min-height: 44px; }
   .he-library-gutter { padding-left: 16px; padding-right: 16px; }
   .he-library-gutter .grid { gap: 12px; }
-  .he-mobile-filters { position: fixed; inset: auto 0 0; z-index: 120; max-height: 85dvh; overflow-y: auto; overscroll-behavior: contain; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .he-library-gutter button[title="向左滚动"],
+  .he-library-gutter button[title="向右滚动"],
+  .he-library-gutter button[title="展开继续观看"],
+  .he-library-gutter button[title="收起继续观看"],
+  .he-continue-dismiss { min-width: 44px; min-height: 44px; }
+  .he-mobile-filters { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); position: fixed; inset: auto 0 0; z-index: 120; max-height: 85dvh; overflow-y: auto; overscroll-behavior: contain; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
   .he-mobile-filters button { min-height: 44px; }
   .he-mobile-filters input { font-size: 16px; min-height: 44px; }
   .he-mobile-filters > div { max-width: 100%; }

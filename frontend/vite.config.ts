@@ -2,10 +2,17 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 
+const buildId = process.env.HE_BUILD_ID || new Date().toISOString()
+
 export default defineConfig({
+  define: { 'import.meta.env.HE_BUILD_ID': JSON.stringify(buildId) },
   plugins: [
     vue(),
     tailwindcss(),
+    {
+      name: 'he-build-version',
+      generateBundle() { this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ buildId }) }) },
+    },
   ],
   build: {
     rollupOptions: {

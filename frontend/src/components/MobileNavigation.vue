@@ -4,7 +4,13 @@ import { useRoute } from 'vue-router'
 import { Compass, Ellipsis, Library, Star } from 'lucide-vue-next'
 const route = useRoute()
 const saved = reactive({ library: '/', favorites: '/?favorite=true', discover: '/external' })
-try { Object.assign(saved, JSON.parse(sessionStorage.getItem('he_mobile_tabs') || '{}')) } catch { /* optional */ }
+try {
+  const values = JSON.parse(sessionStorage.getItem('he_mobile_tabs') || '{}')
+  for (const key of ['library', 'favorites', 'discover'] as const) {
+    const value = values[key]
+    if (typeof value === 'string' && /^\/(?:\?|$|type\/|external(?:\?|$))/.test(value)) saved[key] = value
+  }
+} catch { /* optional */ }
 const section = computed(() => route.path === '/external' ? 'discover' : route.path === '/' || route.path.startsWith('/type/') ? route.query.favorite === 'true' ? 'favorites' : 'library' : 'more')
 watch(() => route.fullPath, () => {
   const key = section.value
