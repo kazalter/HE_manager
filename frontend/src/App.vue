@@ -1,207 +1,64 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { authState, logout } from './auth'
-import { ChevronUp, Menu } from 'lucide-vue-next'
+import { ChevronUp } from 'lucide-vue-next'
 import Sidebar from './components/Sidebar.vue'
+import MobileNavigation from './components/MobileNavigation.vue'
 import AuthView from './views/AuthView.vue'
-
+import { useCompactViewport } from './composables/useCompactViewport'
+const compact = useCompactViewport()
 const desktopCollapsed = ref(localStorage.getItem('he_sidebar_collapsed') === 'true')
-const isCompactViewport = ref(false)
-const mobileSidebarOpen = ref(false)
-const menuTriggerRef = ref<HTMLButtonElement | null>(null)
-
-const isCollapsed = computed({
-  get: () => isCompactViewport.value ? !mobileSidebarOpen.value : desktopCollapsed.value,
-  set: (value: boolean) => {
-    if (isCompactViewport.value) {
-      mobileSidebarOpen.value = !value
-    } else {
-      desktopCollapsed.value = value
-    }
-  },
-})
-
-watch(desktopCollapsed, (newVal) => {
-  localStorage.setItem('he_sidebar_collapsed', String(newVal))
-})
-
+watch(desktopCollapsed, value => localStorage.setItem('he_sidebar_collapsed', String(value)))
 const route = useRoute()
 const mainScrollRef = ref<HTMLElement | null>(null)
 const showBackToTop = ref(false)
-
-const updateResponsiveShell = () => {
-  const nextCompact = window.innerWidth < 900
-  if (nextCompact && !isCompactViewport.value) mobileSidebarOpen.value = false
-  isCompactViewport.value = nextCompact
+const isEmbed = computed(() => route.path.endsWith('/embed') || route.query.embed === 'true')
+const scrollKey = (path: string) => {
+  const [pathname, query = ''] = path.split('?')
+  const params = new URLSearchParams(query)
+  params.delete('media')
+  params.sort()
+  return pathname + '?' + params.toString()
 }
-
-watch(() => route.fullPath, () => {
-  if (isCompactViewport.value) mobileSidebarOpen.value = false
-})
-
-watch(mobileSidebarOpen, async (open) => {
-  if (!isCompactViewport.value) return
+const positions = new Map<string, number>()
+let pendingPosition: number | null = null
+const restoreScroll = () => {
+  if (pendingPosition === null || !mainScrollRef.value) return
+  mainScrollRef.value.scrollTo({ top: pendingPosition, behavior: 'instant' as ScrollBehavior })
+  showBackToTop.value = pendingPosition > 360
+}
+watch(() => route.fullPath, async (next, previous) => {
+  if (scrollKey(next) === scrollKey(previous)) return
+  positions.set(scrollKey(previous), mainScrollRef.value?.scrollTop || 0)
+  pendingPosition = positions.get(scrollKey(next)) || 0
   await nextTick()
-  if (open) {
-    document.querySelector<HTMLButtonElement>('#he-sidebar [data-mobile-close]')?.focus()
-  } else {
-    menuTriggerRef.value?.focus()
-  }
+  restoreScroll()
 })
-
-const handleMenuKeydown = (event: KeyboardEvent) => {
-  if (!isCompactViewport.value || !mobileSidebarOpen.value) return
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    mobileSidebarOpen.value = false
-    return
-  }
-  if (event.key !== 'Tab') return
-
-  const sidebar = document.getElementById('he-sidebar')
-  const focusable = sidebar?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])')
-  if (!focusable?.length) return
-  const first = focusable[0]!
-  const last = focusable[focusable.length - 1]!
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault()
-    last.focus()
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault()
-    first.focus()
-  }
-}
-
-watch(() => route.path, () => {
-  if (mainScrollRef.value) {
-    mainScrollRef.value.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
-    mainScrollRef.value.scrollTop = 0
-  }
-  showBackToTop.value = false
-})
-
-const handleMainScroll = (event: Event) => {
-  const target = event.target as HTMLElement
-  showBackToTop.value = target.scrollTop > 360
-}
-
-const scrollToTop = () => {
-  if (mainScrollRef.value) {
-    mainScrollRef.value.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-}
-
-onMounted(() => {
-  updateResponsiveShell()
-  window.addEventListener('resize', updateResponsiveShell, { passive: true })
-  window.addEventListener('keydown', handleMenuKeydown)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', updateResponsiveShell)
-  window.removeEventListener('keydown', handleMenuKeydown)
-})
-
-const isEmbed = computed(() => {
-  return route.path.endsWith('/embed') || route.query.embed === 'true'
-})
-const mobileMenuOpen = computed(() => isCompactViewport.value && mobileSidebarOpen.value && !isEmbed.value)
+const onContentReady = () => { restoreScroll(); pendingPosition = null }
+const handleMainScroll = (event: Event) => { showBackToTop.value = (event.target as HTMLElement).scrollTop > 360 }
+const scrollToTop = () => mainScrollRef.value?.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+onMounted(() => window.addEventListener('he:content-ready', onContentReady))
+onBeforeUnmount(() => window.removeEventListener('he:content-ready', onContentReady))
 </script>
-
 <template>
   <AuthView v-if="authState.ready && !authState.user" :has-users="authState.hasUsers" :startup-error="authState.error" />
-  <div
-    v-else-if="authState.ready"
-    class="h-screen w-full bg-background text-white/90 font-sans selection:bg-accent selection:text-white relative overflow-hidden flex"
-  >
-    <a
-      v-if="!mobileMenuOpen"
-      href="#he-main-content"
-      class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-accent focus:px-4 focus:py-3 focus:text-white focus:ring-2 focus:ring-white"
-    >跳转到主要内容</a>
-    <!-- Apple-style Dynamic Ambient Glow -->
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="glow-sphere sphere-1"></div>
-      <div class="glow-sphere sphere-2"></div>
-      <div class="glow-sphere sphere-3"></div>
-    </div>
-
-    <Sidebar
-      v-if="!isEmbed"
-      id="he-sidebar"
-      v-model:collapsed="isCollapsed"
-      :is-compact="isCompactViewport"
-      :inert="isCompactViewport && isCollapsed"
-      :aria-hidden="isCompactViewport && isCollapsed ? 'true' : undefined"
-      :class="isCompactViewport ? 'fixed left-0 top-0 z-50' : 'shrink-0 relative z-40'"
-      class="transition-all duration-300 ease-in-out"
-      :user="authState.user"
-      @logout="logout"
-    />
-
-    <!-- Mobile Drawer Overlay Backdrop -->
-    <div
-      v-if="mobileMenuOpen"
-      class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm cursor-default transition-opacity"
-      aria-hidden="true"
-      @click="isCollapsed = true"
-    ></div>
-
-    <!-- Mobile Hamburger Trigger (Only on compact screen when collapsed) -->
-    <button
-      v-if="isCompactViewport && isCollapsed && !isEmbed"
-      ref="menuTriggerRef"
-      type="button"
-      @click="isCollapsed = false"
-      class="fixed z-50 left-4 top-4 w-11 h-11 rounded-xl border border-white/15 bg-sidebar/85 backdrop-blur-xl flex items-center justify-center text-white shadow-md shadow-accent/20 transition-all duration-200 cursor-pointer hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-      title="展开侧边栏"
-      aria-label="展开侧边栏"
-      aria-controls="he-sidebar"
-      :aria-expanded="mobileMenuOpen"
-    >
-      <Menu :size="20" />
-    </button>
-
-    <main
-      id="he-main-content"
-      ref="mainScrollRef"
-      tabindex="-1"
-      :inert="mobileMenuOpen"
-      @scroll="handleMainScroll"
-      class="flex-1 min-w-0 relative z-10 box-border main-scroll-container"
-      :class="isEmbed ? 'h-screen overflow-hidden' : 'h-screen overflow-y-auto overflow-x-hidden scroll-smooth custom-scrollbar'"
-    >
-      <router-view v-slot="{ Component }">
-        <transition name="page-fade" mode="out-in">
-          <component :is="Component" />
-        </transition>
-      </router-view>
-      <div v-if="!isEmbed" class="h-20 w-full"></div>
+  <div v-else-if="authState.ready" class="he-app-shell w-full bg-background text-white/90 font-sans selection:bg-accent selection:text-white relative overflow-hidden flex" :class="{ 'he-compact-shell': compact && !isEmbed }">
+    <a href="#he-main-content" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-accent focus:px-4 focus:py-3 focus:text-white">跳转到主要内容</a>
+    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0" aria-hidden="true"><div class="glow-sphere sphere-1"></div><div class="glow-sphere sphere-2"></div><div class="glow-sphere sphere-3"></div></div>
+    <Sidebar v-if="!isEmbed && !compact" v-model:collapsed="desktopCollapsed" class="shrink-0 relative z-40" :user="authState.user" @logout="logout" />
+    <main id="he-main-content" ref="mainScrollRef" tabindex="-1" @scroll="handleMainScroll" class="flex-1 min-w-0 relative z-10 box-border main-scroll-container" :class="isEmbed ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden custom-scrollbar'">
+      <router-view v-slot="{ Component }"><transition name="page-fade" mode="out-in"><component :is="Component" /></transition></router-view>
+      <div v-if="!isEmbed" class="h-8 w-full"></div>
     </main>
-
-    <!-- Smooth Back To Top Floating Action Button -->
-    <transition name="page-fade">
-      <button
-        v-if="showBackToTop && !isEmbed && !mobileMenuOpen"
-        type="button"
-        @click="scrollToTop"
-        class="fixed bottom-7 right-7 z-40 w-11 h-11 rounded-2xl bg-sidebar/85 hover:bg-accent backdrop-blur-2xl border border-white/15 text-white/70 hover:text-white shadow-2xl shadow-black/60 flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer"
-        title="返回顶部"
-        aria-label="返回顶部"
-      >
-        <ChevronUp :size="20" />
-      </button>
-    </transition>
+    <MobileNavigation v-if="compact && !isEmbed" />
+    <button v-if="showBackToTop && !isEmbed && !route.query.media" type="button" @click="scrollToTop" class="he-back-top fixed right-4 z-30 w-11 h-11 rounded-2xl bg-sidebar/95 border border-white/20 flex items-center justify-center focus-visible:ring-2 focus-visible:ring-accent" aria-label="返回顶部"><ChevronUp :size="20" aria-hidden="true" /></button>
   </div>
-  <div v-else class="h-screen w-full bg-background text-white/50 flex items-center justify-center">
-    正在检查登录状态
-  </div>
+  <div v-else class="he-app-shell bg-background text-white/60 flex items-center justify-center">正在检查登录状态</div>
 </template>
-
 <style>
 .main-scroll-container {
-  contain: paint;
+  overscroll-behavior-y: contain;
 }
 
 .glow-sphere {

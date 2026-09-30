@@ -73,8 +73,12 @@ const onDocumentPointerDown = (event: PointerEvent) => {
 const onDocumentFocusIn = (event: FocusEvent) => {
   if (selectorOpen.value && !selectorRef.value?.contains(event.target as Node)) closeSelector()
 }
-watch(() => route.query.source, () => closeSelector())
+watch(() => route.query.source, () => { closeSelector(); try { localStorage.setItem('he_external_source', activeSite.value) } catch { /* optional */ } })
 onMounted(() => {
+  if (!route.query.source) {
+    const saved = localStorage.getItem('he_external_source')
+    if (saved && sites.some(site => site.key === saved)) void router.replace({ path: route.path, query: { ...route.query, source: saved } })
+  }
   document.addEventListener('pointerdown', onDocumentPointerDown)
   document.addEventListener('focusin', onDocumentFocusIn)
 })

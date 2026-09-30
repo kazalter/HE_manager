@@ -11,6 +11,10 @@ import MediaCard from '../components/MediaCard.vue'
 import MediaViewCard from '../components/MediaViewCard.vue'
 import { AsyncMediaDetail as MediaDetail } from '../components/asyncComponents'
 import PaginationControl from '../components/PaginationControl.vue'
+import { useCompactViewport } from '../composables/useCompactViewport'
+const compact = useCompactViewport()
+const filterPanelRef = ref<HTMLElement | null>(null)
+const filterTriggerRef = ref<HTMLButtonElement | null>(null)
 
 const props = defineProps<{
   mediaType?: string
@@ -24,16 +28,18 @@ const tags = ref<Tag[]>([])
 const loading = ref(true)
 const mediaError = ref('')
 const selectedMedia = ref<Media | null>(null)
-const searchQuery = ref('')
-const sortBy = ref<'date' | 'title' | 'rating' | 'opened'>('date')
-const selectedTag = ref('')
+const searchQuery = ref(typeof route.query.search === 'string' ? route.query.search : '')
+const validSort = (value: unknown): 'date' | 'title' | 'rating' | 'opened' => value === 'title' || value === 'rating' || value === 'opened' ? value : 'date'
+const sortBy = ref(validSort(route.query.sort))
+const selectedTag = ref(typeof route.query.tag === 'string' ? route.query.tag : '')
 const tagDropdownOpen = ref(false)
 const tagSearchQuery = ref('')
 const tagDropdownRef = ref<HTMLElement | null>(null)
 const tagButtonRef = ref<HTMLButtonElement | null>(null)
 const tagSearchRef = ref<HTMLInputElement | null>(null)
-const favoriteOnly = ref(false)
-const sourceFilter = ref<'' | 'x' | 'wnacg' | 'local'>('')
+const favoriteOnly = ref(route.query.favorite === 'true')
+const validSource = (value: unknown): '' | 'x' | 'wnacg' | 'local' => value === 'x' || value === 'wnacg' || value === 'local' ? value : ''
+const sourceFilter = ref(validSource(route.query.source))
 const filtersExpanded = ref(false)
 const continueScrollRef = ref<HTMLElement | null>(null)
 const continueCollapsed = ref(localStorage.getItem('he_continue_collapsed') === 'true')
@@ -68,7 +74,7 @@ watch([() => props.mediaType, () => route.query.view], () => {
   } catch {
     // The current route still works when browser storage is unavailable.
   }
-  viewMode.value = isAvailableView(queryView) ? queryView : isAvailableView(savedView) ? savedView : 'poster'
+  viewMode.value = isAvailableView(queryView) ? queryView : isAvailableView(savedView) ? savedView : props.mediaType === 'video' && compact.value ? 'wide' : props.mediaType === 'audio' && compact.value ? 'list' : 'poster'
 }, { immediate: true })
 
 const selectViewMode = (mode: MediaViewMode) => {
@@ -254,7 +260,7 @@ const fetchContinueMedia = async () => {
 
 const fetchMedia = async (scrollBehavior: ScrollBehavior = 'auto') => {
   const requestId = ++mediaRequestId
-  if (hasCompletedInitialFetch) scrollToTop(scrollBehavior)
+  if (hasCompletedInitialFetch && scrollBehavior !== 'auto') scrollToTop(scrollBehavior)
   loading.value = true
   mediaError.value = ''
   try {
@@ -289,6 +295,8 @@ const fetchMedia = async (scrollBehavior: ScrollBehavior = 'auto') => {
     if (requestId === mediaRequestId) {
       loading.value = false
       hasCompletedInitialFetch = true
+      await nextTick()
+      window.dispatchEvent(new Event('he:content-ready'))
     }
   }
 }
@@ -334,12 +342,6 @@ const goToPage = (page: number) => {
   syncPageQuery(target)
   const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
   void fetchMedia(behavior)
-}
-
-const resetPageAndFetch = () => {
-  currentPage.value = 1
-  syncPageQuery(1, true)
-  void fetchMedia()
 }
 
 const updateMediaInList = (media: Media) => {
@@ -424,25 +426,50 @@ const toggleFavoriteFilter = () => {
 }
 
 let searchTimer: number | undefined
+const syncFilters = () => {
+  const current = [route.query.search || '', route.query.tag || '', validSort(route.query.sort), validSource(route.query.source)]
+  const desired = [searchQuery.value, selectedTag.value, sortBy.value, sourceFilter.value]
+  if (current.every((value, index) => value === desired[index])) return
+  const query = { ...route.query }
+  delete query.page
+  for (const [key, value] of Object.entries({ search: searchQuery.value, tag: selectedTag.value, sort: sortBy.value === 'date' ? '' : sortBy.value, source: sourceFilter.value })) {
+    if (value) query[key] = value
+    else delete query[key]
+  }
+  void router.replace({ path: route.path, query })
+}
 watch(searchQuery, () => {
   window.clearTimeout(searchTimer)
-  searchTimer = window.setTimeout(resetPageAndFetch, 250)
+  searchTimer = window.setTimeout(syncFilters, 250)
 })
-
-watch([() => props.mediaType, selectedTag, sortBy, favoriteOnly, sourceFilter], resetPageAndFetch)
-watch(() => route.query.favorite, value => {
-  favoriteOnly.value = value === 'true'
-}, { immediate: true })
-watch(() => route.query.source, value => {
-  const v = typeof value === 'string' ? value : ''
-  sourceFilter.value = (v === 'x' || v === 'wnacg' || v === 'local') ? v : ''
-}, { immediate: true })
-watch(() => route.query.page, value => {
-  const nextPage = routePage(value)
-  if (nextPage === currentPage.value) return
-  currentPage.value = nextPage
+watch([selectedTag, sortBy, sourceFilter], syncFilters)
+watch(() => JSON.stringify([props.mediaType, route.query.search, route.query.tag, route.query.sort, route.query.source, route.query.favorite, route.query.page]), () => {
+  window.clearTimeout(searchTimer)
+  searchQuery.value = typeof route.query.search === 'string' ? route.query.search : ''
+  selectedTag.value = typeof route.query.tag === 'string' ? route.query.tag : ''
+  sortBy.value = validSort(route.query.sort)
+  sourceFilter.value = validSource(route.query.source)
+  favoriteOnly.value = route.query.favorite === 'true'
+  currentPage.value = routePage(route.query.page)
   void fetchMedia()
 })
+watch(filtersExpanded, async open => {
+  if (!compact.value) return
+  await nextTick()
+  if (open) filterPanelRef.value?.querySelector<HTMLButtonElement>('button')?.focus()
+  else filterTriggerRef.value?.focus()
+})
+const filterKeydown = (event: KeyboardEvent) => {
+  if (!compact.value || !filtersExpanded.value) return
+  if (event.key === 'Escape') { event.preventDefault(); filtersExpanded.value = false }
+  if (event.key !== 'Tab') return
+  const buttons = filterPanelRef.value?.querySelectorAll<HTMLElement>('button:not([disabled]), input, [tabindex="0"]')
+  if (!buttons?.length) return
+  const first = buttons[0]!, last = buttons[buttons.length - 1]!
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+}
+const mobileCategories = [ { label: '全部', path: '/' }, { label: '漫画', path: '/type/manga' }, { label: '视频', path: '/type/video' }, { label: '音频', path: '/type/audio' }, { label: '图片', path: '/type/image' } ]
 watch(() => route.query.media, () => {
   syncSelectedMediaFromRoute()
 })
@@ -466,7 +493,6 @@ const triggerMissingRecheck = async () => {
 
 onMounted(async () => {
   document.addEventListener('pointerdown', handleTagOutsidePointer)
-  scrollToTop('auto')
   await Promise.all([fetchMedia(), fetchContinueMedia()])
   await syncSelectedMediaFromRoute()
   void fetchTags()
@@ -523,7 +549,8 @@ onMounted(async () => {
           <button
             @click="filtersExpanded = !filtersExpanded"
             :class="filtersExpanded || activeFilterCount > 0 ? 'bg-accent/15 border-accent/30 text-accent' : 'bg-white/4 border-white/5 text-white/55 hover:text-white'"
-            class="md:hidden relative w-10 h-10 rounded-xl border flex items-center justify-center transition-all"
+            ref="filterTriggerRef"
+            class="min-[900px]:hidden relative w-11 h-11 rounded-xl border flex items-center justify-center transition-all"
             :aria-expanded="filtersExpanded"
             title="展开筛选"
             aria-label="展开筛选"
@@ -536,10 +563,16 @@ onMounted(async () => {
         </div>
       </div>
 
+      <Teleport to="body" :disabled="!compact">
+      <div v-if="compact && filtersExpanded" class="fixed inset-0 z-[110] bg-black/65" aria-hidden="true" @click="filtersExpanded = false"></div>
       <div
-        :class="filtersExpanded ? 'flex' : 'hidden md:flex'"
-        class="mt-3.5 flex-wrap items-center gap-3 text-xs rounded-2xl md:rounded-none bg-white/[0.025] md:bg-transparent border border-white/5 md:border-0 p-3 md:p-0"
+        ref="filterPanelRef"
+        :class="[filtersExpanded ? 'flex' : 'hidden min-[900px]:flex', compact ? 'he-mobile-filters' : 'mt-3.5']"
+        :role="compact ? 'dialog' : undefined" :aria-modal="compact ? true : undefined" aria-label="媒体筛选和排序"
+        class="flex-wrap items-center gap-3 text-xs rounded-2xl bg-sidebar border border-white/10 p-4 min-[900px]:bg-transparent min-[900px]:border-0 min-[900px]:p-0"
+        @keydown="filterKeydown"
       >
+        <div v-if="compact" class="flex items-center justify-between w-full"><h2 class="text-lg font-bold">筛选和排序</h2><button type="button" class="min-h-11 min-w-11 rounded-xl bg-white/10" aria-label="关闭筛选" @click="filtersExpanded = false"><X :size="20" class="mx-auto" /></button></div>
         <div class="flex items-center gap-1.5 text-white/55 font-bold">
           <Filter :size="13" />
           <span class="text-xs uppercase tracking-wider">筛选</span>
@@ -682,11 +715,16 @@ onMounted(async () => {
           <X :size="12" />
           清除筛选
         </button>
+        <button v-if="compact" type="button" class="min-h-12 w-full rounded-xl bg-accent text-white text-base font-bold" @click="filtersExpanded = false">查看 {{ totalItems.toLocaleString() }} 项媒体</button>
       </div>
+      </Teleport>
+      <nav v-if="compact" aria-label="媒体分类" class="he-media-categories flex gap-2 overflow-x-auto mt-4 pb-1">
+        <router-link v-for="category in mobileCategories" :key="category.path" :to="{ path: category.path, query: { ...route.query, page: undefined, media: undefined } }" :aria-current="route.path === category.path ? 'page' : undefined" class="shrink-0 min-h-11 px-4 rounded-xl flex items-center text-sm font-semibold border" :class="route.path === category.path ? 'bg-accent/20 border-accent/40 text-white' : 'bg-white/5 border-white/10 text-white/70'">{{ category.label }}</router-link>
+      </nav>
     </header>
 
     <!-- Continue watch/read section -->
-    <div v-if="recentlyOpened.length > 0 && !searchQuery && !selectedTag" class="px-6 md:px-8 mb-8 animate-fluid-entrance select-none">
+    <div v-if="recentlyOpened.length > 0 && !searchQuery && !selectedTag" class="he-library-gutter px-6 md:px-8 mb-8 animate-fluid-entrance select-none">
       <div class="flex items-center justify-between gap-3 mb-3.5">
         <div class="flex items-center gap-2">
           <History class="text-accent" :size="15" />
@@ -768,7 +806,7 @@ onMounted(async () => {
       </div>
     </div>
 
-    <div ref="containerRef" class="px-6 md:px-8 pb-12">
+    <div ref="containerRef" class="he-library-gutter px-6 md:px-8 pb-12">
       <div class="flex justify-end mb-5">
         <div class="inline-flex items-center gap-1 rounded-xl border border-white/8 bg-white/4 p-1" role="group" aria-label="媒体显示视图">
           <button
@@ -866,12 +904,21 @@ onMounted(async () => {
 <style scoped>
 @media (max-width: 899px) {
   .he-home-header {
-    padding-left: 4.5rem;
+    padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+    margin-bottom: 20px;
   }
 
-  .he-home-search {
-    flex: 1 0 100%;
-  }
+  .he-home-search { flex: 1 0 100%; gap: 8px; }
+  .he-home-search input { font-size: 16px; min-height: 44px; }
+  .he-home-search button { min-width: 44px; min-height: 44px; }
+  .he-library-gutter { padding-left: 16px; padding-right: 16px; }
+  .he-library-gutter .grid { gap: 12px; }
+  .he-mobile-filters { position: fixed; inset: auto 0 0; z-index: 120; max-height: 85dvh; overflow-y: auto; overscroll-behavior: contain; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .he-mobile-filters button { min-height: 44px; }
+  .he-mobile-filters input { font-size: 16px; min-height: 44px; }
+  .he-mobile-filters > div { max-width: 100%; }
+  .he-mobile-filters [role="group"] { flex-wrap: wrap; }
+
 }
 
 .he-continue-dismiss {

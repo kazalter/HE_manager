@@ -211,13 +211,27 @@ body {
   width: 100%;
 }
 
-/* Reserve space for the fixed mobile navigation button above page titles. */
+/* Phone shell: bottom navigation and dynamic Safari viewport. */
+:root { --he-nav-height: 64px; }
+.he-app-shell { height: 100vh; height: 100dvh; }
+.main-scroll-container { height: 100%; }
+.he-back-top { bottom: 24px; }
+.he-mobile-nav { position: fixed; bottom: 0; inset-inline: 0; z-index: 40; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); min-height: var(--he-nav-height); padding: 6px max(8px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); border-top: 1px solid rgba(255,255,255,.12); background: rgba(15,15,23,.96); backdrop-filter: blur(16px); }
+.he-mobile-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 52px; border-radius: 12px; color: rgba(255,255,255,.7); font-size: 12px; font-weight: 600; }
+.he-mobile-nav a.active { color: rgb(var(--color-accent)); background: rgba(129,140,248,.12); }
+.he-mobile-nav a:focus-visible { outline: 2px solid rgb(var(--color-accent)); outline-offset: -2px; }
+.he-mobile-nav a:active { background: rgba(255,255,255,.12); }
 @media (max-width: 899px) {
-  .he-page-header {
-    padding-top: 3.25rem;
-  }
-
-  .he-page-header.sticky {
-    padding-top: 4.5rem;
-  }
+  .he-compact-shell .main-scroll-container { padding-bottom: calc(var(--he-nav-height) + env(safe-area-inset-bottom)); }
+  .he-back-top { bottom: calc(var(--he-nav-height) + env(safe-area-inset-bottom) + 16px); }
+  .he-page-header { padding-top: calc(16px + env(safe-area-inset-top)); }
+  .he-page-header.sticky { padding: calc(12px + env(safe-area-inset-top)) 16px 12px; }
+  .he-page-header + main { padding-left: 16px; padding-right: 16px; }
+  input, textarea, select { font-size: max(16px, 1em); }
+  .glow-sphere { display: none; }
+  .masonry-grid { column-gap: 12px; }
+  .masonry-grid-item { margin-bottom: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
