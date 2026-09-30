@@ -12,7 +12,7 @@
 
 ## iPhone 安装
 
-Safari 打开正常访问地址→分享→添加到主屏幕→保持“作为 Web App 打开”（如有此选项）。无需开发者模式、签名或 App Store。首次从主屏幕启动应确认登录状态。
+Safari 打开 `http://192.168.0.101:8011`→分享→添加到主屏幕→保持“作为 Web App 打开”（如有此选项）。无需修改 hosts、开发者模式、签名或 App Store。手机需要能访问服务器所在局域网。访问地址改变后需重新登录，并从新地址重新添加主屏幕入口。
 
 manifest 使用 standalone，支持横屏视频，viewport-fit=cover 与安全区 CSS 配合。180/192/512px 图标与 maskable 图标由 `frontend/scripts/generate-app-icons.py` 生成，依赖已有 Pillow；几何图形与 HE 字标一致。
 
@@ -20,7 +20,9 @@ manifest 使用 standalone，支持横屏视频，viewport-fit=cover 与安全�
 
 构建生成 `version.json` 与前端内嵌的相同 buildId；网页在恢复前台/联网及可见时每分钟检查。发现新版提示用户刷新，不自动重载。index 与 version.json 不缓存。
 
-本版不注册 Service Worker，不缓存鉴权 API、视频/音频 Range 或媒体原文件。网络断开时显示状态，仍需要连接服务器才能继续请求内容。未来离线缓存和推送需要可信 HTTPS；当前内网 HTTP 入口可先使用移动网页和主屏幕入口。外层 Nginx Proxy Manager 的域名、证书和公网暴露范围保持现状。
+本版不注册 Service Worker，不缓存鉴权 API、视频/音频 Range 或媒体原文件。网络断开时显示状态，仍需要连接服务器才能继续请求内容。未来离线缓存和推送需要可信 HTTPS；当前内网 HTTP 入口可先使用移动网页和主屏幕入口。前端直接发布到宿主机局域网 IP 的 8011 端口，不再依赖 Nginx Proxy Manager 网络；仅停用 `hemanager.local` 这条代理，其他站点不变。后端及 Android 使用的 8010 端口不变。
+
+Docker Compose 支持通过 `HE_FRONTEND_BIND_IP`（默认 `192.168.0.101`）和 `HE_FRONTEND_PORT`（默认 `8011`）更换局域网入口。容器内部 nginx 继续提供静态页面并转发同源 API/媒体请求。外层代理停用前已备份 NPM 数据库和原配置至其 `/data/backups/hemanager-direct-2026-09-30T17-16-28-996Z`。
 
 iOS 锁屏播放、后台连续切轨、系统媒体控件、来电中断恢复及主屏幕启动需要真实 iPhone 验收；桌面浏览器触控模拟不代表这些系统行为已验证。
 
@@ -33,6 +35,7 @@ iOS 锁屏播放、后台连续切轨、系统媒体控件、来电中断恢复�
 - 375×812 与 844×390 横屏、放大字体、减少动画、筛选弹层焦点循环及 Escape 关闭。
 - 在线 manifest MIME、图标尺寸、版本文件 no-store、手动更新与安装说明；新版不会自动刷新页面。
 - Docker 前后端健康，后端健康接口正常。
+- 局域网 IP:8011 页面、图标、版本文件及登录接口可达；390px 直连登录页无页面异常。NPM 中 HE Manager 已禁用，其他代理记录未变。
 
 浏览器验收使用隔离的 API/媒体响应，避免修改生产收藏和下载任务。真实 iPhone 的主屏幕运行、刘海/键盘、锁屏与后台音频仍应按上文边界验收。
 
