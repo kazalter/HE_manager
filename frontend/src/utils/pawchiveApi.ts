@@ -3,6 +3,8 @@ import { API_BASE_URL, authUrl } from '../config'
 import type { PawchiveAccountStatus, PawchiveCapabilities, PawchiveCreatorFavorite, PawchiveDownloadJob, PawchiveDownloadPreview, PawchiveDownloadSelection, PawchivePage, PawchivePost, PawchiveScope } from '../types/pawchive'
 
 const root = `${API_BASE_URL}/external/pawchive`
+// Upstream calls are throttled to one per second, so allow queueing but never hang forever.
+const METADATA_TIMEOUT = 45_000
 
 export const pawchiveMediaUrl = (ref: string | null | undefined) =>
   ref ? authUrl(`${root}/media/${encodeURIComponent(ref)}`) : ''
@@ -50,13 +52,14 @@ export async function fetchPawchivePosts(scope: PawchiveScope, cursor = '', sign
       cursor: cursor || undefined,
     },
     signal,
+    timeout: METADATA_TIMEOUT,
   })
   return response.data
 }
 
 export async function fetchPawchivePost(post: Pick<PawchivePost, 'service' | 'creator_id' | 'post_id'>, signal?: AbortSignal): Promise<PawchivePost> {
   const { service, creator_id, post_id } = post
-  const response = await axios.get<PawchivePost>(`${root}/posts/${encodeURIComponent(service)}/${encodeURIComponent(creator_id)}/${encodeURIComponent(post_id)}`, { signal })
+  const response = await axios.get<PawchivePost>(`${root}/posts/${encodeURIComponent(service)}/${encodeURIComponent(creator_id)}/${encodeURIComponent(post_id)}`, { signal, timeout: METADATA_TIMEOUT })
   return response.data
 }
 
@@ -65,6 +68,8 @@ export function pawchiveError(error: unknown): string {
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data?.detail
     if (typeof detail?.message === 'string') return detail.message
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') return '读取 Pawchive 超时，请稍后重试。'
+    if (!error.response) return '网络连接中断，请检查网络后重试。'
     if (error.response?.status === 429) return '来源站点请求过快，请稍后重试。'
     if (error.response?.status === 403) return '来源站点限制访问。'
     if (error.response?.status === 503) return 'Pawchive 模块尚未启用。'

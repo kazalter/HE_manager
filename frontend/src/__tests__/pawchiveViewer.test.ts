@@ -1,6 +1,6 @@
 import { nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import PawchiveMediaViewer from '../components/external/pawchive/PawchiveMediaViewer.vue'
 import type { PawchiveAttachment, PawchivePost } from '../types/pawchive'
 
@@ -50,6 +50,38 @@ describe('Pawchive fullscreen viewer', () => {
       wrapper.unmount()
       if (previousDescriptor) Object.defineProperty(document, 'fullscreenElement', previousDescriptor)
       else Reflect.deleteProperty(document, 'fullscreenElement')
+    }
+  })
+
+  it('retries a stalled image with a fresh ref, then skips it during autoplay', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline') }))
+    const reloadMedia = vi.fn(async () => true)
+    const wrapper = mount(PawchiveMediaViewer, {
+      props: {
+        post, attachment, attachments: [attachment], attachmentIndex: 0, attachmentTotal: 1,
+        scopeLabel: 'Example', busy: false, error: '', hasPrevious: false, ended: false,
+        autoplay: true, interval: 5, downloadBusy: false, downloadMessage: '', downloadError: false,
+        reloadMedia,
+      },
+    })
+    try {
+      const firstUrl = wrapper.get('img[alt="image.jpg"]').attributes('src')
+      await vi.advanceTimersByTimeAsync(20_000)
+      expect(reloadMedia).toHaveBeenCalledTimes(1)
+      const retryUrl = wrapper.get('img[alt="image.jpg"]').attributes('src')
+      expect(retryUrl).not.toBe(firstUrl)
+      expect(retryUrl).toContain('retry=1')
+
+      await wrapper.get('img[alt="image.jpg"]').trigger('error')
+      expect(reloadMedia).toHaveBeenCalledTimes(1)
+      expect(wrapper.emitted('playbackError')?.at(-1)).toEqual(['图片加载失败，即将跳到下一项。'])
+      await vi.advanceTimersByTimeAsync(2500)
+      expect(wrapper.emitted('next')).toHaveLength(1)
+    } finally {
+      wrapper.unmount()
+      vi.unstubAllGlobals()
+      vi.useRealTimers()
     }
   })
 })

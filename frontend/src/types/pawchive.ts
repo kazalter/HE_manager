@@ -30,6 +30,9 @@ export interface PawchivePost {
   published_at: string | null
   reported_attachment_count: number
   playable_count: number | null
+  /** Counted from the list entry; absent on responses from older backends. */
+  image_count?: number
+  video_count?: number
   preview_ref: string | null
   tags: string[]
   attachments: PawchiveAttachment[]

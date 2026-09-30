@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ArrowUpRight, CalendarDays, Image as ImageIcon, Paperclip } from 'lucide-vue-next'
+import { ArrowUpRight, CalendarDays, Film, Image as ImageIcon, Paperclip } from 'lucide-vue-next'
 import type { PawchivePost } from '../../../types/pawchive'
 import { pawchiveMediaUrl } from '../../../utils/pawchiveApi'
 
 const props = defineProps<{ post: PawchivePost; selected: boolean }>()
 const emit = defineEmits<{ open: []; select: [] }>()
 const previewFailed = ref(false)
+const hasCounts = computed(() => typeof props.post.image_count === 'number' && typeof props.post.video_count === 'number')
+const noMedia = computed(() => hasCounts.value && !props.post.image_count && !props.post.video_count)
+const mediaLabel = computed(() => {
+  if (!hasCounts.value) return `${props.post.reported_attachment_count} 个附件`
+  if (noMedia.value) return '没有图片或视频'
+  return [props.post.image_count ? `${props.post.image_count} 张图片` : '', props.post.video_count ? `${props.post.video_count} 个视频` : '']
+    .filter(Boolean).join('，')
+})
 const publishedLabel = computed(() => {
   if (!props.post.published_at) return '日期未知'
   const date = new Date(props.post.published_at)
@@ -22,7 +30,14 @@ const publishedLabel = computed(() => {
         <img v-if="post.preview_ref && !previewFailed" :src="pawchiveMediaUrl(post.preview_ref)" alt="" loading="lazy" class="h-full w-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-105" @error="previewFailed = true" />
         <div v-else class="flex h-full w-full items-center justify-center"><ImageIcon :size="30" class="text-white/45" aria-hidden="true" /></div>
         <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/20" aria-hidden="true"></div>
-        <span class="absolute right-2 top-2 inline-flex items-center gap-1 rounded-lg border border-white/20 bg-black/60 px-2 py-1 text-[11px] font-semibold text-white backdrop-blur-sm"><Paperclip :size="12" aria-hidden="true" />{{ post.reported_attachment_count }} 附件</span>
+        <span class="absolute right-2 top-2 inline-flex items-center gap-2 rounded-lg border border-white/20 bg-black/60 px-2 py-1 text-[11px] font-semibold backdrop-blur-sm" :class="noMedia ? 'text-white/60' : 'text-white'" :title="mediaLabel" :aria-label="mediaLabel">
+          <template v-if="!hasCounts"><span class="inline-flex items-center gap-1"><Paperclip :size="12" aria-hidden="true" />{{ post.reported_attachment_count }} 附件</span></template>
+          <template v-else-if="noMedia">无媒体</template>
+          <template v-else>
+            <span v-if="post.image_count" class="inline-flex items-center gap-1"><ImageIcon :size="12" aria-hidden="true" />{{ post.image_count }}</span>
+            <span v-if="post.video_count" class="inline-flex items-center gap-1"><Film :size="12" aria-hidden="true" />{{ post.video_count }}</span>
+          </template>
+        </span>
       </div>
       <div class="min-h-[76px] px-3 pb-3 pt-3">
         <div class="flex items-start gap-1">

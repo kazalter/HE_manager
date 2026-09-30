@@ -10,6 +10,23 @@ interface CurrentItem {
   index: number
   total: number
 }
+type SearchResult =
+  | { kind: 'found'; index: number; detail: PawchivePost }
+  | { kind: 'end' }
+  | { kind: 'paused'; index: number }
+  | { kind: 'stale' }
+
+// Media refs live 12h on the backend; refetch well before cached ones expire.
+const DETAIL_MAX_AGE = 6 * 3600 * 1000
+// Posts with known-empty counts cost nothing to skip, so a search may walk
+// several pages; posts whose counts are unknown still need a detail request.
+const SEARCH_PAGE_LIMIT = 8
+const PREFETCH_PAGE_LIMIT = 3
+const DETAIL_CHECK_LIMIT = 10
+
+const isNotFound = (cause: unknown) => axios.isAxiosError(cause) && cause.response?.status === 404
+const isTransient = (cause: unknown) => axios.isAxiosError(cause) && !axios.isCancel(cause) &&
+  (!cause.response || [502, 503, 504].includes(cause.response.status))
 
 export function usePawchiveSequence() {
   const active = ref(false)
@@ -17,6 +34,7 @@ export function usePawchiveSequence() {
   const error = ref('')
   const notice = ref('')
   const ended = ref(false)
+  const skipped = ref(0)
   const current = ref<CurrentItem | null>(null)
   const nextPost = ref<PawchivePost | null>(null)
   const history = ref<Position[]>([])
@@ -27,10 +45,12 @@ export function usePawchiveSequence() {
   const scopeLabel = computed(() => scope.value.creatorId
     ? `创作者 ${scope.value.service} · ${scope.value.creatorId}`
     : scope.value.query ? `搜索：${scope.value.query}` : '最新帖子')
-  const detailCache = new Map<string, PawchivePost>()
+  const detailCache = new Map<string, { post: PawchivePost; at: number }>()
+  const detailRequests = new Map<string, Promise<PawchivePost>>()
   let version = 0
   let controller: AbortController | null = null
   let postIndex = -1
+  let nextPostIndex = -1
   let searchIndex: number | null = null
   let nextLookup = 0
   let pagePromise: Promise<boolean> | null = null
@@ -38,19 +58,47 @@ export function usePawchiveSequence() {
   const playable = (post: PawchivePost) => post.attachments.filter(attachment =>
     attachment.availability === 'playable' &&
     (scope.value.mediaType === 'all' || attachment.media_type === scope.value.mediaType))
+  // Media count from the list entry; null when the backend did not report it.
+  const summaryMediaCount = (post: PawchivePost): number | null => {
+    if (typeof post.image_count !== 'number' || typeof post.video_count !== 'number') return null
+    if (scope.value.mediaType === 'image') return post.image_count
+    if (scope.value.mediaType === 'video') return post.video_count
+    return post.image_count + post.video_count
+  }
 
   const postAttachments = computed(() => current.value ? playable(current.value.post) : [])
   const nextPostAttachments = computed(() => nextPost.value ? playable(nextPost.value) : [])
 
-  const detailAt = async (index: number): Promise<PawchivePost> => {
+  const fetchDetail = async (summary: PawchivePost) => {
+    const signal = controller?.signal
+    try { return await fetchPawchivePost(summary, signal) }
+    catch (cause) {
+      if (!isTransient(cause) || signal?.aborted) throw cause
+      await new Promise(resolve => window.setTimeout(resolve, 1500))
+      if (signal?.aborted) throw cause
+      return fetchPawchivePost(summary, signal)
+    }
+  }
+
+  const detailAt = (index: number, fresh = false): Promise<PawchivePost> => {
     const summary = posts.value[index]
-    if (!summary) throw new Error('missing post')
-    const cached = detailCache.get(summary.post_key)
-    if (cached) return cached
-    const detail = await fetchPawchivePost(summary, controller?.signal)
-    detailCache.set(summary.post_key, detail)
-    if (detailCache.size > 30) detailCache.delete(detailCache.keys().next().value!)
-    return detail
+    if (!summary) return Promise.reject(new Error('missing post'))
+    const key = summary.post_key
+    const cached = detailCache.get(key)
+    if (!fresh && cached && Date.now() - cached.at < DETAIL_MAX_AGE) return Promise.resolve(cached.post)
+    const pending = detailRequests.get(key)
+    if (pending && !fresh) return pending
+    const requestedVersion = version
+    const request = fetchDetail(summary).then(detail => {
+      if (requestedVersion === version) {
+        detailCache.delete(key)
+        detailCache.set(key, { post: detail, at: Date.now() })
+        if (detailCache.size > 30) detailCache.delete(detailCache.keys().next().value!)
+      }
+      return detail
+    }).finally(() => { if (detailRequests.get(key) === request) detailRequests.delete(key) })
+    detailRequests.set(key, request)
+    return request
   }
 
   const setCurrent = (index: number, post: PawchivePost, attachmentIndex: number, saveHistory: boolean) => {
@@ -59,7 +107,7 @@ export function usePawchiveSequence() {
     if (!next) return false
     const postChanged = current.value?.post.post_key !== post.post_key
     if (saveHistory && current.value) history.value.push({ postKey: current.value.post.post_key, attachmentKey: current.value.attachment.attachment_key })
-    notice.value = current.value && current.value.post.post_key !== post.post_key ? '已进入下一篇帖子' : ''
+    notice.value = current.value && postChanged ? '已进入下一篇帖子' : ''
     current.value = { post, attachment: next, index: attachmentIndex, total: attachments.length }
     postIndex = index
     searchIndex = null
@@ -97,89 +145,90 @@ export function usePawchiveSequence() {
     finally { if (pagePromise === pending) pagePromise = null }
   }
 
+  // Walk forward from `start` to the next post with playable media in scope.
+  const search = async (start: number, stale: () => boolean, pageLimit: number,
+                        onSkip?: () => void): Promise<SearchResult> => {
+    let index = start
+    let pages = 0
+    let checks = 0
+    while (!stale()) {
+      if (index >= posts.value.length) {
+        if (!hasMore.value) return { kind: 'end' }
+        if (pages >= pageLimit) return { kind: 'paused', index }
+        await loadPage()
+        pages++
+        continue
+      }
+      if (summaryMediaCount(posts.value[index]!) === 0) {
+        index++
+        onSkip?.()
+        continue
+      }
+      let detail: PawchivePost
+      try { detail = await detailAt(index) }
+      catch (cause) {
+        if (!isNotFound(cause)) throw cause
+        detail = { ...posts.value[index]!, attachments: [] }
+      }
+      if (stale()) break
+      if (playable(detail).length) return { kind: 'found', index, detail }
+      index++
+      onSkip?.()
+      if (++checks >= DETAIL_CHECK_LIMIT) return { kind: 'paused', index }
+    }
+    return { kind: 'stale' }
+  }
+
   function prepareNextPost() {
     const ownerKey = current.value?.post.post_key
     const requestedVersion = version
     const lookup = ++nextLookup
     nextPost.value = null
+    nextPostIndex = -1
     if (!ownerKey) return
-    void (async () => {
-      let index = postIndex + 1
-      let checked = 0
-      let pages = 0
-      const stale = () => requestedVersion !== version || lookup !== nextLookup || current.value?.post.post_key !== ownerKey
-      while (checked < 10 && pages <= 2 && !stale()) {
-        if (index >= posts.value.length) {
-          if (!hasMore.value || pages >= 2) return
-          try { await loadPage() }
-          catch { return }
-          pages++
-          if (stale() || (index >= posts.value.length && !hasMore.value)) return
-          if (index >= posts.value.length) continue
-        }
-        let detail: PawchivePost
-        try { detail = await detailAt(index) }
-        catch (cause) {
-          if (axios.isAxiosError(cause) && cause.response?.status === 404) { index++; checked++; continue }
-          return
-        }
-        if (stale()) return
-        checked++
-        if (playable(detail).length) {
-          nextPost.value = detail
-          return
-        }
-        index++
-      }
-    })()
+    const stale = () => requestedVersion !== version || lookup !== nextLookup || current.value?.post.post_key !== ownerKey
+    void search(postIndex + 1, stale, PREFETCH_PAGE_LIMIT).then(result => {
+      if (result.kind !== 'found' || stale()) return
+      nextPost.value = result.detail
+      nextPostIndex = result.index
+    }).catch(() => {})
   }
 
   const next = async () => {
     if (!active.value || busy.value || ended.value) return
+    if (current.value && searchIndex === null) {
+      const inPost = playable(current.value.post)
+      if (current.value.index + 1 < inPost.length) {
+        setCurrent(postIndex, current.value.post, current.value.index + 1, true)
+        return
+      }
+      if (nextPost.value && nextPostIndex > postIndex) {
+        setCurrent(nextPostIndex, nextPost.value, 0, true)
+        return
+      }
+    }
     busy.value = true
     error.value = ''
+    skipped.value = 0
     const requestedVersion = version
+    const start = searchIndex ?? (postIndex >= 0 ? postIndex + 1 : 0)
     try {
-      if (current.value && searchIndex === null) {
-        const inPost = playable(current.value.post)
-        if (current.value.index + 1 < inPost.length) {
-          setCurrent(postIndex, current.value.post, current.value.index + 1, true)
-          return
-        }
+      const result = await search(start, () => requestedVersion !== version, SEARCH_PAGE_LIMIT, () => { skipped.value++ })
+      if (result.kind === 'stale') return
+      if (result.kind === 'found') {
+        setCurrent(result.index, result.detail, 0, true)
+        return
       }
-      let index = searchIndex ?? (postIndex >= 0 ? postIndex + 1 : 0)
-      let checked = 0
-      let pages = 0
-      while (checked < 10 && pages <= 2) {
-        if (requestedVersion !== version) return
-        if (index >= posts.value.length) {
-          if (!hasMore.value) { ended.value = true; error.value = '已到当前范围末尾'; return }
-          if (pages >= 2) break
-          await loadPage()
-          pages++
-          if (requestedVersion !== version) return
-          if (index >= posts.value.length && !hasMore.value) { ended.value = true; error.value = '已到当前范围末尾'; return }
-          if (index >= posts.value.length) continue
-        }
-        let detail: PawchivePost
-        try { detail = await detailAt(index) }
-        catch (cause) {
-          if (axios.isAxiosError(cause) && cause.response?.status === 404) { index++; checked++; continue }
-          throw cause
-        }
-        if (requestedVersion !== version) return
-        checked++
-        if (playable(detail).length) {
-          setCurrent(index, detail, 0, true)
-          return
-        }
-        index++
+      if (result.kind === 'end') {
+        ended.value = true
+        error.value = current.value ? '已到当前范围末尾' : '当前范围内没有可播放的媒体'
+        return
       }
-      searchIndex = index
-      error.value = '本段暂无可播放媒体，点击“下一项”继续查找。'
+      searchIndex = result.index
+      error.value = `已跳过 ${skipped.value} 篇没有媒体的帖子，点击“下一项”继续查找。`
     } catch (cause) {
       if (requestedVersion === version && !axios.isCancel(cause)) {
-        searchIndex = searchIndex ?? (postIndex >= 0 ? postIndex + 1 : 0)
+        searchIndex = searchIndex ?? start
         error.value = pawchiveError(cause)
       }
     } finally {
@@ -209,33 +258,44 @@ export function usePawchiveSequence() {
     }
   }
 
+  // Refetch the current post for fresh media refs, keeping the same attachment.
+  const reloadCurrent = async (): Promise<boolean> => {
+    const item = current.value
+    if (!active.value || !item || postIndex < 0) return false
+    const requestedVersion = version
+    const { post_key: postKey } = item.post
+    const { attachment_key: attachmentKey } = item.attachment
+    try {
+      const detail = await detailAt(postIndex, true)
+      if (requestedVersion !== version || current.value?.post.post_key !== postKey ||
+          current.value.attachment.attachment_key !== attachmentKey) return false
+      const attachments = playable(detail)
+      const index = attachments.findIndex(attachment => attachment.attachment_key === attachmentKey)
+      if (index < 0) return false
+      current.value = { post: detail, attachment: attachments[index]!, index, total: attachments.length }
+      return true
+    } catch {
+      return false
+    }
+  }
+
   const open = async (index: number, initialPosts: PawchivePost[], nextCursor: string | null,
                       more: boolean, browseScope: PawchiveScope) => {
     close()
     active.value = true
-    busy.value = true
     scope.value = { ...browseScope }
     posts.value = [...initialPosts]
     cursor.value = nextCursor
     hasMore.value = more
     searchIndex = index
-    const requestedVersion = version
-    try {
-      const detail = await detailAt(index)
-      if (requestedVersion !== version) return
-      if (playable(detail).length) setCurrent(index, detail, 0, false)
-      else { busy.value = false; await next() }
-    } catch (cause) {
-      if (requestedVersion === version && !axios.isCancel(cause)) error.value = pawchiveError(cause)
-    } finally {
-      if (requestedVersion === version) busy.value = false
-    }
+    await next()
   }
 
   const close = () => {
     version++
     nextLookup++
     nextPost.value = null
+    nextPostIndex = -1
     pagePromise = null
     controller?.abort()
     controller = new AbortController()
@@ -243,13 +303,15 @@ export function usePawchiveSequence() {
     current.value = null
     history.value = []
     detailCache.clear()
+    detailRequests.clear()
     busy.value = false
     error.value = ''
     notice.value = ''
     ended.value = false
+    skipped.value = 0
     postIndex = -1
     searchIndex = null
   }
 
-  return { active, busy, error, notice, ended, current, nextPost, postAttachments, nextPostAttachments, history, scopeLabel, open, next, previous, selectAttachment, close }
+  return { active, busy, error, notice, ended, skipped, current, nextPost, postAttachments, nextPostAttachments, history, scopeLabel, open, next, previous, selectAttachment, reloadCurrent, close }
 }

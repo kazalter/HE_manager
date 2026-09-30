@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ArrowLeft, ArrowRight, Download, ExternalLink, Image as ImageIcon, Maximize2, Minimize2, Pause, Play, X } from 'lucide-vue-next'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { ArrowLeft, ArrowRight, Download, ExternalLink, Image as ImageIcon, ImageOff, Loader2, Maximize2, Minimize2, Pause, Play, RotateCw, X } from 'lucide-vue-next'
 import ImageViewer from '../../media-detail/ImageViewer.vue'
 import type { PawchiveAttachment, PawchivePost } from '../../../types/pawchive'
 import { pawchiveMediaUrl } from '../../../utils/pawchiveApi'
@@ -16,6 +16,10 @@ const props = defineProps<{
   scopeLabel: string
   busy: boolean
   error: string
+  notice?: string
+  skipped?: number
+  /** Refetch the current post so an expired or stalled media ref is replaced. */
+  reloadMedia?: () => Promise<boolean>
   hasPrevious: boolean
   ended: boolean
   autoplay: boolean
@@ -55,6 +59,23 @@ const hoverPreviewX = ref(0)
 const hoverPreviewWidth = ref(200)
 const failedPreviewKeys = ref(new Set<string>())
 let imageTimer: number | undefined
+// Bumps the media URL so a retry never reuses a stalled request for the same ref.
+const retryNonce = ref(0)
+const retriedKey = ref('')
+const loadFailed = ref(false)
+const showPlaceholder = ref(false)
+const countdownKey = ref(0)
+let stallTimer: number | undefined
+let placeholderTimer: number | undefined
+let skipTimer: number | undefined
+const IMAGE_STALL_MS = 20_000
+const withNonce = (url: string) => {
+  if (!url || !retryNonce.value) return url
+  return `${url}${url.includes('?') ? '&' : '?'}retry=${retryNonce.value}`
+}
+const videoUrl = computed(() => withNonce(pawchiveMediaUrl(props.attachment.stream_ref)))
+const placeholderUrl = computed(() => props.attachment.media_type === 'image' && props.attachment.preview_ref &&
+  !failedPreviewKeys.value.has(props.attachment.attachment_key) ? pawchiveMediaUrl(props.attachment.preview_ref) : '')
 let wheelGestureTimer: number | undefined
 let wheelGestureUsed = false
 let wheelDelta = 0
@@ -80,7 +101,7 @@ const stopPostPreload = () => {
 }
 const setDisplayImageUrl = () => {
   displayImageUrl.value = preloadedImageUrls.get(props.post.post_key)?.get(props.attachment.attachment_key)
-    || pawchiveMediaUrl(props.attachment.stream_ref)
+    || withNonce(pawchiveMediaUrl(props.attachment.stream_ref))
 }
 const preloadImages = async (postKey: string, items: PawchiveAttachment[], controller: AbortController) => {
   const images = preloadedImageUrls.get(postKey) || new Map<string, string>()
@@ -90,8 +111,12 @@ const preloadImages = async (postKey: string, items: PawchiveAttachment[], contr
   for (const item of items) {
     if (controller.signal.aborted) return
     if (item.media_type !== 'image' || !item.stream_ref || images.has(item.attachment_key) || attempted.has(item.attachment_key)) continue
+    const request = new AbortController()
+    const abortRequest = () => request.abort()
+    controller.signal.addEventListener('abort', abortRequest)
+    const timeout = window.setTimeout(abortRequest, IMAGE_STALL_MS)
     try {
-      const response = await fetch(pawchiveMediaUrl(item.stream_ref), { signal: controller.signal })
+      const response = await fetch(pawchiveMediaUrl(item.stream_ref), { signal: request.signal })
       if (response.status !== 200 || !response.headers.get('content-type')?.startsWith('image/')) continue
       const blob = await response.blob()
       if (controller.signal.aborted) return
@@ -99,6 +124,8 @@ const preloadImages = async (postKey: string, items: PawchiveAttachment[], contr
     } catch {
       if (controller.signal.aborted) return
     } finally {
+      window.clearTimeout(timeout)
+      controller.signal.removeEventListener('abort', abortRequest)
       if (!controller.signal.aborted) attempted.add(item.attachment_key)
     }
   }
@@ -188,12 +215,68 @@ const selectAttachment = (index: number) => {
   scheduleControlsAutoHide()
 }
 
-const clearTimer = () => { window.clearTimeout(imageTimer); imageTimer = undefined }
+const clearTimer = () => { window.clearTimeout(imageTimer); imageTimer = undefined; countdownKey.value = 0 }
 const scheduleImage = () => {
   clearTimer()
   if (props.autoplay && props.attachment.media_type === 'image' && imageReady.value && !document.hidden && !props.busy) {
     imageTimer = window.setTimeout(() => emit('next'), props.interval * 1000)
+    countdownKey.value = Date.now()
   }
+}
+const clearLoadTimers = () => {
+  window.clearTimeout(stallTimer)
+  window.clearTimeout(placeholderTimer)
+  window.clearTimeout(skipTimer)
+  stallTimer = placeholderTimer = skipTimer = undefined
+}
+const startLoadWatch = () => {
+  clearLoadTimers()
+  showPlaceholder.value = false
+  if (props.attachment.media_type !== 'image') return
+  // A short delay keeps the blurred thumbnail from flashing over cached images.
+  placeholderTimer = window.setTimeout(() => { showPlaceholder.value = !imageReady.value }, 150)
+  stallTimer = window.setTimeout(() => { if (!imageReady.value) void onMediaFailed() }, IMAGE_STALL_MS)
+}
+const reloadCurrentMedia = async () => {
+  const key = props.attachment.attachment_key
+  await props.reloadMedia?.().catch(() => false)
+  await nextTick()
+  if (key !== props.attachment.attachment_key) return
+  retryNonce.value++
+  if (props.attachment.media_type === 'image') {
+    setDisplayImageUrl()
+    startLoadWatch()
+  } else {
+    void startVideo()
+  }
+}
+// First failure retries with a fresh ref; a second one skips (autoplay) or waits for the user.
+const onMediaFailed = async () => {
+  const key = props.attachment.attachment_key
+  window.clearTimeout(stallTimer)
+  clearTimer()
+  if (retriedKey.value !== key) {
+    retriedKey.value = key
+    await reloadCurrentMedia()
+    return
+  }
+  loadFailed.value = true
+  const kind = props.attachment.media_type === 'video' ? '视频' : '图片'
+  if (props.autoplay && !props.ended) {
+    emit('playbackError', `${kind}加载失败，即将跳到下一项。`)
+    skipTimer = window.setTimeout(() => {
+      if (key !== props.attachment.attachment_key || !props.autoplay) return
+      emit('next')
+      emit('playbackError', `上一个${kind}加载失败，已自动跳过。`)
+    }, 2500)
+  } else {
+    emit('playbackError', `${kind}加载失败，可重试或跳到下一项。`)
+  }
+}
+const retryMedia = () => {
+  loadFailed.value = false
+  emit('playbackError', '')
+  void reloadCurrentMedia()
 }
 const startVideo = async () => {
   if (!props.autoplay || props.attachment.media_type !== 'video') return
@@ -201,11 +284,20 @@ const startVideo = async () => {
   try { await videoRef.value?.play() }
   catch { emit('playbackError', '浏览器阻止自动播放，请点击视频继续播放。') }
 }
-const onImageLoaded = () => { imageReady.value = true; scheduleImage(); preloadPostImages() }
-const onImageError = () => { clearTimer(); preloadPostImages(); emit('playbackError', '图片加载失败，可手动跳到下一项。') }
+const onImageLoaded = () => {
+  imageReady.value = true
+  loadFailed.value = false
+  clearLoadTimers()
+  scheduleImage()
+  preloadPostImages()
+}
+const onImageError = () => { preloadPostImages(); void onMediaFailed() }
 const onVideoEnded = () => { if (props.autoplay) emit('next') }
 const onVideoPaused = () => {
-  if (props.autoplay && !document.hidden && videoRef.value && !videoRef.value.ended) emit('update:autoplay', false)
+  const video = videoRef.value
+  // Reloading a source also fires `pause` before any data exists; only a user pause stops autoplay.
+  if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return
+  if (props.autoplay && !document.hidden && !video.ended) emit('update:autoplay', false)
 }
 const onVisibility = () => {
   if (document.hidden) { clearTimer(); videoRef.value?.pause() }
@@ -277,9 +369,13 @@ watch(() => props.nextPostKey, (postKey) => {
   else if (props.attachment.media_type !== 'image' || imageReady.value) preloadPostImages()
 })
 watch(() => props.attachment.attachment_key, () => {
+  retryNonce.value = 0
+  retriedKey.value = ''
+  loadFailed.value = false
   setDisplayImageUrl()
   clearTimer()
   imageReady.value = false
+  startLoadWatch()
   if (props.attachment.media_type !== 'image') preloadPostImages()
   void startVideo()
 })
@@ -287,6 +383,7 @@ watch(() => [props.post.post_key, props.attachmentIndex], scrollActiveThumbnail,
 watch(() => props.post.post_key, () => { failedPreviewKeys.value = new Set(); hoverPreviewIndex.value = -1 })
 watch(() => [props.autoplay, props.interval, props.busy], () => { scheduleImage(); void startVideo() })
 onMounted(() => {
+  startLoadWatch()
   closeRef.value?.focus()
   document.addEventListener('visibilitychange', onVisibility)
   document.addEventListener('fullscreenchange', syncFullscreen)
@@ -296,6 +393,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopPostPreload()
   clearTimer()
+  clearLoadTimers()
   clearControlsTimer()
   resetWheelGesture()
   videoRef.value?.pause()
@@ -324,11 +422,24 @@ onBeforeUnmount(() => {
       <button type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-xl border border-white/15 hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" :aria-label="isFullscreen ? '退出全屏' : '进入全屏'" :title="isFullscreen ? '退出全屏' : '进入全屏'" :aria-pressed="isFullscreen" @click="toggleFullscreen"><Minimize2 v-if="isFullscreen" :size="18" aria-hidden="true" /><Maximize2 v-else :size="18" aria-hidden="true" /></button>
     </header>
     <div class="flex-1 min-h-0 relative flex" @wheel.capture="onMediaWheel">
+      <img v-if="placeholderUrl && showPlaceholder && !imageReady && !loadFailed" :src="placeholderUrl" alt="" aria-hidden="true" draggable="false" class="pointer-events-none absolute inset-0 z-10 h-full w-full scale-105 object-contain opacity-60 blur-md" />
       <ImageViewer v-if="attachment.media_type === 'image'" :key="attachment.attachment_key" :media="{ title: attachment.filename }" :image-url="displayImageUrl" :show-controls="true" :click-only-controls="false" :controls-visible="!isFullscreen || controlsVisible" @viewer-click="onMediaSurfaceClick" @previous="emit('previous')" @next="emit('next')" @viewer-double-click="() => {}" @controls-hover="onControlsHover" @loaded="onImageLoaded" @load-error="onImageError" />
       <div v-else class="w-full h-full flex items-center justify-center bg-black">
-        <video ref="videoRef" :key="attachment.attachment_key" :src="pawchiveMediaUrl(attachment.stream_ref)" controls playsinline preload="metadata" class="w-full h-full object-contain" @click="onMediaSurfaceClick" @ended="onVideoEnded" @pause="onVideoPaused" @error="emit('playbackError', '视频无法播放，请尝试来源页面或下一项。')" />
+        <video ref="videoRef" :key="attachment.attachment_key" :src="videoUrl" controls playsinline preload="metadata" class="w-full h-full object-contain" @click="onMediaSurfaceClick" @ended="onVideoEnded" @pause="onVideoPaused" @loadeddata="loadFailed = false" @error="onMediaFailed" />
       </div>
-      <div v-if="busy" role="status" class="absolute inset-0 bg-black/65 flex items-center justify-center text-sm">正在查找下一项…</div>
+      <div v-if="loadFailed" class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black px-6 text-center">
+        <ImageOff :size="40" class="text-white/40" aria-hidden="true" />
+        <p class="text-sm text-white/75">{{ attachment.media_type === 'video' ? '视频' : '图片' }}暂时无法加载</p>
+        <div class="flex gap-2">
+          <button type="button" class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 px-4 text-sm hover:bg-white/10 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" @click="retryMedia"><RotateCw :size="15" aria-hidden="true" />重试</button>
+          <button type="button" :disabled="ended || busy" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-bold disabled:opacity-40 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white" @click="emit('next')">下一项<ArrowRight :size="15" aria-hidden="true" /></button>
+        </div>
+      </div>
+      <div v-if="busy" role="status" :class="isFullscreen && controlsVisible ? 'top-20' : 'top-4'" class="pointer-events-none absolute left-1/2 z-30 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/75 px-4 py-2 text-sm shadow-xl backdrop-blur-md">
+        <Loader2 :size="16" class="shrink-0 animate-spin text-accent" aria-hidden="true" />
+        <span class="truncate">正在查找下一篇有媒体的帖子<template v-if="skipped"> · 已跳过 {{ skipped }} 篇</template></span>
+      </div>
+      <div v-if="countdownKey" :key="countdownKey" aria-hidden="true" class="pawchive-countdown pointer-events-none absolute bottom-0 left-0 z-20 h-0.5 bg-accent/80" :style="{ animationDuration: `${interval}s` }"></div>
     </div>
     <footer :class="isFullscreen ? ['absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 via-black/65 to-transparent border-t-0', controlsVisible ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'] : ''" class="shrink-0 border-t border-white/15 px-3 sm:px-5 py-3 space-y-2 transition-[transform,opacity] duration-300" @mouseenter="onControlsHover(true)" @mouseleave="onControlsHover(false)">
       <nav v-if="attachments.length > 1" ref="thumbnailNavRef" aria-label="本帖媒体预览" class="relative border-b border-white/10 pb-2">
@@ -382,20 +493,40 @@ onBeforeUnmount(() => {
         </div>
       </nav>
       <p v-if="error" role="alert" class="text-sm text-amber-300">{{ error }}</p>
+      <p v-else-if="notice" role="status" class="text-xs text-white/60">{{ notice }}</p>
       <p v-if="downloadMessage" :role="downloadError ? 'alert' : 'status'" :class="downloadError ? 'text-red-300' : 'text-emerald-300'" class="text-sm">{{ downloadMessage }}</p>
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <p class="text-xs text-white/65">本帖可播放附件 {{ attachmentIndex + 1 }} / {{ attachmentTotal }}<span class="ml-2">· {{ attachment.filename }}</span></p>
-        <div class="flex flex-wrap items-center gap-2">
-          <button v-if="attachment.media_type !== 'image'" type="button" :disabled="downloadBusy || busy" class="min-h-11 px-3 rounded-xl border border-white/15 flex items-center gap-1 text-sm disabled:opacity-50 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" @click="emit('downloadCurrent')"><Download :size="15" />当前附件</button>
-          <button type="button" :disabled="downloadBusy" class="min-h-11 px-3 rounded-xl border border-white/15 flex items-center gap-1 text-sm disabled:opacity-50 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" @click="emit('downloadPost')">下载本帖</button>
-          <label class="text-xs text-white/70 flex items-center gap-2">图片间隔
-            <input type="number" min="1" max="300" :value="interval" class="w-16 min-h-11 rounded-lg bg-white/10 border border-white/15 px-2 text-white" @change="emit('update:interval', Math.min(300, Math.max(1, Number(($event.target as HTMLInputElement).value) || 5)))" />秒
-          </label>
-          <button type="button" class="min-h-11 px-3 rounded-xl border border-white/15 flex items-center gap-2 text-sm cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" :aria-pressed="autoplay" @click="emit('update:autoplay', !autoplay)"><Pause v-if="autoplay" :size="16" /><Play v-else :size="16" />{{ autoplay ? '暂停连播' : '自动连播' }}</button>
-          <button type="button" :disabled="!hasPrevious || busy" class="min-h-11 px-3 rounded-xl border border-white/15 flex items-center gap-1 text-sm disabled:opacity-40 cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" @click="emit('previous')"><ArrowLeft :size="16" />上一项</button>
-          <button type="button" :disabled="ended || busy" class="min-h-11 px-3 rounded-xl bg-accent flex items-center gap-1 text-sm font-bold disabled:opacity-40 cursor-pointer focus-visible:ring-2 focus-visible:ring-white" @click="emit('next')">{{ ended ? '范围末尾' : '下一项' }}<ArrowRight :size="16" /></button>
+      <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between lg:gap-3">
+        <p class="min-w-0 truncate text-xs text-white/65" :title="attachment.filename">本帖可播放附件 {{ attachmentIndex + 1 }} / {{ attachmentTotal }}<span class="ml-2">· {{ attachment.filename }}</span></p>
+        <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+          <div class="flex flex-wrap items-center gap-2">
+            <button v-if="attachment.media_type !== 'image'" type="button" :disabled="downloadBusy || busy" class="min-h-11 px-3 rounded-xl border border-white/15 flex items-center gap-1 text-sm disabled:opacity-50 cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" @click="emit('downloadCurrent')"><Download :size="15" />当前附件</button>
+            <button type="button" :disabled="downloadBusy" class="min-h-11 px-3 rounded-xl border border-white/15 flex items-center gap-1 text-sm disabled:opacity-50 cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" @click="emit('downloadPost')">下载本帖</button>
+            <label class="text-xs text-white/70 flex items-center gap-2">图片间隔
+              <input type="number" min="1" max="300" :value="interval" class="w-16 min-h-11 rounded-lg bg-white/10 border border-white/15 px-2 text-white" @change="emit('update:interval', Math.min(300, Math.max(1, Number(($event.target as HTMLInputElement).value) || 5)))" />秒
+            </label>
+          </div>
+          <div class="grid grid-cols-3 gap-2 sm:flex sm:items-center">
+            <button type="button" :disabled="!hasPrevious || busy" class="min-h-11 px-3 rounded-xl border border-white/15 flex items-center justify-center gap-1 text-sm disabled:opacity-40 cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" @click="emit('previous')"><ArrowLeft :size="16" />上一项</button>
+            <button type="button" class="min-h-11 px-3 rounded-xl border border-white/15 flex items-center justify-center gap-2 text-sm cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" :class="autoplay ? 'border-accent/60 bg-accent/15' : ''" :aria-pressed="autoplay" @click="emit('update:autoplay', !autoplay)"><Pause v-if="autoplay" :size="16" /><Play v-else :size="16" />{{ autoplay ? '暂停连播' : '自动连播' }}</button>
+            <button type="button" :disabled="ended || busy" class="min-h-11 px-3 rounded-xl bg-accent flex items-center justify-center gap-1 text-sm font-bold disabled:opacity-40 cursor-pointer focus-visible:ring-2 focus-visible:ring-white" @click="emit('next')">{{ ended ? '范围末尾' : '下一项' }}<ArrowRight :size="16" /></button>
+          </div>
         </div>
       </div>
     </footer>
   </div>
 </template>
+
+<style scoped>
+.pawchive-countdown {
+  width: 100%;
+  transform-origin: left;
+  animation-name: pawchive-countdown;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes pawchive-countdown {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+</style>
