@@ -10,7 +10,9 @@ import AppUpdateNotice from './components/AppUpdateNotice.vue'
 import GlobalAudioPlayer from './components/GlobalAudioPlayer.vue'
 import { audioPlaybackStore } from './stores/audioPlaybackStore'
 import { useCompactViewport } from './composables/useCompactViewport'
+import { useStandaloneViewport } from './composables/useStandaloneViewport'
 const compact = useCompactViewport()
+useStandaloneViewport()
 const desktopCollapsed = ref(localStorage.getItem('he_sidebar_collapsed') === 'true')
 watch(desktopCollapsed, value => localStorage.setItem('he_sidebar_collapsed', String(value)))
 const route = useRoute()

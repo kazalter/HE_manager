@@ -532,7 +532,7 @@ onBeforeUnmount(() => {
 </style>
 
 <style scoped>
-.he-pawchive-viewer { height: 100dvh; }
+.he-pawchive-viewer { height: var(--he-app-height, 100dvh); }
 .he-pawchive-viewer > header { padding-top: calc(12px + env(safe-area-inset-top)); }
 .he-pawchive-viewer > footer { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
 @media (max-width: 599px) { .he-pawchive-viewer > header { gap: 4px; } }

@@ -779,7 +779,7 @@ onUnmounted(() => preloadedImageUrls.clear())
 </template>
 
 <style scoped>
-.he-media-overlay { height: 100dvh; padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.he-media-overlay { height: var(--he-app-height, 100dvh); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
 .he-viewer-header { padding-top: calc(12px + env(safe-area-inset-top)); }
 .he-metadata-scrim { position: absolute; inset: 0; z-index: 55; background: rgba(0,0,0,.6); }
 @media (max-width: 899px) {

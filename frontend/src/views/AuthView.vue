@@ -34,7 +34,7 @@ const submit = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen w-full bg-background text-white flex items-center justify-center px-6 relative overflow-hidden">
+  <div class="he-auth-view min-h-screen w-full bg-background text-white flex items-center justify-center px-6 relative overflow-hidden">
     <!-- Apple-style Dynamic Ambient Glow -->
     <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
       <div class="glow-sphere sphere-1"></div>
