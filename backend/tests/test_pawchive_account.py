@@ -2,17 +2,36 @@ import json
 import unittest
 from unittest.mock import patch
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app import models
 from app.services.external.pawchive import account, client
 
 
 class PawchiveAccountTests(unittest.TestCase):
     def setUp(self):
+        self.engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        models.Base.metadata.create_all(bind=self.engine)
+        session_factory = sessionmaker(bind=self.engine)
+        with session_factory() as db:
+            db.add(models.User(id=42, username="owner", password_hash="unused"))
+            db.commit()
+        self.session_patch = patch.object(account, "SessionLocal", session_factory)
+        self.session_patch.start()
         with account._sessions_lock:
             account._sessions.clear()
 
     def tearDown(self):
         with account._sessions_lock:
             account._sessions.clear()
+        self.session_patch.stop()
+        self.engine.dispose()
 
     def test_login_keeps_session_per_he_user_and_returns_account_favorites(self):
         favorite = {"service": "fanbox", "id": "creator-7", "name": "Favorite author"}

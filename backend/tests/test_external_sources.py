@@ -403,7 +403,7 @@ class ExternalSourcesTest(unittest.TestCase):
 
         with (
             patch.object(external_sources.cffi_requests, "request", fake_request),
-            patch.object(external_sources, "_proxies", lambda: None),
+            patch("app.external_config.get_external_favorites_proxy", return_value=None),
             patch.object(external_sources.time, "sleep", lambda _: None),
         ):
             response = external_sources._request(
@@ -426,7 +426,7 @@ class ExternalSourcesTest(unittest.TestCase):
 
         with (
             patch.object(external_sources.cffi_requests, "request", lambda *a, **k: Response()),
-            patch.object(external_sources, "_proxies", lambda: None),
+            patch("app.external_config.get_external_favorites_proxy", return_value=None),
         ):
             with self.assertRaisesRegex(RuntimeError, "HTTP 404"):
                 external_sources._request(
@@ -446,7 +446,7 @@ class ExternalSourcesTest(unittest.TestCase):
 
         with (
             patch.object(external_sources.cffi_requests, "request", lambda *a, **k: Response()),
-            patch.object(external_sources, "_proxies", lambda: None),
+            patch("app.external_config.get_external_favorites_proxy", return_value=None),
         ):
             response = external_sources._request(
                 "https://www.wnacg.com/missing",
