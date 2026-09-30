@@ -56,7 +56,10 @@ def normalize_post(raw: dict[str, Any], *, creator_name: str | None = None, deta
             "availability": "playable" if media else "unsupported",
         })
     preview = next((a["preview_ref"] for a in attachments if a["media_type"] == "image"), None)
-    playable_count = sum(a["availability"] == "playable" for a in attachments)
+    # List entries carry the same file/attachments as details, so these counts
+    # let the viewer skip media-less posts without a detail request each.
+    image_count = sum(a["media_type"] == "image" for a in attachments)
+    video_count = sum(a["media_type"] == "video" for a in attachments)
     return {
         "post_key": key,
         "service": service,
@@ -67,7 +70,9 @@ def normalize_post(raw: dict[str, Any], *, creator_name: str | None = None, deta
         "source_url": source_url,
         "published_at": raw.get("published"),
         "reported_attachment_count": len(raw.get("attachments") or []),
-        "playable_count": playable_count if detail else None,
+        "playable_count": image_count + video_count,
+        "image_count": image_count,
+        "video_count": video_count,
         "preview_ref": preview,
         "tags": [str(tag)[:100] for tag in (raw.get("tags") or []) if isinstance(tag, str)] if detail else [],
         "attachments": attachments if detail else [],

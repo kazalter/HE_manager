@@ -34,6 +34,13 @@ Pawchive storage check requires that marker before download and again before
 the final file move, so a missing mount cannot fall back to the system disk.
 Keep `/mnt/hdd` mounted before starting downloads.
 
+Media and pagination references are HMAC-signed and valid for 12 hours. The
+signing key comes from `HE_PAWCHIVE_STREAM_SECRET` when set; otherwise the
+backend generates `pawchive_stream.key` next to the database (`/data` in
+Compose) on first start and reuses it, so restarts and redeploys do not break
+media in pages that are already open. Deleting that file invalidates open
+references once, like rotating the secret.
+
 ## Verification
 
 After `docker compose up -d --build`, check:

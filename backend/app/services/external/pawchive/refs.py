@@ -5,11 +5,47 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import os
 import secrets
 import time
 
-_secret = (os.getenv("HE_PAWCHIVE_STREAM_SECRET") or "").encode() or secrets.token_bytes(32)
+from app.external_config import CONFIG_PATH
+
+logger = logging.getLogger(__name__)
+SECRET_PATH = os.path.join(os.path.dirname(CONFIG_PATH) or ".", "pawchive_stream.key")
+# Open viewers keep refs for a whole browsing session; expiry only bounds replay
+# of already-validated, authenticated media paths.
+MEDIA_TTL = 12 * 3600
+CURSOR_TTL = 12 * 3600
+
+
+def _load_secret() -> bytes:
+    """Keep refs valid across restarts: env override, else a persisted key."""
+    configured = (os.getenv("HE_PAWCHIVE_STREAM_SECRET") or "").encode()
+    if configured:
+        return configured
+    try:
+        with open(SECRET_PATH, "rb") as handle:
+            stored = handle.read().strip()
+        if len(stored) >= 32:
+            return stored
+    except OSError:
+        pass
+    generated = secrets.token_hex(32).encode()
+    try:
+        os.makedirs(os.path.dirname(SECRET_PATH) or ".", mode=0o700, exist_ok=True)
+        temp_path = f"{SECRET_PATH}.{secrets.token_hex(4)}.tmp"
+        descriptor = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(generated)
+        os.replace(temp_path, SECRET_PATH)
+    except OSError:
+        logger.warning("Pawchive stream key not persisted; refs reset on restart", exc_info=True)
+    return generated
+
+
+_secret = _load_secret()
 
 
 def _encode(payload: dict) -> str:
@@ -34,7 +70,7 @@ def _decode(token: str) -> dict:
 
 
 def sign_media(path: str, kind: str) -> str:
-    return _encode({"kind": kind, "path": path, "exp": int(time.time()) + 3600})
+    return _encode({"kind": kind, "path": path, "exp": int(time.time()) + MEDIA_TTL})
 
 
 def read_media(token: str) -> tuple[str, str]:
@@ -45,7 +81,7 @@ def read_media(token: str) -> tuple[str, str]:
 
 
 def sign_cursor(offset: int, scope_key: str) -> str:
-    return _encode({"offset": offset, "scope": scope_key, "exp": int(time.time()) + 7200})
+    return _encode({"offset": offset, "scope": scope_key, "exp": int(time.time()) + CURSOR_TTL})
 
 
 def read_cursor(token: str, scope_key: str) -> int:

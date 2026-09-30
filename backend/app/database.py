@@ -59,6 +59,7 @@ def secure_data_permissions(database_url: str | None = None) -> None:
             f"{db_path}-wal",
             f"{db_path}-shm",
             os.path.join(data_dir, "external_config.json"),
+            os.path.join(data_dir, "pawchive_stream.key"),
             os.getenv("HE_AI_CONFIG_PATH", os.path.join(data_dir, "deepseek.json")),
         }
         for path in sensitive_paths:

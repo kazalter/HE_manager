@@ -29,6 +29,8 @@ services:
       HE_PAWCHIVE_PROXY: "${HE_PAWCHIVE_PROXY:-}"
       HE_PAWCHIVE_DOWNLOAD_ROOT: "${HE_PAWCHIVE_DOWNLOAD_ROOT:-}"
       HE_PAWCHIVE_STORAGE_SENTINEL: "${HE_PAWCHIVE_STORAGE_SENTINEL:-}"
+      # Media/cursor signing key; blank keeps an auto-generated key in /data.
+      HE_PAWCHIVE_STREAM_SECRET: "${HE_PAWCHIVE_STREAM_SECRET:-}"
       HE_AI_CONFIG_PATH: "/data/deepseek.json"
       HF_HOME: "/data/huggingface"
       SENTENCE_TRANSFORMERS_HOME: "/data/huggingface"
