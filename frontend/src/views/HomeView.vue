@@ -721,8 +721,10 @@ onMounted(async () => {
         <button v-if="compact" type="button" class="min-h-12 w-full rounded-xl bg-accent text-white text-base font-bold" @click="filtersExpanded = false">查看 {{ totalItems.toLocaleString() }} 项媒体</button>
       </div>
       </Teleport>
-      <nav v-if="compact" aria-label="媒体分类" class="he-media-categories flex gap-2 overflow-x-auto mt-4 pb-1">
+      <nav v-if="compact" aria-label="媒体分类" class="he-media-categories overflow-x-auto mt-4 pb-1">
+        <div class="flex gap-2 w-max min-w-full justify-center">
         <router-link v-for="category in mobileCategories" :key="category.path" :to="{ path: category.path, query: { ...route.query, page: undefined, media: undefined } }" :aria-current="route.path === category.path ? 'page' : undefined" class="shrink-0 min-h-11 px-4 rounded-xl flex items-center text-sm font-semibold border" :class="route.path === category.path ? 'bg-accent/20 border-accent/40 text-white' : 'bg-white/5 border-white/10 text-white/70'">{{ category.label }}</router-link>
+        </div>
       </nav>
     </header>
 
@@ -911,6 +913,7 @@ onMounted(async () => {
     margin-bottom: 20px;
   }
 
+  .he-media-categories a { padding-inline: 14px; }
   .he-home-search { flex: 1 0 100%; gap: 8px; }
   .he-home-search input { font-size: 16px; min-height: 44px; }
   .he-home-search button { min-width: 44px; min-height: 44px; }
