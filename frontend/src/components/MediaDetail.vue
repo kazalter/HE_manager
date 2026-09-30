@@ -7,7 +7,6 @@ import type { Media } from '../types'
 import { audioPlaybackStore } from '../stores/audioPlaybackStore'
 import { useCompactViewport } from '../composables/useCompactViewport'
 const compact = useCompactViewport()
-import ImageViewer from './media-detail/ImageViewer.vue'
 import MangaReader from './media-detail/MangaReader.vue'
 import MetadataPanel from './media-detail/MetadataPanel.vue'
 import VideoPlayer from './media-detail/VideoPlayer.vue'
@@ -48,7 +47,6 @@ const showToast = (msg: string) => {
   setTimeout(() => { toastMessage.value = '' }, 3000)
 }
 
-const imageUrl = computed(() => authUrl(`${API_BASE_URL}/stream/${currentMedia.value.id}`))
 const videoUrl = computed(() => authUrl(`${STREAM_URL}/${currentMedia.value.id}`))
 const coverUrl = computed(() => thumbnailUrl(currentMedia.value.cover_path))
 const isImage = computed(() => currentMedia.value.media_type === 'image')
@@ -281,48 +279,71 @@ const {
 })
 
 
-const preloadedImageUrls = new Set<string>()
-
-const preloadAdjacentImages = () => {
-  if (!isImage.value || currentIndex.value === -1 || !props.allMedia.length) return
-
-  const targets = [
-    currentIndex.value + 1,
-    currentIndex.value + 2,
-    currentIndex.value - 1,
-  ]
-
-  for (const idx of targets) {
-    if (idx >= 0 && idx < props.allMedia.length) {
-      const item = props.allMedia[idx]
-      if (item && item.media_type === 'image') {
-        const streamUrl = authUrl(`${API_BASE_URL}/stream/${item.id}`)
-        if (!preloadedImageUrls.has(streamUrl)) {
-          preloadedImageUrls.add(streamUrl)
-          if (typeof Image !== 'undefined') {
-            const img = new Image()
-            img.src = streamUrl
-          }
-        }
-      }
-    }
-  }
-
-  if (preloadedImageUrls.size > 50) {
-    const list = Array.from(preloadedImageUrls)
-    preloadedImageUrls.clear()
-    for (const url of list.slice(-25)) {
-      preloadedImageUrls.add(url)
-    }
-  }
+const reader = ref<InstanceType<typeof MangaReader> | null>(null)
+const imagePages = computed(() => {
+  const images = props.allMedia.filter(item => item.media_type === 'image' && !item.is_missing)
+  return images.some(item => item.id === currentMedia.value.id) ? images : [currentMedia.value, ...images]
+})
+const imagePage = computed(() => Math.max(0, imagePages.value.findIndex(item => item.id === currentMedia.value.id)))
+const imageDimensions = computed(() => imagePages.value.map(item => item.width && item.height ? [item.width, item.height] as [number, number] : null))
+const selectImagePage = (page: number) => {
+  const target = imagePages.value[page]
+  if (!target || target.id === currentMedia.value.id) return
+  currentMedia.value = target
+  emit('navigate', target)
 }
+const setReaderPage = (page: number) => {
+  if (isImage.value) selectImagePage(page)
+  else currentPage.value = page
+}
+let imageBatchPromise: Promise<void> | null = null
+let imageBatchDirection: -1 | 1 = 1
+let viewerDisposed = false
+onUnmounted(() => { viewerDisposed = true })
+const loadImageBatch = async (direction: -1 | 1, navigate = false) => {
+  if (!props.loadAdjacentMediaPage || viewerDisposed) return
+  const originalId = currentMedia.value.id
+  const originalLength = imagePages.value.length
+  if (imageBatchPromise && imageBatchDirection !== direction) {
+    const previous = imageBatchPromise
+    await previous
+    if (viewerDisposed || currentMedia.value.id !== originalId) return
+    if (imageBatchPromise === previous) imageBatchPromise = null
+    return loadImageBatch(direction, navigate)
+  }
+  const step = direction > 0
+    ? Math.min(reader.value?.stepSize ?? 1, originalLength - imagePage.value)
+    : reader.value?.stepSize ?? 1
+  if (!imageBatchPromise) {
+    imageBatchDirection = direction
+    imageBatchPromise = (async () => {
+      // Bound speculative list requests when a mixed list contains few images.
+      for (let attempt = 0; attempt < 3 && !viewerDisposed && props.hasAdjacentMediaPage?.(direction); attempt++) {
+        if (!await props.loadAdjacentMediaPage!(direction)) {
+          if (!viewerDisposed && props.hasAdjacentMediaPage?.(direction)) showToast('图片列表加载失败，请重试')
+          break
+        }
+        if (imagePages.value.length > originalLength) break
+      }
+    })()
+  }
+  const pending = imageBatchPromise
+  try {
+    await pending
+    if (!viewerDisposed && navigate && currentMedia.value.id === originalId) selectImagePage(imagePage.value + direction * step)
+  } finally { if (imageBatchPromise === pending) imageBatchPromise = null }
+}
+watch(() => [isImage.value, imagePage.value], () => {
+  if (isImage.value && imagePages.value.length - imagePage.value <= 4 && props.hasAdjacentMediaPage?.(1)) {
+    void loadImageBatch(1)
+  }
+}, { immediate: true })
 
 watch(
   () => [currentMedia.value.id, currentMedia.value.media_type] as const,
   async () => {
     const media = currentMedia.value
     currentPage.value = media.media_type === 'manga' ? Math.max(0, media.progress || 0) : 0
-    if (media.media_type === 'image') preloadAdjacentImages()
     if (media.media_type !== 'manga') return
     totalMangaPages.value = null
     mangaPageDimensions.value = []
@@ -366,11 +387,6 @@ const nextPage = () => {
     const max = totalMangaPages.value === null ? Number.MAX_SAFE_INTEGER : totalMangaPages.value - 1
     currentPage.value = Math.min(max, currentPage.value + step)
   }
-}
-
-const prevPage = () => {
-  const step = localStorage.getItem(compact.value ? 'he_manga_read_mode_mobile' : 'he_manga_read_mode') === 'double' ? 2 : 1
-  if (currentPage.value > 0) currentPage.value = Math.max(0, currentPage.value - step)
 }
 
 const AUTO_ADVANCE_SECONDS_KEY = 'he_auto_advance_seconds'
@@ -430,9 +446,15 @@ const advanceAutomatically = async () => {
     if (isNavigatingMedia.value) return
     isNavigatingMedia.value = true
     try {
+      const step = reader.value?.stepSize ?? 1
       let nextIndex = nextImageIndex.value
+      const nextSpread = imagePages.value[imagePage.value + step]
+      if (nextSpread) nextIndex = props.allMedia.findIndex(item => item.id === nextSpread.id)
       while (nextIndex === -1 && props.hasAdjacentMediaPage?.(1) && props.loadAdjacentMediaPage) {
-        if (!await props.loadAdjacentMediaPage(1)) {
+        const previousLength = props.allMedia.length
+        await loadImageBatch(1)
+        if (viewerDisposed) return
+        if (props.allMedia.length === previousLength) {
           if (props.hasAdjacentMediaPage(1)) showToast('后续图片加载失败，自动播放已暂停')
           break
         }
@@ -505,7 +527,7 @@ const handleKeydown = (e: KeyboardEvent) => {
 
   if (e.key === 'ArrowRight') {
     if (isManga.value) {
-      nextPage()
+      reader.value?.nextPage()
       e.preventDefault()
       e.stopImmediatePropagation()
     } else if (isVideo.value && progressVideoElement.value) {
@@ -513,7 +535,8 @@ const handleKeydown = (e: KeyboardEvent) => {
       e.stopImmediatePropagation()
       if (!e.repeat) beginVideoLongPress('forward')
     } else {
-      nextMedia()
+      if (isImage.value) reader.value?.nextPage()
+      else nextMedia()
       e.preventDefault()
       e.stopImmediatePropagation()
     }
@@ -521,7 +544,7 @@ const handleKeydown = (e: KeyboardEvent) => {
 
   if (e.key === 'ArrowLeft') {
     if (isManga.value) {
-      prevPage()
+      reader.value?.previousPage()
       e.preventDefault()
       e.stopImmediatePropagation()
     } else if (isVideo.value && progressVideoElement.value) {
@@ -529,7 +552,8 @@ const handleKeydown = (e: KeyboardEvent) => {
       e.stopImmediatePropagation()
       if (!e.repeat) beginVideoLongPress('rewind')
     } else {
-      prevMedia()
+      if (isImage.value) reader.value?.previousPage()
+      else prevMedia()
       e.preventDefault()
       e.stopImmediatePropagation()
     }
@@ -569,7 +593,6 @@ const handleWindowBlur = () => {
 }
 
 useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
-onUnmounted(() => preloadedImageUrls.clear())
 
 </script>
 
@@ -671,6 +694,8 @@ onUnmounted(() => preloadedImageUrls.clear())
             <span>正在加载媒体…</span>
           </div>
 
+          <div v-if="toastMessage && !currentMedia.is_missing" role="status" class="absolute bottom-44 left-1/2 z-[120] -translate-x-1/2 rounded-xl border border-white/15 bg-black/90 px-4 py-3 text-sm text-white shadow-xl">{{ toastMessage }}</div>
+
           <div v-if="currentMedia.is_missing" class="absolute inset-0 z-[100] bg-black/85 flex flex-col items-center justify-center p-8 backdrop-blur-md">
             <div class="bg-red-500/10 border border-red-500/20 rounded-3xl p-8 max-w-md w-full text-center shadow-2xl">
               <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-5 shadow-inner shadow-red-500/20">
@@ -699,28 +724,23 @@ onUnmounted(() => preloadedImageUrls.clear())
           <VideoPlayer v-else-if="isVideo" :cover-url="coverUrl" @ready="setArtContainer" />
 
           <MangaReader
-            v-else-if="isManga"
-            v-model:current-page="currentPage"
+            v-else-if="isManga || isImage"
+            ref="reader"
+            :key="isImage ? 'images' : `manga-${currentMedia.id}`"
+            :current-page="isImage ? imagePage : currentPage"
             :media="currentMedia"
-            :total-pages="totalMangaPages"
-            :page-dimensions="mangaPageDimensions"
+            :image-pages="isImage ? imagePages : undefined"
+            :has-next-batch="isImage && !!hasAdjacentMediaPage?.(1)"
+            :has-previous-batch="isImage && !!hasAdjacentMediaPage?.(-1)"
+            :total-pages="isImage ? imagePages.length : totalMangaPages"
+            :page-dimensions="isImage ? imageDimensions : mangaPageDimensions"
             :show-controls="showControls"
             :click-only-controls="clickOnlyViewerControls"
-            :progress-text="mangaProgressText"
-            :progress-percent="mangaProgressPercent"
-            @viewer-click="handleViewerClick"
-            @viewer-double-click="handleViewerDoubleClick"
-            @controls-hover="setControlsHover"
-          />
-
-          <ImageViewer
-            v-else
-            :media="currentMedia"
-            :image-url="imageUrl"
-            :show-controls="showControls"
-            :click-only-controls="clickOnlyViewerControls"
-            @previous="prevMedia"
-            @next="nextMedia"
+            :progress-text="isImage ? `${imagePage + 1} / ${imagePages.length}` : mangaProgressText"
+            :progress-percent="isImage ? Math.round((imagePage + 1) / imagePages.length * 100) : mangaProgressPercent"
+            @update:current-page="setReaderPage"
+            @boundary="loadImageBatch($event, true)"
+            @load-more="loadImageBatch(1)"
             @viewer-click="handleViewerClick"
             @viewer-double-click="handleViewerDoubleClick"
             @controls-hover="setControlsHover"
@@ -757,9 +777,9 @@ onUnmounted(() => preloadedImageUrls.clear())
           </div>
         </section>
 
-        <button v-if="compact && showMetadataPanel" type="button" class="he-metadata-scrim" aria-label="关闭媒体信息背景" tabindex="-1" @click="toggleMetadataPanel"></button>
+        <button v-if="compact && showMetadataPanel && showControls" type="button" class="he-metadata-scrim" aria-label="关闭媒体信息背景" tabindex="-1" @click="toggleMetadataPanel"></button>
         <MetadataPanel
-          v-if="!isFullscreen && showMetadataPanel"
+          v-if="!isFullscreen && showMetadataPanel && (showControls || (!isManga && !isImage))"
           :media="currentMedia"
           :cover-url="coverUrl"
           :media-type-label="mediaTypeLabel"

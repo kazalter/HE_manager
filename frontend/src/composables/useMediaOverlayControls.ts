@@ -9,7 +9,7 @@ export function useMediaOverlayControls(
   let immersiveFallback = false
   const showControls = ref(true)
   const isHoveringControls = ref(false)
-  const clickOnlyControls = computed(() => isManga.value || (isFullscreen.value && isImage.value))
+  const clickOnlyControls = computed(() => isManga.value || isImage.value)
   let controlTimer: number | undefined
   let viewerClickTimer: number | undefined
 
@@ -95,7 +95,7 @@ export function useMediaOverlayControls(
 
   const onMouseMove = () => {
     if (clickOnlyControls.value) {
-      // In fullscreen mode: moving mouse while controls are open keeps them visible
+      // Moving the pointer extends visible controls, but never reveals hidden reader UI.
       if (showControls.value && !isHoveringControls.value) {
         startAutoHideTimer(3500)
       }

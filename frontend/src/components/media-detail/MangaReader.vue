@@ -16,11 +16,15 @@ import {
 import { API_BASE_URL, authUrl } from '../../config'
 import type { Media } from '../../types'
 import { useImageViewerZoom } from '../../composables/useImageViewerZoom'
+import { useReaderImageBuffer } from '../../composables/useReaderImageBuffer'
 
 export type MangaReadMode = 'single' | 'double' | 'webtoon'
 
 const props = defineProps<{
   media: Media
+  imagePages?: Media[]
+  hasNextBatch?: boolean
+  hasPreviousBatch?: boolean
   currentPage: number
   totalPages: number | null
   pageDimensions: Array<[number, number] | null>
@@ -35,13 +39,16 @@ const emit = defineEmits<{
   viewerClick: []
   viewerDoubleClick: []
   controlsHover: [hovering: boolean]
+  boundary: [direction: -1 | 1]
+  loadMore: []
 }>()
 
 const mobileReader = window.innerWidth < 900
-const modeKey = mobileReader ? 'he_manga_read_mode_mobile' : 'he_manga_read_mode'
+const preferencePrefix = props.imagePages ? 'he_image' : 'he_manga'
+const modeKey = `${preferencePrefix}_read_mode${mobileReader ? '_mobile' : ''}`
 const savedMode = localStorage.getItem(modeKey)
 const readMode = ref<MangaReadMode>(savedMode === 'single' || savedMode === 'double' || savedMode === 'webtoon' ? savedMode : mobileReader ? 'webtoon' : 'single')
-const isRtl = ref(localStorage.getItem('he_manga_rtl') === 'true')
+const isRtl = ref(localStorage.getItem(`${preferencePrefix}_rtl`) === 'true')
 const showShortcutGuide = ref(false)
 
 const stripKey = mobileReader ? 'he_manga_strip_collapsed_mobile' : 'he_manga_strip_collapsed'
@@ -50,7 +57,7 @@ const toggleStripCollapsed = () => {
   isStripCollapsed.value = !isStripCollapsed.value
   localStorage.setItem(stripKey, String(isStripCollapsed.value))
 }
-const isStripOpen = computed(() => (props.showControls || !props.clickOnlyControls) && !isStripCollapsed.value)
+const isStripOpen = computed(() => !props.imagePages && (props.showControls || !props.clickOnlyControls) && !isStripCollapsed.value)
 
 const thumbStripRef = ref<HTMLDivElement | null>(null)
 const imageContainerRef = ref<HTMLDivElement | null>(null)
@@ -100,7 +107,9 @@ const WHEEL_INTERVAL_MS = 320
 
 const stepSize = computed(() => (readMode.value === 'double' ? 2 : 1))
 
-const pageUrlFor = (page: number) => authUrl(`${API_BASE_URL}/manga/${props.media.id}/page/${page}`)
+const pageUrlFor = (page: number) => props.imagePages
+  ? authUrl(`${API_BASE_URL}/stream/${props.imagePages[page]?.id}`)
+  : authUrl(`${API_BASE_URL}/manga/${props.media.id}/page/${page}`)
 const pageUrl = computed(() => pageUrlFor(props.currentPage))
 const secondPageUrl = computed(() => {
   if (readMode.value !== 'double') return null
@@ -121,6 +130,7 @@ const setPage = (page: number) => {
 }
 
 const previousPage = () => {
+  if (props.currentPage === 0 && props.hasPreviousBatch) { emit('boundary', -1); return }
   if (readMode.value === 'webtoon') {
     if (webtoonContainerRef.value) {
       webtoonContainerRef.value.scrollBy({ top: -window.innerHeight * 0.7, behavior: 'smooth' })
@@ -131,6 +141,7 @@ const previousPage = () => {
 }
 
 const nextPage = () => {
+  if (props.totalPages && props.currentPage + stepSize.value >= props.totalPages && props.hasNextBatch) { emit('boundary', 1); return }
   if (readMode.value === 'webtoon') {
     if (webtoonContainerRef.value) {
       webtoonContainerRef.value.scrollBy({ top: window.innerHeight * 0.7, behavior: 'smooth' })
@@ -156,7 +167,7 @@ const setReadMode = (mode: MangaReadMode) => {
 
 const toggleRtl = () => {
   isRtl.value = !isRtl.value
-  localStorage.setItem('he_manga_rtl', String(isRtl.value))
+  localStorage.setItem(`${preferencePrefix}_rtl`, String(isRtl.value))
 }
 
 const toggleShortcutGuide = () => {
@@ -386,47 +397,66 @@ const onViewerClick = () => {
   emit('viewerClick')
 }
 
-const preloadedMangaPages = new Set<string>()
-
-const preloadAdjacentMangaPages = (page: number) => {
-  if (readMode.value === 'webtoon') return
-  const max = props.totalPages || 99999
-  const ahead = [page + 1, page + 2, page + 3]
-  for (const p of ahead) {
-    if (p < max) {
-      const url = pageUrlFor(p)
-      if (!preloadedMangaPages.has(url)) {
-        preloadedMangaPages.add(url)
-        if (typeof Image !== 'undefined') {
-          const img = new Image()
-          img.src = url
-        }
+// Compensate once per render when decoded dimensions above the viewport change.
+let pendingAnchor: { container: HTMLDivElement; element: HTMLElement; top: number } | null = null
+const imageBuffer = useReaderImageBuffer(update => {
+  const container = webtoonContainerRef.value
+  const element = container?.children[props.currentPage] as HTMLElement | undefined
+  const anchor = !pendingAnchor && container && element && container.scrollTop > 0
+    ? { container, element, top: element.offsetTop } : null
+  if (anchor) pendingAnchor = anchor
+  update()
+  if (anchor) {
+    void nextTick(() => {
+      if (webtoonContainerRef.value === anchor.container && anchor.element.isConnected) {
+        anchor.container.scrollTop += anchor.element.offsetTop - anchor.top
       }
-    }
+      pendingAnchor = null
+    })
   }
+})
+const pageDimensionsFor = (page: number): [number, number] => {
+  const dimensions = props.pageDimensions[page]
+  if (dimensions?.[0] && dimensions?.[1]) return dimensions
+  const state = imageBuffer.states.get(pageUrlFor(page))
+  return state?.width && state.height ? [state.width, state.height] : [2, 3]
 }
+const pageReady = (page: number) => imageBuffer.states.get(pageUrlFor(page))?.status === 'ready'
+const pageFailed = (page: number) => imageBuffer.states.get(pageUrlFor(page))?.status === 'error'
+const preloadAdjacentPages = () => {
+  if (!props.totalPages) return
+  const page = props.currentPage
+  // Six pages ahead, two behind; prioritize the visible spread before speculation.
+  const indices = [page, page + 1, page + 2, page - 1, page + 3, page + 4, page - 2, page + 5, page + 6]
+  imageBuffer.requestWindow(indices.filter(p => p >= 0 && p < props.totalPages!).map(pageUrlFor))
+}
+watch(() => [props.totalPages, readMode.value, props.imagePages?.map(item => item.id).join(',')], preloadAdjacentPages)
+watch(() => props.showControls, visible => { if (!visible) showShortcutGuide.value = false })
+defineExpose({ nextPage, previousPage, stepSize })
 
 watch(() => props.currentPage, page => {
   if (readMode.value !== 'webtoon') {
     resetZoom()
   } else if (page === scrollReportedPage) {
     scrollReportedPage = null
-  } else if (!isProgrammaticScroll) {
+  } else {
     scrollReportedPage = null
-    scrollWebtoonToPage(page)
+    void nextTick(() => scrollWebtoonToPage(page))
   }
   scrollToPage(page)
-  preloadAdjacentMangaPages(page)
+  preloadAdjacentPages()
 }, { immediate: true })
-watch(() => props.totalPages, total => {
+watch(() => props.totalPages, (total, previousTotal) => {
   if (!total) return
   scrollToPage(props.currentPage, false)
-  if (readMode.value === 'webtoon') {
+  if (readMode.value === 'webtoon' && !previousTotal) {
     void nextTick(() => scrollWebtoonToPage(props.currentPage))
   }
 })
 watch(() => props.media.id, () => {
-  preloadedMangaPages.clear()
+  if (props.imagePages) return
+  imageBuffer.clear()
+  preloadAdjacentPages()
   scrollReportedPage = null
   hoverThumbIndex.value = -1
   thumbStripScroll.value = 0
@@ -448,7 +478,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  preloadedMangaPages.clear()
+  imageBuffer.dispose()
   window.removeEventListener('mousemove', onDragMove)
   window.removeEventListener('mouseup', onDragEnd)
   window.removeEventListener('resize', updateStripWidth)
@@ -483,7 +513,7 @@ onBeforeUnmount(() => {
             ? 'opacity-0 -translate-x-6 pointer-events-none'
             : 'opacity-0 -translate-x-6 hover:opacity-100 hover:translate-x-0'"
         class="absolute left-5 z-20 w-14 h-14 rounded-2xl bg-black/45 backdrop-blur-md text-white/55 hover:text-white hover:bg-black/70 transition-all duration-300 cursor-pointer"
-        title="上一页"
+        title="上一页" :tabindex="showControls ? 0 : -1"
       >
         <ChevronLeft :size="34" class="mx-auto" />
       </button>
@@ -492,25 +522,35 @@ onBeforeUnmount(() => {
       <div
         v-if="readMode === 'webtoon'"
         ref="webtoonContainerRef"
+        style="overflow-anchor: none"
         class="w-full h-full overflow-y-auto custom-scrollbar flex flex-col items-center py-6 px-2 select-none"
         @scroll="onWebtoonScroll"
       >
         <div
           v-for="pageIndex in totalPagesList"
-          :key="pageIndex"
+          :key="imagePages?.[pageIndex]?.id ?? pageIndex"
           :id="`webtoon-page-${pageIndex}`"
-          class="w-full max-w-[840px] flex flex-col items-center my-1 relative group"
+          class="he-reader-page w-full max-w-[840px] shrink-0 my-1 relative group bg-neutral-900"
+          :style="{ aspectRatio: `${pageDimensionsFor(pageIndex)[0]} / ${pageDimensionsFor(pageIndex)[1]}` }"
         >
           <img
+            v-if="pageReady(pageIndex)"
             :src="pageUrlFor(pageIndex)"
-            :width="pageDimensions[pageIndex]?.[0] || 2"
-            :height="pageDimensions[pageIndex]?.[1] || 3"
-            loading="lazy"
-            decoding="async"
-            class="w-full h-auto object-contain block shadow-2xl rounded-sm bg-neutral-900"
-            :alt="`第 ${pageIndex + 1} 页`"
+            :width="pageDimensionsFor(pageIndex)[0]"
+            :height="pageDimensionsFor(pageIndex)[1]"
+            loading="eager"
+            decoding="sync"
+            class="w-full h-full object-contain block rounded-sm"
+            :alt="imagePages?.[pageIndex]?.title || `第 ${pageIndex + 1} 页`"
           />
-          <div class="absolute top-2 right-2 bg-black/75 backdrop-blur-md text-white/70 text-[11px] font-mono px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          <div v-else class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-sm text-white/50" role="status">
+            <template v-if="pageFailed(pageIndex)">
+              <span>图片加载失败</span>
+              <button type="button" class="min-h-11 px-4 rounded-xl bg-white/10 text-white" @click.stop="imageBuffer.retry(pageUrlFor(pageIndex))">重新加载</button>
+            </template>
+            <span v-else>正在加载第 {{ pageIndex + 1 }} {{ imagePages ? '张' : '页' }}…</span>
+          </div>
+          <div v-if="showControls" class="absolute top-2 right-2 bg-black/75 backdrop-blur-md text-white/70 text-[11px] font-mono px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
             {{ pageIndex + 1 }} / {{ totalPages }}
           </div>
         </div>
@@ -537,7 +577,7 @@ onBeforeUnmount(() => {
         >
           <img
             :src="pageUrl"
-            class="h-full w-full object-contain pointer-events-none transition-opacity duration-300"
+            class="h-full w-full object-contain pointer-events-none"
             :alt="media.title"
           />
         </div>
@@ -555,25 +595,25 @@ onBeforeUnmount(() => {
             <img
               v-if="secondPageUrl"
               :src="secondPageUrl"
-              class="h-full max-w-[50%] object-contain pointer-events-none transition-opacity duration-300 shadow-xl"
+              class="h-full max-w-[50%] object-contain pointer-events-none shadow-xl"
               :alt="`第 ${currentPage + 2} 页`"
             />
             <img
               :src="pageUrl"
-              class="h-full max-w-[50%] object-contain pointer-events-none transition-opacity duration-300 shadow-xl"
+              class="h-full max-w-[50%] object-contain pointer-events-none shadow-xl"
               :alt="`第 ${currentPage + 1} 页`"
             />
           </template>
           <template v-else>
             <img
               :src="pageUrl"
-              class="h-full max-w-[50%] object-contain pointer-events-none transition-opacity duration-300 shadow-xl"
+              class="h-full max-w-[50%] object-contain pointer-events-none shadow-xl"
               :alt="`第 ${currentPage + 1} 页`"
             />
             <img
               v-if="secondPageUrl"
               :src="secondPageUrl"
-              class="h-full max-w-[50%] object-contain pointer-events-none transition-opacity duration-300 shadow-xl"
+              class="h-full max-w-[50%] object-contain pointer-events-none shadow-xl"
               :alt="`第 ${currentPage + 2} 页`"
             />
           </template>
@@ -591,7 +631,7 @@ onBeforeUnmount(() => {
             ? 'opacity-0 translate-x-6 pointer-events-none'
             : 'opacity-0 translate-x-6 hover:opacity-100 hover:translate-x-0'"
         class="absolute right-5 z-20 w-14 h-14 rounded-2xl bg-black/45 backdrop-blur-md text-white/55 hover:text-white hover:bg-black/70 transition-all duration-300 cursor-pointer"
-        title="下一页"
+        title="下一页" :tabindex="showControls ? 0 : -1"
       >
         <ChevronRight :size="34" class="mx-auto" />
       </button>
@@ -599,6 +639,7 @@ onBeforeUnmount(() => {
       <!-- Bottom Floating Control Pill (Slider + Mode Switcher + Shortcuts) -->
       <div
         :class="showControls || !clickOnlyControls ? 'opacity-100' : 'opacity-0 pointer-events-none'"
+        :inert="!showControls && clickOnlyControls"
         class="he-manga-controls absolute left-1/2 z-20 w-[min(620px,calc(100%-2rem))] rounded-2xl bg-black/75 backdrop-blur-xl border border-white/12 p-3 sm:px-4 sm:py-3 shadow-2xl transition-[transform,opacity] duration-250 ease-out flex flex-col gap-2.5 select-none"
         :style="{
           bottom: 'calc(12px + env(safe-area-inset-bottom))',
@@ -617,7 +658,7 @@ onBeforeUnmount(() => {
               @click="setReadMode('single')"
               class="flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all font-medium cursor-pointer"
               :class="readMode === 'single' ? 'bg-accent text-white shadow-md font-bold' : 'hover:text-white hover:bg-white/5'"
-              title="单页模式"
+              title="单页模式" :aria-pressed="readMode === 'single'"
             >
               <Square :size="13" />
               <span>单页</span>
@@ -627,7 +668,7 @@ onBeforeUnmount(() => {
               @click="setReadMode('double')"
               class="flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all font-medium cursor-pointer"
               :class="readMode === 'double' ? 'bg-accent text-white shadow-md font-bold' : 'hover:text-white hover:bg-white/5'"
-              title="双页跨页模式"
+              title="双页跨页模式" :aria-pressed="readMode === 'double'"
             >
               <Columns2 :size="13" />
               <span>双页</span>
@@ -637,7 +678,7 @@ onBeforeUnmount(() => {
               @click="setReadMode('webtoon')"
               class="flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all font-medium cursor-pointer"
               :class="readMode === 'webtoon' ? 'bg-accent text-white shadow-md font-bold' : 'hover:text-white hover:bg-white/5'"
-              title="连续卷轴模式 (条漫)"
+              title="连续卷轴模式 (条漫)" :aria-pressed="readMode === 'webtoon'"
             >
               <ScrollText :size="13" />
               <span>卷轴</span>
@@ -654,6 +695,8 @@ onBeforeUnmount(() => {
           >
             {{ isRtl ? '日漫 RTL' : '标准 LTR' }}
           </button>
+
+          <button v-if="imagePages && hasNextBatch" type="button" title="加载后续图片" class="px-2 min-h-11 rounded-lg bg-white/8 text-white/80" @click="emit('loadMore')">更多图片</button>
 
           <!-- Middle Page info -->
           <div class="flex items-center gap-2 font-mono tracking-wider ml-auto text-white/70">
@@ -674,7 +717,7 @@ onBeforeUnmount(() => {
 
           <!-- Toggle Thumbnail Strip Button -->
           <button
-            v-if="totalPages && totalPages > 0"
+            v-if="!imagePages && totalPages && totalPages > 0"
             type="button"
             @click="toggleStripCollapsed"
             class="h-7 px-2 rounded-lg flex items-center gap-1.5 text-xs text-white/60 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
@@ -747,13 +790,14 @@ onBeforeUnmount(() => {
       <!-- Zoom Controls Floating Pill (Single / Double Mode) -->
       <div
         v-if="readMode !== 'webtoon'"
-        :class="showControls || isZoomed
+        :class="showControls
           ? 'opacity-100'
           : 'opacity-0 pointer-events-none'"
+        :inert="!showControls"
         class="he-manga-zoom absolute right-6 z-20 flex items-center gap-1 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 px-2 py-1.5 shadow-2xl transition-[transform,opacity] duration-250 ease-out select-none text-white/80"
         :style="{
           bottom: 'calc(12px + env(safe-area-inset-bottom))',
-          transform: `translate3d(0, ${isStripOpen ? '-184px' : (showControls || isZoomed ? '0px' : '12px')}, 0)`,
+          transform: `translate3d(0, ${isStripOpen ? '-184px' : (showControls ? '0px' : '12px')}, 0)`,
         }"
         style="will-change: transform, opacity;"
         @click.stop
@@ -800,10 +844,11 @@ onBeforeUnmount(() => {
 
     <!-- Bottom Thumbnail Strip Bar -->
     <div
-      v-if="totalPages && totalPages > 0"
+      v-if="!imagePages && totalPages && totalPages > 0"
       :class="isStripOpen
         ? 'translate-y-0 opacity-100'
         : 'translate-y-full opacity-0 pointer-events-none'"
+      :inert="!isStripOpen"
       class="he-manga-strip absolute bottom-0 inset-x-0 z-30 border-t border-white/10 bg-[#0c0c0e]/95 backdrop-blur-2xl transition-[transform,opacity] duration-250 ease-out flex flex-col shadow-2xl select-none"
       style="will-change: transform, opacity;"
       @click.stop
