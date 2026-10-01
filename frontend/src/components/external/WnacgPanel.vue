@@ -39,6 +39,7 @@ const {
   loading,
   error: favoritesError,
   totalPages,
+  pageSize: favoritesPageSize,
   fetchItems,
   setPage: setFavoritesPage,
 } = useExternalFavoritesPage({
@@ -512,7 +513,7 @@ watch(favoritesError, message => {
               :page="currentPage"
               :page-count="totalPages"
               :total-items="totalItems"
-              :page-size="pageLimit"
+              :page-size="favoritesPageSize"
               :disabled="loading"
               item-label="条收藏"
               @change="goToPage"

@@ -133,6 +133,7 @@ const {
   loading,
   error: favoritesError,
   totalPages,
+  pageSize: favoritesPageSize,
   pageStart,
   pageEnd,
   fetchItems,
@@ -704,7 +705,7 @@ watch(favoritesError, message => { errorMessage.value = message })
               :page="currentPage"
               :page-count="totalPages"
               :total-items="totalItems"
-              :page-size="pageLimit"
+              :page-size="favoritesPageSize"
               :disabled="loading"
               item-label="条 ASMR"
               @change="goToPage"

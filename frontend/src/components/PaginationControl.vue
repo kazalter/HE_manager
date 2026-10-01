@@ -371,7 +371,7 @@ onUnmounted(() => {
   .media-pagination__controls { justify-content: center; }
   .media-pagination__edge { display: none; }
   .media-page-picker__trigger { min-width: 142px; }
-  .media-page-picker__panel { position: fixed; right: 12px; bottom: 12px; left: 12px; width: auto; transform: none; }
+  .media-page-picker__panel { position: fixed; right: 12px; bottom: calc(var(--he-nav-height, 80px) + env(safe-area-inset-bottom) + 12px); left: 12px; width: auto; transform: none; }
   .page-picker-enter-from,
   .page-picker-leave-to { transform: translateY(9px) scale(0.98); }
   .media-page-picker__scroll { max-height: 42vh; }
