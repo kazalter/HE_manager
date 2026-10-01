@@ -17,6 +17,43 @@ const post: PawchivePost = {
 }
 
 describe('Pawchive fullscreen viewer', () => {
+  it.each(['missing', 'rejected'])('uses immersive image mode when fullscreen is %s', async (failure) => {
+    const wrapper = mount(PawchiveMediaViewer, {
+      attachTo: document.body,
+      props: {
+        post, attachment, attachments: [attachment], attachmentIndex: 0, attachmentTotal: 1,
+        scopeLabel: 'Example', busy: false, error: '', hasPrevious: false, ended: false,
+        autoplay: false, interval: 5, downloadBusy: false, downloadMessage: '', downloadError: false,
+      },
+    })
+    Object.defineProperty(wrapper.element, 'requestFullscreen', {
+      configurable: true,
+      value: failure === 'missing' ? undefined : vi.fn().mockRejectedValue(new Error('unsupported')),
+    })
+    try {
+      await wrapper.get('button[aria-label="进入全屏"]').trigger('click')
+      await nextTick()
+      expect(wrapper.find('button[aria-label="退出全屏"]').exists()).toBe(true)
+      expect(wrapper.get('header').classes()).toContain('absolute')
+      expect(wrapper.get('footer').classes()).toContain('absolute')
+      expect(wrapper.emitted('playbackError')).toBeUndefined()
+
+      await wrapper.get('img[alt="image.jpg"]').trigger('click')
+      await nextTick()
+      expect(wrapper.get('header').classes()).toContain('opacity-0')
+      await wrapper.get('img[alt="image.jpg"]').trigger('click')
+      await nextTick()
+      expect(wrapper.get('header').classes()).toContain('opacity-100')
+
+      await wrapper.get('button[aria-label="退出全屏"]').trigger('click')
+      await nextTick()
+      expect(wrapper.get('header').classes()).not.toContain('absolute')
+      expect(wrapper.find('button[aria-label="进入全屏"]').exists()).toBe(true)
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
   it('does not toggle controls when a zoomed image is dragged', async () => {
     const wrapper = mount(PawchiveMediaViewer, {
       attachTo: document.body,
