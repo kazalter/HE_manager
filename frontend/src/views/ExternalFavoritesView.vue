@@ -61,8 +61,8 @@ const toggleSelector = () => {
   if (selectorOpen.value) closeSelector(true)
   else openSelector()
 }
-const selectSite = (source: SiteKey) => {
-  closeSelector(true)
+const selectSite = (source: SiteKey, restoreFocus = true) => {
+  closeSelector(restoreFocus)
   if (source !== activeSite.value) {
     void router.replace({ path: route.path, query: { ...route.query, source } })
   }
@@ -101,12 +101,32 @@ onBeforeUnmount(() => {
         </div>
         <div ref="selectorRef" class="relative w-full min-w-0 sm:w-72">
           <span class="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-white/50">数据源</span>
+          <div class="relative sm:hidden">
+            <div aria-hidden="true" class="flex min-h-14 w-full items-center gap-3 rounded-2xl border border-white/15 bg-sidebar/90 px-3 text-left shadow-sm">
+              <span class="flex h-10 w-16 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/30">
+                <img :src="activeOption.logo" alt="" draggable="false" class="object-contain" :class="activeSite === 'wnacg' ? 'w-14' : 'h-8 w-8'" />
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm font-bold text-white">{{ activeOption.label }}</span>
+                <span class="block truncate text-xs text-white/55">{{ activeOption.description }}</span>
+              </span>
+              <ChevronDown :size="17" class="shrink-0 text-white/55" aria-hidden="true" />
+            </div>
+            <select
+              :value="activeSite"
+              aria-label="切换外部收藏数据源"
+              class="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+              @change="selectSite(($event.target as HTMLSelectElement).value as SiteKey, false)"
+            >
+              <option v-for="site in sites" :key="site.key" :value="site.key">{{ site.label }}</option>
+            </select>
+          </div>
           <button
             ref="selectorButtonRef"
             type="button"
             :aria-expanded="selectorOpen"
             aria-controls="external-source-options"
-            class="flex min-h-14 w-full items-center gap-3 rounded-2xl border bg-sidebar/90 px-3 text-left shadow-sm transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            class="hidden sm:flex min-h-14 w-full items-center gap-3 rounded-2xl border bg-sidebar/90 px-3 text-left shadow-sm transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             :class="selectorOpen ? 'border-accent/60 bg-accent/10' : 'border-white/15 hover:border-white/35 hover:bg-white/5'"
             @click="toggleSelector"
             @keydown.down.prevent="openSelector"
@@ -127,7 +147,7 @@ onBeforeUnmount(() => {
             id="external-source-options"
             role="group"
             aria-label="可用数据源"
-            class="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-full overflow-y-auto rounded-2xl border border-white/15 bg-sidebar p-2 shadow-2xl shadow-black/45 sm:w-80 max-h-[60vh]"
+            class="hidden sm:block absolute right-0 top-[calc(100%+0.5rem)] z-50 w-full overflow-y-auto rounded-2xl border border-white/15 bg-sidebar p-2 shadow-2xl shadow-black/45 sm:w-80 max-h-[60vh]"
             @keydown.down.prevent="moveOptionFocus(1)"
             @keydown.up.prevent="moveOptionFocus(-1)"
             @keydown.home.prevent="focusOption(0)"
