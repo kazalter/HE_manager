@@ -4,6 +4,8 @@ export interface UseImageViewerZoomOptions {
   minScale?: number
   maxScale?: number
   onSwipe?: (direction: -1 | 1) => void
+  onSwipeMove?: (offsetX: number) => void
+  onSwipeCancel?: () => void
   zoomStep?: number
 }
 
@@ -157,6 +159,7 @@ export function useImageViewerZoom(
       isPanning.value = isZoomed.value
     } else {
       multipleTouches = true; suppressTouchClick = true
+      options.onSwipeCancel?.()
       pinchDistance = distance(event.touches); pinchScale = scale.value
       isPanning.value = true
       if (event.cancelable) event.preventDefault()
@@ -168,21 +171,37 @@ export function useImageViewerZoom(
       const x = (event.touches[0]!.clientX + event.touches[1]!.clientX) / 2
       const y = (event.touches[0]!.clientY + event.touches[1]!.clientY) / 2
       setScale(pinchScale * distance(event.touches) / pinchDistance, x, y)
-    } else if (event.touches.length === 1 && isZoomed.value && !multipleTouches) {
-      if (event.cancelable) event.preventDefault()
+    } else if (event.touches.length === 1 && !multipleTouches) {
       const dx = event.touches[0]!.clientX - touchX, dy = event.touches[0]!.clientY - touchY
-      if (Math.hypot(dx, dy) > 8) suppressTouchClick = true
-      clampTranslation(touchTx + dx, touchTy + dy, scale.value)
+      if (isZoomed.value) {
+        if (event.cancelable) event.preventDefault()
+        if (Math.hypot(dx, dy) > 8) suppressTouchClick = true
+        clampTranslation(touchTx + dx, touchTy + dy, scale.value)
+      } else if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+        if (event.cancelable) event.preventDefault()
+        suppressTouchClick = true
+        options.onSwipeMove?.(dx)
+      }
     }
   }
   const onTouchEnd = (event: TouchEvent) => {
     isPanning.value = false
-    if (event.type === 'touchcancel') { suppressTouchClick = true; multipleTouches = true; return }
-    if (event.touches.length || multipleTouches || isZoomed.value || !event.changedTouches.length) return
+    if (event.type === 'touchcancel') {
+      suppressTouchClick = true; multipleTouches = true
+      options.onSwipeCancel?.()
+      return
+    }
+    if (event.touches.length) return
+    if (multipleTouches || isZoomed.value || !event.changedTouches.length) {
+      options.onSwipeCancel?.()
+      return
+    }
     const dx = event.changedTouches[0]!.clientX - touchX, dy = event.changedTouches[0]!.clientY - touchY
     if (Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
       suppressTouchClick = true
       options.onSwipe?.(dx < 0 ? 1 : -1)
+    } else {
+      options.onSwipeCancel?.()
     }
   }
   const wasTouchGesture = () => {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { computed, defineComponent } from 'vue'
+import { computed, defineComponent, nextTick } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import MangaReader from '../components/media-detail/MangaReader.vue'
 import { useReaderImageBuffer } from '../composables/useReaderImageBuffer'
@@ -70,6 +70,38 @@ describe('reader images and controls', () => {
     await ControlledImage.instances[2]!.onload!()
     expect(buffer.states.get('new')?.width).toBe(800)
     buffer.dispose()
+  })
+
+  it('moves the current image with touch and previews the adjacent page before switching', async () => {
+    localStorage.setItem('he_image_read_mode', 'single')
+    vi.stubGlobal('Image', ControlledImage)
+    const images = Array.from({ length: 3 }, (_, index) => ({
+      id: 100 + index, title: 'Image ' + index, media_type: 'image',
+    })) as Media[]
+    const wrapper = mount(MangaReader, { props: {
+      media: images[0]!, imagePages: images, currentPage: 0, totalPages: 3,
+      pageDimensions: [], showControls: true, clickOnlyControls: true,
+      progressText: '1 / 3', progressPercent: 33,
+    } })
+    wrappers.push(wrapper)
+    const canvas = wrapper.get('[style*="touch-action: none"]').element
+    const touch = (type: string, x: number, active: boolean) => {
+      const event = new Event(type, { bubbles: true, cancelable: true })
+      Object.defineProperties(event, {
+        touches: { value: active ? [{ clientX: x, clientY: 300 }] : [] },
+        changedTouches: { value: [{ clientX: x, clientY: 300 }] },
+      })
+      canvas.dispatchEvent(event)
+    }
+    touch('touchstart', 300, true)
+    touch('touchmove', 180, true)
+    await nextTick()
+    expect(wrapper.get('.he-photo-slide').attributes('style')).toContain('--he-swipe-offset: -120px')
+    expect(wrapper.find('[aria-hidden="true"] img').attributes('src')).toContain('/stream/101')
+    touch('touchend', 90, false)
+    expect(wrapper.emitted('update:currentPage')?.at(-1)).toEqual([1])
+    await wrapper.setProps({ currentPage: 1, progressText: '2 / 3', progressPercent: 67 })
+    expect(wrapper.findAll('.he-photo-slide img').some(image => image.attributes('src')?.includes('/stream/101'))).toBe(true)
   })
 
   it('uses image streams, offers three modes, advances spreads, and omits all thumbnails', async () => {

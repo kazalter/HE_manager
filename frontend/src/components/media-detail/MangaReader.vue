@@ -82,6 +82,57 @@ let scrollRafId: number | null = null
 let dragRafId: number | null = null
 let pendingDragScroll = 0
 
+const swipeOffset = ref(0)
+const swipeBasePage = ref<number | null>(null)
+const isSwiping = ref(false)
+const snapBack = ref(false)
+const slideDirection = ref<-1 | 1>(1)
+let swipeResetTimer: number | undefined
+let pendingSlideDirection: -1 | 1 | null = null
+const finishSwipeMotion = () => {
+  window.clearTimeout(swipeResetTimer)
+  swipeOffset.value = 0
+  swipeBasePage.value = null
+  isSwiping.value = false
+  snapBack.value = false
+}
+const physicalToLogical = (direction: -1 | 1): -1 | 1 =>
+  (direction === 1) !== isRtl.value ? 1 : -1
+const adjacentPage = (direction: -1 | 1) =>
+  props.currentPage + physicalToLogical(direction) * (readMode.value === 'double' ? 2 : 1)
+const canPreview = (direction: -1 | 1) => {
+  const page = adjacentPage(direction)
+  return page >= 0 && (props.totalPages === null || page < props.totalPages)
+}
+const onReaderSwipeMove = (offset: number) => {
+  const direction: -1 | 1 = offset < 0 ? 1 : -1
+  const width = imageContainerRef.value?.clientWidth || window.innerWidth
+  window.clearTimeout(swipeResetTimer)
+  snapBack.value = false
+  swipeBasePage.value ??= props.currentPage
+  swipeOffset.value = Math.max(-width, Math.min(width, canPreview(direction) ? offset : offset * 0.18))
+  isSwiping.value = true
+}
+const onReaderSwipeCancel = () => {
+  isSwiping.value = false
+  snapBack.value = true
+  swipeOffset.value = 0
+  swipeBasePage.value = null
+  window.clearTimeout(swipeResetTimer)
+  swipeResetTimer = window.setTimeout(() => { snapBack.value = false }, 240)
+}
+const onReaderSwipe = (direction: -1 | 1) => {
+  const hasPreview = canPreview(direction)
+  slideDirection.value = direction
+  pendingSlideDirection = direction
+  isSwiping.value = false
+  if (physicalToLogical(direction) === 1) nextPage()
+  else previousPage()
+  if (!hasPreview) { onReaderSwipeCancel(); return }
+  window.clearTimeout(swipeResetTimer)
+  swipeResetTimer = window.setTimeout(finishSwipeMotion, 360)
+}
+
 const {
   scale: zoomScale,
   translateX: zoomTx,
@@ -96,7 +147,11 @@ const {
   onMouseDown: onZoomMouseDown,
   wasDragging: wasZoomDragging,
   onTouchStart, onTouchMove, onTouchEnd, wasTouchGesture,
-} = useImageViewerZoom(imageContainerRef, { onSwipe: direction => { if ((direction === 1) !== isRtl.value) nextPage(); else previousPage() } })
+} = useImageViewerZoom(imageContainerRef, {
+  onSwipe: onReaderSwipe,
+  onSwipeMove: onReaderSwipeMove,
+  onSwipeCancel: onReaderSwipeCancel,
+})
 
 const THUMB_W = 110
 const THUMB_H = 148
@@ -117,6 +172,21 @@ const secondPageUrl = computed(() => {
   if (props.totalPages !== null && nextP >= props.totalPages) return null
   return pageUrlFor(nextP)
 })
+const previewPageIndex = computed(() => {
+  if (!swipeOffset.value) return null
+  const direction: -1 | 1 = swipeOffset.value < 0 ? 1 : -1
+  const base = swipeBasePage.value ?? props.currentPage
+  const page = base + physicalToLogical(direction) * (readMode.value === 'double' ? 2 : 1)
+  return page >= 0 && (props.totalPages === null || page < props.totalPages) ? page : null
+})
+const previewPageUrl = computed(() => previewPageIndex.value === null ? '' : pageUrlFor(previewPageIndex.value))
+const previewSecondPageUrl = computed(() => {
+  if (readMode.value !== 'double' || previewPageIndex.value === null) return null
+  const second = previewPageIndex.value + 1
+  return props.totalPages !== null && second >= props.totalPages ? null : pageUrlFor(second)
+})
+const previewTransform = computed(() =>
+  `translate3d(calc(${swipeOffset.value}px + ${swipeOffset.value < 0 ? '100%' : '-100%'}), 0, 0)`)
 const thumbnailUrl = (page: number) => authUrl(`${API_BASE_URL}/manga/${props.media.id}/page/${page}?thumbnail=true`)
 
 const totalPagesList = computed(() => {
@@ -126,11 +196,19 @@ const totalPagesList = computed(() => {
 
 const setPage = (page: number) => {
   const maximum = props.totalPages ? props.totalPages - 1 : Number.MAX_SAFE_INTEGER
-  emit('update:currentPage', Math.max(0, Math.min(page, maximum)))
+  const next = Math.max(0, Math.min(page, maximum))
+  if (next === props.currentPage) { pendingSlideDirection = null; onReaderSwipeCancel(); return }
+  pendingSlideDirection ??= ((next > props.currentPage) !== isRtl.value ? 1 : -1)
+  slideDirection.value = pendingSlideDirection
+  emit('update:currentPage', next)
 }
 
 const previousPage = () => {
-  if (props.currentPage === 0 && props.hasPreviousBatch) { emit('boundary', -1); return }
+  if (props.currentPage === 0 && props.hasPreviousBatch) {
+    pendingSlideDirection ??= isRtl.value ? 1 : -1
+    emit('boundary', -1)
+    return
+  }
   if (readMode.value === 'webtoon') {
     if (webtoonContainerRef.value) {
       webtoonContainerRef.value.scrollBy({ top: -window.innerHeight * 0.7, behavior: 'smooth' })
@@ -141,7 +219,11 @@ const previousPage = () => {
 }
 
 const nextPage = () => {
-  if (props.totalPages && props.currentPage + stepSize.value >= props.totalPages && props.hasNextBatch) { emit('boundary', 1); return }
+  if (props.totalPages && props.currentPage + stepSize.value >= props.totalPages && props.hasNextBatch) {
+    pendingSlideDirection ??= isRtl.value ? -1 : 1
+    emit('boundary', 1)
+    return
+  }
   if (readMode.value === 'webtoon') {
     if (webtoonContainerRef.value) {
       webtoonContainerRef.value.scrollBy({ top: window.innerHeight * 0.7, behavior: 'smooth' })
@@ -155,6 +237,8 @@ const nextPage = () => {
 }
 
 const setReadMode = (mode: MangaReadMode) => {
+  pendingSlideDirection = null
+  finishSwipeMotion()
   readMode.value = mode
   localStorage.setItem(modeKey, mode)
   resetZoom()
@@ -434,7 +518,12 @@ watch(() => [props.totalPages, readMode.value, props.imagePages?.map(item => ite
 watch(() => props.showControls, visible => { if (!visible) showShortcutGuide.value = false })
 defineExpose({ nextPage, previousPage, stepSize })
 
-watch(() => props.currentPage, page => {
+watch(() => props.currentPage, (page, previousPage) => {
+  if (previousPage !== undefined && page !== previousPage) {
+    snapBack.value = false
+    slideDirection.value = pendingSlideDirection ?? ((page > previousPage) !== isRtl.value ? 1 : -1)
+    pendingSlideDirection = null
+  }
   if (readMode.value !== 'webtoon') {
     resetZoom()
   } else if (page === scrollReportedPage) {
@@ -484,6 +573,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', updateStripWidth)
   window.clearTimeout(programmaticScrollTimer)
   window.clearTimeout(hoverTimer)
+  window.clearTimeout(swipeResetTimer)
   if (scrollRafId !== null) cancelAnimationFrame(scrollRafId)
   if (webtoonScrollRafId !== null) cancelAnimationFrame(webtoonScrollRafId)
   if (dragRafId !== null) cancelAnimationFrame(dragRafId)
@@ -566,58 +656,80 @@ onBeforeUnmount(() => {
         @touchstart="onTouchStart" @touchmove="onTouchMove" @touchend="onTouchEnd" @touchcancel="onTouchEnd"
         style="touch-action: none"
       >
-        <!-- Single Mode -->
         <div
-          v-if="readMode === 'single'"
-          class="w-full h-full flex items-center justify-center"
-          :style="{
-            transform: `translate3d(${zoomTx}px, ${zoomTy}px, 0px) scale(${zoomScale})`,
-            transition: isZoomPanning ? 'none' : 'transform 0.15s ease-out',
-          }"
+          v-if="previewPageIndex !== null"
+          aria-hidden="true"
+          class="pointer-events-none absolute inset-0 z-0 flex items-center justify-center bg-black"
+          :style="{ transform: previewTransform }"
         >
-          <img
-            :src="pageUrl"
-            class="h-full w-full object-contain pointer-events-none"
-            :alt="media.title"
-          />
+          <img v-if="readMode === 'single'" :src="previewPageUrl" alt="" class="h-full w-full object-contain" />
+          <div v-else class="flex h-full w-full items-center justify-center gap-1 px-2 sm:gap-2">
+            <template v-if="isRtl">
+              <img v-if="previewSecondPageUrl" :src="previewSecondPageUrl" alt="" class="h-full max-w-[50%] object-contain" />
+              <img :src="previewPageUrl" alt="" class="h-full max-w-[50%] object-contain" />
+            </template>
+            <template v-else>
+              <img :src="previewPageUrl" alt="" class="h-full max-w-[50%] object-contain" />
+              <img v-if="previewSecondPageUrl" :src="previewSecondPageUrl" alt="" class="h-full max-w-[50%] object-contain" />
+            </template>
+          </div>
         </div>
 
-        <!-- Double Page Mode -->
-        <div
-          v-else-if="readMode === 'double'"
-          class="w-full h-full flex items-center justify-center gap-1 sm:gap-2 px-2"
-          :style="{
-            transform: `translate3d(${zoomTx}px, ${zoomTy}px, 0px) scale(${zoomScale})`,
-            transition: isZoomPanning ? 'none' : 'transform 0.15s ease-out',
-          }"
+        <!-- Single-page and spread changes share the same directional photo motion. -->
+        <Transition
+          v-if="readMode === 'single'"
+          :name="slideDirection === 1 ? 'he-photo-next' : 'he-photo-prev'"
+          @after-enter="finishSwipeMotion"
+          @enter-cancelled="finishSwipeMotion"
         >
-          <template v-if="isRtl">
-            <img
-              v-if="secondPageUrl"
-              :src="secondPageUrl"
-              class="h-full max-w-[50%] object-contain pointer-events-none shadow-xl"
-              :alt="`第 ${currentPage + 2} 页`"
-            />
-            <img
-              :src="pageUrl"
-              class="h-full max-w-[50%] object-contain pointer-events-none shadow-xl"
-              :alt="`第 ${currentPage + 1} 页`"
-            />
-          </template>
-          <template v-else>
-            <img
-              :src="pageUrl"
-              class="h-full max-w-[50%] object-contain pointer-events-none shadow-xl"
-              :alt="`第 ${currentPage + 1} 页`"
-            />
-            <img
-              v-if="secondPageUrl"
-              :src="secondPageUrl"
-              class="h-full max-w-[50%] object-contain pointer-events-none shadow-xl"
-              :alt="`第 ${currentPage + 2} 页`"
-            />
-          </template>
-        </div>
+          <div
+            :key="pageUrl"
+            class="he-photo-slide absolute inset-0 z-10 flex items-center justify-center"
+            :class="{ 'is-releasing': snapBack }"
+            :style="{ '--he-swipe-offset': swipeOffset + 'px' }"
+          >
+            <div
+              class="flex h-full w-full items-center justify-center"
+              :style="{
+                transform: 'translate3d(' + zoomTx + 'px, ' + zoomTy + 'px, 0px) scale(' + zoomScale + ')',
+                transition: isZoomPanning ? 'none' : 'transform 0.15s ease-out',
+              }"
+            >
+              <img :src="pageUrl" class="h-full w-full object-contain pointer-events-none" :alt="media.title" />
+            </div>
+          </div>
+        </Transition>
+
+        <Transition
+          v-else
+          :name="slideDirection === 1 ? 'he-photo-next' : 'he-photo-prev'"
+          @after-enter="finishSwipeMotion"
+          @enter-cancelled="finishSwipeMotion"
+        >
+          <div
+            :key="pageUrl"
+            class="he-photo-slide absolute inset-0 z-10 flex items-center justify-center"
+            :class="{ 'is-releasing': snapBack }"
+            :style="{ '--he-swipe-offset': swipeOffset + 'px' }"
+          >
+            <div
+              class="flex h-full w-full items-center justify-center gap-1 px-2 sm:gap-2"
+              :style="{
+                transform: 'translate3d(' + zoomTx + 'px, ' + zoomTy + 'px, 0px) scale(' + zoomScale + ')',
+                transition: isZoomPanning ? 'none' : 'transform 0.15s ease-out',
+              }"
+            >
+              <template v-if="isRtl">
+                <img v-if="secondPageUrl" :src="secondPageUrl" class="h-full max-w-[50%] object-contain pointer-events-none shadow-xl" :alt="'第 ' + (currentPage + 2) + ' 页'" />
+                <img :src="pageUrl" class="h-full max-w-[50%] object-contain pointer-events-none shadow-xl" :alt="'第 ' + (currentPage + 1) + ' 页'" />
+              </template>
+              <template v-else>
+                <img :src="pageUrl" class="h-full max-w-[50%] object-contain pointer-events-none shadow-xl" :alt="'第 ' + (currentPage + 1) + ' 页'" />
+                <img v-if="secondPageUrl" :src="secondPageUrl" class="h-full max-w-[50%] object-contain pointer-events-none shadow-xl" :alt="'第 ' + (currentPage + 2) + ' 页'" />
+              </template>
+            </div>
+          </div>
+        </Transition>
       </div>
 
       <!-- Right Next Button -->

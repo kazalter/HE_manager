@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { defineComponent, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { useImageViewerZoom } from '../composables/useImageViewerZoom'
@@ -116,6 +116,36 @@ describe('useImageViewerZoom composable', () => {
     zoom.resetZoom()
     expect(zoom.wasDragging()).toBe(false)
 
+    wrapper.unmount()
+  })
+
+  it('reports touch drag progress, commits a swipe, and preserves zoom panning', () => {
+    const onSwipeMove = vi.fn()
+    const onSwipeCancel = vi.fn()
+    const onSwipe = vi.fn()
+    const { wrapper, zoom } = createTestViewer({ onSwipeMove, onSwipeCancel, onSwipe })
+    const touchEvent = (type: string, x: number, active: boolean) => ({
+      type, cancelable: true, preventDefault: vi.fn(),
+      touches: active ? [{ clientX: x, clientY: 300 }] : [],
+      changedTouches: [{ clientX: x, clientY: 300 }],
+    } as unknown as TouchEvent)
+
+    zoom.onTouchStart(touchEvent('touchstart', 300, true))
+    zoom.onTouchMove(touchEvent('touchmove', 180, true))
+    expect(onSwipeMove).toHaveBeenLastCalledWith(-120)
+    zoom.onTouchEnd(touchEvent('touchend', 90, false))
+    expect(onSwipe).toHaveBeenCalledWith(1)
+
+    zoom.onTouchStart(touchEvent('touchstart', 300, true))
+    zoom.onTouchMove(touchEvent('touchmove', 270, true))
+    zoom.onTouchEnd(touchEvent('touchend', 270, false))
+    expect(onSwipeCancel).toHaveBeenCalledTimes(1)
+
+    zoom.setScale(2)
+    onSwipeMove.mockClear()
+    zoom.onTouchStart(touchEvent('touchstart', 300, true))
+    zoom.onTouchMove(touchEvent('touchmove', 180, true))
+    expect(onSwipeMove).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 
