@@ -51,7 +51,6 @@ const videoRef = ref<HTMLVideoElement | null>(null)
 const imageReady = ref(false)
 const displayImageUrl = ref('')
 const preloadedImageUrls = new Map<string, Map<string, string>>()
-const preloadedVersion = ref(0)
 const attemptedImageKeys = new Map<string, Set<string>>()
 let preloadController: AbortController | null = null
 let preloadPending = false
@@ -79,15 +78,6 @@ const withNonce = (url: string) => {
 const videoUrl = computed(() => withNonce(pawchiveMediaUrl(props.attachment.stream_ref)))
 const placeholderUrl = computed(() => props.attachment.media_type === 'image' && props.attachment.preview_ref &&
   !failedPreviewKeys.value.has(props.attachment.attachment_key) ? pawchiveMediaUrl(props.attachment.preview_ref) : '')
-const adjacentImageUrl = (index: number) => {
-  // Recompute the preview as soon as its preloaded blob becomes available.
-  void preloadedVersion.value
-  const item = props.attachments[index]
-  if (item?.media_type !== 'image') return ''
-  return preloadedImageUrls.get(props.post.post_key)?.get(item.attachment_key) || pawchiveMediaUrl(item.stream_ref)
-}
-const previousImageUrl = computed(() => adjacentImageUrl(props.attachmentIndex - 1))
-const nextImageUrl = computed(() => adjacentImageUrl(props.attachmentIndex + 1))
 let wheelGestureTimer: number | undefined
 let wheelGestureUsed = false
 let wheelDelta = 0
@@ -133,7 +123,6 @@ const preloadImages = async (postKey: string, items: PawchiveAttachment[], contr
       const blob = await response.blob()
       if (controller.signal.aborted) return
       images.set(item.attachment_key, URL.createObjectURL(blob))
-      preloadedVersion.value++
     } catch {
       if (controller.signal.aborted) return
     } finally {
@@ -456,7 +445,7 @@ onBeforeUnmount(() => {
     </header>
     <div class="flex-1 min-h-0 relative flex" @wheel.capture="onMediaWheel">
       <img v-if="placeholderUrl && showPlaceholder && !imageReady && !loadFailed" :src="placeholderUrl" alt="" aria-hidden="true" draggable="false" class="pointer-events-none absolute inset-0 z-10 h-full w-full scale-105 object-contain opacity-60 blur-md" />
-      <ImageViewer v-if="attachment.media_type === 'image'" :media="{ title: attachment.filename }" :image-url="displayImageUrl" :slide-key="post.post_key + ':' + attachment.attachment_key" :navigation-index="attachmentIndex" :navigation-group="post.post_key" :previous-image-url="previousImageUrl" :next-image-url="nextImageUrl" :show-controls="true" :click-only-controls="false" :controls-visible="!isFullscreen || controlsVisible" @viewer-click="onMediaSurfaceClick" @previous="emit('previous')" @next="emit('next')" @viewer-double-click="() => {}" @controls-hover="onControlsHover" @loaded="onImageLoaded" @load-error="onImageError" />
+      <ImageViewer v-if="attachment.media_type === 'image'" :key="attachment.attachment_key" :media="{ title: attachment.filename }" :image-url="displayImageUrl" :show-controls="true" :click-only-controls="false" :controls-visible="!isFullscreen || controlsVisible" @viewer-click="onMediaSurfaceClick" @previous="emit('previous')" @next="emit('next')" @viewer-double-click="() => {}" @controls-hover="onControlsHover" @loaded="onImageLoaded" @load-error="onImageError" />
       <div v-else class="w-full h-full flex items-center justify-center bg-black">
         <video ref="videoRef" :key="attachment.attachment_key" :src="videoUrl" controls playsinline preload="metadata" class="w-full h-full object-contain" @click="onMediaSurfaceClick" @ended="onVideoEnded" @pause="onVideoPaused" @loadeddata="loadFailed = false" @error="onMediaFailed" />
       </div>

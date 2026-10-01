@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ChevronLeft, ChevronRight, Loader2, RotateCcw, RotateCw, ZoomIn, ZoomOut } from 'lucide-vue-next'
 import type { Media } from '../../types'
 import { useImageViewerZoom } from '../../composables/useImageViewerZoom'
@@ -11,11 +11,6 @@ const props = withDefaults(defineProps<{
   clickOnlyControls: boolean
   controlsVisible?: boolean
   wheelBehavior?: 'navigate' | 'zoom'
-  slideKey?: string
-  navigationIndex?: number
-  navigationGroup?: string
-  previousImageUrl?: string
-  nextImageUrl?: string
 }>(), {
   wheelBehavior: 'navigate',
 })
@@ -35,50 +30,6 @@ const imageContainerRef = ref<HTMLDivElement | null>(null)
 const showLoading = ref(false)
 const rotation = ref(0)
 const isActualSize = ref(false)
-const slideDirection = ref<-1 | 1>(1)
-const swipeOffset = ref(0)
-const dragPreviewUrl = ref('')
-const snapBack = ref(false)
-let swipeResetTimer: number | undefined
-let pendingDirection: -1 | 1 | null = null
-let lastNavigationIndex = props.navigationIndex
-let lastNavigationGroup = props.navigationGroup
-const activeSlideKey = computed(() => props.slideKey || props.imageUrl)
-const previewImageUrl = computed(() => dragPreviewUrl.value)
-const previewTransform = computed(() =>
-  'translate3d(calc(' + swipeOffset.value + 'px + ' + (swipeOffset.value < 0 ? '100%' : '-100%') + '), 0, 0)')
-const finishSwipeMotion = () => {
-  window.clearTimeout(swipeResetTimer)
-  swipeOffset.value = 0
-  dragPreviewUrl.value = ''
-  snapBack.value = false
-}
-const onSwipeMove = (offset: number) => {
-  window.clearTimeout(swipeResetTimer)
-  snapBack.value = false
-  const width = imageContainerRef.value?.clientWidth || window.innerWidth
-  const available = offset < 0 ? props.nextImageUrl : props.previousImageUrl
-  dragPreviewUrl.value = available || ''
-  swipeOffset.value = Math.max(-width, Math.min(width, available ? offset : offset * 0.18))
-}
-const onSwipeCancel = () => {
-  snapBack.value = true
-  swipeOffset.value = 0
-  dragPreviewUrl.value = ''
-  window.clearTimeout(swipeResetTimer)
-  swipeResetTimer = window.setTimeout(() => { snapBack.value = false }, 240)
-}
-const navigate = (direction: -1 | 1) => {
-  pendingDirection = direction
-  slideDirection.value = direction
-  if (!(direction === 1 ? props.nextImageUrl : props.previousImageUrl)) onSwipeCancel()
-  else {
-    window.clearTimeout(swipeResetTimer)
-    swipeResetTimer = window.setTimeout(finishSwipeMotion, 360)
-  }
-  if (direction === 1) emit('next')
-  else emit('previous')
-}
 let lastWheelAt = 0
 let loadingTimer: number | undefined
 
@@ -104,11 +55,7 @@ const {
   onMouseDown: onZoomMouseDown,
   wasDragging: wasZoomDragging,
   onTouchStart, onTouchMove, onTouchEnd, wasTouchGesture,
-} = useImageViewerZoom(imageContainerRef, {
-  onSwipe: navigate,
-  onSwipeMove,
-  onSwipeCancel,
-})
+} = useImageViewerZoom(imageContainerRef, { onSwipe: direction => { if (direction === 1) emit('next'); else emit('previous') } })
 
 const rotateClockwise = () => {
   rotation.value = (rotation.value + 90) % 360
@@ -120,15 +67,13 @@ const resetAll = () => {
   isActualSize.value = false
 }
 
-const onImageLoad = (url: string) => {
-  if (url !== props.imageUrl) return
+const onImageLoad = () => {
   clearLoadingTimer()
   showLoading.value = false
   emit('loaded')
 }
 
-const onImageError = (url: string) => {
-  if (url !== props.imageUrl) return
+const onImageError = () => {
   clearLoadingTimer()
   showLoading.value = false
   emit('loadError')
@@ -176,7 +121,7 @@ const onWheel = (event: WheelEvent) => {
   if (Math.abs(delta) < 8) return
   event.preventDefault()
   lastWheelAt = now
-  navigate(delta > 0 ? 1 : -1)
+  delta > 0 ? emit('next') : emit('previous')
 }
 
 const onViewerClick = () => {
@@ -204,17 +149,6 @@ watch(() => props.imageUrl, (newUrl) => {
   resetAll()
   scheduleLoadingCheck(newUrl)
 })
-watch(activeSlideKey, () => {
-  snapBack.value = false
-  slideDirection.value = pendingDirection ?? (
-    props.navigationGroup === lastNavigationGroup &&
-    props.navigationIndex !== undefined && lastNavigationIndex !== undefined &&
-    props.navigationIndex < lastNavigationIndex ? -1 : 1
-  )
-  pendingDirection = null
-  lastNavigationIndex = props.navigationIndex
-  lastNavigationGroup = props.navigationGroup
-})
 
 watch(isZoomed, (val) => {
   if (!val) {
@@ -228,7 +162,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearLoadingTimer()
-  window.clearTimeout(swipeResetTimer)
 })
 </script>
 
@@ -260,7 +193,7 @@ onBeforeUnmount(() => {
 
       <!-- Left Prev Button -->
       <button
-        @click.stop="navigate(-1)"
+        @click.stop="emit('previous')"
         @mouseenter="emit('controlsHover', true)"
         @mouseleave="emit('controlsHover', false)"
         :class="controlsVisible !== undefined
@@ -279,50 +212,29 @@ onBeforeUnmount(() => {
       <!-- Main Image Container -->
       <div
         ref="imageContainerRef"
-        class="relative w-full h-full flex items-center justify-center overflow-hidden select-none"
+        class="w-full h-full flex items-center justify-center overflow-hidden select-none"
         :style="{ cursor: isZoomed ? (isZoomPanning ? 'grabbing' : 'grab') : 'default' }"
         @mousedown="onZoomMouseDown"
         @touchstart="onTouchStart" @touchmove="onTouchMove" @touchend="onTouchEnd" @touchcancel="onTouchEnd"
         style="touch-action: none"
       >
-        <div
-          v-if="swipeOffset && previewImageUrl"
-          aria-hidden="true"
-          class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black"
-          :style="{ transform: previewTransform }"
-        >
-          <img :src="previewImageUrl" alt="" class="h-full w-full object-contain" />
-        </div>
-        <Transition
-          :name="slideDirection === 1 ? 'he-photo-next' : 'he-photo-prev'"
-          @after-enter="finishSwipeMotion"
-          @enter-cancelled="finishSwipeMotion"
-        >
-          <div
-            :key="activeSlideKey"
-            class="he-photo-slide absolute inset-0 flex items-center justify-center"
-            :class="{ 'is-releasing': snapBack }"
-            :style="{ '--he-swipe-offset': swipeOffset + 'px' }"
-          >
-            <img
-              ref="imgRef"
-              :src="imageUrl"
-              @load="onImageLoad(($event.target as HTMLImageElement).getAttribute('src') || '')"
-              @error="onImageError(($event.target as HTMLImageElement).getAttribute('src') || '')"
-              class="h-full w-full object-contain pointer-events-none select-none"
-              :style="{
-                transform: 'translate3d(' + zoomTx + 'px, ' + zoomTy + 'px, 0px) scale(' + zoomScale + ') rotate(' + rotation + 'deg)',
-                transition: isZoomPanning ? 'none' : 'transform 0.15s ease-out',
-              }"
-              :alt="media.title"
-            />
-          </div>
-        </Transition>
+        <img
+          ref="imgRef"
+          :src="imageUrl"
+          @load="onImageLoad"
+          @error="onImageError"
+          class="h-full w-full object-contain pointer-events-none select-none"
+          :style="{
+            transform: `translate3d(${zoomTx}px, ${zoomTy}px, 0px) scale(${zoomScale}) rotate(${rotation}deg)`,
+            transition: isZoomPanning ? 'none' : 'transform 0.15s ease-out',
+          }"
+          :alt="media.title"
+        />
       </div>
 
       <!-- Right Next Button -->
       <button
-        @click.stop="navigate(1)"
+        @click.stop="emit('next')"
         @mouseenter="emit('controlsHover', true)"
         @mouseleave="emit('controlsHover', false)"
         :class="controlsVisible !== undefined

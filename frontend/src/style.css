@@ -79,41 +79,6 @@ body {
   background-clip: content-box;
 }
 
-/* Photo-like page movement shared by Pawchive, images, and manga spreads. */
-.he-photo-slide {
-  transform: translate3d(var(--he-swipe-offset, 0px), 0, 0);
-  will-change: transform;
-}
-.he-photo-slide.is-releasing {
-  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.he-photo-next-enter-active,
-.he-photo-next-leave-active,
-.he-photo-prev-enter-active,
-.he-photo-prev-leave-active {
-  transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.he-photo-next-enter-from { transform: translate3d(calc(100% + var(--he-swipe-offset, 0px)), 0, 0); }
-.he-photo-next-leave-to { transform: translate3d(-100%, 0, 0); }
-.he-photo-prev-enter-from { transform: translate3d(calc(-100% + var(--he-swipe-offset, 0px)), 0, 0); }
-.he-photo-prev-leave-to { transform: translate3d(100%, 0, 0); }
-
-@media (prefers-reduced-motion: reduce) {
-  .he-photo-slide.is-releasing,
-  .he-photo-next-enter-active,
-  .he-photo-next-leave-active,
-  .he-photo-prev-enter-active,
-  .he-photo-prev-leave-active {
-    transition-duration: 0.01ms;
-  }
-  .he-photo-next-enter-from,
-  .he-photo-next-leave-to,
-  .he-photo-prev-enter-from,
-  .he-photo-prev-leave-to {
-    transform: none;
-  }
-}
-
 /* Fluid Apple-style Spring Modal Transition */
 .modal-snap-enter-active {
   transition: opacity 0.4s var(--ease-out-expo);
