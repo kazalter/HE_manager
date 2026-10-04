@@ -214,9 +214,8 @@ body {
 /* Phone shell: bottom navigation and dynamic Safari viewport. */
 :root { --he-nav-height: 80px; --he-app-height: 100vh; }
 @supports (height: 100dvh) { :root { --he-app-height: 100dvh; } }
-/* An opaque iOS status bar owns its top inset. Percentage heights follow the
- * actual layout viewport; 100vh can still include the excluded status bar. */
-html.he-standalone { --he-app-height: 100%; }
+/* Home Screen mode has no Safari toolbar. Do not subtract its space via dvh. */
+html.he-standalone { --he-app-height: 100vh; }
 html.he-standalone, .he-standalone body, .he-standalone #app { height: var(--he-app-height); min-height: 0; overflow: hidden; }
 .he-standalone body { position: relative; }
 .he-standalone .he-auth-view { height: var(--he-app-height); min-height: 0; overflow-y: auto; align-items: safe center; padding-block: 16px; }
@@ -244,15 +243,6 @@ html.he-standalone, .he-standalone body, .he-standalone #app { height: var(--he-
   .he-keyboard-open .he-has-mini.he-compact-shell > .main-scroll-container { padding-bottom: 0; }
   .he-compact-shell .main-scroll-container { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-bottom: calc(var(--he-nav-height) + env(safe-area-inset-bottom)); }
   .he-back-top { right: calc(16px + env(safe-area-inset-right)); bottom: calc(var(--he-nav-height) + env(safe-area-inset-bottom) + 16px); }
-  /* Keep the viewport edge opaque: media behind a sticky header must not
-   * bleed into Safari's status-bar sampling or acquire another blur layer. */
-  .he-compact-shell .he-home-header,
-  .he-compact-shell .he-page-header.sticky {
-    background-color: rgb(var(--color-background));
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-    box-shadow: none;
-  }
   .he-page-header { padding-top: calc(16px + env(safe-area-inset-top)); }
   .he-page-header.sticky { padding: calc(12px + env(safe-area-inset-top)) 16px 12px; }
   .he-page-header + main { padding-left: 16px; padding-right: 16px; }
