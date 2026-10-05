@@ -8,13 +8,41 @@
     <meta name="application-name" content="HE Manager" />
     <meta name="apple-mobile-web-app-title" content="HE Manager" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="theme-color" content="#111114" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HE Manager</title>
+    <!-- iOS standalone compositor workaround; this empty layer adds no visible top spacer. -->
+    <style>
+      @media (display-mode: standalone) {
+        .he-ios-edge-guard {
+          position: fixed;
+          inset: 0 0 auto;
+          height: 11px;
+          z-index: 2147483647;
+          pointer-events: none;
+          background: #050507;
+          -webkit-background-clip: text;
+          background-clip: text;
+        }
+      }
+      @media (display-mode: standalone) and (max-width: 899px) {
+        html.he-ios-standard-viewport .he-mobile-nav {
+          /* Standard viewport reports zero bottom inset; retain the tested home-indicator space. */
+          height: calc(var(--he-nav-height) + 34px);
+          padding-bottom: 42px;
+        }
+      }
+    </style>
+    <script>
+      if (navigator.standalone && /iPhone/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('he-ios-standard-viewport');
+      }
+    </script>
   </head>
   <body>
     <div id="app"></div>
+    <div class="he-ios-edge-guard" aria-hidden="true"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
