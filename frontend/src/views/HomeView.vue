@@ -833,7 +833,7 @@ onMounted(async () => {
 
       <div
         v-if="loading"
-        :class="viewMode === 'list' ? 'flex flex-col gap-2' : viewMode === 'wide' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 md:gap-7' : 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 md:gap-7'"
+        :class="viewMode === 'list' ? 'flex flex-col gap-2' : viewMode === 'wide' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 md:gap-7' : 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-5 md:gap-7'"
       >
         <div
           v-for="i in 12"
@@ -852,7 +852,7 @@ onMounted(async () => {
       </div>
 
       <div v-else-if="mediaList.length > 0" class="flex flex-col gap-9">
-        <div v-if="viewMode === 'poster'" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 md:gap-7">
+        <div v-if="viewMode === 'poster'" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-5 md:gap-7">
           <MediaCard
             v-for="(item, index) in mediaList"
             :key="item.id"
