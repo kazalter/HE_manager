@@ -30,6 +30,7 @@ interface SiteOption {
   accentBg: string
   accentText: string
   glowColor: string
+  dotBg: string
 }
 
 const sites: SiteOption[] = [
@@ -45,6 +46,7 @@ const sites: SiteOption[] = [
     accentBg: 'bg-amber-500/12',
     accentText: 'text-amber-300',
     glowColor: 'shadow-amber-500/15',
+    dotBg: 'bg-amber-400',
   },
   {
     key: 'x',
@@ -58,6 +60,7 @@ const sites: SiteOption[] = [
     accentBg: 'bg-sky-500/12',
     accentText: 'text-sky-300',
     glowColor: 'shadow-sky-500/15',
+    dotBg: 'bg-sky-400',
   },
   {
     key: 'asmr',
@@ -71,6 +74,7 @@ const sites: SiteOption[] = [
     accentBg: 'bg-purple-500/12',
     accentText: 'text-purple-300',
     glowColor: 'shadow-purple-500/15',
+    dotBg: 'bg-purple-400',
   },
   {
     key: 'pawchive',
@@ -84,6 +88,7 @@ const sites: SiteOption[] = [
     accentBg: 'bg-pink-500/12',
     accentText: 'text-pink-300',
     glowColor: 'shadow-pink-500/15',
+    dotBg: 'bg-pink-400',
   },
 ]
 
@@ -220,7 +225,17 @@ onMounted(() => {
     <div class="max-w-7xl mx-auto px-4 md:px-8 mb-5">
       <div class="flex items-center justify-between px-4 py-2.5 rounded-2xl border border-white/8 bg-white/[0.02] backdrop-blur-md">
         <div class="flex items-center gap-2.5 min-w-0">
-          <span class="w-2 h-2 rounded-full animate-pulse" :class="activeOption.accentText">●</span>
+          <!-- Pulsing Radar Indicator Light (Pixel-perfect aligned) -->
+          <span class="relative flex h-2.5 w-2.5 shrink-0 items-center justify-center">
+            <span
+              class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
+              :class="activeOption.dotBg"
+            ></span>
+            <span
+              class="relative inline-flex h-2 w-2 rounded-full shadow-sm"
+              :class="activeOption.dotBg"
+            ></span>
+          </span>
           <span class="text-xs font-bold text-white truncate">
             {{ activeOption.label }} 平台空间
           </span>
