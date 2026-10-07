@@ -8,25 +8,21 @@ by rank (RRF) instead of by raw score.
 Strategies
 ==========
 * by_author   — SQL exact / LIKE against media.artist, metadata.parsed_artist
-                and metadata.parsed_circle. Whatever survives is the entire
-                pool (no fuzzy expansion — if the user asked for a specific
-                author, only that author counts).
-* by_style    — BM25 over named fields + dense vector cosine + adaptive
-                threshold. Same machinery the pre-Phase-3 path used, now
-                wrapped behind a clean function with explicit pool size.
+                and metadata.parsed_circle.
+* by_style    — BM25 with cross-lingual ACG synonym expansion + dense vector
+                cosine with adaptive threshold.
 * similar_to  — Look up the referenced title with fuzzy matching against
                 media.title / metadata.parsed_title, take its embedding,
-                do cosine top-K. Optional: also expand by the same
-                author's other works.
-* browse      — Sort by (favorite, rating, -recency_of_last_open) and
-                return the head of that list. No query content needed.
-
-Each function is a free-standing helper — it doesn't import recommendations
-itself, so circular-import risk is contained.
+                do cosine top-K.
+* browse      — Smart discovery blending favorites, ratings, user reading affinity
+                (boosting unread works from frequently-read artists), and jitter
+                for serendipitous "换一批" exploration.
 """
 from __future__ import annotations
 
 import logging
+import random
+from collections import Counter
 from typing import Iterable, Optional
 
 from sqlalchemy import func, or_
@@ -36,19 +32,16 @@ from . import manga_search, manga_vector, models
 
 log = logging.getLogger(__name__)
 
-
-# --- Common candidate pull --------------------------------------------------
-
 HIDDEN_DUPLICATE_STATUSES = {"checking", "strong_duplicate", "suspected_duplicate", "dedup_excluded"}
+
+VECTOR_POOL = 60
+VECTOR_MIN_SIMILARITY = 0.30
+VECTOR_GAP_OVER_P90 = 0.10
+VECTOR_MIN_MAX_OVER_P90 = 0.05
 
 
 def visible_manga(db: Session) -> list[models.Media]:
-    """All manga rows the recommender is allowed to consider.
-
-    Excludes missing files and pending/confirmed duplicates. The list is
-    fully materialised (with tag / profile / metadata relationships
-    accessible) because every retriever needs the full row anyway.
-    """
+    """All manga rows the recommender is allowed to consider."""
     return (
         db.query(models.Media)
         .options(
@@ -72,18 +65,7 @@ def by_author(
     artists: Iterable[str],
     candidates: list[models.Media],
 ) -> list[tuple[int, float]]:
-    """Match candidates against any of the user-named artists.
-
-    Each candidate is scored 0..1 based on the best evidence:
-      1.0 — exact (case-insensitive) match on media.artist /
-            metadata.parsed_artist / metadata.parsed_circle
-      0.8 — partial match (user name is substring of, or contains, the
-            stored name — handles minor romanisation differences)
-      0.0 — no signal; excluded
-
-    Returns sorted by score desc. Ties broken by (rating, favorite, id)
-    so the better-curated work of the same author comes first.
-    """
+    """Match candidates against any of the user-named artists."""
     targets = [str(a).strip().lower() for a in artists if str(a).strip()]
     if not targets:
         return []
@@ -115,59 +97,52 @@ def by_author(
 
 
 def _all_artist_aliases(media: models.Media) -> list[str]:
-    """Every artist/circle string we have for a manga, lowercased.
-
-    Combines media.artist (parsed by the scanner / backfill), and the
-    metadata-profile parsed_artist + parsed_circle (parsed by the title
-    bracket analyzer). Duplicates are fine — by_author scoring already
-    deduplicates per-candidate.
-    """
-    out: list[str] = []
+    """Every artist/circle string we have for a manga, lowercased."""
+    names: list[str] = []
     if media.artist:
-        out.append(media.artist.strip().lower())
-    meta = media.metadata_profile
-    if meta:
-        if meta.parsed_artist:
-            out.append(meta.parsed_artist.strip().lower())
-        if meta.parsed_circle:
-            out.append(meta.parsed_circle.strip().lower())
-    return [s for s in out if s]
+        names.append(media.artist.strip().lower())
+    metadata = media.metadata_profile
+    if metadata:
+        if metadata.parsed_artist:
+            names.append(metadata.parsed_artist.strip().lower())
+        if metadata.parsed_circle:
+            names.append(metadata.parsed_circle.strip().lower())
+    # dedupe preserving order
+    seen: set[str] = set()
+    out: list[str] = []
+    for n in names:
+        if n and n not in seen:
+            seen.add(n)
+            out.append(n)
+    return out
+
+
+def _compute_reading_affinity(candidates: list[models.Media]) -> dict[str, float]:
+    """Compute affinity score for artists based on user's read history."""
+    read_counts = Counter()
+    for m in candidates:
+        if m.view_status in ("viewed", "viewing"):
+            for a in _all_artist_aliases(m):
+                read_counts[a] += 1
+    # 1 work read -> +6.0, 2 works -> +12.0, max +24.0
+    return {a: min(c * 6.0, 24.0) for a, c in read_counts.items()}
 
 
 # --- by_style ---------------------------------------------------------------
 
-# These constants mirror what recommendations.py was using inline. Keeping
-# them here keeps the retrievers self-contained.
-VECTOR_POOL = 60
-VECTOR_MIN_SIMILARITY = 0.30
-VECTOR_GAP_OVER_P90 = 0.10
-VECTOR_MIN_MAX_OVER_P90 = 0.12
-
-
 def by_style(
     candidates: list[models.Media],
-    query_terms: list[str],
+    query_terms: Iterable[str],
     avoid_tokens: list[str],
 ) -> tuple[list[tuple[int, float]], list[tuple[int, float]], dict[int, list[str]]]:
-    """BM25 + dense vector hybrid for theme/tone queries.
-
-    Returns three things in one tuple because the caller (recommend_manga)
-    wants all of them and recomputing inside it would be wasteful:
-      bm25_ranks      [(media_id, text_score)] sorted desc, text_score > 0
-      vec_ranks       [(media_id, similarity)] sorted desc, threshold-passed
-      matched_tags    {media_id: [tokens that hit fields]}
-
-    The retriever does NOT do the RRF fusion — that's the caller's job, so
-    it can mix in the prior score (rating / favorite / view_status) at the
-    same time.
-    """
-    if not query_terms:
-        return [], [], {}
-
-    # Tokenise once, dedupe.
+    """Hybrid BM25 + dense vector retrieval for theme / vibe queries."""
     tokens: list[str] = []
     for term in query_terms:
         tokens.extend(manga_search.tokenize(term))
+
+    # Expand query tokens with ACG tropes and cross-lingual synonyms
+    tokens = manga_search.expand_query_tokens(tokens)
+
     seen: set[str] = set()
     positive_tokens: list[str] = []
     for t in tokens:
@@ -178,7 +153,7 @@ def by_style(
     if not positive_tokens:
         return [], [], {}
 
-    # Build field tokens + IDF over the candidate set.
+    # Build field tokens + IDF over the candidate set
     field_tokens_by_id = {m.id: manga_search.build_field_tokens(m) for m in candidates}
     idf = manga_search.compute_idf(field_tokens_by_id)
 
@@ -195,13 +170,7 @@ def by_style(
             matched_tags[media.id] = matched
     bm25_scored.sort(key=lambda x: x[1], reverse=True)
 
-    # Vector pass — gated on BM25 finding *something*. Rationale: dense
-    # cosine over MiniLM-multilingual returns above-noise-floor hits for
-    # essentially every query (the "doujin baseline"), so without a BM25
-    # anchor we end up rescuing irrelevant manga whenever the user asks
-    # for something the library doesn't actually contain (the mignon
-    # case). Requiring at least one BM25 hit grounds the relevance signal
-    # and preserves the "honest empty result" guarantee.
+    # Vector pass — gated on BM25 finding *something*
     if not bm25_scored:
         return [], [], {}
 
@@ -222,16 +191,13 @@ def _vector_pass(
     positive_tokens: list[str],
     surviving_ids: set[int],
 ) -> list[tuple[int, float]]:
-    """Dense embedding retrieval with adaptive threshold.
-
-    Returns [(media_id, similarity)] of items above the noise floor, in
-    descending similarity. Returns [] when the model can't load or the
-    distribution suggests no real signal.
-    """
+    """Dense embedding retrieval with adaptive threshold."""
     try:
         import numpy as np
         query_text = " ".join(positive_tokens)[:512]
         query_vec = manga_vector.encode_query(query_text)
+        if query_vec is None:
+            return []
 
         profiles = [m.ai_profile for m in candidates
                     if m.ai_profile and m.id in surviving_ids]
@@ -256,7 +222,7 @@ def _vector_pass(
             threshold = VECTOR_MIN_SIMILARITY
 
         return [(mid, sim) for mid, sim in all_ranked[:VECTOR_POOL] if sim >= threshold]
-    except Exception as exc:  # noqa: BLE001 — best-effort
+    except Exception as exc:  # noqa: BLE001
         log.warning("by_style vector retrieval failed: %s", exc)
         return []
 
@@ -269,21 +235,12 @@ def similar_to(
     candidates: list[models.Media],
     surviving_ids: Optional[set[int]] = None,
 ) -> tuple[Optional[models.Media], list[tuple[int, float]]]:
-    """Find a referenced manga, then cosine-rank the rest by its embedding.
-
-    Returns (referenced_media, ranked_neighbours). `referenced_media` is
-    None when we can't identify what the user is talking about — caller
-    should report that to the user instead of guessing.
-
-    Neighbours exclude the referenced manga itself and pass the same
-    adaptive cosine threshold as by_style. `surviving_ids`, when given,
-    restricts the result to those (e.g. after avoid filtering).
-    """
+    """Find a referenced manga, then cosine-rank the rest by its embedding."""
     if not referenced_title or not referenced_title.strip():
         return None, []
 
-    # Resolve the referenced manga via fuzzy SQL LIKE on title/parsed_title.
-    needle = f"%{referenced_title.strip()}%"
+    # Resolve the referenced manga via fuzzy SQL LIKE on title/parsed_title
+    clean_target = referenced_title.strip().lower()
     referenced = (
         db.query(models.Media)
         .outerjoin(models.MangaMetadataProfile)
@@ -291,10 +248,8 @@ def similar_to(
             models.Media.media_type == "manga",
             models.Media.is_missing == False,  # noqa: E712
             or_(
-                func.lower(models.Media.title).like(f"%{referenced_title.strip().lower()}%"),
-                func.lower(models.MangaMetadataProfile.parsed_title).like(
-                    f"%{referenced_title.strip().lower()}%"
-                ),
+                func.lower(models.Media.title).like(f"%{clean_target}%"),
+                func.lower(models.MangaMetadataProfile.parsed_title).like(f"%{clean_target}%"),
             ),
         )
         .first()
@@ -310,7 +265,6 @@ def similar_to(
     if target_vec is None:
         return referenced, []
 
-    # Neighbour pool: all other surviving candidates with embeddings.
     profiles = [
         m.ai_profile for m in candidates
         if m.ai_profile and m.id != referenced.id
@@ -324,9 +278,6 @@ def similar_to(
     if not ranked:
         return referenced, []
 
-    # similar_to has a clearer signal definition (same manga = 1.0) so we
-    # use a flat threshold here, not the p90 trick. Anything < 0.40 is
-    # genuinely "different".
     return referenced, [(mid, sim) for mid, sim in ranked if sim >= 0.40][:VECTOR_POOL]
 
 
@@ -335,20 +286,17 @@ def similar_to(
 def browse(
     candidates: list[models.Media],
     avoid_tokens: list[str],
+    seed: Optional[int] = None,
 ) -> list[tuple[int, float]]:
-    """No-query default: favorites + rating + freshness ranking.
+    """Smart discovery ranking blending favorites, ratings, and user reading affinity.
 
-    Score is a weighted blend of:
-      favorite        +50 if true
-      rating          *10 per star (0..50)
-      not viewed      +10 (unviewed > viewing > viewed)
-      not viewing     +3
-      tiebreak by id desc (newer first) inside the score key
-
-    Avoid tokens still apply — the user can say "随便推荐点不要黑暗的" and
-    have it filter correctly.
+    Scores are boosted for:
+      - favorite: +50
+      - rating: rating * 10 (0..50)
+      - unread works by user's top-read artists: up to +24 affinity bonus
+      - unviewed vs viewing vs viewed status: prioritizing unread discoveries
+      - jitter: pseudo-random noise to shuffle candidates on "换一批"
     """
-    # Avoid filter: build minimal field tokens just for the avoid check.
     if avoid_tokens:
         field_tokens_by_id = {m.id: manga_search.build_field_tokens(m) for m in candidates}
         candidates = [
@@ -356,17 +304,30 @@ def browse(
             if not manga_search.avoid_hit(field_tokens_by_id[m.id], avoid_tokens)
         ]
 
+    artist_affinity = _compute_reading_affinity(candidates)
+    rng = random.Random(seed) if seed is not None else random.Random()
+
     scored: list[tuple[int, float]] = []
     for media in candidates:
         score = 0.0
         if media.favorite:
             score += 50.0
         score += (media.rating or 0) * 10.0
+
+        aliases = _all_artist_aliases(media)
+        best_affinity = max([artist_affinity.get(a, 0.0) for a in aliases] or [0.0])
+
         if media.view_status == "unviewed":
-            score += 10.0
+            score += 15.0 + best_affinity
         elif media.view_status == "viewing":
-            score += 3.0
-        # freshness tiebreak: tiny bump for higher id
+            score += 8.0 + (best_affinity * 0.5)
+        else:  # viewed
+            score -= 10.0
+
+        # Jitter so rerolling shuffles while respecting score strata
+        score += rng.uniform(0.0, 10.0)
+
+        # Freshness tiebreak: tiny bump for higher id
         score += min((media.id or 0) / 1_000_000.0, 0.001)
         scored.append((media.id, score))
 

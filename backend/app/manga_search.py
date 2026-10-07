@@ -13,9 +13,11 @@ field-weighted token matching + IDF rarity boost. Conceptually BM25-lite:
 - avoid terms are only checked against the *high-signal* fields (tag /
   meta_tag / parody / artist / title) — never summary or AI-generated text,
   which previously caused false-positive filtering.
+- cross-lingual ACG synonym expansion for common Chinese/Japanese tropes.
 
 Public API:
     tokenize(text)           -> list[str]
+    expand_query_tokens(tokens) -> list[str]
     build_field_tokens(media) -> dict[str, set[str]]
     compute_idf(by_media)    -> dict[str, float]
     score_text_match(fields, query_tokens, idf) -> (score, matched_terms)
@@ -61,7 +63,7 @@ FIELD_WEIGHTS: dict[str, float] = {
     "profile_kw": 3.0,
     "parody": 2.5,
     "artist": 2.5,
-    "title": 1.5,
+    "title": 2.0,
     "summary": 0.8,
 }
 
@@ -71,17 +73,96 @@ AVOID_FIELDS: tuple[str, ...] = ("tag", "meta_tag", "parody", "artist", "title")
 
 _LATIN_TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9_+\-]*")
 
+# Cross-lingual synonym and trope expansion mapping.
+# Maps common user query terms (in Simplified Chinese) to Japanese doujinshi,
+# kanji, katakana, and alias terms commonly present in manga titles and metadata.
+ACG_SYNONYM_MAP: dict[str, list[str]] = {
+    # 题材 / 人设 / 角色关系
+    "青梅竹马": ["幼馴染", "幼なじみ", "青梅", "自幼"],
+    "青梅": ["幼馴染", "幼なじみ", "青梅", "自幼"],
+    "幼驯染": ["幼馴染", "幼なじみ", "青梅竹马"],
+    "大姐姐": ["お姉さん", "お姉ちゃん", "姉", "年上", "姐姐"],
+    "姐": ["お姉さん", "お姉ちゃん", "姉", "年上"],
+    "姐姐": ["お姉さん", "お姉ちゃん", "姉", "年上"],
+    "妹妹": ["妹", "いもうと", "義妹"],
+    "学姐": ["先輩", "せんぱい", "学姐"],
+    "前辈": ["先輩", "せんぱい"],
+    "学妹": ["後輩", "こうはい", "学妹"],
+    "后辈": ["後輩", "こうはい"],
+    "同级生": ["同級生", "同学"],
+    "同学": ["同級生", "同学"],
+    "老师": ["先生", "女教師", "教师", "老师"],
+    "教师": ["先生", "女教師", "教师"],
+    "女仆": ["メイド", "女仆"],
+    "女仆装": ["メイド", "女仆"],
+    "兔女郎": ["バニー", "バニーガール", "兔女郎"],
+    "辣妹": ["ギャル", "辣妹", "黒ギャル"],
+    "纯爱": ["純愛", "恋", "愛", "好き", "カノジョ", "彼女", "恋人", "初恋"],
+    "恋爱": ["純愛", "恋", "愛", "好き", "カノジョ", "彼女", "恋人"],
+    "治愈": ["癒", "明亮", "温馨", "癒し", "日常", "温もり"],
+    "日常": ["日常", "ほのぼの"],
+    "催眠": ["催眠", "洗脳"],
+    "触手": ["触手"],
+    "寝取": ["寝取", "ntr", "NTR"],
+    "牛头人": ["寝取", "ntr", "NTR"],
+    "巨乳": ["巨乳", "爆乳", "おっぱい"],
+    "贫乳": ["貧乳", "ロリ"],
+    "萝莉": ["ロリ", "幼女"],
+    "泳装": ["水着", "泳装", "プール", "海"],
+    "温泉": ["温泉", "露天風呂"],
+    "浴衣": ["浴衣", "着物", "和服"],
+    "和服": ["浴衣", "着物", "和服"],
+    "全彩": ["full color", "color", "カラー", "全彩", "彩色感强"],
+    "彩色": ["full color", "color", "カラー", "全彩", "彩色感强"],
+    "短篇": ["短篇", "length:短篇", "文字较少"],
+    "中篇": ["中篇", "length:中篇"],
+    "长篇": ["长篇", "length:长篇"],
+    "无修": ["無修正", "无修"],
+    "无修正": ["無修正"],
+    # 热门 IP / 同人
+    "碧蓝档案": ["ブルーアーカイブ", "ブルアカ", "blue archive", "蔚蓝档案"],
+    "蔚蓝档案": ["ブルーアーカイブ", "ブルアカ", "blue archive"],
+    "原神": ["原神", "genshin"],
+    "明日方舟": ["アークナイツ", "明日方舟", "arknights"],
+    "偶像大师": ["アイドルマスター", "アイマス"],
+}
+
+
+def expand_query_tokens(tokens: Iterable[str]) -> list[str]:
+    """Broaden query tokens with ACG tropes and cross-lingual synonyms."""
+    out: list[str] = []
+    seen: set[str] = set()
+
+    for token in tokens:
+        if not token:
+            continue
+        t_clean = token.strip()
+        t_lower = t_clean.lower()
+        if t_lower not in seen:
+            seen.add(t_lower)
+            out.append(t_clean)
+
+        # Direct map hit
+        if t_lower in ACG_SYNONYM_MAP:
+            for syn in ACG_SYNONYM_MAP[t_lower]:
+                s_lower = syn.lower()
+                if s_lower not in seen:
+                    seen.add(s_lower)
+                    out.append(syn)
+        else:
+            # Substring / partial key hit
+            for key, syns in ACG_SYNONYM_MAP.items():
+                if key in t_lower or (len(t_lower) >= 2 and t_lower in key):
+                    for syn in syns:
+                        s_lower = syn.lower()
+                        if s_lower not in seen:
+                            seen.add(s_lower)
+                            out.append(syn)
+    return out
+
+
 # Tokens that show up as filler in free-form queries. Stripped before
 # scoring so they don't drag IDF down or produce noise hits.
-#
-# Includes:
-#   - Verbs / fillers      ("想看", "推荐", ...)
-#   - Generic catalog nouns ("漫画", "作品", "类型", ...)
-#   - Pronouns / determiners that latch onto everything ("我", "他", "她",
-#     "这个", "那个", "你") — without these, queries like "我想看作者X的作品"
-#     match every manga whose title contains "我".
-#   - Structural meta words ("作者", "画师", "画家") that the user uses to
-#     *name* the slot they care about, not as a content word.
 _STOPWORDS: frozenset[str] = frozenset({
     # zh — verbs / fillers
     "想看", "想要", "推荐", "一点", "一些", "看看", "求", "的", "了",
@@ -94,11 +175,7 @@ _STOPWORDS: frozenset[str] = frozenset({
     # zh — pronouns / determiners
     "我", "你", "他", "她", "它", "这", "那", "这个", "那个", "这种", "那种",
     "哪", "哪个", "什么", "怎么", "谁",
-    # ja — very common fillers + 1-char suffix particles that show up in
-    # almost every doujin tag/title ("〇〇系", "〇〇向", "〇〇風"). These are
-    # genre-suffix tokens, not content — leaving them in lets jieba splits
-    # like "治愈/系/明亮/温馨" produce a phantom "系" match on every manga
-    # with "やれやれ系" in its title.
+    # ja — common fillers
     "おすすめ", "好き", "もの", "こと",
     "系", "向", "派", "型", "風", "风",
     # en
@@ -158,7 +235,6 @@ def tokenize(text: Optional[str]) -> list[str]:
 def _tokenize_cjk_run(run: str) -> list[str]:
     if _HAS_JIEBA:
         cut = [t.strip() for t in jieba.cut(run, HMM=True)]
-        # jieba emits single-char tokens; keep CJK singles, drop punctuation
         return [t for t in cut if t]
     return _cjk_ngrams(run)
 
@@ -178,7 +254,25 @@ def _tokens_from_items(items: Iterable[str]) -> set[str]:
 
 
 def _tokens_from_text(text: Optional[str]) -> set[str]:
-    return set(tokenize(text))
+    if not text:
+        return set()
+    out: set[str] = set(tokenize(text))
+    s = text.strip().lower()
+    if s:
+        out.add(s)
+
+    # Extract Japanese Katakana words (e.g. ブルーアーカイブ, メイド, バニー)
+    for k in re.findall(r"[\u30a0-\u30ffー]{2,}", text):
+        out.add(k.lower())
+
+    # Extract bracketed segments: [Circle], (Parody)
+    for b in re.findall(r"\[([^\]]+)\]|\(([^)]+)\)|（([^）]+)）|【([^】]+)】", text):
+        for part in b:
+            if part and len(part.strip()) > 1:
+                cleaned = part.strip().lower()
+                out.add(cleaned)
+                out.update(tokenize(cleaned))
+    return out
 
 
 def _tag_field(media: models.Media) -> list[str]:
@@ -203,8 +297,16 @@ def _profile_kw_field(media: models.Media) -> list[str]:
 
 
 def _parody_field(media: models.Media) -> str:
+    parts: list[str] = []
     metadata = media.metadata_profile
-    return (metadata.parody or "") if metadata else ""
+    if metadata and metadata.parody:
+        parts.append(metadata.parody)
+    if media.title:
+        for match in re.finditer(r"\(([^)]+)\)|（([^）]+)）", media.title):
+            p = match.group(1) or match.group(2)
+            if p and len(p.strip()) > 1:
+                parts.append(p.strip())
+    return " ".join(parts)
 
 
 def _artist_field(media: models.Media) -> str:
@@ -221,10 +323,13 @@ def _artist_field(media: models.Media) -> str:
 
 
 def _title_field(media: models.Media) -> str:
+    parts: list[str] = []
+    if media.title:
+        parts.append(media.title)
     metadata = media.metadata_profile
-    if metadata and metadata.parsed_title:
-        return metadata.parsed_title
-    return media.title or ""
+    if metadata and metadata.parsed_title and metadata.parsed_title != media.title:
+        parts.append(metadata.parsed_title)
+    return " ".join(parts)
 
 
 def _summary_field(media: models.Media) -> str:
@@ -271,27 +376,39 @@ def score_text_match(
     query_tokens: Iterable[str],
     idf: dict[str, float],
 ) -> tuple[float, list[str]]:
-    """Sum weighted hits across fields, multiplied by per-token IDF.
-
-    Returns (score, matched_terms). matched_terms preserves first-hit order
-    so the caller can surface "what we matched on" to the user.
-    """
+    """Sum weighted hits across fields, multiplied by per-token IDF."""
     score = 0.0
     matched: list[str] = []
     seen_terms: set[str] = set()
+
     for token in query_tokens:
         if not token:
             continue
+        token_lower = token.lower()
         token_weight = 0.0
+        hit = False
+
         for field, weight in FIELD_WEIGHTS.items():
-            if token in fields.get(field, ()):
+            field_tokens = fields.get(field, set())
+            if token in field_tokens or token_lower in field_tokens:
                 token_weight += weight
-        if token_weight <= 0:
+                hit = True
+            elif len(token_lower) >= 2:
+                # Substring matching against field tokens
+                for f_token in field_tokens:
+                    if token_lower in f_token or (len(f_token) >= 2 and f_token in token_lower):
+                        token_weight += weight * 0.75
+                        hit = True
+                        break
+
+        if not hit or token_weight <= 0:
             continue
+
         score += token_weight * idf.get(token, 1.0)
         if token not in seen_terms:
             matched.append(token)
             seen_terms.add(token)
+
     return score, matched
 
 
@@ -299,7 +416,13 @@ def avoid_hit(fields: dict[str, set[str]], avoid_tokens: Iterable[str]) -> bool:
     for token in avoid_tokens:
         if not token:
             continue
+        token_lower = token.lower()
         for field in AVOID_FIELDS:
-            if token in fields.get(field, ()):
+            field_tokens = fields.get(field, ())
+            if token in field_tokens or token_lower in field_tokens:
                 return True
+            if len(token_lower) >= 2:
+                for f_token in field_tokens:
+                    if token_lower in f_token:
+                        return True
     return False

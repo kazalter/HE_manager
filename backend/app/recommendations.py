@@ -431,21 +431,43 @@ def _query_tokens(preferences: dict, key: str) -> list[str]:
 
 # --- Reason synthesis ------------------------------------------------------
 
+_NOISE_TERMS = {
+    "dl版", "中国翻訳", "汉化", "漢化", "白杨汉化组", "吗喽汉化组",
+    "镜面光折射汉化", "无邪気漢化組", "欶澜汉化组", "category:後頁>",
+    "language:中文", "无修正", "無修正"
+}
+
+
 def local_reason(media: models.Media, matched_terms: list[str]) -> str:
     bits = []
-    if matched_terms:
-        bits.append(f"匹配到 {', '.join(matched_terms[:3])}")
-    if media.rating:
-        bits.append(f"已有 {media.rating} 星评分")
+    clean_terms = [t for t in matched_terms if t.lower() not in _NOISE_TERMS]
+    if clean_terms:
+        bits.append(f"契合主题「{', '.join(clean_terms[:3])}」")
+
+    artist = media.artist
+    if not artist and media.metadata_profile and media.metadata_profile.parsed_artist:
+        artist = media.metadata_profile.parsed_artist
+    if artist:
+        bits.append(f"画师【{artist}】作品")
+
+    if media.view_status == "unviewed":
+        bits.append("尚未阅读的新作")
+    elif media.view_status == "viewing":
+        bits.append("正在阅读中")
+
     if media.favorite:
-        bits.append("你收藏过它")
+        bits.append("星标收藏")
+    if media.rating:
+        bits.append(f"{media.rating}星评价")
     if media.page_count:
-        bits.append(f"{media.page_count} 页，长度比较明确")
-    if media.ai_profile and media.ai_profile.content_summary:
-        bits.append(media.ai_profile.content_summary[:80])
+        bits.append(f"{media.page_count}页")
+
     if not bits:
-        bits.append("和当前输入在标题、作者或标签上有接近点")
-    return "；".join(bits) + "。"
+        if media.ai_profile and media.ai_profile.content_summary:
+            bits.append(media.ai_profile.content_summary[:60])
+        else:
+            bits.append("馆藏精选推荐")
+    return " · ".join(bits)
 
 
 # --- DeepSeek rerank -------------------------------------------------------
@@ -765,9 +787,10 @@ def _route_browse(
     preferences: dict,
     candidates: list[models.Media],
     avoid_tokens: list[str],
+    seed: Optional[int] = None,
 ) -> tuple[list[dict], Optional[str]]:
-    """No-query default: rating + favorite + freshness."""
-    ranks = manga_retrievers.browse(candidates, avoid_tokens)
+    """Discovery default: rating + favorite + reading affinity + shuffle."""
+    ranks = manga_retrievers.browse(candidates, avoid_tokens, seed=seed)
     if not ranks:
         return [], "manga 库为空，或所有作品都被排除标签过滤掉了。"
 
@@ -798,6 +821,7 @@ def recommend_manga(
     limit: int,
     avoid_tags: Iterable[str],
     preferred_tags: Iterable[str],
+    seed: Optional[int] = None,
 ) -> dict:
     preferences, ai_enabled, message = parse_preferences(query, avoid_tags, preferred_tags)
     intent: str = preferences.get("intent") or "by_style"
@@ -813,12 +837,12 @@ def recommend_manga(
     elif intent == "similar_to":
         scored, err = _route_similar_to(db, preferences, candidates, avoid_tokens)
     elif intent == "browse":
-        scored, err = _route_browse(preferences, candidates, avoid_tokens)
+        scored, err = _route_browse(preferences, candidates, avoid_tokens, seed=seed)
     else:  # by_style — also the down-route target when other intents have empty slots
         scored, err = _route_by_style(preferences, candidates, avoid_tokens)
         # If by_style had no content terms at all, gracefully fall back to browse.
         if not scored and err is None:
-            scored, err = _route_browse(preferences, candidates, avoid_tokens)
+            scored, err = _route_browse(preferences, candidates, avoid_tokens, seed=seed)
             intent = "browse"
             preferences["intent"] = "browse"
 

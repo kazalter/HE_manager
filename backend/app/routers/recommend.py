@@ -169,4 +169,5 @@ def recommend_manga(payload: schemas.MangaRecommendationRequest, db: Session = D
         limit=payload.limit,
         avoid_tags=payload.avoid_tags,
         preferred_tags=payload.preferred_tags,
+        seed=payload.seed,
     )

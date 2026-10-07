@@ -105,10 +105,11 @@ class TagMergeRequest(BaseModel):
 
 
 class MangaRecommendationRequest(BaseModel):
-    query: str = Field(min_length=1, max_length=4000)
+    query: str = Field(default="", max_length=4000)
     limit: int = Field(default=12, ge=1)
     avoid_tags: List[str] = []
     preferred_tags: List[str] = []
+    seed: Optional[int] = None
 
 
 class MangaRecommendationItem(BaseModel):
