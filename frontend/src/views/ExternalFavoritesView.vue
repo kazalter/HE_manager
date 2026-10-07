@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Check, ChevronDown } from 'lucide-vue-next'
+import { computed, onMounted, watch } from 'vue'
+import {
+  ArrowRight,
+  CheckCircle2,
+  Layers,
+  ShieldCheck,
+} from 'lucide-vue-next'
+import { useRoute, useRouter } from 'vue-router'
 import wnacgLogo from '../assets/external-sources/wnacg.png'
 import xLogo from '../assets/external-sources/x.svg'
 import asmrOneLogo from '../assets/external-sources/asmr-one.png'
 import pawchiveLogo from '../assets/external-sources/pawchive.png'
-import { useRoute, useRouter } from 'vue-router'
 import WnacgPanel from '../components/external/WnacgPanel.vue'
 import XImportPanel from '../components/external/XImportPanel.vue'
 import AsmrPanel from '../components/external/AsmrPanel.vue'
@@ -16,169 +21,224 @@ type SiteKey = 'wnacg' | 'x' | 'asmr' | 'pawchive'
 interface SiteOption {
   key: SiteKey
   label: string
+  sublabel: string
+  badge: string
   description: string
   logo: string
+  logoClass?: string
+  accentBorder: string
+  accentBg: string
+  accentText: string
+  glowColor: string
 }
 
 const sites: SiteOption[] = [
-  { key: 'wnacg', label: 'WNACG', description: '漫画收藏夹同步与下载', logo: wnacgLogo },
-  { key: 'x', label: 'X (Twitter)', description: '喜欢媒体一键导入', logo: xLogo },
-  { key: 'asmr', label: 'ASMR.one', description: 'ASMR 标记作品同步与下载', logo: asmrOneLogo },
-  { key: 'pawchive', label: 'Pawchive', description: '作者收藏、帖子浏览与下载', logo: pawchiveLogo },
+  {
+    key: 'wnacg',
+    label: 'WNACG',
+    sublabel: '绅士漫画',
+    badge: 'MANGA',
+    description: '个人收藏夹同步、章节目录解析与本地漫画库批量下载入库',
+    logo: wnacgLogo,
+    logoClass: 'w-14 object-contain',
+    accentBorder: 'border-amber-500/50',
+    accentBg: 'bg-amber-500/12',
+    accentText: 'text-amber-300',
+    glowColor: 'shadow-amber-500/15',
+  },
+  {
+    key: 'x',
+    label: 'X (Twitter)',
+    sublabel: '社交媒体',
+    badge: 'MEDIA',
+    description: '喜欢与书签媒体一键导入、推文归档与本地图片视频自动化转存',
+    logo: xLogo,
+    logoClass: 'h-7 w-7 object-contain',
+    accentBorder: 'border-sky-500/50',
+    accentBg: 'bg-sky-500/12',
+    accentText: 'text-sky-300',
+    glowColor: 'shadow-sky-500/15',
+  },
+  {
+    key: 'asmr',
+    label: 'ASMR.one',
+    sublabel: '同人音声',
+    badge: 'AUDIO',
+    description: '标记作品双向同步、沉浸式在线试听与智能格式过滤下载',
+    logo: asmrOneLogo,
+    logoClass: 'h-8 w-8 object-contain',
+    accentBorder: 'border-purple-500/50',
+    accentBg: 'bg-purple-500/12',
+    accentText: 'text-purple-300',
+    glowColor: 'shadow-purple-500/15',
+  },
+  {
+    key: 'pawchive',
+    label: 'Pawchive',
+    sublabel: '创作者画廊',
+    badge: 'CREATOR',
+    description: 'Patreon / Fanbox 创作者画廊订阅、高清序列播放与原图批量归档',
+    logo: pawchiveLogo,
+    logoClass: 'h-8 w-8 object-contain',
+    accentBorder: 'border-pink-500/50',
+    accentBg: 'bg-pink-500/12',
+    accentText: 'text-pink-300',
+    glowColor: 'shadow-pink-500/15',
+  },
 ]
 
 const route = useRoute()
 const router = useRouter()
+
 const activeSite = computed<SiteKey>(() => {
   const source = route.query.source
   return typeof source === 'string' && sites.some(site => site.key === source)
-    ? source as SiteKey
+    ? (source as SiteKey)
     : 'wnacg'
 })
-const activeOption = computed(() => sites.find(site => site.key === activeSite.value) || sites[0]!)
-const selectorRef = ref<HTMLDivElement | null>(null)
-const selectorButtonRef = ref<HTMLButtonElement | null>(null)
-const selectorOpen = ref(false)
 
-const optionButtons = () => selectorRef.value?.querySelectorAll<HTMLButtonElement>('[data-source-option]')
-const focusOption = (index: number) => { optionButtons()?.item(index)?.focus() }
-const moveOptionFocus = (step: number) => {
-  const buttons = optionButtons()
-  if (!buttons?.length) return
-  const current = Array.from(buttons).indexOf(document.activeElement as HTMLButtonElement)
-  focusOption((current + step + buttons.length) % buttons.length)
-}
-const closeSelector = (restoreFocus = false) => {
-  selectorOpen.value = false
-  if (restoreFocus) void nextTick(() => selectorButtonRef.value?.focus())
-}
-const openSelector = () => {
-  if (selectorOpen.value) return
-  selectorOpen.value = true
-  void nextTick(() => focusOption(sites.findIndex(site => site.key === activeSite.value)))
-}
-const toggleSelector = () => {
-  if (selectorOpen.value) closeSelector(true)
-  else openSelector()
-}
-const selectSite = (source: SiteKey, restoreFocus = true) => {
-  closeSelector(restoreFocus)
+const activeOption = computed(() => sites.find(site => site.key === activeSite.value) || sites[0]!)
+
+const selectSite = (source: SiteKey) => {
   if (source !== activeSite.value) {
     void router.replace({ path: route.path, query: { ...route.query, source } })
   }
 }
-const onDocumentPointerDown = (event: PointerEvent) => {
-  if (selectorOpen.value && !selectorRef.value?.contains(event.target as Node)) closeSelector()
-}
-const onDocumentFocusIn = (event: FocusEvent) => {
-  if (selectorOpen.value && !selectorRef.value?.contains(event.target as Node)) closeSelector()
-}
-watch(() => route.query.source, () => { closeSelector(); try { localStorage.setItem('he_external_source', activeSite.value) } catch { /* optional */ } })
+
+watch(
+  () => route.query.source,
+  () => {
+    try {
+      localStorage.setItem('he_external_source', activeSite.value)
+    } catch {
+      /* ignore */
+    }
+  }
+)
+
 onMounted(() => {
   if (!route.query.source) {
     const saved = localStorage.getItem('he_external_source')
-    if (saved && sites.some(site => site.key === saved)) void router.replace({ path: route.path, query: { ...route.query, source: saved } })
+    if (saved && sites.some(site => site.key === saved)) {
+      void router.replace({ path: route.path, query: { ...route.query, source: saved } })
+    }
   }
-  document.addEventListener('pointerdown', onDocumentPointerDown)
-  document.addEventListener('focusin', onDocumentFocusIn)
 })
-onBeforeUnmount(() => {
-  document.removeEventListener('pointerdown', onDocumentPointerDown)
-  document.removeEventListener('focusin', onDocumentFocusIn)
-})
-
 </script>
 
 <template>
-  <div class="z-10 relative min-h-screen">
-    <header class="he-page-header sticky top-0 z-40 bg-background/75 backdrop-blur-xl border-b border-white/10 px-6 md:px-8 py-5 mb-6">
-      <div class="flex flex-wrap items-center justify-between gap-4">
-        <div class="flex items-baseline gap-3">
-          <h1 class="text-2xl md:text-3xl font-black text-white tracking-tight">外部收藏</h1>
-          <p class="text-[11px] font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20 uppercase tracking-widest">
-            MULTI-SOURCE
-          </p>
-        </div>
-        <div ref="selectorRef" class="relative w-full min-w-0 sm:w-72">
-          <span class="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-white/50">数据源</span>
-          <div class="relative sm:hidden">
-            <div aria-hidden="true" class="flex min-h-14 w-full items-center gap-3 rounded-2xl border border-white/15 bg-sidebar/90 px-3 text-left shadow-sm">
-              <span class="flex h-10 w-16 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/30">
-                <img :src="activeOption.logo" alt="" draggable="false" class="object-contain" :class="activeSite === 'wnacg' ? 'w-14' : 'h-8 w-8'" />
-              </span>
-              <span class="min-w-0 flex-1">
-                <span class="block truncate text-sm font-bold text-white">{{ activeOption.label }}</span>
-                <span class="block truncate text-xs text-white/55">{{ activeOption.description }}</span>
-              </span>
-              <ChevronDown :size="17" class="shrink-0 text-white/55" aria-hidden="true" />
-            </div>
-            <select
-              :value="activeSite"
-              aria-label="切换外部收藏数据源"
-              class="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
-              @change="selectSite(($event.target as HTMLSelectElement).value as SiteKey, false)"
-            >
-              <option v-for="site in sites" :key="site.key" :value="site.key">{{ site.label }}</option>
-            </select>
+  <div class="z-10 relative min-h-screen text-white pb-16">
+    <!-- Top Sticky Header -->
+    <header class="he-page-header sticky top-0 z-40 bg-surface/75 backdrop-blur-xl border-b border-white/10 px-4 md:px-8 py-3.5 mb-6">
+      <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-accent/30 to-purple-500/20 border border-accent/40 flex items-center justify-center text-accent shrink-0 shadow-lg shadow-accent/10">
+            <Layers :size="20" />
           </div>
-          <button
-            ref="selectorButtonRef"
-            type="button"
-            :aria-expanded="selectorOpen"
-            aria-controls="external-source-options"
-            class="hidden sm:flex min-h-14 w-full items-center gap-3 rounded-2xl border bg-sidebar/90 px-3 text-left shadow-sm transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            :class="selectorOpen ? 'border-accent/60 bg-accent/10' : 'border-white/15 hover:border-white/35 hover:bg-white/5'"
-            @click="toggleSelector"
-            @keydown.down.prevent="openSelector"
-            @keydown.up.prevent="openSelector"
-            @keydown.esc.prevent.stop="closeSelector(true)"
-          >
-            <span class="flex h-10 w-16 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/30">
-              <img :src="activeOption.logo" alt="" draggable="false" class="object-contain" :class="activeSite === 'wnacg' ? 'w-14' : 'h-8 w-8'" />
-            </span>
-            <span class="min-w-0 flex-1">
-              <span class="block truncate text-sm font-bold text-white">{{ activeOption.label }}</span>
-              <span class="block truncate text-xs text-white/55">{{ activeOption.description }}</span>
-            </span>
-            <ChevronDown :size="17" class="shrink-0 text-white/55 transition-transform duration-200" :class="selectorOpen ? 'rotate-180' : ''" aria-hidden="true" />
-          </button>
-          <div
-            v-show="selectorOpen"
-            id="external-source-options"
-            role="group"
-            aria-label="可用数据源"
-            class="hidden sm:block absolute right-0 top-[calc(100%+0.5rem)] z-50 w-full overflow-y-auto rounded-2xl border border-white/15 bg-sidebar p-2 shadow-2xl shadow-black/45 sm:w-80 max-h-[60vh]"
-            @keydown.down.prevent="moveOptionFocus(1)"
-            @keydown.up.prevent="moveOptionFocus(-1)"
-            @keydown.home.prevent="focusOption(0)"
-            @keydown.end.prevent="focusOption(sites.length - 1)"
-            @keydown.esc.prevent.stop="closeSelector(true)"
-          >
-            <button
-              v-for="site in sites"
-              :key="site.key"
-              data-source-option
-              type="button"
-              :aria-pressed="activeSite === site.key"
-              class="flex min-h-16 w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              :class="activeSite === site.key ? 'border-accent/35 bg-accent/12' : 'border-transparent hover:border-white/10 hover:bg-white/7'"
-              @click="selectSite(site.key)"
-            >
-              <span class="flex h-10 w-16 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/30">
-                <img :src="site.logo" alt="" draggable="false" class="object-contain" :class="site.key === 'wnacg' ? 'w-14' : 'h-8 w-8'" />
-              </span>
-              <span class="min-w-0 flex-1">
-                <span class="block truncate text-sm font-semibold text-white">{{ site.label }}</span>
-                <span class="block text-xs leading-5 text-white/55">{{ site.description }}</span>
-              </span>
-              <Check v-if="activeSite === site.key" :size="17" class="shrink-0 text-accent" aria-hidden="true" />
-            </button>
+          <div>
+            <h1 class="text-xl md:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+              外部收藏与同步
+            </h1>
+            <p class="text-[11px] text-white/50 truncate">
+              多平台收藏夹拉取 · 智能媒体转存 · 本地媒体库双向联动
+            </p>
+          </div>
+        </div>
+
+        <!-- Security & Status Badge -->
+        <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1.5 px-3 py-1 rounded-full border border-emerald-400/25 bg-emerald-500/10 text-emerald-300 text-xs font-bold backdrop-blur-md">
+            <ShieldCheck :size="14" />
+            <span>凭据本地加密保护</span>
           </div>
         </div>
       </div>
     </header>
 
-    <main class="px-6 md:px-8 pb-12 space-y-6">
+    <!-- Hero Source Switcher Cards -->
+    <section class="max-w-7xl mx-auto px-4 md:px-8 mb-5">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <button
+          v-for="site in sites"
+          :key="site.key"
+          type="button"
+          @click="selectSite(site.key)"
+          :class="[
+            activeSite === site.key
+              ? `${site.accentBorder} ${site.accentBg} shadow-xl ${site.glowColor} ring-1 ring-white/15 scale-[1.01]`
+              : 'border-white/10 bg-surface/40 hover:border-white/20 hover:bg-surface/70'
+          ]"
+          class="group relative flex flex-col justify-between p-4 rounded-2xl border transition-all duration-200 text-left active:scale-[0.98] cursor-pointer"
+        >
+          <div>
+            <div class="flex items-start justify-between gap-2 mb-3">
+              <!-- Logo Container -->
+              <div class="h-10 w-16 flex items-center justify-center rounded-xl bg-black/40 border border-white/10 group-hover:scale-105 transition-transform duration-200">
+                <img :src="site.logo" alt="" draggable="false" :class="site.logoClass || 'h-8 w-8 object-contain'" />
+              </div>
+              <!-- Badge -->
+              <span
+                :class="activeSite === site.key ? `${site.accentText} bg-white/10` : 'text-white/40 bg-white/5'"
+                class="px-2 py-0.5 rounded-md text-[10px] font-black tracking-wider uppercase border border-white/5"
+              >
+                {{ site.badge }}
+              </span>
+            </div>
+
+            <div class="flex items-center gap-1.5">
+              <span class="text-sm sm:text-base font-black text-white group-hover:text-accent transition-colors">
+                {{ site.label }}
+              </span>
+              <span class="text-xs text-white/40 font-medium">· {{ site.sublabel }}</span>
+            </div>
+
+            <p class="text-xs text-white/55 mt-1 line-clamp-1 leading-relaxed">
+              {{ site.description }}
+            </p>
+          </div>
+
+          <!-- Bottom Status Bar -->
+          <div class="mt-3.5 pt-2.5 border-t border-white/8 flex items-center justify-between text-[11px]">
+            <span
+              :class="activeSite === site.key ? site.accentText : 'text-white/35'"
+              class="font-bold flex items-center gap-1"
+            >
+              <CheckCircle2 v-if="activeSite === site.key" :size="12" />
+              <span>{{ activeSite === site.key ? '当前数据源' : '点击切换' }}</span>
+            </span>
+            <ArrowRight
+              :size="13"
+              class="transition-transform group-hover:translate-x-1"
+              :class="activeSite === site.key ? site.accentText : 'text-white/20'"
+            />
+          </div>
+        </button>
+      </div>
+    </section>
+
+    <!-- Active Platform Banner -->
+    <div class="max-w-7xl mx-auto px-4 md:px-8 mb-5">
+      <div class="flex items-center justify-between px-4 py-2.5 rounded-2xl border border-white/8 bg-white/[0.02] backdrop-blur-md">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span class="w-2 h-2 rounded-full animate-pulse" :class="activeOption.accentText">●</span>
+          <span class="text-xs font-bold text-white truncate">
+            {{ activeOption.label }} 平台空间
+          </span>
+          <span class="hidden sm:inline text-xs text-white/40 truncate">
+            — {{ activeOption.description }}
+          </span>
+        </div>
+        <div class="flex items-center gap-2 shrink-0 text-xs text-white/45">
+          <span class="hidden md:inline">定时自动同步已支持</span>
+          <span class="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[10px] font-bold text-white/60">
+            活跃
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Panel Container -->
+    <main class="max-w-7xl mx-auto px-4 md:px-8 space-y-6">
       <!-- Keep panel instances alive so source state survives switching. -->
       <KeepAlive>
         <WnacgPanel v-if="activeSite === 'wnacg'" key="wnacg" />
