@@ -35,6 +35,10 @@ export interface DedupSummary {
     checking: number;
     queue_size: number;
     worker_running: boolean;
+    total_media: number;
+    fingerprinted: number;
+    unchecked: number;
+    failed: number;
 }
 
 export interface DedupMediaSummary {

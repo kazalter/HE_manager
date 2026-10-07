@@ -95,13 +95,13 @@ def apply_local_dedup_precheck(
     library_title_index: set,
     pending_dedup_paths: list,
 ) -> None:
-    """Compute the normalized title and decide whether this entry needs the dedup worker."""
+    """Index every new entry so renamed copies can also be detected by content."""
     norm = dedup_normalize.normalize_title(getattr(media, "title", "") or "")
     setattr(media, "normalized_title", norm)
     if norm and norm in library_title_index:
         setattr(media, "duplicate_status", "checking")
-        pending_dedup_paths.append(getattr(media, "absolute_path", ""))
     else:
-        setattr(media, "duplicate_status", "unique")
+        setattr(media, "duplicate_status", "dedup_pending")
+    pending_dedup_paths.append(getattr(media, "absolute_path", ""))
     if norm:
         library_title_index.add(norm)

@@ -26,18 +26,12 @@ import PaginationControl from '../components/PaginationControl.vue'
 const previewModalPair = ref<DuplicateCandidatePair | null>(null)
 
 const getQualityComparison = (pair: DuplicateCandidatePair) => {
-  const leftSize = pair.existing.file_size || 0
-  const rightSize = pair.candidate.file_size || 0
-  const sizeDiff = leftSize - rightSize
-
   const leftRes = (pair.existing.width || 0) * (pair.existing.height || 0)
   const rightRes = (pair.candidate.width || 0) * (pair.candidate.height || 0)
 
   if (leftRes > rightRes && rightRes > 0) return 'left'
   if (rightRes > leftRes && leftRes > 0) return 'right'
 
-  if (sizeDiff > 1024 * 50) return 'left'
-  if (sizeDiff < -1024 * 50) return 'right'
   return 'equal'
 }
 
@@ -113,6 +107,7 @@ const statusLabel = (status: string) => ({
   replaced: '已采用右侧路径',
   kept_both: '已标记非重复',
   ignored: '已忽略',
+  stale: '检测结果已失效',
 }[status] || status)
 
 const comparisonRows = (pair: DuplicateCandidatePair) => [
@@ -140,6 +135,39 @@ const rangeStart = computed(() => total.value ? (dedupStore.state.page - 1) * de
 const rangeEnd = computed(() => Math.min(total.value, dedupStore.state.page * dedupStore.state.pageSize))
 const noPairs = computed(() => !loading.value && pairs.value.length === 0)
 const selectedCount = computed(() => selectedPairIds.value.size)
+const scanActive = computed(() => dedupStore.state.scanStarting || (summary.value?.checking ?? 0) > 0 || (summary.value?.queue_size ?? 0) > 0)
+const coverage = computed(() => summary.value?.total_media
+  ? Math.round((summary.value.fingerprinted / summary.value.total_media) * 100) : 0)
+const hasFilters = computed(() => !!dedupStore.state.filterLevel || !!dedupStore.state.filterMediaType || dedupStore.state.filterStatus !== 'pending')
+let pollTimer: ReturnType<typeof window.setTimeout> | undefined
+let disposed = false
+
+const schedulePoll = () => {
+  if (disposed || pollTimer !== undefined || !scanActive.value) return
+  pollTimer = window.setTimeout(async () => {
+    pollTimer = undefined
+    await dedupStore.refresh()
+    schedulePoll()
+  }, 3000)
+}
+
+watch(scanActive, (active) => {
+  if (active) schedulePoll()
+  else if (pollTimer !== undefined) {
+    window.clearTimeout(pollTimer)
+    pollTimer = undefined
+  }
+})
+
+const onRecheckLibrary = async () => {
+  if (scanActive.value) return
+  await dedupStore.recheckLibrary()
+}
+
+const resetFilters = async () => {
+  dedupStore.setFilters({ level: '', status: 'pending', mediaType: '' })
+  await dedupStore.fetchPairs()
+}
 
 watch(pairs, (nextPairs) => {
   const validIds = new Set(nextPairs.map(pair => pair.id))
@@ -286,7 +314,11 @@ onMounted(async () => {
   await dedupStore.refresh()
 })
 
-onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalEscape))
+onBeforeUnmount(() => {
+  disposed = true
+  if (pollTimer !== undefined) window.clearTimeout(pollTimer)
+  window.removeEventListener('keydown', handleGlobalEscape)
+})
 </script>
 
 <template>
@@ -305,6 +337,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalEscape))
           type="button"
           @click="onRefresh"
           :disabled="loading"
+          aria-label="刷新检测状态"
           class="flex h-11 shrink-0 items-center gap-2 rounded-xl border border-white/12 bg-white/5 px-3.5 text-sm font-bold text-white/75 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-55"
         >
           <RefreshCw :size="17" :class="(loading || refreshSpinning) ? 'animate-spin' : ''" aria-hidden="true" />
@@ -325,6 +358,34 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalEscape))
         </button>
       </div>
 
+      <section aria-label="内容检测" class="rounded-2xl border border-white/10 bg-white/[0.035] p-4 min-[640px]:p-5">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div class="min-w-0 flex-1">
+            <h2 class="flex items-center gap-2 text-base font-black text-white"><ShieldCheck :size="19" class="text-accent" aria-hidden="true" /> 内容检测</h2>
+          </div>
+          <button type="button" @click="onRecheckLibrary" :disabled="scanActive || !summary?.total_media" class="flex min-h-11 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-bold text-white transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50">
+            <RefreshCw :size="17" :class="scanActive ? 'animate-spin' : ''" aria-hidden="true" />
+            {{ scanActive ? '检测进行中' : '检测全库' }}
+          </button>
+        </div>
+        <p class="mt-2 max-w-2xl text-sm leading-relaxed text-white/60">按文件内容寻找重复，支持改名后的副本。检测只生成待审查结果，保留与清理由你决定。</p>
+        <div class="mt-4 grid grid-cols-2 gap-3 min-[900px]:grid-cols-4" aria-live="polite">
+          <div class="rounded-xl bg-black/15 p-3"><p class="text-xs font-medium text-white/60">可检测媒体</p><p class="mt-1 text-2xl font-black text-white">{{ summary?.total_media ?? '—' }} <span class="text-xs font-medium text-white/50">项</span></p></div>
+          <div class="rounded-xl bg-black/15 p-3"><p class="text-xs font-medium text-white/60">已建立指纹</p><p class="mt-1 text-2xl font-black text-white">{{ summary?.fingerprinted ?? '—' }} <span class="text-xs font-medium text-white/50">项</span></p></div>
+          <div class="rounded-xl bg-black/15 p-3"><p class="text-xs font-medium text-white/60">待审查结果</p><p class="mt-1 text-2xl font-black text-accent">{{ summary?.pending_pairs ?? '—' }} <span class="text-xs font-medium text-white/50">组</span></p></div>
+          <div class="rounded-xl bg-black/15 p-3"><p class="text-xs font-medium text-white/60">检测失败</p><p class="mt-1 text-2xl font-black" :class="summary?.failed ? 'text-amber-200' : 'text-white'">{{ summary?.failed ?? '—' }} <span class="text-xs font-medium text-white/50">项</span></p></div>
+        </div>
+        <div class="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-white/65">
+          <span>指纹覆盖 {{ coverage }}%</span>
+          <span v-if="scanActive" role="status">后台检测中 · {{ summary?.checking ?? 0 }} 项等待处理 · 结果自动更新</span>
+          <span v-else-if="summary?.unchecked">{{ summary.unchecked }} 项尚未建立指纹，建议检测全库</span>
+          <span v-else>支持视频、漫画、图片和音频</span>
+        </div>
+        <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-label="指纹覆盖率" :aria-valuenow="coverage" aria-valuemin="0" aria-valuemax="100"><div class="h-full rounded-full bg-accent transition-[width] motion-reduce:transition-none" :style="{ width: `${coverage}%` }"></div></div>
+        <p v-if="summary?.failed" class="mt-3 flex items-start gap-2 text-xs leading-relaxed text-amber-200"><AlertTriangle :size="15" class="shrink-0" aria-hidden="true" />{{ summary.failed }} 项检测失败，请检查文件可读性后重新检测。</p>
+        <p class="mt-3 text-xs leading-relaxed text-white/50">图片比较文件指纹；漫画、视频和音频比较抽样内容。同名文件还会比较页数、时长等信息。压缩或转码后的不同版本可能无法识别。</p>
+      </section>
+
       <section aria-label="重复检测状态" class="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-white/10 bg-white/[0.035] px-4 py-2.5 text-sm">
         <span class="font-black text-white">{{ summary?.pending_pairs ?? 0 }} <span class="font-medium text-white/55">待处理</span></span>
         <span class="text-white/20">·</span>
@@ -334,8 +395,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalEscape))
         <span class="text-white/20">·</span>
         <span class="font-bold text-sky-200">{{ summary?.weak_suspected ?? 0 }} <span class="font-medium text-white/50">低置信</span></span>
         <span class="ml-auto flex items-center gap-2 text-white/60">
-          <span :class="summary?.worker_running ? 'bg-emerald-300' : 'bg-white/30'" class="h-2 w-2 rounded-full"></span>
-          {{ summary?.worker_running ? `检测中 · 队列 ${summary?.queue_size ?? 0}` : '检测任务空闲' }}
+          <span :class="scanActive ? 'bg-emerald-300' : 'bg-white/30'" class="h-2 w-2 rounded-full"></span>
+          {{ scanActive ? `检测中 · 队列 ${summary?.queue_size ?? 0}` : '检测任务空闲' }}
         </span>
       </section>
 
@@ -366,6 +427,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalEscape))
               <option value="replaced">已采用右侧路径</option>
               <option value="kept_both">已标记非重复</option>
               <option value="ignored">已忽略</option>
+              <option value="stale">检测结果已失效</option>
               <option value="all">全部状态</option>
             </select>
           </label>
@@ -466,12 +528,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalEscape))
                 <div class="mb-2 flex items-center justify-between">
                   <p class="text-sm font-black text-emerald-300">左侧 · 现有记录</p>
                   <span v-if="getQualityComparison(pair) === 'left'" class="inline-flex items-center gap-1 rounded-md bg-emerald-400/15 border border-emerald-400/25 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
-                    <Sparkles :size="12" /> 较高画质 / 大文件
+                    <Sparkles :size="12" aria-hidden="true" /> 较高分辨率
                   </span>
                 </div>
                 <div class="flex gap-3">
-                  <div
+                  <button type="button"
                     @click="previewModalPair = pair"
+                    :aria-label="`对比 ${pair.existing.title} 与 ${pair.candidate.title} 的封面`"
                     class="group/cover relative flex h-36 w-24 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/30 transition hover:border-white/30"
                     title="点击并排高清对比预览"
                   >
@@ -480,7 +543,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalEscape))
                     <div class="absolute inset-0 bg-black/40 opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-center justify-center text-white">
                       <Eye :size="18" />
                     </div>
-                  </div>
+                  </button>
                   <div class="min-w-0 space-y-2">
                     <p class="text-base font-black leading-snug text-white">{{ pair.existing.title }}</p>
                     <p v-if="pair.existing.favorite" class="flex items-center gap-1.5 text-xs font-bold text-amber-200"><Star :size="14" fill="currentColor" aria-hidden="true" />已收藏</p>
@@ -508,12 +571,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalEscape))
                 <div class="mb-2 flex items-center justify-between">
                   <p class="text-sm font-black text-amber-300">右侧 · 新扫描记录</p>
                   <span v-if="getQualityComparison(pair) === 'right'" class="inline-flex items-center gap-1 rounded-md bg-emerald-400/15 border border-emerald-400/25 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
-                    <Sparkles :size="12" /> 较高画质 / 大文件
+                    <Sparkles :size="12" aria-hidden="true" /> 较高分辨率
                   </span>
                 </div>
                 <div class="flex gap-3">
-                  <div
+                  <button type="button"
                     @click="previewModalPair = pair"
+                    :aria-label="`对比 ${pair.existing.title} 与 ${pair.candidate.title} 的封面`"
                     class="group/cover relative flex h-36 w-24 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/30 transition hover:border-white/30"
                     title="点击并排高清对比预览"
                   >
@@ -522,7 +586,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalEscape))
                     <div class="absolute inset-0 bg-black/40 opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-center justify-center text-white">
                       <Eye :size="18" />
                     </div>
-                  </div>
+                  </button>
                   <div class="min-w-0 space-y-2">
                     <p class="text-base font-black leading-snug text-white">{{ pair.candidate.title }}</p>
                     <p v-if="pair.candidate.favorite" class="flex items-center gap-1.5 text-xs font-bold text-amber-200"><Star :size="14" fill="currentColor" aria-hidden="true" />已收藏</p>
@@ -540,21 +604,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalEscape))
             </div>
 
             <div v-if="pair.status === 'pending'" class="mt-5 grid gap-2 border-t border-white/10 pt-4 min-[700px]:grid-cols-2 min-[1180px]:grid-cols-[1.1fr_1.1fr_1fr_auto]">
-              <button
-                v-if="getQualityComparison(pair) !== 'equal'"
-                type="button"
-                :disabled="processingPairIds.has(pair.id)"
-                @click="onResolve(pair, getQualityComparison(pair) === 'left' ? 'keep_existing' : 'replace_path')"
-                class="min-[1180px]:col-span-full mb-1 rounded-xl bg-emerald-500/20 border border-emerald-500/35 hover:bg-emerald-500/30 text-emerald-100 px-4 py-2.5 text-left text-sm font-black transition-all cursor-pointer disabled:opacity-50 flex items-center justify-between"
-              >
-                <div class="flex items-center gap-2">
-                  <Sparkles :size="16" class="text-emerald-400" />
-                  <span>一键保留更高质量项 ({{ getQualityComparison(pair) === 'left' ? '左侧' : '右侧' }})</span>
-                </div>
-                <span class="text-xs font-normal text-emerald-300/80">
-                  {{ getQualityComparison(pair) === 'left' ? '保留左侧记录并隐藏右侧' : '采用右侧高画质文件路径' }}
-                </span>
-              </button>
               <button type="button" :disabled="processingPairIds.has(pair.id)" @click="onResolve(pair, 'keep_existing')" class="min-h-12 rounded-xl bg-accent px-4 py-2 text-left text-sm font-black text-white hover:brightness-110 focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-50">
                 保留左侧记录
                 <span class="mt-0.5 block text-xs font-medium text-white/70">右侧文件保留，但从媒体库隐藏</span>
@@ -580,8 +629,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalEscape))
 
         <div v-if="noPairs" class="flex flex-col items-center justify-center px-6 py-20 text-center">
           <ShieldCheck :size="42" class="mb-4 text-emerald-300/70" aria-hidden="true" />
-          <p class="text-lg font-black text-white">当前没有符合条件的重复条目</p>
-          <p class="mt-2 max-w-md text-sm leading-relaxed text-white/50">新扫描文件经过指纹检测后会显示在这里。你也可以调整筛选条件查看处理历史。</p>
+          <p class="text-lg font-black text-white">{{ scanActive ? '正在检查文件内容' : hasFilters ? '当前筛选下没有结果' : summary?.unchecked ? '还有文件尚未检测' : '当前没有待审查的重复条目' }}</p>
+          <p class="mt-2 max-w-md text-sm leading-relaxed text-white/60">{{ scanActive ? '后台检测持续进行，发现的重复条目会自动显示在这里。' : hasFilters ? '调整筛选条件，或返回全部待审查结果。' : summary?.unchecked ? '列表为空不代表没有重复。点击上方“检测全库”补全指纹并重新检查。' : '可以重新检测全库，或通过状态筛选查看处理历史。' }}</p>
+          <button v-if="hasFilters" type="button" @click="resetFilters" class="mt-4 min-h-11 rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-bold text-white hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent">清除筛选</button>
         </div>
       </section>
 

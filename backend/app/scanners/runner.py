@@ -337,7 +337,7 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                 row[0]
                 for row in db.query(models.Media.id)
                 .filter(models.Media.absolute_path.in_(pending_dedup_paths))
-                .filter(models.Media.duplicate_status == "checking")
+                .filter(models.Media.duplicate_status.in_(["checking", "dedup_pending"]))
                 .all()
             ]
             if checking_ids:

@@ -7,9 +7,10 @@ interface DedupState {
   summary: DedupSummary | null
   pairs: DuplicateCandidatePair[]
   loading: boolean
+  scanStarting: boolean
   errorMessage: string
   filterLevel: '' | 'strong_duplicate' | 'suspected_duplicate' | 'weak_suspected'
-  filterStatus: 'pending' | 'all' | 'merged' | 'kept_both' | 'ignored' | 'replaced'
+  filterStatus: 'pending' | 'all' | 'merged' | 'kept_both' | 'ignored' | 'replaced' | 'stale'
   filterMediaType: '' | 'video' | 'manga' | 'image' | 'audio'
   sort: 'confidence' | 'newest' | 'oldest'
   page: number
@@ -21,6 +22,7 @@ const state = reactive<DedupState>({
   summary: null,
   pairs: [],
   loading: false,
+  scanStarting: false,
   errorMessage: '',
   filterLevel: '',
   filterStatus: 'pending',
@@ -79,6 +81,20 @@ const fetchPairs = async () => {
 
 const refresh = async () => {
   await Promise.all([fetchSummary(), fetchPairs()])
+}
+
+const recheckLibrary = async () => {
+  if (state.scanStarting) return
+  state.scanStarting = true
+  state.errorMessage = ''
+  try {
+    await axios.post(`${API_BASE_URL}/dedup/recheck`)
+    await refresh()
+  } catch (err: any) {
+    state.errorMessage = err.response?.data?.detail || '无法启动全库检测，请重试'
+  } finally {
+    state.scanStarting = false
+  }
 }
 
 const resolvePair = async (
@@ -143,6 +159,7 @@ export const dedupStore = {
   fetchSummary,
   fetchPairs,
   refresh,
+  recheckLibrary,
   resolvePair,
   recheckMedia,
   deleteMediaFile,

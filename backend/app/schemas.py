@@ -433,6 +433,10 @@ class DedupSummary(BaseModel):
     checking: int = 0
     queue_size: int = 0
     worker_running: bool = False
+    total_media: int = 0
+    fingerprinted: int = 0
+    unchecked: int = 0
+    failed: int = 0
 
 
 class DedupMediaSummary(BaseModel):

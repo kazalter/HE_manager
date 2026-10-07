@@ -3,6 +3,7 @@ import shutil
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import case, or_
 from sqlalchemy.orm import Session, aliased
 
 from .. import media_cleanup, models, schemas
@@ -94,21 +95,49 @@ def _ordered_candidate_query(query, sort: str):
 
 @router.get("/dedup/summary", response_model=schemas.DedupSummary)
 def dedup_summary(db: Session = Depends(get_db)):
-    pending_pairs = (
-        db.query(models.DuplicateCandidate)
-        .filter(models.DuplicateCandidate.status == "pending")
-        .count()
+    pending = _filtered_candidate_query(db, level=None, status="pending", media_type=None)
+    base = db.query(models.Media).filter(
+        models.Media.is_missing == False,  # noqa: E712
+        models.Media.duplicate_status != "dedup_excluded",
     )
-    base = db.query(models.Media)
+    fingerprinted = base.join(models.MediaFingerprint).filter(
+        or_(models.MediaFingerprint.hash_first.isnot(None),
+            models.MediaFingerprint.hash_middle.isnot(None),
+            models.MediaFingerprint.hash_last.isnot(None)),
+    ).count()
+    total_media = base.count()
     return {
-        "pending_pairs": pending_pairs,
-        "strong_duplicate": base.filter(models.Media.duplicate_status == "strong_duplicate").count(),
-        "suspected_duplicate": base.filter(models.Media.duplicate_status == "suspected_duplicate").count(),
-        "weak_suspected": base.filter(models.Media.duplicate_status == "weak_suspected").count(),
-        "checking": base.filter(models.Media.duplicate_status == "checking").count(),
+        "pending_pairs": pending.count(),
+        "strong_duplicate": pending.filter(models.DuplicateCandidate.level == "strong_duplicate").count(),
+        "suspected_duplicate": pending.filter(models.DuplicateCandidate.level == "suspected_duplicate").count(),
+        "weak_suspected": pending.filter(models.DuplicateCandidate.level == "weak_suspected").count(),
+        "checking": base.filter(models.Media.duplicate_status.in_(["checking", "dedup_pending"])).count(),
+        "failed": base.filter(models.Media.duplicate_status == "dedup_error").count(),
+        "total_media": total_media,
+        "fingerprinted": fingerprinted,
+        "unchecked": total_media - fingerprinted,
         "queue_size": dedup_worker.queue_size(),
         "worker_running": dedup_worker.is_running(),
     }
+
+
+@router.post("/dedup/recheck")
+def recheck_library_dedup(db: Session = Depends(get_db)):
+    media = db.query(models.Media).filter(
+        models.Media.is_missing == False,  # noqa: E712
+        models.Media.duplicate_status != "dedup_excluded",
+        models.Media.media_type.in_(["image", "manga", "video", "audio"]),
+    ).order_by(models.Media.id.asc()).all()
+    db.query(models.Media).filter(
+        models.Media.id.in_([item.id for item in media]),
+        models.Media.duplicate_status != "dedup_excluded",
+    ).update({"duplicate_status": case(
+        (models.Media.duplicate_status.in_(["checking", "strong_duplicate", "suspected_duplicate"]), "checking"),
+        else_="dedup_pending",
+    )}, synchronize_session="fetch")
+    db.commit()
+    queued = dedup_worker.enqueue(item.id for item in media)
+    return {"queued": queued, "total": len(media)}
 
 
 @router.get("/dedup/candidates", response_model=List[schemas.DuplicateCandidatePair])
@@ -257,7 +286,15 @@ def recheck_media_dedup(media_id: int, db: Session = Depends(get_db)):
     media = db.query(models.Media).filter(models.Media.id == media_id).first()
     if not media:
         raise HTTPException(status_code=404, detail="Media not found")
-    media.duplicate_status = "checking"
+    if media.duplicate_status == "dedup_excluded":
+        raise HTTPException(status_code=409, detail="此条目已处理并隐藏，无需重新检测")
+    db.query(models.Media).filter(
+        models.Media.id == media.id,
+        models.Media.duplicate_status != "dedup_excluded",
+    ).update({"duplicate_status": case(
+        (models.Media.duplicate_status.in_(["checking", "strong_duplicate", "suspected_duplicate"]), "checking"),
+        else_="dedup_pending",
+    )}, synchronize_session="fetch")
     db.commit()
     dedup_worker.enqueue([media.id])
     return {"queued": True, "media_id": media.id}
