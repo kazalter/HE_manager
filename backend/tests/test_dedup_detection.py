@@ -10,7 +10,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app import models
-from app.dedup import worker
+from app.dedup import worker, normalize
 from app.dedup import merge
 from app.routers import dedup
 from app.scanners.common import apply_local_dedup_precheck
@@ -62,6 +62,31 @@ class DedupDetectionTest(unittest.TestCase):
         self.assertEqual(pairs[0].level, "strong_duplicate")
         self.assertEqual(self.db.get(models.Media, left).duplicate_status, "unique")
         self.assertEqual(self.db.get(models.Media, right).duplicate_status, "strong_duplicate")
+
+    def test_bracketed_date_does_not_truncate_the_work_title(self):
+        self.assertEqual(normalize.normalize_title('[2023.01] [PIXIV FANBOX] First work [Team]'), 'first work')
+        self.assertEqual(normalize.normalize_title('2024.09 collection'), '2024 09 collection')
+        self.assertNotEqual(normalize.normalize_title('2024.09 collection'), normalize.normalize_title('2024.10 collection'))
+
+    def test_only_supported_media_extensions_are_removed(self):
+        self.assertEqual(normalize.normalize_title('First work.CBZ'), 'first work')
+        self.assertEqual(normalize.normalize_title('Scene.part.two.MP4'), 'scene part two')
+        self.assertEqual(normalize.normalize_title('First.work'), 'first work')
+
+    def test_date_truncation_false_positive_is_retired_on_recheck(self):
+        left = self.image('first.png', title='[2023.01] First work')
+        right = self.image('second.png', title='[2023.02] Second work', color='blue', status='suspected_duplicate')
+        for media_id in (left, right):
+            self.db.get(models.Media, media_id).normalized_title = '2023'
+        self.db.add(models.DuplicateCandidate(existing_media_id=left, candidate_media_id=right,
+            level='suspected_duplicate', similarity=65, status='pending'))
+        self.db.commit()
+        worker._process_one(left)
+        worker._process_one(right)
+        self.db.expire_all()
+        self.assertEqual(self.db.query(models.DuplicateCandidate).filter_by(status='pending').count(), 0)
+        self.assertEqual(self.db.query(models.DuplicateCandidate).one().status, 'stale')
+        self.assertEqual(self.db.get(models.Media, right).duplicate_status, 'unique')
 
     def test_manual_not_duplicate_decision_survives_rechecks_from_either_side(self):
         left = self.image("left.png", title="same")

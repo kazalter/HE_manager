@@ -17,6 +17,11 @@ import unicodedata
 _BRACKETED = re.compile(r"[\[\(【「『〈《][^\[\]\(\)【】「」『』〈〉《》]{0,80}[\]\)】」』〉》]")
 _RUNS = re.compile(r"[\s_\-·•・~～]+")
 _PUNCT = re.compile(r"[!\"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~。、，；：！？…—『』「」【】《》〈〉]+")
+_MEDIA_EXTENSIONS = {
+    '.zip', '.cbz', '.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm', '.flv', '.ts', '.m4v',
+    '.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.avif',
+    '.mp3', '.wav', '.flac', '.m4a', '.aac', '.ogg', '.opus', '.wma',
+}
 
 
 def normalize_title(value: str) -> str:
@@ -27,8 +32,10 @@ def normalize_title(value: str) -> str:
     if not value:
         return ""
 
-    # Drop common file extensions.
-    base = os.path.splitext(value)[0] if "." in value else value
+    # A date or dotted title is not a file extension. Unconditionally splitting
+    # '[2023.01] ...' used to discard the work title and collapse a whole year.
+    stem, extension = os.path.splitext(value)
+    base = stem if extension.lower() in _MEDIA_EXTENSIONS else value
 
     # NFKC folds full-width / half-width CJK punctuation to a canonical form so the
     # punctuation strip below catches them too.
