@@ -65,16 +65,16 @@ class PinnedHTTPSConnection(http.client.HTTPSConnection):
         raise PawchiveError("UPSTREAM_UNAVAILABLE", "无法连接 Pawchive", 502) from last_error
 
 
-def _new_connection(host: str) -> http.client.HTTPSConnection:
+def _new_connection(host: str, *, timeout: float = 20) -> http.client.HTTPSConnection:
     from app.external_config import get_external_favorites_proxy, validate_external_favorites_proxy
 
     proxy = get_external_favorites_proxy()
     if not proxy:
-        return PinnedHTTPSConnection(host, timeout=20)
+        return PinnedHTTPSConnection(host, timeout=timeout)
     try:
         proxy = validate_external_favorites_proxy(proxy)
         parsed = urlsplit(proxy or "")
-        connection = http.client.HTTPSConnection(parsed.hostname, parsed.port or 80, timeout=20)
+        connection = http.client.HTTPSConnection(parsed.hostname, parsed.port or 80, timeout=timeout)
     except (ValueError, TypeError) as exc:
         raise PawchiveError("INVALID_CONFIG", "外部收藏代理地址无效，请填写 HTTP 代理", 503) from exc
     connection.set_tunnel(host, 443)
@@ -118,13 +118,54 @@ def _raise_for_status(response):
         raise PawchiveError("UPSTREAM_UNAVAILABLE", "Pawchive 返回错误", 502)
 
 
-def _throttle_api():
+def _deadline_timeout(timeout: float, deadline: float | None) -> float:
+    if deadline is None:
+        return timeout
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise PawchiveError("UPSTREAM_UNAVAILABLE", "读取 Pawchive 收藏超时", 502)
+    return min(timeout, remaining)
+
+
+def _throttle_api(deadline: float | None = None):
     global _next_api_request
-    with _rate_lock:
+    acquired = (_rate_lock.acquire(timeout=_deadline_timeout(30, deadline))
+                if deadline is not None else _rate_lock.acquire())
+    if not acquired:
+        raise PawchiveError("UPSTREAM_UNAVAILABLE", "等待 Pawchive 请求超时", 502)
+    try:
         now = time.monotonic()
         if _next_api_request > now:
-            time.sleep(_next_api_request - now)
+            delay = _next_api_request - now
+            if deadline is not None and delay >= _deadline_timeout(30, deadline):
+                raise PawchiveError("UPSTREAM_UNAVAILABLE", "等待 Pawchive 请求超时", 502)
+            time.sleep(delay)
+        _deadline_timeout(30, deadline)
         _next_api_request = time.monotonic() + 1.0
+    finally:
+        _rate_lock.release()
+
+
+def _set_account_read_timeout(sock, timeout: float, deadline: float | None):
+    remaining = _deadline_timeout(timeout, deadline)
+    if sock is not None:
+        sock.settimeout(min(sock.gettimeout() or timeout, remaining))
+
+
+def _read_account_body(response, sock, limit: int, timeout: float, deadline: float | None) -> bytes:
+    if deadline is None:
+        return response.read(limit + 1)
+    body = bytearray()
+    while len(body) <= limit:
+        _set_account_read_timeout(sock, timeout, deadline)
+        chunk = response.read1(min(64 * 1024, limit + 1 - len(body)))
+        if not chunk:
+            break
+        body.extend(chunk)
+        if response.isclosed():
+            break
+    _deadline_timeout(timeout, deadline)
+    return bytes(body)
 
 
 def get_json(path: str, params: dict[str, str | int] | None = None):
@@ -173,6 +214,8 @@ def account_request(
     cookies: dict[str, str] | None = None,
     form: dict[str, str] | None = None,
     body_limit: int = JSON_LIMIT,
+    timeout: float = 20,
+    budget: float | None = None,
 ):
     """Make a bounded request to Pawchive's fixed-host account endpoints.
 
@@ -233,12 +276,37 @@ def account_request(
         headers["Content-Type"] = "application/x-www-form-urlencoded"
         headers["Content-Length"] = str(len(body))
 
-    _throttle_api()
-    connection = _new_connection(API_HOST)
+    deadline = time.monotonic() + budget if budget is not None else None
+    _throttle_api(deadline)
+    connection = _new_connection(API_HOST, timeout=_deadline_timeout(timeout, deadline))
+    response = None
+    sock = None
+    deadline_timer = None
+    if deadline is not None:
+        def interrupt_read():
+            # http.client can make repeated reads inside header/chunk parsing.
+            # Socket inactivity timeouts alone do not bound a slow-drip reply.
+            current_socket = sock if sock is not None else connection.sock
+            if current_socket is not None:
+                try:
+                    current_socket.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+
+        deadline_timer = threading.Timer(_deadline_timeout(budget, deadline), interrupt_read)
+        deadline_timer.daemon = True
+        deadline_timer.start()
     try:
         connection.request(method, target, body=body, headers=headers)
+        sock = connection.sock
+        _set_account_read_timeout(sock, timeout, deadline)
         response = connection.getresponse()
-        response_body = response.read(body_limit + 1)
+        _deadline_timeout(timeout, deadline)
+        if response.status >= 400:
+            # Status headers already tell us whether this request is forbidden
+            # or rate-limited. Never let a broken error body hide that status.
+            return response.status, response.getheaders(), b""
+        response_body = _read_account_body(response, sock, body_limit, timeout, deadline)
         if len(response_body) > body_limit:
             raise PawchiveError("UPSTREAM_INVALID", "Pawchive 账号响应超出限制", 502)
         return response.status, response.getheaders(), response_body
@@ -247,6 +315,11 @@ def account_request(
     except (OSError, TimeoutError, http.client.HTTPException) as exc:
         raise PawchiveError("UPSTREAM_UNAVAILABLE", "无法连接 Pawchive 账号服务", 502) from exc
     finally:
+        if deadline_timer is not None:
+            deadline_timer.cancel()
+            deadline_timer.join()
+        if response is not None:
+            response.close()
         connection.close()
 
 

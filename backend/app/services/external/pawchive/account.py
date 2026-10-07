@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import threading
 from dataclasses import dataclass, field
 from http.cookies import SimpleCookie
+from time import monotonic, sleep
 from urllib.parse import quote
 
 from .... import models
@@ -16,6 +18,10 @@ _sessions: dict[int, "AccountSession"] = {}
 _sessions_lock = threading.RLock()
 _COOKIE_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$")
 _COOKIE_VALUE = re.compile(r"^[!\x23-\x2B\x2D-\x3A\x3C-\x5B\x5D-\x7E]*$")
+logger = logging.getLogger(__name__)
+_FAVORITES_TIMEOUT = 10.0
+_FAVORITES_RETRY_WINDOW = 30.0
+_FAVORITES_RETRY_DELAYS = (1.0, 2.0)
 
 
 @dataclass
@@ -109,12 +115,17 @@ def _merge_cookies(session: AccountSession, headers: list[tuple[str, str]]) -> b
     return changed
 
 
-def _request(session: AccountSession, target: str, *, method: str = "GET", form: dict[str, str] | None = None):
+def _request(session: AccountSession, target: str, *, method: str = "GET", form: dict[str, str] | None = None,
+             timeout: float | None = None, budget: float | None = None):
+    options = {"timeout": timeout} if timeout is not None else {}
+    if budget is not None:
+        options["budget"] = budget
     status, headers, body = client.account_request(
         target,
         method=method,
         cookies=session.cookies,
         form=form,
+        **options,
     )
     if _merge_cookies(session, headers):
         _persist_if_current(session)
@@ -199,11 +210,31 @@ def _parse_creator_list(body: bytes) -> list[dict]:
 
 
 def _fetch_favorites(session: AccountSession) -> list[dict]:
-    status, body = _request(session, "/api/v1/account/favorites?type=artist")
-    if status == 401:
-        raise _upstream_error(status)
-    _require_ok(status)
-    return _parse_creator_list(body)
+    # Only this read is retried. Login and favorite mutations must not be
+    # replayed when a failed connection leaves their upstream outcome unknown.
+    deadline = monotonic() + _FAVORITES_RETRY_WINDOW
+    last_error = None
+    for attempt in range(len(_FAVORITES_RETRY_DELAYS) + 1):
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise last_error or client.PawchiveError("UPSTREAM_UNAVAILABLE", "读取 Pawchive 收藏超时", 502)
+        transient = True
+        try:
+            status, body = _request(session, "/api/v1/account/favorites?type=artist",
+                                    timeout=min(_FAVORITES_TIMEOUT, remaining), budget=remaining)
+            transient = 200 <= status < 300 or status in {500, 502, 503, 504}
+            _require_ok(status)
+            return _parse_creator_list(body)
+        except client.PawchiveError as exc:
+            last_error = exc
+            if not transient or exc.code not in {"UPSTREAM_UNAVAILABLE", "UPSTREAM_INVALID"}:
+                raise
+            if attempt == len(_FAVORITES_RETRY_DELAYS) or deadline - monotonic() <= _FAVORITES_RETRY_DELAYS[attempt]:
+                logger.warning("Pawchive favorites refresh failed after %s attempts (%s)", attempt + 1, exc.code)
+                raise
+            delay = _FAVORITES_RETRY_DELAYS[attempt]
+            logger.warning("Pawchive favorites read failed (%s); retry %s in %.1fs", exc.code, attempt + 1, delay)
+            sleep(delay)
 
 
 def status(user_id: int) -> dict:

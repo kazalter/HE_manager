@@ -29,7 +29,7 @@ export async function logoutPawchiveAccount(): Promise<void> {
 }
 
 export async function fetchPawchiveAccountFavorites(signal?: AbortSignal): Promise<PawchiveCreatorFavorite[]> {
-  const response = await axios.get<{ items: PawchiveCreatorFavorite[] }>(`${root}/account/favorites`, { signal })
+  const response = await axios.get<{ items: PawchiveCreatorFavorite[] }>(`${root}/account/favorites`, { signal, timeout: METADATA_TIMEOUT })
   return response.data.items
 }
 
