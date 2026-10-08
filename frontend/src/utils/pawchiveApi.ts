@@ -9,6 +9,12 @@ const METADATA_TIMEOUT = 45_000
 export const pawchiveMediaUrl = (ref: string | null | undefined) =>
   ref ? authUrl(`${root}/media/${encodeURIComponent(ref)}`) : ''
 
+/** Bust the browser's cached failure for a media URL on retry `attempt` (0 = original URL). */
+export const withRetryParam = (url: string, attempt: number) => {
+  if (!url || !attempt) return url
+  return `${url}${url.includes('?') ? '&' : '?'}retry=${attempt}`
+}
+
 export async function fetchPawchiveCapabilities(signal?: AbortSignal): Promise<PawchiveCapabilities> {
   const response = await axios.get<PawchiveCapabilities>(`${root}/capabilities`, { signal })
   return response.data

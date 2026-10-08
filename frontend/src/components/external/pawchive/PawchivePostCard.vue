@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { ArrowUpRight, CalendarDays, Film, Image as ImageIcon, Paperclip } from 'lucide-vue-next'
 import type { PawchivePost } from '../../../types/pawchive'
 import { pawchiveMediaUrl } from '../../../utils/pawchiveApi'
+import PawchiveRetryImage from './PawchiveRetryImage.vue'
 
 const props = defineProps<{ post: PawchivePost; selected: boolean }>()
 const emit = defineEmits<{ open: []; select: [] }>()
-const previewFailed = ref(false)
 const hasCounts = computed(() => typeof props.post.image_count === 'number' && typeof props.post.video_count === 'number')
 const noMedia = computed(() => hasCounts.value && !props.post.image_count && !props.post.video_count)
 const mediaLabel = computed(() => {
@@ -27,8 +27,9 @@ const publishedLabel = computed(() => {
   <article class="group flex min-w-0 flex-col overflow-hidden rounded-2xl border bg-white/[0.045] shadow-lg shadow-black/10 transition-[border-color,box-shadow,transform] duration-200 hover:border-accent/50 hover:shadow-accent/10 motion-safe:hover:-translate-y-0.5" :class="selected ? 'border-accent/60 ring-1 ring-accent/20' : 'border-white/10'">
     <button type="button" class="block w-full min-w-0 text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent" :aria-label="`打开作品：${post.title || '无标题作品'}`" @click="emit('open')">
       <div class="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-accent/20 via-white/10 to-black/50">
-        <img v-if="post.preview_ref && !previewFailed" :src="pawchiveMediaUrl(post.preview_ref)" alt="" loading="lazy" class="h-full w-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-105" @error="previewFailed = true" />
-        <div v-else class="flex h-full w-full items-center justify-center"><ImageIcon :size="30" class="text-white/45" aria-hidden="true" /></div>
+        <PawchiveRetryImage :src="pawchiveMediaUrl(post.preview_ref)" alt="" loading="lazy" class="h-full w-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-105">
+          <template #fallback><div class="flex h-full w-full items-center justify-center"><ImageIcon :size="30" class="text-white/45" aria-hidden="true" /></div></template>
+        </PawchiveRetryImage>
         <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/20" aria-hidden="true"></div>
         <span class="absolute right-2 top-2 inline-flex items-center gap-2 rounded-lg border border-white/20 bg-black/60 px-2 py-1 text-[11px] font-semibold backdrop-blur-sm" :class="noMedia ? 'text-white/60' : 'text-white'" :title="mediaLabel" :aria-label="mediaLabel">
           <template v-if="!hasCounts"><span class="inline-flex items-center gap-1"><Paperclip :size="12" aria-hidden="true" />{{ post.reported_attachment_count }} 附件</span></template>

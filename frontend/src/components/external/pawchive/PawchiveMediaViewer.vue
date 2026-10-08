@@ -3,7 +3,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ArrowLeft, ArrowRight, Download, ExternalLink, Image as ImageIcon, ImageOff, Loader2, Maximize2, Minimize2, Pause, Play, RotateCw, X } from 'lucide-vue-next'
 import ImageViewer from '../../media-detail/ImageViewer.vue'
 import type { PawchiveAttachment, PawchivePost } from '../../../types/pawchive'
-import { pawchiveMediaUrl } from '../../../utils/pawchiveApi'
+import { pawchiveMediaUrl, withRetryParam } from '../../../utils/pawchiveApi'
+import PawchiveRetryImage from './PawchiveRetryImage.vue'
 import { fetchImageBlob, isAbortError } from '../../../utils/pawchiveImageLoader'
 
 const props = defineProps<{
@@ -75,10 +76,7 @@ let placeholderTimer: number | undefined
 let skipTimer: number | undefined
 // Originals can be 20+ MB behind a slow proxy, so only a pause in received bytes counts as a stall.
 const IMAGE_STALL_MS = 20_000
-const withNonce = (url: string) => {
-  if (!url || !retryNonce.value) return url
-  return `${url}${url.includes('?') ? '&' : '?'}retry=${retryNonce.value}`
-}
+const withNonce = (url: string) => withRetryParam(url, retryNonce.value)
 const videoUrl = computed(() => withNonce(pawchiveMediaUrl(props.attachment.stream_ref)))
 const placeholderUrl = computed(() => props.attachment.media_type === 'image' && props.attachment.preview_ref &&
   !failedPreviewKeys.value.has(props.attachment.attachment_key) ? pawchiveMediaUrl(props.attachment.preview_ref) : '')
@@ -526,14 +524,14 @@ onBeforeUnmount(() => {
           :style="{ left: hoverPreviewX + 'px', width: hoverPreviewWidth + 'px', height: '268px' }"
         >
           <div class="relative h-full w-full overflow-hidden rounded-lg bg-white/5">
-            <img
+            <PawchiveRetryImage
               v-if="attachments[hoverPreviewIndex].preview_ref && !failedPreviewKeys.has(attachments[hoverPreviewIndex].attachment_key)"
               :src="pawchiveMediaUrl(attachments[hoverPreviewIndex].preview_ref)"
               alt=""
               decoding="async"
               draggable="false"
               class="h-full w-full object-contain"
-              @error="markPreviewFailed(attachments[hoverPreviewIndex].attachment_key)"
+              @failed="markPreviewFailed(attachments[hoverPreviewIndex].attachment_key)"
             />
             <span v-else class="flex h-full w-full items-center justify-center text-white/50"><ImageIcon :size="40" aria-hidden="true" /></span>
             <span v-if="attachments[hoverPreviewIndex].media_type === 'video'" class="absolute inset-0 flex items-center justify-center"><Play :size="38" fill="currentColor" aria-hidden="true" /></span>
@@ -557,7 +555,7 @@ onBeforeUnmount(() => {
             @blur="hideHoverPreview(index)"
             @click="selectAttachment(index)"
           >
-            <img v-if="item.preview_ref && !failedPreviewKeys.has(item.attachment_key)" :src="pawchiveMediaUrl(item.preview_ref)" alt="" loading="lazy" decoding="async" draggable="false" class="h-full w-full object-cover" @error="markPreviewFailed(item.attachment_key)" />
+            <PawchiveRetryImage v-if="item.preview_ref && !failedPreviewKeys.has(item.attachment_key)" :src="pawchiveMediaUrl(item.preview_ref)" alt="" loading="lazy" decoding="async" draggable="false" class="h-full w-full object-cover" @failed="markPreviewFailed(item.attachment_key)" />
             <span v-else class="flex h-full w-full items-center justify-center text-white/50"><ImageIcon :size="24" aria-hidden="true" /></span>
             <span v-if="item.media_type === 'video'" class="absolute inset-0 flex items-center justify-center bg-black/35"><Play :size="22" fill="currentColor" aria-hidden="true" /></span>
             <span class="absolute bottom-1 right-1 rounded bg-black/75 px-1 text-[10px] font-bold text-white">{{ index + 1 }}</span>
