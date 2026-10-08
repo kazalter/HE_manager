@@ -68,6 +68,8 @@ class CacheWriter:
         self.expected_size = expected_size
         self.size = 0
         self.file = path.open("xb")
+        # Shared downloads stream this file to readers while it is written.
+        self.in_place = path == CACHE_ROOT / kind / key
 
     def write(self, chunk: bytes) -> None:
         if self.file is None:
@@ -77,6 +79,7 @@ class CacheWriter:
             return
         try:
             self.file.write(chunk)
+            self.file.flush()
             self.size += len(chunk)
         except OSError:
             logger.warning("Pawchive cache write failed", exc_info=True)
@@ -162,32 +165,41 @@ class RestartMediaCache:
 
     def begin_write(
         self, path: str, kind: str, content_type: str, expected_size: int | None,
+        *, in_place: bool = False,
     ) -> CacheWriter | None:
+        """Start a cache file; ``in_place`` writes the final name so readers can
+        follow it during the download (callers must ensure one writer per key)."""
         if kind not in KINDS:
             return None
         key = self._key(path)
         with self._lock:
             if not self._enabled or self.limits[kind] == 0 or key in self._entries[kind]:
                 return None
-        temporary = CACHE_ROOT / kind / f".{key}.{uuid.uuid4().hex}.part"
+        target = (CACHE_ROOT / kind / key if in_place
+                  else CACHE_ROOT / kind / f".{key}.{uuid.uuid4().hex}.part")
         try:
-            return CacheWriter(self, kind, key, temporary, content_type, expected_size)
+            if in_place:
+                target.unlink(missing_ok=True)
+            return CacheWriter(self, kind, key, target, content_type, expected_size)
         except OSError:
             logger.warning("Pawchive cache temporary file unavailable", exc_info=True)
             return None
 
     def _commit(self, writer: CacheWriter) -> None:
         with self._lock:
+            if writer.key in self._entries[writer.kind] and writer.in_place:
+                return
             if not self._enabled or writer.key in self._entries[writer.kind]:
                 _discard(writer.path)
                 return
             destination = CACHE_ROOT / writer.kind / writer.key
-            try:
-                os.replace(writer.path, destination)
-            except OSError:
-                _discard(writer.path)
-                logger.warning("Pawchive cache commit failed", exc_info=True)
-                return
+            if not writer.in_place:
+                try:
+                    os.replace(writer.path, destination)
+                except OSError:
+                    _discard(writer.path)
+                    logger.warning("Pawchive cache commit failed", exc_info=True)
+                    return
             self._entries[writer.kind][writer.key] = _Entry(
                 destination, writer.content_type, writer.size
             )

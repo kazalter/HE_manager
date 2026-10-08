@@ -68,6 +68,18 @@ validated source path and media kind, not the short-lived signed URL. Videos
 and partial media responses are streamed without being cached. Cached images
 still pass through HE Manager authentication and signed-reference validation.
 
+Whole-image requests share one upstream download per file. The bytes are
+written to the cache file and streamed to every waiting request as they
+arrive. If every reader disconnects, the download continues for 15 seconds so
+a viewer retry or a reopened post can pick it up; after that it stops and the
+partial file is removed. The `X-Pawchive-Cache` response header reports `HIT`
+(served from cache) or `SHARED` (joined or started a download).
+
+The web viewer loads originals with a 20-second inactivity timeout rather than
+a total time limit. A large image that is still arriving keeps loading, with
+its progress shown, and only a 20-second pause in received data counts as a
+stall.
+
 The backend uses /mnt/hdd/.he-manager/pawchive-cache and requires
 /mnt/hdd/.mounted. It removes only that cache directory when the backend
 starts; a browser refresh does not clear it. If the mount or sentinel is

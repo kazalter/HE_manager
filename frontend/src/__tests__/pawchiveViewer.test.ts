@@ -1,6 +1,6 @@
 import { nextTick } from 'vue'
-import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import PawchiveMediaViewer from '../components/external/pawchive/PawchiveMediaViewer.vue'
 import type { PawchiveAttachment, PawchivePost } from '../types/pawchive'
 
@@ -16,7 +16,19 @@ const post: PawchivePost = {
   preview_ref: 'preview-ref', tags: [], attachments: [attachment],
 }
 
+const imageResponse = () => new Response(new Blob(['jpeg'], { type: 'image/jpeg' }), {
+  status: 200, headers: { 'content-type': 'image/jpeg', 'content-length': '4' },
+})
+
 describe('Pawchive fullscreen viewer', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn(async () => imageResponse()))
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:image'), revokeObjectURL: vi.fn() }))
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it.each(['missing', 'rejected'])('uses immersive image mode when fullscreen is %s', async (failure) => {
     const wrapper = mount(PawchiveMediaViewer, {
       attachTo: document.body,
@@ -31,6 +43,7 @@ describe('Pawchive fullscreen viewer', () => {
       value: failure === 'missing' ? undefined : vi.fn().mockRejectedValue(new Error('unsupported')),
     })
     try {
+      await flushPromises()
       await wrapper.get('button[aria-label="进入全屏"]').trigger('click')
       await nextTick()
       expect(wrapper.find('button[aria-label="退出全屏"]').exists()).toBe(true)
@@ -66,6 +79,7 @@ describe('Pawchive fullscreen viewer', () => {
     const previousDescriptor = Object.getOwnPropertyDescriptor(document, 'fullscreenElement')
     Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: wrapper.element })
     try {
+      await flushPromises()
       document.dispatchEvent(new Event('fullscreenchange'))
       await nextTick()
       await wrapper.get('button[title^="放大"]').trigger('click')
@@ -92,7 +106,13 @@ describe('Pawchive fullscreen viewer', () => {
 
   it('retries a stalled image with a fresh ref, then skips it during autoplay', async () => {
     vi.useFakeTimers()
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline') }))
+    const urls: string[] = []
+    // First request hangs until the idle timeout aborts it; the retry fails outright.
+    vi.stubGlobal('fetch', vi.fn((url: string, init: RequestInit) => {
+      urls.push(url)
+      if (urls.length > 1) return Promise.reject(new Error('offline'))
+      return new Promise((_, reject) => init.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError'))))
+    }))
     const reloadMedia = vi.fn(async () => true)
     const wrapper = mount(PawchiveMediaViewer, {
       props: {
@@ -103,21 +123,53 @@ describe('Pawchive fullscreen viewer', () => {
       },
     })
     try {
-      const firstUrl = wrapper.get('img[alt="image.jpg"]').attributes('src')
-      await vi.advanceTimersByTimeAsync(20_000)
+      await vi.advanceTimersByTimeAsync(19_000)
+      expect(reloadMedia).not.toHaveBeenCalled()
+      expect(wrapper.find('[role="status"]').text()).toContain('正在加载原图')
+      await vi.advanceTimersByTimeAsync(1_000)
       expect(reloadMedia).toHaveBeenCalledTimes(1)
-      const retryUrl = wrapper.get('img[alt="image.jpg"]').attributes('src')
-      expect(retryUrl).not.toBe(firstUrl)
-      expect(retryUrl).toContain('retry=1')
-
-      await wrapper.get('img[alt="image.jpg"]').trigger('error')
-      expect(reloadMedia).toHaveBeenCalledTimes(1)
+      expect(urls).toHaveLength(2)
+      expect(urls[1]).not.toBe(urls[0])
+      expect(urls[1]).toContain('retry=1')
       expect(wrapper.emitted('playbackError')?.at(-1)).toEqual(['图片加载失败，即将跳到下一项。'])
       await vi.advanceTimersByTimeAsync(2500)
       expect(wrapper.emitted('next')).toHaveLength(1)
     } finally {
       wrapper.unmount()
-      vi.unstubAllGlobals()
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a slow original loading while bytes keep arriving', async () => {
+    vi.useFakeTimers()
+    let push: ((chunk: Uint8Array | null) => void) | undefined
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(new ReadableStream<Uint8Array>({
+      start(controller) { push = (chunk) => chunk ? controller.enqueue(chunk) : controller.close() },
+    }), { status: 200, headers: { 'content-type': 'image/jpeg', 'content-length': '4' } })))
+    const reloadMedia = vi.fn(async () => true)
+    const wrapper = mount(PawchiveMediaViewer, {
+      props: {
+        post, attachment, attachments: [attachment], attachmentIndex: 0, attachmentTotal: 1,
+        scopeLabel: 'Example', busy: false, error: '', hasPrevious: false, ended: false,
+        autoplay: false, interval: 5, downloadBusy: false, downloadMessage: '', downloadError: false,
+        reloadMedia,
+      },
+    })
+    try {
+      for (let second = 0; second < 3; second++) {
+        await vi.advanceTimersByTimeAsync(15_000)
+        push?.(new Uint8Array([1]))
+      }
+      await vi.advanceTimersByTimeAsync(15_000)
+      expect(reloadMedia).not.toHaveBeenCalled()
+      expect(wrapper.get('[role="status"]').text()).toContain('75%')
+      push?.(new Uint8Array([1]))
+      push?.(null)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(wrapper.get('img[alt="image.jpg"]').attributes('src')).toBe('blob:image')
+      expect(wrapper.emitted('playbackError')).toBeUndefined()
+    } finally {
+      wrapper.unmount()
       vi.useRealTimers()
     }
   })

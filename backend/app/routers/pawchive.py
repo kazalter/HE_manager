@@ -13,8 +13,8 @@ from sqlalchemy.orm import Session
 from .. import auth, models
 from ..database import get_db
 from ..services import job_lifecycle
-from ..services.external.pawchive import account, client, downloader, normalize, provider, refs
-from ..services.external.pawchive.media_cache import media_cache
+from ..services.external.pawchive import account, client, downloader, media_fetch, normalize, provider, refs
+from ..services.external.pawchive.media_cache import CacheLease, media_cache
 
 router = APIRouter(prefix="/external/pawchive", tags=["pawchive"])
 
@@ -201,14 +201,30 @@ def stream_media_response(stream_ref: str, range_header: str | None = None):
         raise client.PawchiveError("MEDIA_UNSUPPORTED", "媒体格式不受支持", 415)
     if range_header and not _SINGLE_RANGE.fullmatch(range_header):
         raise client.PawchiveError("INVALID_RANGE", "仅支持单一区间读取", 416)
-    cached = media_cache.lookup(path, kind)
-    if cached is not None:
+    # Whole-image reads share one upstream download; ranges and videos stream directly.
+    if kind in {"image", "preview"} and not range_header:
+        shared = media_fetch.open_shared(path, kind)
+    else:
+        shared = media_cache.lookup(path, kind)
+    if isinstance(shared, CacheLease):
         return FileResponse(
-            cached.path,
-            media_type=cached.content_type,
+            shared.path,
+            media_type=shared.content_type,
             headers={"Cache-Control": "private, max-age=60", "X-Pawchive-Cache": "HIT"},
-            background=BackgroundTask(cached.release),
+            background=BackgroundTask(shared.release),
         )
+    if isinstance(shared, media_fetch.SharedDownload):
+        reader = shared.reader()
+        try:
+            shared.wait_ready()
+        except BaseException:
+            reader.close()
+            raise
+        headers = {"Cache-Control": "private, max-age=60", "X-Pawchive-Cache": "SHARED"}
+        if shared.expected_size is not None:
+            headers["Content-Length"] = str(shared.expected_size)
+        return StreamingResponse(reader, media_type=shared.content_type, headers=headers,
+                                 background=BackgroundTask(reader.close))
     connection, upstream = client.open_media(path, preview=kind == "preview", range_header=range_header)
     content_range = upstream.getheader("Content-Range")
     if upstream.status == 416:
@@ -231,27 +247,12 @@ def stream_media_response(stream_ref: str, range_header: str | None = None):
         if value:
             headers[public_name] = value
 
-    length = upstream.getheader("Content-Length")
-    expected_size = int(length) if length and length.isdigit() else None
-    writer = (
-        media_cache.begin_write(path, kind, content_type, expected_size)
-        if upstream.status == 200 and not range_header else None
-    )
-
     def chunks():
-        complete = False
         try:
             while part := upstream.read(64 * 1024):
-                if writer is not None:
-                    writer.write(part)
                 yield part
-            complete = True
         finally:
-            try:
-                if writer is not None:
-                    writer.close(complete)
-            finally:
-                connection.close()
+            connection.close()
 
     return StreamingResponse(chunks(), status_code=upstream.status, media_type=content_type,
                              headers=headers, background=BackgroundTask(connection.close))

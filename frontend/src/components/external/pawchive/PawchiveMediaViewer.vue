@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, Download, ExternalLink, Image as ImageIcon, Imag
 import ImageViewer from '../../media-detail/ImageViewer.vue'
 import type { PawchiveAttachment, PawchivePost } from '../../../types/pawchive'
 import { pawchiveMediaUrl } from '../../../utils/pawchiveApi'
+import { fetchImageBlob, isAbortError } from '../../../utils/pawchiveImageLoader'
 
 const props = defineProps<{
   post: PawchivePost
@@ -54,6 +55,9 @@ const preloadedImageUrls = new Map<string, Map<string, string>>()
 const attemptedImageKeys = new Map<string, Set<string>>()
 let preloadController: AbortController | null = null
 let preloadPending = false
+let imageController: AbortController | null = null
+// Fraction of the current original received, or null while the size is unknown.
+const loadProgress = ref<number | null>(null)
 const thumbnailNavRef = ref<HTMLElement | null>(null)
 const thumbnailStripRef = ref<HTMLDivElement | null>(null)
 const hoverPreviewIndex = ref(-1)
@@ -67,9 +71,9 @@ const retriedKey = ref('')
 const loadFailed = ref(false)
 const showPlaceholder = ref(false)
 const countdownKey = ref(0)
-let stallTimer: number | undefined
 let placeholderTimer: number | undefined
 let skipTimer: number | undefined
+// Originals can be 20+ MB behind a slow proxy, so only a pause in received bytes counts as a stall.
 const IMAGE_STALL_MS = 20_000
 const withNonce = (url: string) => {
   if (!url || !retryNonce.value) return url
@@ -101,9 +105,56 @@ const stopPostPreload = () => {
   abortPostPreload()
   releaseOtherPosts(new Set())
 }
-const setDisplayImageUrl = () => {
-  displayImageUrl.value = preloadedImageUrls.get(props.post.post_key)?.get(props.attachment.attachment_key)
-    || withNonce(pawchiveMediaUrl(props.attachment.stream_ref))
+const cacheImage = (postKey: string, key: string, blob: Blob) => {
+  const images = preloadedImageUrls.get(postKey) || new Map<string, string>()
+  preloadedImageUrls.set(postKey, images)
+  const existing = images.get(key)
+  if (existing) return existing
+  const url = URL.createObjectURL(blob)
+  images.set(key, url)
+  return url
+}
+const dropCachedImage = (postKey: string, key: string) => {
+  const url = preloadedImageUrls.get(postKey)?.get(key)
+  if (!url) return
+  URL.revokeObjectURL(url)
+  preloadedImageUrls.get(postKey)?.delete(key)
+}
+const abortImageLoad = () => {
+  imageController?.abort()
+  imageController = null
+}
+const loadCurrentImage = async () => {
+  abortImageLoad()
+  const item = props.attachment
+  const postKey = props.post.post_key
+  if (item.media_type !== 'image' || !item.stream_ref) {
+    displayImageUrl.value = ''
+    return
+  }
+  const ready = preloadedImageUrls.get(postKey)?.get(item.attachment_key)
+  if (ready) {
+    displayImageUrl.value = ready
+    return
+  }
+  displayImageUrl.value = ''
+  loadProgress.value = null
+  const controller = new AbortController()
+  imageController = controller
+  try {
+    const blob = await fetchImageBlob(withNonce(pawchiveMediaUrl(item.stream_ref)), {
+      signal: controller.signal,
+      idleMs: IMAGE_STALL_MS,
+      onProgress: (progress) => { if (imageController === controller) loadProgress.value = progress },
+    })
+    if (imageController !== controller) return
+    displayImageUrl.value = cacheImage(postKey, item.attachment_key, blob)
+  } catch (error) {
+    if (isAbortError(error) || imageController !== controller) return
+    void onMediaFailed()
+  } finally {
+    if (imageController === controller) imageController = null
+  }
 }
 const preloadImages = async (postKey: string, items: PawchiveAttachment[], controller: AbortController) => {
   const images = preloadedImageUrls.get(postKey) || new Map<string, string>()
@@ -113,21 +164,13 @@ const preloadImages = async (postKey: string, items: PawchiveAttachment[], contr
   for (const item of items) {
     if (controller.signal.aborted) return
     if (item.media_type !== 'image' || !item.stream_ref || images.has(item.attachment_key) || attempted.has(item.attachment_key)) continue
-    const request = new AbortController()
-    const abortRequest = () => request.abort()
-    controller.signal.addEventListener('abort', abortRequest)
-    const timeout = window.setTimeout(abortRequest, IMAGE_STALL_MS)
     try {
-      const response = await fetch(pawchiveMediaUrl(item.stream_ref), { signal: request.signal })
-      if (response.status !== 200 || !response.headers.get('content-type')?.startsWith('image/')) continue
-      const blob = await response.blob()
+      const blob = await fetchImageBlob(pawchiveMediaUrl(item.stream_ref), { signal: controller.signal, idleMs: IMAGE_STALL_MS })
       if (controller.signal.aborted) return
-      images.set(item.attachment_key, URL.createObjectURL(blob))
+      cacheImage(postKey, item.attachment_key, blob)
     } catch {
       if (controller.signal.aborted) return
     } finally {
-      window.clearTimeout(timeout)
-      controller.signal.removeEventListener('abort', abortRequest)
       if (!controller.signal.aborted) attempted.add(item.attachment_key)
     }
   }
@@ -226,10 +269,9 @@ const scheduleImage = () => {
   }
 }
 const clearLoadTimers = () => {
-  window.clearTimeout(stallTimer)
   window.clearTimeout(placeholderTimer)
   window.clearTimeout(skipTimer)
-  stallTimer = placeholderTimer = skipTimer = undefined
+  placeholderTimer = skipTimer = undefined
 }
 const startLoadWatch = () => {
   clearLoadTimers()
@@ -237,7 +279,6 @@ const startLoadWatch = () => {
   if (props.attachment.media_type !== 'image') return
   // A short delay keeps the blurred thumbnail from flashing over cached images.
   placeholderTimer = window.setTimeout(() => { showPlaceholder.value = !imageReady.value }, 150)
-  stallTimer = window.setTimeout(() => { if (!imageReady.value) void onMediaFailed() }, IMAGE_STALL_MS)
 }
 const reloadCurrentMedia = async () => {
   const key = props.attachment.attachment_key
@@ -246,8 +287,8 @@ const reloadCurrentMedia = async () => {
   if (key !== props.attachment.attachment_key) return
   retryNonce.value++
   if (props.attachment.media_type === 'image') {
-    setDisplayImageUrl()
     startLoadWatch()
+    void loadCurrentImage()
   } else {
     void startVideo()
   }
@@ -255,7 +296,6 @@ const reloadCurrentMedia = async () => {
 // First failure retries with a fresh ref; a second one skips (autoplay) or waits for the user.
 const onMediaFailed = async () => {
   const key = props.attachment.attachment_key
-  window.clearTimeout(stallTimer)
   clearTimer()
   if (retriedKey.value !== key) {
     retriedKey.value = key
@@ -293,7 +333,12 @@ const onImageLoaded = () => {
   scheduleImage()
   preloadPostImages()
 }
-const onImageError = () => { preloadPostImages(); void onMediaFailed() }
+const onImageError = () => {
+  // A blob that fails to decode must not be served again by the retry.
+  dropCachedImage(props.post.post_key, props.attachment.attachment_key)
+  preloadPostImages()
+  void onMediaFailed()
+}
 const onVideoEnded = () => { if (props.autoplay) emit('next') }
 const onVideoPaused = () => {
   const video = videoRef.value
@@ -382,7 +427,6 @@ const onKeydown = (event: KeyboardEvent) => {
 watch(() => props.post.post_key, () => {
   abortPostPreload()
   releaseOtherPosts(new Set([props.post.post_key]))
-  setDisplayImageUrl()
   if (props.attachment.media_type !== 'image') preloadPostImages()
 }, { immediate: true })
 watch(() => props.nextPostKey, (postKey) => {
@@ -390,14 +434,14 @@ watch(() => props.nextPostKey, (postKey) => {
   if (preloadController) preloadPending = true
   else if (props.attachment.media_type !== 'image' || imageReady.value) preloadPostImages()
 })
-watch(() => props.attachment.attachment_key, () => {
+watch(() => [props.post.post_key, props.attachment.attachment_key], () => {
   retryNonce.value = 0
   retriedKey.value = ''
   loadFailed.value = false
-  setDisplayImageUrl()
   clearTimer()
   imageReady.value = false
   startLoadWatch()
+  void loadCurrentImage()
   if (props.attachment.media_type !== 'image') preloadPostImages()
   void startVideo()
 })
@@ -406,6 +450,7 @@ watch(() => props.post.post_key, () => { failedPreviewKeys.value = new Set(); ho
 watch(() => [props.autoplay, props.interval, props.busy], () => { scheduleImage(); void startVideo() })
 onMounted(() => {
   startLoadWatch()
+  void loadCurrentImage()
   closeRef.value?.focus()
   document.addEventListener('visibilitychange', onVisibility)
   document.addEventListener('fullscreenchange', syncFullscreen)
@@ -413,6 +458,7 @@ onMounted(() => {
   if (props.attachment.media_type === 'video') void startVideo()
 })
 onBeforeUnmount(() => {
+  abortImageLoad()
   stopPostPreload()
   clearTimer()
   clearLoadTimers()
@@ -445,8 +491,12 @@ onBeforeUnmount(() => {
     </header>
     <div class="flex-1 min-h-0 relative flex" @wheel.capture="onMediaWheel">
       <img v-if="placeholderUrl && showPlaceholder && !imageReady && !loadFailed" :src="placeholderUrl" alt="" aria-hidden="true" draggable="false" class="pointer-events-none absolute inset-0 z-10 h-full w-full scale-105 object-contain opacity-60 blur-md" />
-      <ImageViewer v-if="attachment.media_type === 'image'" :key="attachment.attachment_key" :media="{ title: attachment.filename }" :image-url="displayImageUrl" :show-controls="true" :click-only-controls="false" :controls-visible="!isFullscreen || controlsVisible" @viewer-click="onMediaSurfaceClick" @previous="emit('previous')" @next="emit('next')" @viewer-double-click="() => {}" @controls-hover="onControlsHover" @loaded="onImageLoaded" @load-error="onImageError" />
-      <div v-else class="w-full h-full flex items-center justify-center bg-black">
+      <div v-if="attachment.media_type === 'image' && !displayImageUrl && showPlaceholder && !loadFailed" role="status" class="pointer-events-none absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/75 px-4 py-2 text-sm shadow-xl backdrop-blur-md">
+        <Loader2 :size="16" class="shrink-0 animate-spin text-accent" aria-hidden="true" />
+        <span>正在加载原图<template v-if="loadProgress !== null"> {{ Math.round(loadProgress * 100) }}%</template></span>
+      </div>
+      <ImageViewer v-if="attachment.media_type === 'image' && displayImageUrl" :key="attachment.attachment_key" :media="{ title: attachment.filename }" :image-url="displayImageUrl" :show-controls="true" :click-only-controls="false" :controls-visible="!isFullscreen || controlsVisible" @viewer-click="onMediaSurfaceClick" @previous="emit('previous')" @next="emit('next')" @viewer-double-click="() => {}" @controls-hover="onControlsHover" @loaded="onImageLoaded" @load-error="onImageError" />
+      <div v-else-if="attachment.media_type !== 'image'" class="w-full h-full flex items-center justify-center bg-black">
         <video ref="videoRef" :key="attachment.attachment_key" :src="videoUrl" controls playsinline preload="metadata" class="w-full h-full object-contain" @click="onMediaSurfaceClick" @ended="onVideoEnded" @pause="onVideoPaused" @loadeddata="loadFailed = false" @error="onMediaFailed" />
       </div>
       <div v-if="loadFailed" class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black px-6 text-center">
