@@ -208,6 +208,12 @@ async def _in_media_threads(iterator):
             close()
 
 
+# Pawchive file paths are content hashes, so an image URL never changes content.
+# Media refs stay stable for hours, which lets the browser reuse covers and
+# originals instead of asking the proxy again. Videos keep a short lifetime.
+_IMAGE_CACHE_CONTROL = "private, max-age=86400"
+_VIDEO_CACHE_CONTROL = "private, max-age=60"
+
 _SINGLE_RANGE = re.compile(r"^bytes=(?:\d+-\d*|-\d+)$")
 _CONTENT_RANGE = re.compile(r"^bytes \d+-\d+/(?:\d+|\*)$")
 
@@ -231,7 +237,7 @@ def stream_media_response(stream_ref: str, range_header: str | None = None):
         return FileResponse(
             shared.path,
             media_type=shared.content_type,
-            headers={"Cache-Control": "private, max-age=60", "X-Pawchive-Cache": "HIT"},
+            headers={"Cache-Control": _IMAGE_CACHE_CONTROL, "X-Pawchive-Cache": "HIT"},
             background=BackgroundTask(shared.release),
         )
     if isinstance(shared, media_fetch.SharedDownload):
@@ -241,7 +247,7 @@ def stream_media_response(stream_ref: str, range_header: str | None = None):
         except BaseException:
             reader.close()
             raise
-        headers = {"Cache-Control": "private, max-age=60", "X-Pawchive-Cache": "SHARED"}
+        headers = {"Cache-Control": _IMAGE_CACHE_CONTROL, "X-Pawchive-Cache": "SHARED"}
         if shared.expected_size is not None:
             headers["Content-Length"] = str(shared.expected_size)
         return StreamingResponse(_in_media_threads(reader), media_type=shared.content_type, headers=headers,
@@ -258,7 +264,7 @@ def stream_media_response(stream_ref: str, range_header: str | None = None):
             or (upstream.status == 206 and not _CONTENT_RANGE.fullmatch(content_range or ""))):
         connection.close()
         raise client.PawchiveError("UPSTREAM_INVALID", "来源返回了无效的媒体响应", 502)
-    headers = {"Cache-Control": "private, max-age=60"}
+    headers = {"Cache-Control": _VIDEO_CACHE_CONTROL if kind == "video" else _IMAGE_CACHE_CONTROL}
     for upstream_name, public_name in (
         ("Content-Length", "Content-Length"), ("Content-Range", "Content-Range"),
         ("Accept-Ranges", "Accept-Ranges"), ("ETag", "ETag"),

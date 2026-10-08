@@ -57,7 +57,11 @@ After `docker compose up -d --build`, check:
    an author, search for an author, and add or remove a favorite.
 
 Media URLs use short-lived signed references and the same HE Manager access
-token as other binary routes. Do not place the token or source media URL in
+token as other binary routes. A reference's expiry is rounded up to a 6-hour
+boundary, so it stays valid for 12 to 18 hours and the same file keeps the
+same URL across list refreshes. Image responses allow private browser caching
+for one day because Pawchive file paths are content hashes. Video responses
+keep a 60-second lifetime. Do not place the token or source media URL in
 logs. The nginx media location disables access logs and response buffering.
 
 ## Temporary image cache

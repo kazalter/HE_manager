@@ -61,6 +61,32 @@ class StreamTests(unittest.TestCase):
                 stream_media_response(refs.sign_media(IMAGE, "image"))
         self.assertTrue(connection.closed)
 
+    def test_media_refs_are_stable_within_an_expiry_window(self):
+        window = refs.MEDIA_EXPIRY_STEP
+        start = window * 1000 + 10
+        with patch.object(refs.time, "time", return_value=start):
+            first = refs.sign_media(IMAGE, "image")
+        with patch.object(refs.time, "time", return_value=start + window - 20):
+            self.assertEqual(refs.sign_media(IMAGE, "image"), first)
+        with patch.object(refs.time, "time", return_value=start + window):
+            self.assertNotEqual(refs.sign_media(IMAGE, "image"), first)
+        for offset in (0, window - 20):
+            with patch.object(refs.time, "time", return_value=start + offset):
+                expires = refs._decode(refs.sign_media(IMAGE, "image"))["exp"]
+            self.assertGreaterEqual(expires - (start + offset), refs.MEDIA_TTL)
+            self.assertLessEqual(expires - (start + offset), refs.MEDIA_TTL + window)
+
+    def test_images_cache_longer_than_videos(self):
+        for path, kind, content_type, expected in (
+            (IMAGE, "image", "image/jpeg", "private, max-age=86400"),
+            (VIDEO, "video", "video/mp4", "private, max-age=60"),
+        ):
+            connection = FakeConnection()
+            with patch.object(client, "open_media", return_value=(connection, FakeResponse(200, content_type))):
+                response = stream_media_response(refs.sign_media(path, kind), "bytes=0-15")
+            self.assertEqual(response.headers["cache-control"], expected)
+            response.background.func()
+
     def test_query_token_only_on_binary_route(self):
         self.assertTrue(query_token_allowed("GET", "/external/pawchive/media/signed"))
         self.assertFalse(query_token_allowed("POST", "/external/pawchive/media/signed"))

@@ -17,6 +17,9 @@ SECRET_PATH = os.path.join(os.path.dirname(CONFIG_PATH) or ".", "pawchive_stream
 # Open viewers keep refs for a whole browsing session; expiry only bounds replay
 # of already-validated, authenticated media paths.
 MEDIA_TTL = 12 * 3600
+# Media expiry is rounded up to this step so a file keeps the same URL across
+# list refreshes and stays in the browser cache; refs then live 12-18 hours.
+MEDIA_EXPIRY_STEP = 6 * 3600
 CURSOR_TTL = 12 * 3600
 
 
@@ -70,7 +73,8 @@ def _decode(token: str) -> dict:
 
 
 def sign_media(path: str, kind: str) -> str:
-    return _encode({"kind": kind, "path": path, "exp": int(time.time()) + MEDIA_TTL})
+    expires = -(-(int(time.time()) + MEDIA_TTL) // MEDIA_EXPIRY_STEP) * MEDIA_EXPIRY_STEP
+    return _encode({"kind": kind, "path": path, "exp": expires})
 
 
 def read_media(token: str) -> tuple[str, str]:
