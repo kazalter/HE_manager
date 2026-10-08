@@ -5,7 +5,7 @@ import ImageViewer from '../../media-detail/ImageViewer.vue'
 import type { PawchiveAttachment, PawchivePost } from '../../../types/pawchive'
 import { pawchiveMediaUrl, withRetryParam } from '../../../utils/pawchiveApi'
 import PawchiveRetryImage from './PawchiveRetryImage.vue'
-import { fetchImageBlob, isAbortError } from '../../../utils/pawchiveImageLoader'
+import { fetchImageBlob, isAbortError, PawchiveImageError } from '../../../utils/pawchiveImageLoader'
 
 const props = defineProps<{
   post: PawchivePost
@@ -59,6 +59,10 @@ let preloadPending = false
 let imageController: AbortController | null = null
 // Fraction of the current original received, or null while the size is unknown.
 const loadProgress = ref<number | null>(null)
+// Originals the source no longer has (404); their thumbnail is shown instead.
+const missingOriginals = ref(new Set<string>())
+const originalMissing = computed(() => props.attachment.media_type === 'image' &&
+  missingOriginals.value.has(props.attachment.attachment_key) && displayImageUrl.value !== '')
 const thumbnailNavRef = ref<HTMLElement | null>(null)
 const thumbnailStripRef = ref<HTMLDivElement | null>(null)
 const hoverPreviewIndex = ref(-1)
@@ -135,6 +139,10 @@ const loadCurrentImage = async () => {
     displayImageUrl.value = ready
     return
   }
+  if (missingOriginals.value.has(item.attachment_key) && item.preview_ref) {
+    displayImageUrl.value = pawchiveMediaUrl(item.preview_ref)
+    return
+  }
   displayImageUrl.value = ''
   loadProgress.value = null
   const controller = new AbortController()
@@ -149,6 +157,12 @@ const loadCurrentImage = async () => {
     displayImageUrl.value = cacheImage(postKey, item.attachment_key, blob)
   } catch (error) {
     if (isAbortError(error) || imageController !== controller) return
+    if (error instanceof PawchiveImageError && error.status === 404 && item.preview_ref) {
+      // Retrying cannot bring back a deleted original, but its thumbnail usually still exists.
+      missingOriginals.value = new Set(missingOriginals.value).add(item.attachment_key)
+      displayImageUrl.value = pawchiveMediaUrl(item.preview_ref)
+      return
+    }
     void onMediaFailed()
   } finally {
     if (imageController === controller) imageController = null
@@ -425,6 +439,7 @@ const onKeydown = (event: KeyboardEvent) => {
 watch(() => props.post.post_key, () => {
   abortPostPreload()
   releaseOtherPosts(new Set([props.post.post_key]))
+  missingOriginals.value = new Set()
   if (props.attachment.media_type !== 'image') preloadPostImages()
 }, { immediate: true })
 watch(() => props.nextPostKey, (postKey) => {
@@ -562,6 +577,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </nav>
+      <p v-if="originalMissing" role="status" class="text-xs text-amber-200/90">来源站已缺失这张原图，当前显示的是缩略图。</p>
       <p v-if="error" role="alert" class="text-sm text-amber-300">{{ error }}</p>
       <p v-else-if="notice" role="status" class="text-xs text-white/60">{{ notice }}</p>
       <p v-if="downloadMessage" :role="downloadError ? 'alert' : 'status'" :class="downloadError ? 'text-red-300' : 'text-emerald-300'" class="text-sm">{{ downloadMessage }}</p>

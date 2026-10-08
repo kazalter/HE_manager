@@ -87,6 +87,9 @@ The web viewer loads originals with a 20-second inactivity timeout rather than
 a total time limit. A large image that is still arriving keeps loading, with
 its progress shown, and only a 20-second pause in received data counts as a
 stall.
+Some originals are missing on the source file host even though their
+thumbnails still exist. When an original returns 404, the viewer shows the
+thumbnail with a notice instead of retrying.
 
 The backend uses /mnt/hdd/.he-manager/pawchive-cache and requires
 /mnt/hdd/.mounted. It removes only that cache directory when the backend
