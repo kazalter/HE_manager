@@ -1,8 +1,11 @@
 """Authenticated HE Manager API for public Pawchive browsing."""
 from __future__ import annotations
 
+import functools
 import os
 import re
+
+import anyio
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
@@ -187,6 +190,24 @@ def remove_creator_favorite(
     return Response(status_code=204)
 
 
+# Media requests block on upstream I/O. They get their own worker threads so a
+# page of slow thumbnails cannot exhaust the shared pool used by every other
+# synchronous endpoint in the app.
+_MEDIA_THREADS = anyio.CapacityLimiter(64)
+_END = object()
+
+
+async def _in_media_threads(iterator):
+    """Iterate a blocking byte iterator on the media worker threads."""
+    try:
+        while (chunk := await anyio.to_thread.run_sync(next, iterator, _END, limiter=_MEDIA_THREADS)) is not _END:
+            yield chunk
+    finally:
+        close = getattr(iterator, "close", None)
+        if close is not None:
+            close()
+
+
 _SINGLE_RANGE = re.compile(r"^bytes=(?:\d+-\d*|-\d+)$")
 _CONTENT_RANGE = re.compile(r"^bytes \d+-\d+/(?:\d+|\*)$")
 
@@ -223,7 +244,7 @@ def stream_media_response(stream_ref: str, range_header: str | None = None):
         headers = {"Cache-Control": "private, max-age=60", "X-Pawchive-Cache": "SHARED"}
         if shared.expected_size is not None:
             headers["Content-Length"] = str(shared.expected_size)
-        return StreamingResponse(reader, media_type=shared.content_type, headers=headers,
+        return StreamingResponse(_in_media_threads(reader), media_type=shared.content_type, headers=headers,
                                  background=BackgroundTask(reader.close))
     connection, upstream = client.open_media(path, preview=kind == "preview", range_header=range_header)
     content_range = upstream.getheader("Content-Range")
@@ -254,13 +275,14 @@ def stream_media_response(stream_ref: str, range_header: str | None = None):
         finally:
             connection.close()
 
-    return StreamingResponse(chunks(), status_code=upstream.status, media_type=content_type,
+    return StreamingResponse(_in_media_threads(chunks()), status_code=upstream.status, media_type=content_type,
                              headers=headers, background=BackgroundTask(connection.close))
 
 
 @router.get("/media/{stream_ref}")
-def get_media(stream_ref: str, request: Request):
-    return _run(stream_media_response, stream_ref, request.headers.get("range"))
+async def get_media(stream_ref: str, request: Request):
+    operation = functools.partial(_run, stream_media_response, stream_ref, request.headers.get("range"))
+    return await anyio.to_thread.run_sync(operation, limiter=_MEDIA_THREADS)
 
 
 class DownloadSelection(BaseModel):

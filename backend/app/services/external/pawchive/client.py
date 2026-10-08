@@ -4,6 +4,11 @@ All requests use the shared external-favorites proxy when configured. Without
 one, direct connections keep pinned DNS checks. Account cookies are handled
 only by the separate allowlisted account_request. Media streams keep their
 connection open only while the response iterator runs.
+
+Public API and media requests reuse idle keep-alive connections per host, so a
+page of thumbnails does not pay a fresh DNS, TCP, proxy CONNECT and TLS
+handshake for every image. A connection returns to the pool only after its
+response body was read to the end.
 """
 from __future__ import annotations
 
@@ -28,6 +33,14 @@ _cache_bytes = 0
 _cache_lock = threading.Lock()
 _rate_lock = threading.Lock()
 _next_api_request = 0.0
+POOL_IDLE_SECONDS = 20.0
+POOL_MAX_IDLE = 8
+# Keyed by (host, proxy) so a proxy change in Settings never reuses an old tunnel.
+_pool: dict[tuple[str, str], list[tuple[float, http.client.HTTPSConnection]]] = {}
+_pool_lock = threading.Lock()
+# Errors that mean a reused keep-alive connection was already closed by the peer.
+_STALE_ERRORS = (http.client.RemoteDisconnected, http.client.BadStatusLine,
+                 BrokenPipeError, ConnectionResetError, ConnectionAbortedError)
 _ACCOUNT_CREATOR_PATH = re.compile(r"^/api/v1/favorites/creator/[A-Za-z0-9_-]{1,100}/[A-Za-z0-9_-]{1,100}$")
 _ACCOUNT_COOKIE_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$")
 _ACCOUNT_COOKIE_VALUE = re.compile(r"^[!\x23-\x2B\x2D-\x3A\x3C-\x5B\x5D-\x7E]*$")
@@ -81,10 +94,61 @@ def _new_connection(host: str, *, timeout: float = 20) -> http.client.HTTPSConne
     return connection
 
 
+class PooledConnection:
+    """Connection handle whose ``close`` returns a fully read connection to the pool."""
+
+    def __init__(self, route: tuple[str, str], connection: http.client.HTTPSConnection):
+        self.route = route
+        self.connection = connection
+        self.response: http.client.HTTPResponse | None = None
+        self._closed = False
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        response = self.response
+        reusable = (response is not None and response.isclosed() and not response.will_close
+                    and self.connection.sock is not None)
+        if not reusable:
+            self.connection.close()
+            return
+        with _pool_lock:
+            idle = _pool.setdefault(self.route, [])
+            if len(idle) < POOL_MAX_IDLE:
+                idle.append((time.monotonic(), self.connection))
+                return
+        self.connection.close()
+
+
+def _pooled_connection(route: tuple[str, str]) -> http.client.HTTPSConnection | None:
+    now = time.monotonic()
+    expired = []
+    found = None
+    with _pool_lock:
+        idle = _pool.get(route, [])
+        while idle:
+            since, connection = idle.pop()
+            if now - since <= POOL_IDLE_SECONDS:
+                found = connection
+                break
+            expired.append(connection)
+    for connection in expired:
+        connection.close()
+    return found
+
+
+def clear_pool() -> None:
+    with _pool_lock:
+        connections = [connection for idle in _pool.values() for _, connection in idle]
+        _pool.clear()
+    for connection in connections:
+        connection.close()
+
+
 def _request(host: str, target: str, *, range_header: str | None = None):
     if host not in {API_HOST, FILE_HOST, IMAGE_HOST} or not target.startswith("/") or ".." in target:
         raise PawchiveError("INVALID_REQUEST", "非法上游请求", 400)
-    connection = _new_connection(host)
     headers = {
         "Host": host,
         "Accept": "application/json" if host == API_HOST else "image/*, video/*",
@@ -93,18 +157,34 @@ def _request(host: str, target: str, *, range_header: str | None = None):
     }
     if range_header:
         headers["Range"] = range_header
-    try:
-        connection.request("GET", target, headers=headers)
-        response = connection.getresponse()
-        if 300 <= response.status < 400:
-            raise PawchiveError("UPSTREAM_REDIRECT", "Pawchive 媒体地址已变化", 502)
-        return connection, response
-    except PawchiveError:
-        connection.close()
-        raise
-    except (OSError, TimeoutError, http.client.HTTPException) as exc:
-        connection.close()
-        raise PawchiveError("UPSTREAM_UNAVAILABLE", "Pawchive 暂时不可用", 502) from exc
+    from app.external_config import get_external_favorites_proxy
+
+    route = (host, get_external_favorites_proxy() or "")
+    while True:
+        connection = _pooled_connection(route)
+        reused = connection is not None
+        if connection is None:
+            connection = _new_connection(host)
+        handle = PooledConnection(route, connection)
+        try:
+            connection.request("GET", target, headers=headers)
+            response = connection.getresponse()
+            handle.response = response
+            if 300 <= response.status < 400:
+                raise PawchiveError("UPSTREAM_REDIRECT", "Pawchive 媒体地址已变化", 502)
+            return handle, response
+        except PawchiveError:
+            connection.close()
+            raise
+        except _STALE_ERRORS as exc:
+            connection.close()
+            if reused:
+                # The peer closed an idle keep-alive connection; a GET is safe to resend.
+                continue
+            raise PawchiveError("UPSTREAM_UNAVAILABLE", "Pawchive 暂时不可用", 502) from exc
+        except (OSError, TimeoutError, http.client.HTTPException) as exc:
+            connection.close()
+            raise PawchiveError("UPSTREAM_UNAVAILABLE", "Pawchive 暂时不可用", 502) from exc
 
 
 def _raise_for_status(response):

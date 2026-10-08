@@ -5,10 +5,15 @@ for a short grace period after the last reader leaves. A viewer that retries a
 slow image, or a preload that races the visible image, therefore reads the
 bytes already fetched instead of starting over. Finished files are committed to
 the restart-scoped media cache. Without a usable cache, callers stream directly.
+
+Originals and thumbnails use separate upstream concurrency lanes. A page of
+covers therefore cannot occupy every proxy connection while the viewer waits
+for the original it is showing, and a few large originals cannot block covers.
 """
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 
@@ -22,6 +27,18 @@ HEADER_TIMEOUT = 45.0
 # An unfinished download with no reader stops after this many seconds.
 ABANDON_GRACE = 15.0
 
+
+def _lane_size(name: str, default: int) -> int:
+    try:
+        return max(1, int(os.getenv(name, str(default))))
+    except ValueError:
+        return default
+
+
+_lanes = {
+    "image": threading.BoundedSemaphore(_lane_size("HE_PAWCHIVE_IMAGE_CONCURRENCY", 4)),
+    "preview": threading.BoundedSemaphore(_lane_size("HE_PAWCHIVE_PREVIEW_CONCURRENCY", 6)),
+}
 _lock = threading.Lock()
 _downloads: dict[tuple[str, str], "SharedDownload"] = {}
 
@@ -70,7 +87,14 @@ class SharedDownload:
         connection = None
         complete = False
         error: client.PawchiveError | None = None
+        lane = _lanes[self.kind]
+        acquired = False
         try:
+            while not (acquired := lane.acquire(timeout=1.0)):
+                if self._abandoned():
+                    raise client.PawchiveError("CANCELED", "已无读取者", 499)
+            if self._abandoned():
+                raise client.PawchiveError("CANCELED", "已无读取者", 499)
             connection, response = client.open_media(self.path, preview=self.kind == "preview")
             content_type = (response.getheader("Content-Type") or "").split(";", 1)[0].strip().lower()
             if response.status != 200 or not content_type.startswith("image/"):
@@ -99,6 +123,8 @@ class SharedDownload:
         finally:
             if connection is not None:
                 connection.close()
+            if acquired:
+                lane.release()
             # Commit before leaving the registry so a new request finds the cache entry.
             self._writer.close(complete)
             self._publish(done=True, error=error)

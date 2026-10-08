@@ -1,4 +1,5 @@
 import asyncio
+import os
 import queue
 import tempfile
 import threading
@@ -6,6 +7,9 @@ import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from app.routers import pawchive as router
 from app.services.external.pawchive import client, media_cache as cache_module, media_fetch, refs
@@ -200,6 +204,22 @@ class SharedDownloadTests(unittest.TestCase):
             hit = router.stream_media_response(refs.sign_media(IMAGE, "image"))
         self.assertEqual(hit.headers["x-pawchive-cache"], "HIT")
         hit.background.func()
+
+    def test_endpoint_streams_through_media_threads(self):
+        app = FastAPI()
+        app.include_router(router.router)
+        upstream = GatedResponse([b"ab", b"cd"])
+        upstream.release_all()
+        opener, _ = self.fake_open(upstream)
+        with opener, patch.dict(os.environ, {"HE_PAWCHIVE_ENABLED": "1"}):
+            url = f"/external/pawchive/media/{refs.sign_media(IMAGE, 'image')}"
+            response = TestClient(app).get(url)
+            missing = TestClient(app).get("/external/pawchive/media/expired.ref")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"abcd")
+        self.assertEqual(response.headers["x-pawchive-cache"], "SHARED")
+        self.assertEqual(missing.status_code, 400)
+        self.assertEqual(missing.json()["detail"]["code"], "INVALID_REF")
 
     def test_range_requests_bypass_shared_download(self):
         opener, _ = self.fake_open(GatedResponse([b"ab"]))
