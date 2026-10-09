@@ -10,6 +10,7 @@ const compact = useCompactViewport()
 import MangaReader from './media-detail/MangaReader.vue'
 import MetadataPanel from './media-detail/MetadataPanel.vue'
 import VideoPlayer from './media-detail/VideoPlayer.vue'
+import { UiButton } from './ui'
 import { useMediaOverlayControls } from '../composables/useMediaOverlayControls'
 import { useMediaProgress } from '../composables/useMediaProgress'
 import { useVideoPlayback } from '../composables/useVideoPlayback'
@@ -599,10 +600,10 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
 <template>
   <Teleport to="body">
     <div v-if="!isAudio || currentMedia.is_missing" role="dialog" aria-modal="true" :aria-label="currentMedia.title" class="he-media-overlay fixed inset-0 z-[200] flex items-center justify-center">
-      <div class="absolute inset-0 bg-background/85 backdrop-blur-2xl" @click="emit('close')"></div>
+      <div class="absolute inset-0 bg-black/80" @click="emit('close')"></div>
 
-      <div class="he-media-layout relative w-full h-full bg-[#060606] shadow-2xl flex overflow-hidden" :class="{ 'is-video': isVideo, 'show-mobile-metadata': compact && showMetadataPanel }">
-        <section class="relative flex-1 min-w-0 bg-black flex flex-col">
+      <div class="he-media-layout relative flex h-full w-full overflow-hidden bg-black" :class="{ 'is-video': isVideo, 'show-mobile-metadata': compact && showMetadataPanel }">
+        <section class="relative flex min-w-0 flex-1 flex-col bg-black">
           <header
             ref="overlayHeader"
             @mouseenter="setHeaderPointerOver(true)"
@@ -610,41 +611,41 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
             @focusin="onHeaderFocusIn"
             @focusout="onHeaderFocusOut"
             :class="isAudio
-              ? 'relative shrink-0 border-b border-white/10 bg-black/80 opacity-100 translate-y-0'
+              ? 'relative shrink-0 border-b border-white/10 bg-black opacity-100 translate-y-0'
               : [
-                  'absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent',
+                  'absolute inset-x-0 top-0 bg-gradient-to-b from-black/75 via-black/35 to-transparent',
                   showControls || (isAutoAdvancing && !clickOnlyViewerControls)
                     ? 'opacity-100 translate-y-0'
                     : clickOnlyViewerControls
                       ? 'opacity-0 -translate-y-3 pointer-events-none'
                       : 'opacity-0 -translate-y-3 hover:opacity-100 hover:translate-y-0',
                 ]"
-            class="he-viewer-header flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-5 z-50 transition-all duration-300 focus-within:opacity-100 focus-within:translate-y-0 focus-within:pointer-events-auto"
+            class="he-viewer-header z-50 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 pb-6 pt-3 transition-[opacity,transform] duration-200 ease-out focus-within:pointer-events-auto focus-within:translate-y-0 focus-within:opacity-100 sm:flex-nowrap sm:px-6 sm:pt-4"
           >
-            <h2 class="w-full sm:w-auto sm:grow min-w-0 text-lg font-bold truncate sm:pr-4 text-white/95 drop-shadow-xl select-none">{{ currentMedia.title }}</h2>
-            <div class="flex w-full sm:w-auto items-center justify-end gap-2">
+            <h2 class="min-w-0 flex-1 select-none truncate text-body font-medium text-white sm:text-heading sm:font-semibold">{{ currentMedia.title }}</h2>
+            <div class="he-viewer-actions flex shrink-0 items-center gap-1 rounded-2xl bg-black/70 p-1 text-white">
               <div
                 v-if="(isImage || isManga) && !currentMedia.is_missing"
                 role="group"
                 aria-label="自动播放设置"
-                class="flex items-center gap-2 rounded-xl border border-white/20 bg-black/70 p-1 text-white backdrop-blur-md"
+                class="flex items-center gap-1"
                 @click.stop
               >
                 <button
                   type="button"
-                  class="inline-flex h-11 min-w-11 items-center justify-center gap-2 rounded-lg px-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-black disabled:cursor-not-allowed disabled:opacity-40"
-                  :class="isAutoAdvancing ? 'bg-accent/25 text-accent hover:bg-accent/35' : 'bg-white/10 text-white hover:bg-white/20'"
+                  class="he-chrome-btn gap-1.5 px-2.5 text-meta font-medium disabled:cursor-not-allowed disabled:opacity-40"
+                  :class="isAutoAdvancing ? 'bg-accent text-on-accent hover:bg-accent/90' : 'text-white/85 hover:bg-white/10 hover:text-white'"
                   :disabled="!isAutoAdvancing && !canAutoAdvance"
                   :aria-label="isAutoAdvancing ? '暂停自动播放' : '开始自动播放'"
                   :aria-pressed="isAutoAdvancing"
                   :title="isAutoAdvancing ? '暂停自动播放' : canAutoAdvance ? '开始自动播放' : isManga ? '已到最后一页' : '没有下一张图片'"
                   @click="toggleAutoAdvance"
                 >
-                  <Pause v-if="isAutoAdvancing" :size="18" />
-                  <Play v-else :size="18" />
+                  <Pause v-if="isAutoAdvancing" :size="16" aria-hidden="true" />
+                  <Play v-else :size="16" aria-hidden="true" />
                   <span class="hidden min-[420px]:inline">{{ isAutoAdvancing ? '暂停' : '自动播放' }}</span>
                 </button>
-                <label class="flex items-center gap-1.5 pr-1.5 text-sm font-medium text-white/80">
+                <label class="flex items-center gap-1.5 pr-1.5 text-meta text-white/70">
                   <span class="sr-only">自动播放间隔（秒）</span>
                   <input
                     v-model="autoAdvanceSecondsInput"
@@ -653,7 +654,7 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
                     max="300"
                     step="1"
                     inputmode="numeric"
-                    class="h-11 w-12 rounded-lg border border-white/25 bg-white/10 text-center font-mono text-base text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                    class="he-seconds-input h-9 w-11 rounded-lg border border-white/15 bg-white/10 text-center text-body tabular-nums text-white transition-colors hover:border-white/25 focus:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 pointer-coarse:h-11"
                     aria-label="自动播放间隔，秒"
                     title="自动播放间隔，1 至 300 秒"
                     @focus="isEditingAutoAdvanceSeconds = true"
@@ -663,23 +664,26 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
                   />
                   <span>秒</span>
                 </label>
+                <span class="mx-0.5 h-5 w-px bg-white/15" aria-hidden="true"></span>
               </div>
               <button
-                v-if="!isFullscreen"
-                @click="toggleMetadataPanel"
-                class="w-11 h-11 rounded-xl bg-black/35 backdrop-blur-md hover:bg-black/55 text-white/65 hover:text-white transition-all"
+                v-if="!isFullscreen && !(compact && isVideo)"
+                type="button"
+                class="he-chrome-btn w-9 text-white/80 hover:bg-white/10 hover:text-white pointer-coarse:w-11"
+                :class="showMetadataPanel ? 'bg-white/10 text-white' : ''"
                 :aria-label="showMetadataPanel ? '收起媒体信息' : '显示媒体信息'" :aria-expanded="showMetadataPanel"
                 :title="showMetadataPanel ? '收起信息侧栏' : '展开信息侧栏'"
+                @click="toggleMetadataPanel"
               >
-                <PanelRightClose v-if="showMetadataPanel" :size="19" class="mx-auto" />
-                <PanelRightOpen v-else :size="19" class="mx-auto" />
+                <PanelRightClose v-if="showMetadataPanel" :size="18" aria-hidden="true" />
+                <PanelRightOpen v-else :size="18" aria-hidden="true" />
               </button>
-              <button v-if="!isVideo" @click="toggleFullscreen" class="w-11 h-11 rounded-xl bg-black/35 backdrop-blur-md hover:bg-black/55 text-white/65 hover:text-white transition-all" :title="isFullscreen ? '退出全屏' : '全屏'">
-                <Minimize v-if="isFullscreen" :size="19" class="mx-auto" />
-                <Maximize v-else :size="19" class="mx-auto" />
+              <button v-if="!isVideo" type="button" class="he-chrome-btn w-9 text-white/80 hover:bg-white/10 hover:text-white pointer-coarse:w-11" :aria-label="isFullscreen ? '退出全屏' : '全屏'" :title="isFullscreen ? '退出全屏' : '全屏'" @click="toggleFullscreen">
+                <Minimize v-if="isFullscreen" :size="18" aria-hidden="true" />
+                <Maximize v-else :size="18" aria-hidden="true" />
               </button>
-              <button @click="emit('close')" class="w-11 h-11 rounded-xl bg-red-500/20 backdrop-blur-md hover:bg-red-500/40 text-red-100 hover:text-white transition-all" aria-label="返回媒体列表" title="关闭">
-                <X :size="20" class="mx-auto" />
+              <button type="button" class="he-chrome-btn w-9 text-white/80 hover:bg-white/10 hover:text-white pointer-coarse:w-11" aria-label="返回媒体列表" title="关闭" @click="emit('close')">
+                <X :size="20" aria-hidden="true" />
               </button>
             </div>
           </header>
@@ -688,35 +692,35 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
             v-if="isNavigatingMedia"
             role="status"
             aria-live="polite"
-            class="absolute bottom-6 left-1/2 z-[120] flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/80 px-4 py-2 text-sm text-white/85 shadow-xl backdrop-blur-md"
+            class="absolute bottom-6 left-1/2 z-[120] flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/80 px-4 py-2 text-meta text-white/90 ring-1 ring-inset ring-white/10"
           >
-            <Loader2 :size="16" class="animate-spin text-accent" />
+            <Loader2 :size="16" class="animate-spin" aria-hidden="true" />
             <span>正在加载媒体…</span>
           </div>
 
-          <div v-if="toastMessage && !currentMedia.is_missing" role="status" class="absolute bottom-44 left-1/2 z-[120] -translate-x-1/2 rounded-xl border border-white/15 bg-black/90 px-4 py-3 text-sm text-white shadow-xl">{{ toastMessage }}</div>
+          <div v-if="toastMessage && !currentMedia.is_missing" role="status" class="absolute bottom-44 left-1/2 z-[120] max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-2xl bg-black/85 px-4 py-2.5 text-body text-white ring-1 ring-inset ring-white/10">{{ toastMessage }}</div>
 
-          <div v-if="currentMedia.is_missing" class="absolute inset-0 z-[100] bg-black/85 flex flex-col items-center justify-center p-8 backdrop-blur-md">
-            <div class="bg-red-500/10 border border-red-500/20 rounded-3xl p-8 max-w-md w-full text-center shadow-2xl">
-              <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-5 shadow-inner shadow-red-500/20">
-                <FileQuestion :size="32" class="text-red-400" />
+          <div v-if="currentMedia.is_missing" class="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-black/85 p-6">
+            <div class="w-full max-w-md rounded-3xl border border-line-strong bg-surface-3 p-6 text-center shadow-modal sm:p-8">
+              <div class="mx-auto mb-4 grid size-12 place-items-center rounded-2xl border border-danger/25 bg-danger/10 text-danger" aria-hidden="true">
+                <FileQuestion :size="22" />
               </div>
-              <h3 class="text-2xl font-black text-red-400 mb-3 tracking-tight">文件丢失</h3>
-              <p class="text-[15px] text-white/60 leading-relaxed mb-8">
-                系统无法找到原文件。<br>可能是文件已被删除、移动，或所在的外部存储设备未连接。
+              <h3 class="text-heading font-semibold text-ink">文件丢失</h3>
+              <p class="mx-auto mt-1.5 max-w-sm text-meta text-subtle">
+                系统无法找到原文件。可能是文件已被删除、移动，或所在的外部存储设备未连接。
               </p>
-              <div class="flex flex-col sm:flex-row gap-3 justify-center">
-                <button @click="recheckMedia" class="px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold transition-all flex items-center justify-center gap-2 flex-1 shadow-lg shadow-black/50">
-                  <RefreshCw :size="18" :class="{ 'animate-spin': isRechecking }" />
+              <div class="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
+                <UiButton variant="secondary" size="lg" :loading="isRechecking" @click="recheckMedia">
+                  <template #icon><RefreshCw :size="16" /></template>
                   重新检查
-                </button>
-                <button @click="removeMissingMedia" class="px-6 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold transition-all flex items-center justify-center gap-2 flex-1 shadow-lg shadow-red-500/20">
-                  <Trash2 :size="18" />
+                </UiButton>
+                <UiButton variant="danger" size="lg" @click="removeMissingMedia">
+                  <template #icon><Trash2 :size="16" /></template>
                   从媒体库移除
-                </button>
+                </UiButton>
               </div>
             </div>
-            <div v-if="toastMessage" class="absolute bottom-10 left-1/2 -translate-x-1/2 bg-black/90 border border-white/10 text-white px-6 py-3 rounded-xl font-bold shadow-2xl transition-all">
+            <div v-if="toastMessage" role="status" class="absolute bottom-10 left-1/2 -translate-x-1/2 rounded-2xl border border-line-strong bg-surface-3 px-4 py-2.5 text-body text-ink shadow-pop">
               {{ toastMessage }}
             </div>
           </div>
@@ -746,40 +750,42 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
             @controls-hover="setControlsHover"
           />
 
-          <div v-if="isVideo" class="video-summary min-[1100px]:hidden shrink-0 border-t border-white/10 bg-background/95 px-4 sm:px-6 py-4">
-            <div class="flex items-start justify-between gap-6 flex-wrap">
-              <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2 mb-2">
-                  <span class="rounded-md bg-accent/15 px-2 py-1 text-[11px] font-black text-accent">{{ mediaTypeLabel }}</span>
-                  <span class="text-xs text-white/35 truncate">{{ currentMedia.relative_path }}</span>
-                </div>
-                <h3 class="text-xl font-black text-white truncate">{{ currentMedia.title }}</h3>
-                <div class="mt-3 h-1.5 rounded-full bg-white/10 overflow-hidden">
-                  <div class="h-full bg-accent transition-all" :style="{ width: `${videoProgressPercent}%` }"></div>
-                </div>
-              </div>
+          <MetadataPanel
+            v-if="isVideo && compact && !currentMedia.is_missing"
+            inline
+            :media="currentMedia"
+            :cover-url="coverUrl"
+            :media-type-label="mediaTypeLabel"
+            :video-progress-percent="videoProgressPercent"
+            :manga-progress-percent="mangaProgressPercent"
+            :manga-progress-text="mangaProgressText"
+            :manga-page-total="mangaPageTotal"
+            @toggle-favorite="updateMedia({ favorite: !currentMedia.favorite })"
+            @set-rating="setRating"
+            @add-tag="addTag"
+            @remove-tag="removeTag"
+          />
 
-              <div class="video-summary-stats grid grid-cols-3 gap-2 text-right shrink-0 min-w-0 max-w-full">
-                <div class="rounded-xl bg-white/5 border border-white/10 px-4 py-3">
-                  <p class="text-[11px] text-white/35 mb-1">进度</p>
-                  <p class="text-sm font-bold text-white">{{ videoProgressPercent }}%</p>
-                </div>
-                <div class="rounded-xl bg-white/5 border border-white/10 px-4 py-3">
-                  <p class="text-[11px] text-white/35 mb-1">播放</p>
-                  <p class="text-sm font-bold text-white">{{ progressText }}</p>
-                </div>
-                <div class="rounded-xl bg-white/5 border border-white/10 px-4 py-3">
-                  <p class="text-[11px] text-white/35 mb-1">大小</p>
-                  <p class="text-sm font-bold text-white">{{ formatSize(currentMedia.file_size) }}</p>
-                </div>
-              </div>
+          <div v-if="isVideo && !compact" class="video-summary min-[1100px]:hidden shrink-0 border-t border-line bg-background px-6 py-4">
+            <h3 class="truncate text-heading font-semibold text-ink" :title="currentMedia.title">{{ currentMedia.title }}</h3>
+            <p class="mt-1 flex flex-wrap items-center gap-x-2 text-meta text-subtle tabular-nums">
+              <span>{{ mediaTypeLabel }}</span>
+              <span class="text-faint" aria-hidden="true">·</span>
+              <span>{{ progressText }}</span>
+              <span class="text-faint" aria-hidden="true">·</span>
+              <span>已看 {{ videoProgressPercent }}%</span>
+              <span class="text-faint" aria-hidden="true">·</span>
+              <span>{{ formatSize(currentMedia.file_size) }}</span>
+            </p>
+            <div class="mt-3 h-1 overflow-hidden rounded-sm bg-surface-3">
+              <div class="h-full rounded-sm bg-accent" :style="{ width: `${videoProgressPercent}%` }"></div>
             </div>
           </div>
         </section>
 
         <button v-if="compact && showMetadataPanel && showControls" type="button" class="he-metadata-scrim" aria-label="关闭媒体信息背景" tabindex="-1" @click="toggleMetadataPanel"></button>
         <MetadataPanel
-          v-if="!isFullscreen && showMetadataPanel && (showControls || (!isManga && !isImage))"
+          v-if="!isFullscreen && showMetadataPanel && !(compact && isVideo) && (showControls || (!isManga && !isImage))"
           :media="currentMedia"
           :cover-url="coverUrl"
           :media-type-label="mediaTypeLabel"
@@ -801,28 +807,37 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
 <style scoped>
 .he-media-overlay { height: var(--he-app-height, 100dvh); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
 .he-viewer-header { padding-top: calc(12px + env(safe-area-inset-top)); }
-.he-metadata-scrim { position: absolute; inset: 0; z-index: 55; background: rgba(0,0,0,.6); }
+.he-chrome-btn {
+  display: inline-flex;
+  height: 36px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  transition: background-color var(--duration-fast, 120ms) var(--ease-out, ease-out), color var(--duration-fast, 120ms) var(--ease-out, ease-out);
+}
+@media (pointer: coarse) {
+  .he-chrome-btn { height: 44px; min-width: 44px; }
+}
+.he-seconds-input { -moz-appearance: textfield; }
+.he-seconds-input::-webkit-outer-spin-button,
+.he-seconds-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.he-metadata-scrim { position: absolute; inset: 0; z-index: 55; background: rgb(0 0 0 / 0.6); }
 @media (max-width: 899px) {
-  .he-viewer-header { flex-wrap: nowrap; padding-inline: 12px; gap: 8px; }
-  .he-viewer-header h2 { width: auto; font-size: 14px; flex: 1; }
-  .he-viewer-header > div { width: auto; gap: 4px; }
-  .he-media-layout:not(.is-video) .he-viewer-header { flex-wrap: wrap; }
+  .he-viewer-header { padding-inline: 12px; padding-bottom: 16px; }
   .he-media-layout:not(.is-video) .he-viewer-header h2 { flex-basis: 100%; }
-  .he-media-layout:not(.is-video) .he-viewer-header > div { width: 100%; }
+  .he-media-layout:not(.is-video) .he-viewer-header { justify-content: flex-end; }
   .he-viewer-header [aria-label="自动播放设置"] button span { display: none; }
-  .he-media-layout.is-video > section { overflow-y: auto; }
-  .he-media-layout.is-video .he-viewer-header { position: relative; opacity: 1; transform: none; pointer-events: auto; background: #060606; }
+  .he-media-layout.is-video > section { overflow-y: auto; overscroll-behavior: contain; }
+  .he-media-layout.is-video .he-viewer-header { position: relative; flex-wrap: nowrap; opacity: 1; transform: none; pointer-events: auto; background: #000; padding-bottom: 8px; }
+  .he-media-layout.is-video .he-viewer-actions { background: transparent; padding: 0; }
   .he-media-layout.is-video :deep(.he-video-stage) { flex: 0 0 auto; aspect-ratio: 16 / 9; width: 100%; }
-  .video-summary { display: block !important; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
-  .video-summary-stats { width: 100%; text-align: left; }
-  .video-summary-stats > div { padding: 10px; }
-  .video-summary h3 { white-space: normal; font-size: 18px; }
 }
 @media (max-width: 899px) and (orientation: landscape) {
   .he-media-layout.is-video :deep(.he-video-stage) { flex: 1 1 0; aspect-ratio: auto; min-height: 0; }
-  .he-media-layout.is-video .video-summary { display: none !important; }
+  .he-media-layout.is-video :deep(.he-metadata-inline) { display: none; }
 }
-@media (max-height: 650px), (max-width: 640px) {
+@media (max-height: 650px) {
   .video-summary { display: none; }
 }
 </style>

@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import { Book, ChevronDown, ChevronLeft, ChevronRight, Columns3, Filter, History, LayoutGrid, List, Play, Rows3, Search, SortAsc, Star, X } from 'lucide-vue-next'
+import { ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, LayoutGrid, List, Rows3, Search, SlidersHorizontal, Star, Tag as TagIcon, TriangleAlert, X } from 'lucide-vue-next'
 import { API_BASE_URL, thumbnailUrl } from '../config'
 import { authState } from '../auth'
 import mediaPlaceholderUrl from '../assets/media-placeholder.svg?no-inline'
@@ -11,6 +11,7 @@ import MediaCard from '../components/MediaCard.vue'
 import MediaViewCard from '../components/MediaViewCard.vue'
 import { AsyncMediaDetail as MediaDetail } from '../components/asyncComponents'
 import PaginationControl from '../components/PaginationControl.vue'
+import { EmptyState, PageHeader, SectionHeader, UiButton, UiIconButton, UiInput, UiSegmented, UiSkeleton, buttonClass, controlClass, iconButtonClass, menuItemClass, popoverClass, type SegmentedOption } from '../components/ui'
 import { useCompactViewport } from '../composables/useCompactViewport'
 const compact = useCompactViewport()
 const filterPanelRef = ref<HTMLElement | null>(null)
@@ -125,11 +126,39 @@ const progressPercent = (media: Media) => {
   if (media.media_type === 'video' && media.duration && media.progress > 0) {
     return Math.min(100, Math.max(0, Math.round((media.progress / media.duration) * 100)))
   }
-  if (media.media_type === 'manga' && media.page_count && media.progress >= 0) {
+  // Manga progress is a 0-based page index, so page 0 only counts once reading started.
+  if (media.media_type === 'manga' && media.page_count && media.progress >= 0 && media.view_status !== 'unviewed') {
     return Math.min(100, Math.max(0, Math.round(((media.progress + 1) / media.page_count) * 100)))
   }
   return 0
 }
+
+const typeLabel = (type: Media['media_type']) =>
+  type === 'video' ? '视频' : type === 'manga' ? '漫画' : type === 'audio' ? '音频' : '杂图'
+
+const formatClock = (seconds: number) => {
+  const total = Math.max(0, Math.floor(seconds))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const rest = String(total % 60).padStart(2, '0')
+  return hours ? `${hours}:${String(minutes).padStart(2, '0')}:${rest}` : `${minutes}:${rest}`
+}
+
+const continueMeta = (media: Media) => {
+  const percent = progressPercent(media)
+  if (media.media_type === 'manga' && media.page_count) {
+    return percent > 0 ? `${Math.min(media.page_count, media.progress + 1)}/${media.page_count} 页` : `${media.page_count} 页`
+  }
+  if (percent > 0) return `已看 ${percent}%`
+  if (media.duration) return formatClock(media.duration)
+  return ''
+}
+
+const continueThumbClass = (media: Media) =>
+  media.media_type === 'video' ? 'w-24' : media.media_type === 'audio' ? 'w-16' : 'w-11'
+
+const continueTitle = computed(() =>
+  props.mediaType === 'manga' ? '继续阅读' : props.mediaType === 'audio' ? '继续收听' : props.mediaType === 'image' ? '最近浏览' : '继续观看')
 
 const recentlyOpened = computed(() => {
   return [...continueMedia.value]
@@ -213,6 +242,46 @@ const pageTitle = computed(() => {
 
 const selectedTagLabel = computed(() => selectedTag.value || '全部标签')
 
+type SortKey = 'date' | 'title' | 'rating' | 'opened'
+const sortOptions: SegmentedOption<SortKey>[] = [
+  { value: 'date', label: '最近添加' },
+  { value: 'opened', label: '最近打开' },
+  { value: 'rating', label: '评分' },
+  { value: 'title', label: '名称' },
+]
+const sortLabel = computed(() => sortOptions.find(option => option.value === sortBy.value)?.label ?? '最近添加')
+const sourceOptions: SegmentedOption<'' | 'x' | 'wnacg' | 'local'>[] = [
+  { value: '', label: '全部来源' },
+  { value: 'local', label: '本地' },
+  { value: 'x', label: 'X' },
+  { value: 'wnacg', label: 'WNACG' },
+]
+const viewSegments = computed<SegmentedOption<MediaViewMode>[]>(() => viewOptions.value.map(option => ({
+  value: option.mode, label: option.label, icon: option.icon, iconOnly: !compact.value,
+})))
+const viewModeModel = computed<MediaViewMode>({
+  get: () => viewMode.value,
+  set: mode => selectViewMode(mode),
+})
+
+// Single-type pages show each type's own aspect ratio; the mixed wall keeps uniform posters.
+const cardShape = computed(() => props.mediaType && props.mediaType !== 'image' ? 'natural' : 'poster')
+const posterGridClass = computed(() => props.mediaType === 'video' && cardShape.value === 'natural'
+  ? 'grid grid-cols-1 gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'
+  : 'poster-grid')
+const skeletonAspect = computed(() => viewMode.value === 'wide' || (viewMode.value === 'poster' && props.mediaType === 'video')
+  ? 'aspect-video'
+  : viewMode.value === 'poster' && props.mediaType === 'audio' ? 'aspect-square' : 'aspect-[2/3]')
+
+const sortDropdownOpen = ref(false)
+const sortDropdownRef = ref<HTMLElement | null>(null)
+const sortButtonRef = ref<HTMLButtonElement | null>(null)
+const selectSort = (value: SortKey) => {
+  sortBy.value = value
+  sortDropdownOpen.value = false
+  sortButtonRef.value?.focus()
+}
+
 const selectTag = (tagName: string) => {
   selectedTag.value = tagName
   tagSearchQuery.value = ''
@@ -228,6 +297,9 @@ const closeTagDropdown = async () => {
 const handleTagOutsidePointer = (event: PointerEvent) => {
   if (tagDropdownOpen.value && !tagDropdownRef.value?.contains(event.target as Node)) {
     tagDropdownOpen.value = false
+  }
+  if (sortDropdownOpen.value && !sortDropdownRef.value?.contains(event.target as Node)) {
+    sortDropdownOpen.value = false
   }
 }
 
@@ -249,7 +321,7 @@ const fetchTags = async () => {
 const fetchContinueMedia = async () => {
   try {
     const res = await axios.get<Media[]>(`${API_BASE_URL}/media`, {
-      params: { sort: 'opened', limit: 12, offset: 0 },
+      params: { media_type: props.mediaType, sort: 'opened', limit: 12, offset: 0 },
     })
     continueMedia.value = res.data
   } catch (err) {
@@ -443,6 +515,7 @@ watch(searchQuery, () => {
   searchTimer = window.setTimeout(syncFilters, 250)
 })
 watch([selectedTag, sortBy, sourceFilter], syncFilters)
+watch(() => props.mediaType, () => { void fetchContinueMedia() })
 watch(() => JSON.stringify([props.mediaType, route.query.search, route.query.tag, route.query.sort, route.query.source, route.query.favorite, route.query.page]), () => {
   window.clearTimeout(searchTimer)
   searchQuery.value = typeof route.query.search === 'string' ? route.query.search : ''
@@ -504,392 +577,327 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="z-10 relative">
-    <header class="he-home-header sticky top-0 z-40 bg-background/55 backdrop-blur-2xl border-b border-white/5 px-6 md:px-8 py-4 mb-6 shadow-[0_4px_30px_rgba(0,0,0,0.4)]">
-      <div class="flex flex-wrap items-center justify-between gap-4">
-        <div class="flex items-baseline gap-3">
-          <h1 class="text-xl md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-white/60 tracking-tight">
-            {{ pageTitle }}
-          </h1>
-          <span class="text-xs font-black text-accent bg-accent/10 px-2 py-0.5 rounded-md border border-accent/20 uppercase tracking-widest">
-            {{ totalItems.toLocaleString() }} 项
-          </span>
-        </div>
-
-        <div class="he-home-search flex flex-1 min-w-0 w-full md:min-w-[260px] max-w-3xl gap-3">
-          <div class="relative flex-1 group">
-            <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-white/25 group-focus-within:text-accent transition-colors duration-300" :size="16" />
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="搜索标题、文件名..."
-              aria-label="搜索标题或文件名"
-              class="w-full bg-white/4 border border-white/5 rounded-xl pl-11 pr-10 py-2.5 text-sm text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:bg-white/6 focus:border-white/12 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)] transition-all duration-300"
-            />
-            <button
-              v-if="searchQuery"
-              type="button"
-              @click="searchQuery = ''"
-              class="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/30 hover:text-white rounded-md transition-colors cursor-pointer"
-              title="清空搜索"
-              aria-label="清空搜索"
-            >
-              <X :size="14" />
-            </button>
-          </div>
+  <div class="relative z-10 min-h-full">
+    <PageHeader sticky :title="pageTitle" :count="loading && !totalItems ? undefined : `${totalItems.toLocaleString()} 项`">
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="he-home-search flex min-w-0 items-center gap-2" :class="compact ? 'w-full' : ''">
+          <UiInput
+            v-model="searchQuery"
+            type="text"
+            :size="compact ? 'lg' : 'md'"
+            placeholder="搜索标题、文件名…"
+            aria-label="搜索标题或文件名"
+            :class="compact ? 'flex-1 pointer-coarse:[&_input]:h-11' : 'w-64 xl:w-72'"
+          >
+            <template #leading><Search :size="16" /></template>
+            <template v-if="searchQuery" #trailing>
+              <UiIconButton label="清空搜索" size="sm" @click="searchQuery = ''"><X :size="14" aria-hidden="true" /></UiIconButton>
+            </template>
+          </UiInput>
 
           <button
-            @click="toggleFavoriteFilter"
-            :class="favoriteOnly ? 'bg-gradient-to-tr from-accent to-indigo-500 text-white shadow-md shadow-accent/15 border border-accent/20 scale-102' : 'bg-white/4 border border-white/5 text-white/50 hover:bg-white/6 hover:text-white hover:border-white/10 hover:shadow-md'"
-            class="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 cursor-pointer"
+            type="button"
+            :class="iconButtonClass('secondary', compact ? 'lg' : 'md')"
             title="只看收藏"
             aria-label="只看收藏"
             :aria-pressed="favoriteOnly"
+            @click="toggleFavoriteFilter"
           >
-            <Star :size="16" :fill="favoriteOnly ? 'currentColor' : 'none'" />
+            <Star :size="compact ? 18 : 16" :class="favoriteOnly ? 'text-star' : ''" :fill="favoriteOnly ? 'currentColor' : 'none'" aria-hidden="true" />
           </button>
 
           <button
-            @click="filtersExpanded = !filtersExpanded"
-            :class="filtersExpanded || activeFilterCount > 0 ? 'bg-accent/15 border-accent/30 text-accent' : 'bg-white/4 border-white/5 text-white/55 hover:text-white'"
+            v-if="compact"
             ref="filterTriggerRef"
-            class="min-[900px]:hidden relative w-11 h-11 rounded-xl border flex items-center justify-center transition-all"
+            type="button"
+            class="relative"
+            :class="iconButtonClass('secondary', 'lg')"
             :aria-expanded="filtersExpanded"
             title="展开筛选"
             aria-label="展开筛选"
+            @click="filtersExpanded = !filtersExpanded"
           >
-            <Filter :size="16" />
-            <span v-if="activeFilterCount" class="absolute -right-1 -top-1 min-w-4 h-4 px-1 rounded-full bg-accent text-[10px] font-black text-white flex items-center justify-center">
+            <SlidersHorizontal :size="18" aria-hidden="true" />
+            <span v-if="activeFilterCount" class="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-caption font-medium text-on-accent tabular-nums">
               {{ activeFilterCount }}
             </span>
           </button>
         </div>
-      </div>
 
-      <Teleport to="body" :disabled="!compact">
-      <div v-if="compact && filtersExpanded" class="fixed inset-0 z-[110] bg-black/65" aria-hidden="true" @click="filtersExpanded = false"></div>
-      <div
-        ref="filterPanelRef"
-        :class="[filtersExpanded ? 'flex' : 'hidden min-[900px]:flex', compact ? 'he-mobile-filters' : 'mt-3.5']"
-        :role="compact ? 'dialog' : undefined" :aria-modal="compact ? true : undefined" aria-label="媒体筛选和排序"
-        class="flex-wrap items-center gap-3 text-xs rounded-2xl bg-sidebar border border-white/10 p-4 min-[900px]:bg-transparent min-[900px]:border-0 min-[900px]:p-0"
-        @keydown="filterKeydown"
-      >
-        <div v-if="compact" class="flex items-center justify-between w-full"><h2 class="text-lg font-bold">筛选和排序</h2><button type="button" class="min-h-11 min-w-11 rounded-xl bg-white/10" aria-label="关闭筛选" @click="filtersExpanded = false"><X :size="20" class="mx-auto" /></button></div>
-        <div class="flex items-center gap-1.5 text-white/55 font-bold">
-          <Filter :size="13" />
-          <span class="text-xs uppercase tracking-wider">筛选</span>
-        </div>
-
-        <!-- Tag Dropdown -->
-        <div ref="tagDropdownRef" class="relative" @keydown.esc.prevent.stop="closeTagDropdown">
-          <button
-            ref="tagButtonRef"
-            @click="tagDropdownOpen = !tagDropdownOpen"
-            class="min-w-32 bg-white/4 border border-white/5 rounded-xl px-3 py-2 text-xs text-white/70 focus:outline-none focus:ring-2 focus:ring-accent/20 flex items-center justify-between gap-3 hover:bg-white/6 hover:border-white/10 transition-all duration-300 cursor-pointer font-bold"
-            :aria-expanded="tagDropdownOpen"
-            aria-controls="he-tag-options"
-            aria-label="按标签筛选"
-          >
-            <span class="truncate">{{ selectedTagLabel }}</span>
-            <ChevronDown :size="12" :class="tagDropdownOpen ? 'rotate-180' : ''" class="transition-transform text-white/35" />
-          </button>
+        <Teleport to="body" :disabled="!compact">
+          <div v-if="compact && filtersExpanded" class="fixed inset-0 z-[110] bg-black/60" aria-hidden="true" @click="filtersExpanded = false"></div>
           <div
-            v-if="tagDropdownOpen"
-            id="he-tag-options"
-            class="absolute left-0 top-full mt-1.5 z-50 min-w-56 max-h-72 flex flex-col rounded-2xl border border-white/10 bg-sidebar/95 backdrop-blur-3xl shadow-2xl p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+            ref="filterPanelRef"
+            :class="compact
+              ? [filtersExpanded ? 'flex' : 'hidden', 'he-mobile-filters flex-col gap-5 rounded-t-3xl border-t border-line-strong bg-surface-3 px-4 pt-4 shadow-modal']
+              : 'flex flex-wrap items-center gap-2'"
+            :role="compact ? 'dialog' : undefined"
+            :aria-modal="compact ? true : undefined"
+            aria-label="媒体筛选和排序"
+            @keydown="filterKeydown"
           >
-            <div class="px-1 py-1 mb-1 border-b border-white/8">
-              <input
-                ref="tagSearchRef"
-                v-model="tagSearchQuery"
-                type="text"
-                placeholder="过滤标签..."
-                aria-label="搜索标签"
-                class="w-full bg-white/6 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-accent/40"
-                @click.stop
-              />
+            <div v-if="compact" class="flex items-center justify-between">
+              <h2 class="text-heading font-semibold text-ink">筛选和排序</h2>
+              <button type="button" :class="iconButtonClass('ghost', 'lg')" aria-label="关闭筛选" title="关闭筛选" @click="filtersExpanded = false">
+                <X :size="20" aria-hidden="true" />
+              </button>
             </div>
-            <div class="overflow-y-auto max-h-56 custom-scrollbar pr-0.5 space-y-0.5">
-              <button
-                @click="selectTag('')"
-                :class="selectedTag === '' ? 'bg-accent text-white shadow-sm shadow-accent/15' : 'text-white/70 hover:text-white hover:bg-white/6'"
-                class="w-full rounded-xl px-3 py-1.5 text-left text-xs font-bold transition-all duration-200 cursor-pointer"
-              >
-                全部标签
-              </button>
-              <button
-                v-for="tag in filteredTags"
-                :key="tag.id"
-                @click="selectTag(tag.name)"
-                :class="selectedTag === tag.name ? 'bg-accent text-white shadow-sm shadow-accent/15' : 'text-white/70 hover:text-white hover:bg-white/6'"
-                class="w-full rounded-xl px-3 py-1.5 text-left text-xs font-bold transition-all duration-200 cursor-pointer flex items-center justify-between"
-              >
-                <span class="truncate">{{ tag.name }}</span>
-                <span v-if="tag.count" class="text-[10px] text-white/40 font-mono ml-2">{{ tag.count }}</span>
-              </button>
-              <div v-if="filteredTags.length === 0" class="py-3 text-center text-xs text-white/35">
-                无匹配标签
+
+            <div>
+              <p v-if="compact" class="mb-2 text-meta font-medium text-muted">标签</p>
+              <div ref="tagDropdownRef" class="relative" @keydown.esc.prevent.stop="closeTagDropdown">
+                <button
+                  ref="tagButtonRef"
+                  type="button"
+                  :class="[
+                    buttonClass('secondary', compact ? 'lg' : 'md', compact),
+                    'justify-between',
+                    compact ? '' : 'max-w-52',
+                    selectedTag ? '!border-accent/50 !bg-accent/15 !text-accent-glow' : '',
+                  ]"
+                  :aria-expanded="tagDropdownOpen"
+                  aria-controls="he-tag-options"
+                  aria-label="按标签筛选"
+                  @click="tagDropdownOpen = !tagDropdownOpen"
+                >
+                  <span class="flex min-w-0 items-center gap-2">
+                    <TagIcon :size="15" class="shrink-0" :class="selectedTag ? '' : 'text-subtle'" aria-hidden="true" />
+                    <span class="truncate">{{ selectedTagLabel }}</span>
+                  </span>
+                  <ChevronDown :size="15" class="shrink-0 text-subtle transition-transform duration-150" :class="tagDropdownOpen ? 'rotate-180' : ''" aria-hidden="true" />
+                </button>
+                <div
+                  v-if="tagDropdownOpen"
+                  id="he-tag-options"
+                  :class="[popoverClass, compact ? 'mt-2 w-full' : 'absolute left-0 top-full z-50 mt-1.5 w-64']"
+                  class="flex max-h-80 flex-col"
+                >
+                  <div class="p-1 pb-1.5">
+                    <input
+                      ref="tagSearchRef"
+                      v-model="tagSearchQuery"
+                      type="text"
+                      placeholder="过滤标签…"
+                      aria-label="搜索标签"
+                      :class="controlClass('sm')"
+                      @click.stop
+                    />
+                  </div>
+                  <div class="custom-scrollbar min-h-0 flex-1 space-y-0.5 overflow-y-auto">
+                    <button type="button" :class="[menuItemClass, selectedTag === '' ? '!text-ink font-medium' : '']" @click="selectTag('')">
+                      <span class="truncate">全部标签</span>
+                      <Check v-if="selectedTag === ''" :size="15" class="ml-auto shrink-0 text-accent" aria-hidden="true" />
+                    </button>
+                    <button
+                      v-for="tag in filteredTags"
+                      :key="tag.id"
+                      type="button"
+                      :class="[menuItemClass, selectedTag === tag.name ? '!text-ink font-medium' : '']"
+                      @click="selectTag(tag.name)"
+                    >
+                      <span class="truncate">{{ tag.name }}</span>
+                      <Check v-if="selectedTag === tag.name" :size="15" class="ml-auto shrink-0 text-accent" aria-hidden="true" />
+                      <span v-else-if="tag.count" class="ml-auto shrink-0 text-caption text-subtle tabular-nums">{{ tag.count }}</span>
+                    </button>
+                    <p v-if="filteredTags.length === 0" class="py-3 text-center text-meta text-subtle">无匹配标签</p>
+                  </div>
+                </div>
               </div>
             </div>
+
+            <div>
+              <p v-if="compact" class="mb-2 text-meta font-medium text-muted">来源</p>
+              <UiSegmented v-model="sourceFilter" label="来源筛选" :options="sourceOptions" :block="compact" />
+            </div>
+
+            <div v-if="compact">
+              <p class="mb-2 text-meta font-medium text-muted">排序</p>
+              <UiSegmented v-model="sortBy" label="排序方式" :options="sortOptions" block />
+            </div>
+            <div v-else ref="sortDropdownRef" class="relative" @keydown.esc.prevent.stop="sortDropdownOpen = false; sortButtonRef?.focus()">
+              <button
+                ref="sortButtonRef"
+                type="button"
+                :class="buttonClass('ghost', 'md')"
+                aria-haspopup="menu"
+                :aria-expanded="sortDropdownOpen"
+                :aria-label="`排序方式：${sortLabel}`"
+                @click="sortDropdownOpen = !sortDropdownOpen"
+              >
+                <ArrowUpDown :size="15" class="text-subtle" aria-hidden="true" />
+                <span>{{ sortLabel }}</span>
+                <ChevronDown :size="15" class="text-subtle transition-transform duration-150" :class="sortDropdownOpen ? 'rotate-180' : ''" aria-hidden="true" />
+              </button>
+              <div v-if="sortDropdownOpen" role="menu" aria-label="排序方式" :class="[popoverClass, 'absolute left-0 top-full z-50 mt-1.5 min-w-44']">
+                <button
+                  v-for="option in sortOptions"
+                  :key="option.value"
+                  type="button"
+                  role="menuitemradio"
+                  :aria-checked="sortBy === option.value"
+                  :class="[menuItemClass, sortBy === option.value ? '!text-ink font-medium' : '']"
+                  @click="selectSort(option.value)"
+                >
+                  {{ option.label }}
+                  <Check v-if="sortBy === option.value" :size="15" class="ml-auto text-accent" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+
+            <div v-if="compact">
+              <p class="mb-2 text-meta font-medium text-muted">显示方式</p>
+              <UiSegmented v-model="viewModeModel" label="媒体显示视图" :options="viewSegments" block />
+            </div>
+
+            <UiButton v-if="activeFilterCount > 0 && !compact" variant="ghost" size="sm" @click="clearFilters">
+              <template #icon><X :size="14" /></template>
+              清除筛选
+            </UiButton>
+
+            <div v-if="compact" class="flex gap-2 pt-1">
+              <UiButton v-if="activeFilterCount > 0" variant="secondary" size="lg" @click="clearFilters">清除</UiButton>
+              <UiButton variant="primary" size="lg" block class="flex-1" @click="filtersExpanded = false">查看 {{ totalItems.toLocaleString() }} 项媒体</UiButton>
+            </div>
           </div>
-        </div>
+        </Teleport>
 
-        <!-- Source Filter (Slide segmented Pill) -->
-        <div class="flex bg-white/3 rounded-xl p-0.5 border border-white/5 shadow-inner" role="group" aria-label="来源筛选">
-          <button
-            @click="sourceFilter = ''"
-            :aria-pressed="sourceFilter === ''"
-            :class="sourceFilter === '' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
-            class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
-          >
-            全部
-          </button>
-          <button
-            @click="sourceFilter = 'local'"
-            :aria-pressed="sourceFilter === 'local'"
-            :class="sourceFilter === 'local' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
-            class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
-            title="本地扫描的媒体"
-          >
-            本地
-          </button>
-          <button
-            @click="sourceFilter = 'x'"
-            :aria-pressed="sourceFilter === 'x'"
-            :class="sourceFilter === 'x' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
-            class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
-            title="X (Twitter) 导入"
-          >
-            X
-          </button>
-          <button
-            @click="sourceFilter = 'wnacg'"
-            :aria-pressed="sourceFilter === 'wnacg'"
-            :class="sourceFilter === 'wnacg' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
-            class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
-            title="wnacg 下载"
-          >
-            wnacg
-          </button>
-        </div>
-
-        <!-- Sort Filter -->
-        <div class="flex bg-white/3 rounded-xl p-0.5 border border-white/5 shadow-inner" role="group" aria-label="排序方式">
-          <button
-            @click="sortBy = 'date'"
-            :aria-pressed="sortBy === 'date'"
-            :class="sortBy === 'date' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
-            class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
-          >
-            最近添加
-          </button>
-          <button
-            @click="sortBy = 'opened'"
-            :aria-pressed="sortBy === 'opened'"
-            :class="sortBy === 'opened' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
-            class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
-          >
-            最近打开
-          </button>
-          <button
-            @click="sortBy = 'rating'"
-            :aria-pressed="sortBy === 'rating'"
-            :class="sortBy === 'rating' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
-            class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 cursor-pointer"
-          >
-            评分
-          </button>
-          <button
-            @click="sortBy = 'title'"
-            :aria-pressed="sortBy === 'title'"
-            :class="sortBy === 'title' ? 'bg-accent text-white shadow-sm shadow-accent/10' : 'text-white/50 hover:text-white hover:bg-white/3'"
-            class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-250 flex items-center gap-1 cursor-pointer"
-          >
-            <SortAsc :size="11" /> 名称
-          </button>
-        </div>
-
-        <button
-          v-if="activeFilterCount > 0"
-          @click="clearFilters"
-          class="h-8 px-3 rounded-xl border border-white/8 bg-white/3 text-xs font-bold text-white/55 hover:text-white hover:bg-white/8 flex items-center gap-1.5 transition-all"
-        >
-          <X :size="12" />
-          清除筛选
-        </button>
-        <button v-if="compact" type="button" class="min-h-12 w-full rounded-xl bg-accent text-white text-base font-bold" @click="filtersExpanded = false">查看 {{ totalItems.toLocaleString() }} 项媒体</button>
+        <UiSegmented v-if="!compact" v-model="viewModeModel" label="媒体显示视图" :options="viewSegments" class="ml-auto" />
       </div>
-      </Teleport>
-      <nav v-if="compact" aria-label="媒体分类" class="he-media-categories overflow-x-auto mt-4 pb-1">
-        <div class="flex gap-2 w-max min-w-full justify-center">
-        <router-link v-for="category in mobileCategories" :key="category.path" :to="{ path: category.path, query: { ...route.query, page: undefined, media: undefined } }" :aria-current="route.path === category.path ? 'page' : undefined" class="shrink-0 min-h-11 px-4 rounded-xl flex items-center text-sm font-semibold border" :class="route.path === category.path ? 'bg-accent/20 border-accent/40 text-white' : 'bg-white/5 border-white/10 text-white/70'">{{ category.label }}</router-link>
+
+      <nav v-if="compact" aria-label="媒体分类" class="he-media-categories -mx-4 mt-3 overflow-x-auto px-4 scrollbar-none">
+        <div class="flex w-max gap-2">
+          <router-link
+            v-for="category in mobileCategories"
+            :key="category.path"
+            :to="{ path: category.path, query: { ...route.query, page: undefined, media: undefined } }"
+            :aria-current="route.path === category.path ? 'page' : undefined"
+            class="inline-flex h-10 shrink-0 items-center rounded-full border px-4 text-meta font-medium transition-colors duration-150 focus-ring"
+            :class="route.path === category.path ? 'border-accent/50 bg-accent/15 text-accent-glow' : 'border-line bg-surface text-muted'"
+          >{{ category.label }}</router-link>
         </div>
       </nav>
-    </header>
+    </PageHeader>
 
-    <!-- Continue watch/read section -->
-    <div v-if="recentlyOpened.length > 0 && !searchQuery && !selectedTag" class="he-library-gutter px-6 md:px-8 mb-8 animate-fluid-entrance select-none">
-      <div class="flex items-center justify-between gap-3 mb-3.5">
-        <div class="flex items-center gap-2">
-          <History class="text-accent" :size="15" />
-          <h2 class="text-xs font-black text-white/50 tracking-wider uppercase">继续观看 / 阅读 / 收听</h2>
-        </div>
-        <div class="flex items-center gap-1.5">
-          <button
-            @click="continueCollapsed = !continueCollapsed"
-            class="h-8 px-2.5 rounded-lg border border-white/8 bg-white/4 text-xs font-bold text-white/55 hover:text-white hover:bg-white/8 flex items-center gap-1.5 transition-all cursor-pointer"
-            :title="continueCollapsed ? '展开继续观看' : '收起继续观看'"
-          >
-            <span>{{ continueCollapsed ? '展开' : '收起' }}</span>
-            <ChevronDown :size="13" class="transition-transform duration-200" :class="{ '-rotate-90': continueCollapsed }" />
-          </button>
-          <template v-if="!continueCollapsed">
-            <button @click="scrollContinue(-1)" class="w-8 h-8 rounded-lg border border-white/8 bg-white/4 text-white/55 hover:text-white hover:bg-white/8 flex items-center justify-center transition-all cursor-pointer" title="向左滚动">
-              <ChevronLeft :size="16" />
-            </button>
-            <button @click="scrollContinue(1)" class="w-8 h-8 rounded-lg border border-white/8 bg-white/4 text-white/55 hover:text-white hover:bg-white/8 flex items-center justify-center transition-all cursor-pointer" title="向右滚动">
-              <ChevronRight :size="16" />
-            </button>
+    <section v-if="recentlyOpened.length > 0 && !searchQuery && !selectedTag" class="page-gutter mt-6 select-none" aria-label="继续观看">
+      <div class="page-container">
+        <SectionHeader :title="continueTitle">
+          <template #actions>
+            <UiButton variant="ghost" size="sm" :title="continueCollapsed ? '展开继续观看' : '收起继续观看'" :aria-expanded="!continueCollapsed" @click="continueCollapsed = !continueCollapsed">
+              {{ continueCollapsed ? '展开' : '收起' }}
+              <template #trailing><ChevronDown :size="14" class="transition-transform duration-150" :class="{ '-rotate-90': continueCollapsed }" aria-hidden="true" /></template>
+            </UiButton>
+            <template v-if="!continueCollapsed && !compact">
+              <UiIconButton label="向左滚动" variant="secondary" size="sm" @click="scrollContinue(-1)"><ChevronLeft :size="16" aria-hidden="true" /></UiIconButton>
+              <UiIconButton label="向右滚动" variant="secondary" size="sm" @click="scrollContinue(1)"><ChevronRight :size="16" aria-hidden="true" /></UiIconButton>
+            </template>
           </template>
-        </div>
-      </div>
-      <div v-show="!continueCollapsed" class="relative -mx-1 px-1">
-        <div class="pointer-events-none absolute right-0 top-0 bottom-2 w-12 bg-gradient-to-l from-background to-transparent z-10"></div>
-        <div ref="continueScrollRef" class="flex gap-4 overflow-x-auto pb-2 pr-10 custom-scrollbar scroll-smooth">
-        <div
-          v-for="item in recentlyOpened"
-          :key="item.id"
-          class="shrink-0 w-52 sm:w-60 bg-gradient-to-b from-white/5 to-white/[0.01] rounded-xl border border-white/5 p-2.5 hover:border-white/15 focus-within:border-accent/60 transition-all duration-300 cursor-pointer flex gap-3 relative shadow-md hover:shadow-[0_12px_24px_-10px_rgba(var(--color-accent),0.15)] group"
-        >
-          <button
-            type="button"
-            class="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            :aria-label="`打开媒体：${item.title}`"
-            @click="openMedia(item)"
-          ></button>
-          <!-- 临时忽略/移除按钮 -->
-          <button
-            type="button"
-            @click="dismissContinueItem(item.id, $event)"
-            class="he-continue-dismiss absolute top-1.5 right-1.5 w-8 h-8 rounded-full bg-black/85 border border-white/20 text-white/80 hover:text-white hover:bg-red-500/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent flex items-center justify-center z-20 cursor-pointer"
-            title="从列表中移除"
-            :aria-label="`从继续观看中移除：${item.title}`"
+        </SectionHeader>
+        <div v-show="!continueCollapsed" ref="continueScrollRef" class="-mx-4 flex gap-3 overflow-x-auto scroll-smooth px-4 pb-1 scrollbar-none sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0">
+          <div
+            v-for="item in recentlyOpened"
+            :key="item.id"
+            class="group relative flex w-72 shrink-0 items-center gap-3 rounded-2xl border border-line bg-surface p-2.5 transition-colors duration-150 ease-out hover:border-line-strong hover:bg-surface-2"
           >
-            <X :size="16" />
-          </button>
-
-          <div class="w-14 h-18 shrink-0 rounded-lg overflow-hidden bg-black/40 border border-white/5 relative">
-            <img :src="item.cover_path ? thumbnailUrl(item.cover_path) : mediaPlaceholderUrl" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-            <div class="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <Play v-if="item.media_type === 'video'" :size="12" fill="white" class="text-white" />
-              <Book v-else :size="12" class="text-white" />
+            <button
+              type="button"
+              class="absolute inset-0 z-10 rounded-2xl focus-ring"
+              :aria-label="`打开媒体：${item.title}`"
+              @click="openMedia(item)"
+            ></button>
+            <div class="relative h-16 shrink-0 overflow-hidden rounded-lg bg-surface-2" :class="continueThumbClass(item)">
+              <img :src="item.cover_path ? thumbnailUrl(item.cover_path) : mediaPlaceholderUrl" alt="" class="h-full w-full object-cover" />
+              <div class="pointer-events-none absolute inset-0 rounded-lg ring-1 ring-inset ring-white/8"></div>
             </div>
-          </div>
-          <div class="flex-1 min-w-0 flex flex-col justify-between py-0.5">
-            <div>
-              <h3 class="text-sm font-bold text-white/85 group-hover:text-accent truncate pr-7 transition-colors leading-tight mb-1" :title="item.title">{{ item.title }}</h3>
-              <p class="text-[10.5px] font-bold text-white/60 uppercase tracking-wider">
-                {{ item.media_type === 'manga' ? '漫画' : item.media_type === 'video' ? '视频' : item.media_type === 'audio' ? '音频' : '杂图' }}
+            <div class="min-w-0 flex-1">
+              <h3 class="line-clamp-2 pr-6 text-meta font-medium leading-snug text-ink pointer-coarse:pr-8" :title="item.title">{{ item.title }}</h3>
+              <p class="mt-1 flex min-w-0 items-center gap-1.5 text-caption text-subtle tabular-nums">
+                <span class="shrink-0">{{ typeLabel(item.media_type) }}</span>
+                <template v-if="continueMeta(item)">
+                  <span class="text-faint" aria-hidden="true">·</span>
+                  <span class="truncate">{{ continueMeta(item) }}</span>
+                </template>
               </p>
-            </div>
-            <div v-if="progressPercent(item) > 0" class="space-y-1">
-              <div class="flex items-center justify-between text-[10px] font-bold text-white/60">
-                <span>已看 {{ progressPercent(item) }}%</span>
+              <div
+                v-if="progressPercent(item) > 0"
+                class="mt-2 h-1 overflow-hidden rounded-sm bg-surface-3"
+                role="progressbar"
+                :aria-label="`${item.title}观看进度`"
+                :aria-valuenow="progressPercent(item)"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                <div class="h-full rounded-sm bg-accent" :style="{ width: `${progressPercent(item)}%` }"></div>
               </div>
-              <div class="h-1 w-full bg-white/10 rounded-full overflow-hidden" role="progressbar" :aria-label="`${item.title}观看进度`" :aria-valuenow="progressPercent(item)" aria-valuemin="0" aria-valuemax="100">
-                <div
-                  class="h-full rounded-full transition-all duration-300"
-                  :class="item.media_type === 'manga' ? 'bg-purple-400' : 'bg-accent'"
-                  :style="{ width: `${progressPercent(item)}%` }"
-                ></div>
-              </div>
             </div>
+            <button
+              type="button"
+              class="he-continue-dismiss absolute right-1 top-1 z-20 grid size-7 place-items-center rounded-lg text-subtle transition-colors duration-150 hover:bg-surface-3 hover:text-ink focus-ring pointer-coarse:size-10"
+              title="从列表中移除"
+              :aria-label="`从继续观看中移除：${item.title}`"
+              @click="dismissContinueItem(item.id, $event)"
+            >
+              <X :size="14" aria-hidden="true" />
+            </button>
           </div>
         </div>
-        </div>
       </div>
-    </div>
+    </section>
 
-    <div ref="containerRef" class="he-library-gutter px-6 md:px-8 pb-12">
-      <div class="flex justify-end mb-5">
-        <div class="inline-flex items-center gap-1 rounded-xl border border-white/8 bg-white/4 p-1" role="group" aria-label="媒体显示视图">
-          <button
-            v-for="option in viewOptions"
-            :key="option.mode"
-            type="button"
-            class="flex min-w-9 h-9 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-bold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
-            :class="viewMode === option.mode ? 'bg-accent text-white shadow-sm' : 'text-white/55 hover:bg-white/8 hover:text-white'"
-            :aria-label="option.label"
-            :aria-pressed="viewMode === option.mode"
-            :title="option.label"
-            @click="selectViewMode(option.mode)"
-          >
-            <component :is="option.icon" :size="16" aria-hidden="true" />
-            <span class="hidden lg:inline">{{ option.label }}</span>
-          </button>
+    <div ref="containerRef" class="page-gutter pb-12" :class="recentlyOpened.length > 0 && !searchQuery && !selectedTag ? 'mt-8' : 'mt-6'">
+      <div class="page-container">
+        <div v-if="loading" :class="viewMode === 'list' ? 'flex flex-col gap-2' : viewMode === 'wide' ? 'grid grid-cols-1 gap-x-5 gap-y-7 md:grid-cols-2 xl:grid-cols-3' : viewMode === 'poster' ? posterGridClass : 'poster-grid'">
+          <template v-if="viewMode === 'list'">
+            <UiSkeleton v-for="i in 8" :key="i" class="h-24 w-full rounded-2xl" />
+          </template>
+          <div v-for="i in 12" v-else :key="i">
+            <UiSkeleton class="w-full rounded-2xl" :class="skeletonAspect" />
+            <UiSkeleton shape="text" class="mt-3 w-4/5" />
+            <UiSkeleton shape="text" class="mt-2 w-1/2" />
+          </div>
         </div>
-      </div>
 
-      <div
-        v-if="loading"
-        :class="viewMode === 'list' ? 'flex flex-col gap-2' : viewMode === 'wide' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 md:gap-7' : 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-5 md:gap-7'"
-      >
-        <div
-          v-for="i in 12"
-          :key="i"
-          class="animate-pulse rounded-xl border border-white/5 bg-white/5"
-          :class="viewMode === 'list' ? 'h-24' : viewMode === 'wide' ? 'aspect-video' : 'aspect-[3/4.5]'"
-        ></div>
-      </div>
+        <EmptyState v-else-if="mediaError" :icon="TriangleAlert" tone="danger" title="媒体列表加载失败" :description="mediaError">
+          <UiButton variant="secondary" size="sm" @click="fetchMedia()">重试</UiButton>
+        </EmptyState>
 
-      <div v-else-if="mediaError" class="flex flex-col items-center justify-center py-32 text-amber-100 text-center">
-        <div class="w-16 h-16 rounded-2xl bg-amber-400/10 flex items-center justify-center mb-5 border border-amber-300/20">
-          <Search :size="28" />
-        </div>
-        <p class="text-lg font-bold mb-2">媒体列表加载失败</p>
-        <p class="text-sm text-amber-100/75">{{ mediaError }}</p>
-      </div>
+        <div v-else-if="mediaList.length > 0" class="flex flex-col gap-10">
+          <div v-if="viewMode === 'poster'" :class="posterGridClass">
+            <MediaCard
+              v-for="(item, index) in mediaList"
+              :key="item.id"
+              :media="item"
+              :index="index"
+              :shape="cardShape"
+              :show-type="!mediaType"
+              @click="openMedia(item)"
+            />
+          </div>
+          <div v-else :class="viewMode === 'masonry' ? 'masonry-grid' : viewMode === 'wide' ? 'grid grid-cols-1 gap-x-5 gap-y-7 md:grid-cols-2 xl:grid-cols-3' : 'flex flex-col gap-2'">
+            <MediaViewCard
+              v-for="item in mediaList"
+              :key="item.id"
+              :media="item"
+              :mode="viewMode"
+              :class="viewMode === 'masonry' ? 'masonry-grid-item' : ''"
+              @click="openMedia(item)"
+            />
+          </div>
 
-      <div v-else-if="mediaList.length > 0" class="flex flex-col gap-9">
-        <div v-if="viewMode === 'poster'" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-5 md:gap-7">
-          <MediaCard
-            v-for="(item, index) in mediaList"
-            :key="item.id"
-            :media="item"
-            :index="index"
-            @click="openMedia(item)"
-          />
-        </div>
-        <div v-else :class="viewMode === 'masonry' ? 'masonry-grid' : viewMode === 'wide' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 md:gap-7' : 'flex flex-col gap-2'">
-          <MediaViewCard
-            v-for="item in mediaList"
-            :key="item.id"
-            :media="item"
-            :mode="viewMode"
-            :class="viewMode === 'masonry' ? 'masonry-grid-item' : ''"
-            @click="openMedia(item)"
+          <PaginationControl
+            v-if="pageCount > 1"
+            :page="currentPage"
+            :page-count="pageCount"
+            :total-items="totalItems"
+            :page-size="pageSize"
+            :disabled="loading"
+            item-label="项媒体"
+            @change="goToPage"
           />
         </div>
 
-        <PaginationControl
-          v-if="pageCount > 1"
-          :page="currentPage"
-          :page-count="pageCount"
-          :total-items="totalItems"
-          :page-size="pageSize"
-          :disabled="loading"
-          item-label="项媒体"
-          @change="goToPage"
-        />
-      </div>
-
-      <div v-else-if="!loading && mediaList.length === 0" class="flex flex-col items-center justify-center py-32 text-white/35 text-center">
-        <div class="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-5 border border-white/10">
-          <Search :size="28" />
-        </div>
-        <p class="text-lg font-bold mb-2">没有找到匹配的媒体</p>
-        <p class="text-sm">可以去设置页添加扫描目录，或调整当前筛选条件。</p>
+        <EmptyState v-else-if="!loading && mediaList.length === 0" :icon="Search" title="没有找到匹配的媒体" description="可以去设置页添加扫描目录，或调整当前筛选条件。">
+          <UiButton v-if="activeFilterCount > 0" variant="secondary" size="sm" @click="clearFilters">清除筛选</UiButton>
+        </EmptyState>
       </div>
     </div>
 
@@ -908,35 +916,24 @@ onMounted(async () => {
 
 <style scoped>
 @media (max-width: 899px) {
-  .he-home-header {
-    padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
-    margin-bottom: 20px;
+  .he-mobile-filters {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 120;
+    max-height: 85dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
   }
-
-  .he-media-categories a { padding-inline: 14px; }
-  .he-home-search { flex: 1 0 100%; gap: 8px; }
-  .he-home-search input { font-size: 16px; min-height: 44px; }
-  .he-home-search button { min-width: 44px; min-height: 44px; }
-  .he-library-gutter { padding-left: 16px; padding-right: 16px; }
-  .he-library-gutter .grid { gap: 12px; }
-  .he-library-gutter button[title="向左滚动"],
-  .he-library-gutter button[title="向右滚动"],
-  .he-library-gutter button[title="展开继续观看"],
-  .he-library-gutter button[title="收起继续观看"],
-  .he-continue-dismiss { min-width: 44px; min-height: 44px; }
-  .he-mobile-filters { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); position: fixed; inset: auto 0 0; z-index: 120; max-height: 85dvh; overflow-y: auto; overscroll-behavior: contain; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
-  .he-mobile-filters button { min-height: 44px; }
-  .he-mobile-filters input { font-size: 16px; min-height: 44px; }
-  .he-mobile-filters > div { max-width: 100%; }
-  .he-mobile-filters [role="group"] { flex-wrap: wrap; }
-
 }
 
 .he-continue-dismiss {
   opacity: 1;
 }
 
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .he-continue-dismiss {
     opacity: 0;
   }
