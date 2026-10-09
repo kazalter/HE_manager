@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { X } from 'lucide-vue-next'
+import { UiButton } from './ui'
 import { externalDownloadStore } from '../stores/externalDownloadStore'
 
 const job = externalDownloadStore.job
@@ -40,68 +41,50 @@ const cancelText = computed(() => {
   return job.value.status === 'canceling' || job.value.cancel_requested ? '取消中' : '取消下载'
 })
 
+const taskLabel = (status: string) => (
+  status === 'success' ? '成功' : status === 'failed' ? '失败' : status === 'downloading' ? '下载中' : '等待'
+)
+const taskTone = (status: string) => (
+  status === 'success' ? 'text-success' : status === 'failed' ? 'text-danger' : status === 'downloading' ? 'text-accent-glow' : 'text-subtle'
+)
+
 const onCancel = () => externalDownloadStore.cancelDownload()
 </script>
 
 <template>
-  <div v-if="job" class="px-5 py-3 border-b border-white/10 bg-black/15 space-y-2">
-    <div class="flex items-center justify-between gap-3">
+  <div v-if="job" class="space-y-3 rounded-2xl border border-line bg-surface p-4">
+    <div class="flex items-start justify-between gap-3">
       <div class="min-w-0">
-        <p class="text-xs font-bold text-white/70">
-          {{ statusLabel }} · {{ statusBookText }}
+        <p class="text-body font-medium text-ink">
+          {{ statusLabel }}
+          <span class="text-meta font-normal text-subtle tabular-nums">· {{ statusBookText }}</span>
         </p>
-        <p class="text-[11px] text-white/50 mt-0.5">
+        <p class="mt-0.5 text-meta text-subtle tabular-nums">
           {{ downloadedPages }} / {{ totalPages }} 页 · {{ progressPercent }}%
         </p>
       </div>
-      <button
-        v-if="inProgress"
-        @click="onCancel"
-        :disabled="!canCancel"
-        class="h-8 px-3 rounded-lg bg-red-500/15 border border-red-400/25 text-red-200 disabled:opacity-45 disabled:cursor-not-allowed flex items-center gap-1 text-[11px] font-black transition-all"
-      >
-        <X :size="13" />
+      <UiButton v-if="inProgress" size="sm" variant="ghost" class="hover:!bg-danger/12 hover:!text-danger" :disabled="!canCancel" @click="onCancel">
+        <template #icon><X :size="14" aria-hidden="true" /></template>
         {{ cancelText }}
-      </button>
+      </UiButton>
     </div>
 
-    <div class="h-2 rounded-full bg-white/10 overflow-hidden">
-      <div
-        class="h-full bg-accent transition-all"
-        :style="{ width: `${progressPercent}%` }"
-      ></div>
+    <div class="h-1 overflow-hidden rounded-sm bg-surface-3" role="progressbar" :aria-valuenow="progressPercent" aria-valuemin="0" aria-valuemax="100" aria-label="下载进度">
+      <div class="h-full rounded-sm bg-accent transition-[width] duration-200" :style="{ width: `${progressPercent}%` }"></div>
     </div>
 
-    <div v-if="currentBookTitle" class="text-[11px] text-white/55 space-y-0.5">
-      <p class="truncate">
-        正在下载：<span class="text-white/80 font-bold">{{ currentBookTitle }}</span>
-      </p>
-      <p>
-        当前漫画 {{ currentBookDownloadedPages }} / {{ currentBookTotalPages }} 页
-      </p>
+    <div v-if="currentBookTitle" class="min-w-0 text-meta text-subtle">
+      <p class="truncate">正在下载：<span class="font-medium text-ink">{{ currentBookTitle }}</span></p>
+      <p class="tabular-nums">当前漫画 {{ currentBookDownloadedPages }} / {{ currentBookTotalPages }} 页</p>
     </div>
 
-    <div v-if="tasks.length" class="max-h-32 overflow-y-auto space-y-1 pr-1">
-      <p
-        v-for="task in tasks"
-        :key="task.id"
-        class="text-[11px] truncate flex items-center gap-2"
-        :class="{
-          'text-emerald-300': task.status === 'success',
-          'text-red-300': task.status === 'failed',
-          'text-accent': task.status === 'downloading',
-          'text-white/40': task.status === 'pending',
-        }"
-      >
-        <span class="shrink-0 w-12 text-[10px] uppercase font-black tracking-wider">
-          {{ task.status === 'success' ? '成功' : task.status === 'failed' ? '失败' : task.status === 'downloading' ? '下载' : '等待' }}
-        </span>
-        <span class="truncate">{{ task.title || `#${task.item_id}` }}</span>
-        <span v-if="task.total_pages" class="shrink-0 text-white/40">
-          {{ task.downloaded_pages }}/{{ task.total_pages }}
-        </span>
-        <span v-if="task.error" class="shrink-0 text-red-300/70 truncate">· {{ task.error }}</span>
-      </p>
-    </div>
+    <ul v-if="tasks.length" class="max-h-40 space-y-1 overflow-y-auto border-t border-line pt-3 pr-1">
+      <li v-for="task in tasks" :key="task.id" class="flex min-w-0 items-center gap-2 text-caption">
+        <span class="w-12 shrink-0 font-medium" :class="taskTone(task.status)">{{ taskLabel(task.status) }}</span>
+        <span class="min-w-0 truncate text-muted">{{ task.title || `#${task.item_id}` }}</span>
+        <span v-if="task.total_pages" class="shrink-0 text-subtle tabular-nums">{{ task.downloaded_pages }}/{{ task.total_pages }}</span>
+        <span v-if="task.error" class="min-w-0 shrink truncate text-danger">· {{ task.error }}</span>
+      </li>
+    </ul>
   </div>
 </template>

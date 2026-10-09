@@ -2,10 +2,9 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import axios from 'axios'
 import {
+  BookOpen,
   CheckSquare,
   Download,
-  ExternalLink,
-  Globe2,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -20,6 +19,10 @@ import AutoSyncSection from './AutoSyncSection.vue'
 import PaginationControl from '../PaginationControl.vue'
 import { externalDownloadStore } from '../../stores/externalDownloadStore'
 import { useExternalFavoritesPage } from '../../composables/useExternalFavoritesPage'
+import { EmptyState, UiButton, UiIconButton, UiInput, UiModal, UiSkeleton, controlClass, fieldHintClass, fieldLabelClass, type Tone } from '../ui'
+import ExternalSourceLayout from './ExternalSourceLayout.vue'
+import ExternalItemCard from './ExternalItemCard.vue'
+import ExternalPickRow from './ExternalPickRow.vue'
 
 const favoritesUrl = ref('https://www.wnacg.com/users-users_fav.html')
 const downloadRootPath = ref('')
@@ -30,6 +33,7 @@ const syncing = ref(false)
 const errorMessage = ref('')
 const sources = ref<ExternalFavoriteSource[]>([])
 const activeSourceId = ref<number | null>(null)
+const sourcesLoaded = ref(false)
 const downloadPanelOpen = ref(false)
 const selectedDownloadIds = ref<Set<number>>(new Set())
 const {
@@ -75,6 +79,14 @@ const statusText = computed(() => {
   if (activeSource.value.status === 'syncing') return '同步中'
   if (activeSource.value.status === 'error') return '同步失败'
   return '待同步'
+})
+
+const statusTone = computed<Tone>(() => {
+  const status = activeSource.value?.status
+  if (status === 'ok') return 'success'
+  if (status === 'syncing') return 'info'
+  if (status === 'error') return 'danger'
+  return 'neutral'
 })
 
 const formatTime = (value: string | null) => {
@@ -224,6 +236,7 @@ const dismissDownloadJob = () => externalDownloadStore.dismissJob()
 const fetchSources = async () => {
   const res = await axios.get(`${API_BASE_URL}/external/sources`)
   sources.value = res.data
+  sourcesLoaded.value = true
   if (!activeSourceId.value && activeSiteSources.value.length > 0) {
     activeSourceId.value = activeSiteSources.value[0].id
     favoritesUrl.value = activeSiteSources.value[0].favorites_url
@@ -325,361 +338,224 @@ watch(favoritesError, message => {
 </script>
 
 <template>
-  <section class="space-y-6">
-    <div class="grid grid-cols-1 xl:grid-cols-[minmax(320px,420px),1fr] gap-6">
-      <div class="bg-white/[0.04] border border-white/10 rounded-2xl p-5 space-y-4">
-        <div class="flex items-center justify-between gap-3">
-          <div class="flex items-center gap-3 text-white">
-            <div class="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center border border-accent/20">
-              <Globe2 :size="20" />
-            </div>
-            <div>
-              <h2 class="text-base font-black">WNACG</h2>
-              <p class="text-xs text-white/45">{{ statusText }} · {{ formatTime(activeSource?.last_synced_at || null) }}</p>
-            </div>
-          </div>
-          <div class="flex items-center gap-1.5 text-[11px] text-emerald-300 bg-emerald-400/10 border border-emerald-400/15 rounded-full px-2 py-1">
-            <ShieldCheck :size="13" />
-            本地保存
-          </div>
-        </div>
-
-        <div v-if="activeSiteSources.length > 0" class="flex flex-wrap gap-2">
-          <button
-            v-for="source in activeSiteSources"
-            :key="source.id"
-            @click="selectSource(source)"
-            :class="activeSourceId === source.id ? 'bg-accent text-white' : 'bg-white/5 text-white/55 hover:text-white'"
-            class="px-3 py-2 rounded-xl border border-white/10 text-xs font-bold transition-all"
-          >
-            {{ source.name }}
-          </button>
-        </div>
-
-        <label class="block space-y-2">
-          <span class="text-xs font-bold text-white/55">喜欢页地址</span>
-          <input
-            v-model="favoritesUrl"
-            type="url"
-            class="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-3 text-sm text-white placeholder-white/35 focus:outline-none focus:ring-2 focus:ring-accent/50"
-          />
-        </label>
-
-        <label class="block space-y-2">
-          <span class="text-xs font-bold text-white/55">Cookie</span>
-          <textarea
-            v-model="cookie"
-            rows="4"
-            placeholder="粘贴你自己账号在 WNACG 的 Cookie"
-            class="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-3 text-sm text-white placeholder-white/35 focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none"
-          ></textarea>
-        </label>
-
-        <label class="block space-y-2">
-          <span class="text-xs font-bold text-white/55">每个分类同步页数</span>
-          <input
-            v-model.number="pageLimit"
-            type="number"
-            min="1"
-            max="30"
-            class="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-accent/50"
-          />
-        </label>
-
+  <ExternalSourceLayout
+    :status="statusText"
+    :status-tone="statusTone"
+    :meta="activeSource?.last_synced_at ? `上次同步 ${formatTime(activeSource.last_synced_at)}` : '尚未同步收藏夹'"
+    :default-open="sourcesLoaded && !activeSource"
+  >
+    <template #config>
+      <div v-if="activeSiteSources.length > 0" class="flex flex-wrap gap-2">
         <button
-          @click="syncWnacg"
-          :disabled="syncing"
-          class="w-full h-12 rounded-xl bg-accent text-white font-black flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+          v-for="source in activeSiteSources"
+          :key="source.id"
+          type="button"
+          :aria-pressed="activeSourceId === source.id"
+          :class="[
+            'inline-flex h-8 items-center rounded-full border px-3 text-meta font-medium transition-colors focus-ring',
+            activeSourceId === source.id ? 'border-accent/50 bg-accent/15 text-accent-glow' : 'border-line bg-surface text-muted hover:border-line-strong hover:text-ink',
+          ]"
+          @click="selectSource(source)"
         >
-          <RefreshCw :size="18" :class="syncing ? 'animate-spin' : ''" />
-          {{ syncing ? '同步中' : '同步收藏' }}
+          {{ source.name }}
         </button>
-
-        <AutoSyncSection
-          v-if="activeSource"
-          source-type="wnacg"
-          :source-id="activeSource.id"
-          :enabled="activeSource.auto_sync_enabled"
-          :interval-hours="activeSource.auto_sync_interval_hours"
-          :last-run-at="activeSource.auto_sync_last_run_at"
-          :next-run-at="activeSource.auto_sync_next_run_at"
-          :last-status="activeSource.auto_sync_last_status"
-          :last-message="activeSource.auto_sync_last_message"
-          :can-enable="!!activeSource.cookie_saved && !!activeSource.download_root_path"
-          disable-reason="请先保存 Cookie 并设置下载路径"
-          @update="handleAutoSyncUpdate"
-        />
-
-        <p v-if="activeSource?.last_error" class="text-xs text-red-300 bg-red-400/10 border border-red-400/20 rounded-xl px-3 py-2">
-          {{ activeSource.last_error }}
-        </p>
-
       </div>
 
-      <div class="min-h-[360px] space-y-4">
-        <!-- Panel toolbar: search + refresh + download (was previously in page header) -->
-        <div class="bg-white/[0.04] border border-white/10 rounded-2xl px-3 py-3 flex flex-wrap items-center gap-3">
-          <p class="text-[11px] font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20 uppercase tracking-widest">
-            {{ totalItems }} ITEMS
-          </p>
-          <div class="relative flex-1 min-w-[200px] group">
-            <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 group-focus-within:text-accent transition-colors" :size="16" />
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="搜索标题或分类"
-              class="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-white/35 focus:outline-none focus:ring-2 focus:ring-accent/50"
-            />
-          </div>
-          <button
-            @click="fetchItems()"
-            class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white flex items-center justify-center transition-all"
-            title="刷新列表"
-          >
-            <RefreshCw :size="16" />
-          </button>
-          <button
-            @click="downloadPanelOpen = true"
-            class="h-10 px-3.5 rounded-xl bg-accent text-white font-black border border-white/10 flex items-center gap-2 hover:brightness-110 transition-all text-sm"
-            title="下载选择"
-          >
-            <Download :size="16" />
-            <span>下载</span>
-            <span v-if="selectedDownloadItems.length > 0" class="min-w-5 h-5 rounded-full bg-white/20 px-1.5 text-[11px] leading-5 text-center">
-              {{ selectedDownloadItems.length }}
-            </span>
-          </button>
-        </div>
+      <label class="block">
+        <span :class="fieldLabelClass">喜欢页地址</span>
+        <UiInput v-model="favoritesUrl" type="url" />
+      </label>
 
-        <div v-if="errorMessage" class="bg-red-400/10 border border-red-400/20 text-red-200 rounded-xl px-4 py-3 text-sm">
-          {{ errorMessage }}
-        </div>
+      <label class="block">
+        <span :class="fieldLabelClass">Cookie</span>
+        <textarea
+          v-model="cookie"
+          rows="3"
+          placeholder="粘贴你自己账号在 WNACG 的 Cookie"
+          :class="[controlClass('md'), 'h-auto min-h-24 resize-y py-2 leading-relaxed']"
+        ></textarea>
+        <span :class="[fieldHintClass, 'flex items-center gap-1.5']">
+          <ShieldCheck :size="13" class="shrink-0 text-success" aria-hidden="true" />
+          只保存在本机，同步后输入框会清空
+        </span>
+      </label>
 
-        <div v-if="loading" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-5">
-          <div v-for="i in 10" :key="i" class="aspect-[3/4.3] bg-white/5 animate-pulse rounded-2xl border border-white/5"></div>
-        </div>
+      <label class="block">
+        <span :class="fieldLabelClass">每个分类同步页数</span>
+        <UiInput v-model.number="pageLimit" type="number" min="1" max="30" class="w-32" />
+      </label>
 
-        <div v-else-if="items.length > 0" class="space-y-5">
-          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-5">
-            <button
-              v-for="item in pagedItems"
-              :key="item.id"
-              type="button"
-              @click="openExternalItem(item)"
-              class="group bg-white/[0.04] border border-white/10 rounded-2xl overflow-hidden hover:-translate-y-1 hover:border-accent/35 transition-all text-left"
-            >
-              <div class="aspect-[3/4] bg-black/30 overflow-hidden relative" style="transform: translateZ(0);">
-                <img
-                  v-if="item.cover_url"
-                  :src="coverSrc(item)"
-                  :alt="item.title"
-                  class="absolute inset-0 w-full h-full object-cover group-hover:scale-105"
-                  style="transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1); will-change: transform; backface-visibility: hidden;"
-                  loading="eager"
-                  decoding="async"
-                />
-                <div v-else class="w-full h-full flex items-center justify-center text-white/25">
-                  <Globe2 :size="34" />
-                </div>
-                <span
-                  v-if="item.local_media_id"
-                  class="absolute left-2 top-2 rounded-lg bg-emerald-400/90 px-2 py-1 text-[10px] font-black text-slate-950"
-                >
-                  已下载
-                </span>
-              </div>
-              <div class="p-3 space-y-2">
-                <h3 class="text-sm font-bold text-white line-clamp-2 leading-snug min-h-[2.6em]">{{ item.title }}</h3>
-                <div class="flex items-center justify-between gap-2 text-xs text-white/40">
-                  <span class="truncate">{{ item.category_name || 'WNACG' }}</span>
-                  <ExternalLink :size="14" class="shrink-0 text-white/35 group-hover:text-accent" />
-                </div>
-              </div>
-            </button>
-          </div>
+      <UiButton variant="primary" size="lg" block :loading="syncing" @click="syncWnacg">
+        <template #icon><RefreshCw :size="16" aria-hidden="true" /></template>
+        {{ syncing ? '同步中' : '同步收藏' }}
+      </UiButton>
 
-          <div class="flex flex-wrap items-center justify-between gap-3 bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3">
-            <button
-              @click="toggleAllFilteredSelection"
-              class="h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-white flex items-center gap-2 text-xs font-bold transition-all"
-              title="全选当前列表"
-            >
-              <CheckSquare v-if="allFilteredSelected" :size="16" />
-              <Square v-else :size="16" />
-              全选
-            </button>
-            <PaginationControl
-              v-if="totalPages > 1"
-              :page="currentPage"
-              :page-count="totalPages"
-              :total-items="totalItems"
-              :page-size="favoritesPageSize"
-              :disabled="loading"
-              item-label="条收藏"
-              @change="goToPage"
-            />
-          </div>
-        </div>
+      <p v-if="activeSource?.last_error" role="alert" class="flex items-start gap-3 rounded-lg border border-danger/25 bg-danger/10 px-3.5 py-3 text-meta text-danger">
+        {{ activeSource.last_error }}
+      </p>
 
-        <div v-else class="min-h-[360px] flex flex-col items-center justify-center text-center text-white/35 border border-dashed border-white/10 rounded-2xl">
-          <Globe2 :size="34" class="mb-4" />
-          <p class="text-lg font-bold text-white/45">还没有外部收藏</p>
-          <p class="text-sm mt-2">同步后会显示在这里</p>
-        </div>
+      <AutoSyncSection
+        v-if="activeSource"
+        source-type="wnacg"
+        :source-id="activeSource.id"
+        :enabled="activeSource.auto_sync_enabled"
+        :interval-hours="activeSource.auto_sync_interval_hours"
+        :last-run-at="activeSource.auto_sync_last_run_at"
+        :next-run-at="activeSource.auto_sync_next_run_at"
+        :last-status="activeSource.auto_sync_last_status"
+        :last-message="activeSource.auto_sync_last_message"
+        :can-enable="!!activeSource.cookie_saved && !!activeSource.download_root_path"
+        disable-reason="请先保存 Cookie 并设置下载路径"
+        @update="handleAutoSyncUpdate"
+      />
+    </template>
+
+    <div class="flex items-center gap-2">
+      <p class="hidden shrink-0 pr-2 text-meta text-subtle tabular-nums sm:block">{{ totalItems }} 项</p>
+      <UiInput v-model="searchQuery" type="search" placeholder="搜索标题或分类" aria-label="搜索收藏标题或分类" class="flex-1">
+        <template #leading><Search :size="16" /></template>
+      </UiInput>
+      <UiIconButton label="刷新列表" variant="secondary" @click="fetchItems()"><RefreshCw :size="16" aria-hidden="true" /></UiIconButton>
+      <UiButton variant="primary" title="下载选择" @click="downloadPanelOpen = true">
+        <template #icon><Download :size="16" aria-hidden="true" /></template>
+        下载
+        <template v-if="selectedDownloadItems.length > 0" #trailing>
+          <span class="tabular-nums">{{ selectedDownloadItems.length }}</span>
+        </template>
+      </UiButton>
+    </div>
+
+    <p v-if="errorMessage" role="alert" class="flex items-start gap-3 rounded-lg border border-danger/25 bg-danger/10 px-3.5 py-3 text-meta text-danger">
+      {{ errorMessage }}
+    </p>
+
+    <div v-if="loading" class="poster-grid pt-2" aria-busy="true">
+      <div v-for="i in 8" :key="i">
+        <UiSkeleton class="aspect-[2/3] w-full rounded-2xl" />
+        <UiSkeleton shape="text" class="mt-3 w-4/5" />
+        <UiSkeleton shape="text" class="mt-2 w-1/2" />
       </div>
     </div>
 
-    <div
-      v-if="downloadPanelOpen"
-      class="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex justify-end"
-      @click.self="downloadPanelOpen = false"
-    >
-      <aside class="w-full max-w-2xl h-full bg-sidebar border-l border-white/10 shadow-2xl flex flex-col">
-        <div class="px-5 py-4 border-b border-white/10 flex items-center justify-between gap-3">
-          <div>
-            <h2 class="text-xl font-black text-white">下载选择</h2>
-            <p class="text-xs text-white/45 mt-1">已选择 {{ selectedDownloadItems.length }} 个，当前列表 {{ filteredItems.length }} 个</p>
-          </div>
-          <button
-            @click="downloadPanelOpen = false"
-            class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white flex items-center justify-center transition-all"
-            title="关闭"
-          >
-            <X :size="18" />
-          </button>
-        </div>
+    <template v-else-if="items.length > 0">
+      <div class="poster-grid pt-2">
+        <ExternalItemCard
+          v-for="item in pagedItems"
+          :key="item.id"
+          :title="item.title"
+          :cover="item.cover_url ? coverSrc(item) : null"
+          :meta="item.category_name || 'WNACG'"
+          :downloaded="!!item.local_media_id"
+          :placeholder-icon="BookOpen"
+          @click="openExternalItem(item)"
+        />
+      </div>
 
-        <div class="px-5 py-4 border-b border-white/10 space-y-2">
-          <label class="block space-y-2">
-            <span class="text-xs font-bold text-white/70">下载位置 <span class="text-red-300">*</span></span>
-            <input
-              v-model="downloadRootPath"
-              type="text"
-              required
-              placeholder="例如 C:\Users\25768\Desktop\HE_Project\HE_manager\external_downloads"
-              class="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-3 text-sm text-white placeholder-white/35 focus:outline-none focus:ring-2 focus:ring-accent/50"
-            />
-          </label>
-          <p class="text-[11px] text-white/35">必填。漫画会保存到该路径下的 manga 目录，开始下载时会自动记住这个位置。</p>
-        </div>
+      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+        <UiButton variant="ghost" size="sm" title="全选当前列表" @click="toggleAllFilteredSelection">
+          <template #icon>
+            <CheckSquare v-if="allFilteredSelected" :size="14" aria-hidden="true" />
+            <Square v-else :size="14" aria-hidden="true" />
+          </template>
+          全选本页
+        </UiButton>
+        <PaginationControl
+          v-if="totalPages > 1"
+          :page="currentPage"
+          :page-count="totalPages"
+          :total-items="totalItems"
+          :page-size="favoritesPageSize"
+          :disabled="loading"
+          item-label="条收藏"
+          @change="goToPage"
+        />
+      </div>
+    </template>
 
-        <div class="px-5 py-3 border-b border-white/10 flex flex-wrap items-center gap-2">
-          <button
-            @click="toggleAllFilteredSelection"
-            :disabled="downloadableFilteredItems.length === 0"
-            class="h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-white flex items-center gap-2 text-xs font-bold transition-all"
-          >
-            <CheckSquare v-if="allFilteredSelected" :size="16" />
-            <Square v-else :size="16" />
+    <div v-else class="rounded-2xl border border-dashed border-line">
+      <EmptyState :icon="BookOpen" title="还没有外部收藏" description="填好喜欢页地址和 Cookie 后点「同步收藏」，收藏会显示在这里。" />
+    </div>
+
+    <UiModal v-model:open="downloadPanelOpen" title="下载选择" :description="`已选择 ${selectedDownloadItems.length} 个，当前列表 ${filteredItems.length} 个`" placement="right">
+      <div class="space-y-4">
+        <label class="block">
+          <span :class="fieldLabelClass">下载位置 <span class="text-danger">*</span></span>
+          <UiInput
+            v-model="downloadRootPath"
+            required
+            placeholder="例如 D:\HE\downloads 或 /data/downloads"
+          />
+          <span :class="fieldHintClass">必填。漫画会保存到该路径下的 manga 目录，开始下载时会自动记住这个位置。</span>
+        </label>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <UiButton size="sm" :disabled="downloadableFilteredItems.length === 0" @click="toggleAllFilteredSelection">
+            <template #icon>
+              <CheckSquare v-if="allFilteredSelected" :size="14" aria-hidden="true" />
+              <Square v-else :size="14" aria-hidden="true" />
+            </template>
             全选当前列表
-          </button>
-          <button
-            @click="clearDownloadSelection"
-            :disabled="selectedDownloadItems.length === 0"
-            class="h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed text-xs font-bold transition-all"
-          >
-            清空选择
-          </button>
-          <button
-            @click="startWnacgDownload"
-            :disabled="selectedDownloadItems.length === 0 || !downloadRootPath.trim() || downloadInProgress"
-            class="h-10 px-4 rounded-xl bg-accent text-white disabled:opacity-45 disabled:cursor-not-allowed flex items-center gap-2 text-xs font-black transition-all"
-          >
-            <Download :size="16" :class="downloadInProgress ? 'animate-pulse' : ''" />
-            {{ downloadInProgress ? '下载中' : '开始下载' }}
-          </button>
-          <button
-            @click="exportSelectedLinks"
-            :disabled="selectedDownloadItems.length === 0"
-            class="h-10 px-4 rounded-xl bg-accent text-white disabled:opacity-45 disabled:cursor-not-allowed flex items-center gap-2 text-xs font-black transition-all"
-          >
-            <Download :size="16" />
-            导出所选链接
-          </button>
+          </UiButton>
+          <UiButton size="sm" variant="ghost" :disabled="selectedDownloadItems.length === 0" @click="clearDownloadSelection">清空选择</UiButton>
         </div>
 
         <ExternalDownloadProgress />
         <div
           v-if="downloadJob && !downloadInProgress"
-          class="px-5 py-3 border-b border-white/10 bg-black/15 flex flex-wrap items-center gap-2"
+          class="flex flex-wrap items-center gap-2 rounded-lg border px-3.5 py-3"
+          :class="failedTasks.length ? 'border-danger/25 bg-danger/10' : 'border-success/25 bg-success/10'"
         >
-          <p
-            class="text-[11px] font-bold mr-auto"
-            :class="failedTasks.length ? 'text-red-300' : 'text-emerald-300'"
-          >
+          <p class="mr-auto text-meta font-medium" :class="failedTasks.length ? 'text-danger' : 'text-success'">
             {{ failedTasks.length ? `${failedTasks.length} 本下载失败（明细见上方列表）` : '本次下载已结束' }}
           </p>
-          <button
+          <UiButton
             v-if="failedTasks.length"
-            @click="retryFailedDownloads"
+            size="sm"
             :disabled="!downloadRootPath.trim()"
-            class="h-8 px-3 rounded-lg bg-accent text-white disabled:opacity-45 disabled:cursor-not-allowed flex items-center gap-1 text-[11px] font-black transition-all"
             title="只重新下载失败的漫画，已下好的页会跳过"
+            @click="retryFailedDownloads"
           >
-            <RefreshCw :size="13" />
+            <template #icon><RefreshCw :size="14" aria-hidden="true" /></template>
             重试失败项
-          </button>
-          <button
-            @click="dismissDownloadJob"
-            class="h-8 px-3 rounded-lg bg-white/5 border border-white/10 text-white/60 hover:text-white flex items-center gap-1 text-[11px] font-black transition-all"
-            title="关闭进度面板"
-          >
-            <X :size="13" />
+          </UiButton>
+          <UiButton size="sm" variant="ghost" title="关闭进度面板" @click="dismissDownloadJob">
+            <template #icon><X :size="14" aria-hidden="true" /></template>
             关闭
-          </button>
+          </UiButton>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-5 space-y-3">
-          <label
+        <div class="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface">
+          <ExternalPickRow
             v-for="item in filteredItems"
             :key="item.id"
-            :class="item.local_media_id ? 'opacity-70 cursor-default' : 'cursor-pointer hover:border-accent/35'"
-            class="grid grid-cols-[auto,56px,1fr,auto] gap-3 items-center rounded-2xl border border-white/10 bg-white/[0.04] p-3 transition-all"
-          >
-            <input
-              type="checkbox"
-              :checked="selectedDownloadIds.has(item.id) && !item.local_media_id"
-              :disabled="!!item.local_media_id"
-              class="w-4 h-4 accent-accent disabled:opacity-35 disabled:cursor-not-allowed"
-              @change="toggleDownloadSelection(item)"
-            />
-            <div class="w-14 h-[74px] rounded-lg bg-black/30 overflow-hidden border border-white/10">
-              <img
-                v-if="item.cover_url"
-                :src="coverSrc(item)"
-                :alt="item.title"
-                class="w-full h-full object-cover"
-              />
-              <div v-else class="w-full h-full flex items-center justify-center text-white/25">
-                <Globe2 :size="20" />
-              </div>
-            </div>
-            <div class="min-w-0">
-              <div class="flex items-start gap-2">
-                <p class="min-w-0 text-sm font-bold text-white line-clamp-2 leading-snug">{{ item.title }}</p>
-                <span
-                  v-if="item.local_media_id"
-                  class="shrink-0 rounded-md bg-emerald-400/15 border border-emerald-300/20 px-1.5 py-0.5 text-[10px] font-black text-emerald-200"
-                >
-                  已下载
-                </span>
-              </div>
-              <p class="text-xs text-white/40 mt-1 truncate">{{ item.category_name || 'WNACG' }}</p>
-            </div>
-            <a
-              :href="item.url"
-              target="_blank"
-              rel="noreferrer"
-              class="w-9 h-9 rounded-xl bg-white/5 border border-white/10 text-white/55 hover:text-accent flex items-center justify-center transition-all"
-              title="打开原站"
-              @click.stop
-            >
-              <ExternalLink :size="16" />
-            </a>
-          </label>
+            :title="item.title"
+            :meta="item.category_name || 'WNACG'"
+            :cover="item.cover_url ? coverSrc(item) : null"
+            :url="item.url"
+            :checked="selectedDownloadIds.has(item.id)"
+            :downloaded="!!item.local_media_id"
+            :placeholder-icon="BookOpen"
+            @toggle="toggleDownloadSelection(item)"
+          />
         </div>
-      </aside>
-    </div>
+      </div>
+
+      <template #footer>
+        <UiButton :disabled="selectedDownloadItems.length === 0" @click="exportSelectedLinks">
+          <template #icon><Download :size="16" aria-hidden="true" /></template>
+          导出所选链接
+        </UiButton>
+        <UiButton
+          variant="primary"
+          :disabled="selectedDownloadItems.length === 0 || !downloadRootPath.trim()"
+          :loading="downloadInProgress"
+          @click="startWnacgDownload"
+        >
+          <template #icon><Download :size="16" aria-hidden="true" /></template>
+          {{ downloadInProgress ? '下载中' : '开始下载' }}
+        </UiButton>
+      </template>
+    </UiModal>
 
     <MediaDetail
       v-if="selectedLocalMedia"
@@ -689,5 +565,5 @@ watch(favoritesError, message => {
       @updated="updateLocalMediaInList"
       @navigate="selectedLocalMedia = $event"
     />
-  </section>
+  </ExternalSourceLayout>
 </template>

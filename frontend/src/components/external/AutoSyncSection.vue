@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import axios from 'axios'
 import { Clock, Play, RefreshCw, AlertTriangle, CheckCircle, XCircle, Loader2, ChevronDown } from 'lucide-vue-next'
 import { API_BASE_URL } from '../../config'
+import { UiButton, fieldLabelClass, menuItemClass, popoverClass } from '../ui'
 import type { AutoSyncLogEntry } from '../../types'
 
 const props = defineProps<{
@@ -60,11 +61,11 @@ const statusIcon = computed(() => {
 
 const statusColor = computed(() => {
   switch (props.lastStatus) {
-    case 'success': return 'text-emerald-400'
-    case 'failed': return 'text-red-400'
-    case 'partial': return 'text-amber-400'
-    case 'running': return 'text-blue-400'
-    default: return 'text-white/40'
+    case 'success': return 'text-success'
+    case 'failed': return 'text-danger'
+    case 'partial': return 'text-warning'
+    case 'running': return 'text-info'
+    default: return 'text-subtle'
   }
 })
 
@@ -77,6 +78,10 @@ const statusLabel = computed(() => {
     default: return '未运行'
   }
 })
+
+const logDotClass = (status: string) => (
+  status === 'success' ? 'bg-success' : status === 'failed' ? 'bg-danger' : 'bg-warning'
+)
 
 const countdown = ref('')
 let countdownTimer: ReturnType<typeof setInterval> | null = null
@@ -180,61 +185,55 @@ watch(() => props.sourceId, () => {
 </script>
 
 <template>
-  <div class="border-t border-white/8 pt-4 mt-1 space-y-3">
-    <!-- Header -->
-    <div class="flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <Clock :size="14" class="text-white/45" />
-        <span class="text-xs font-bold text-white/55">自动同步+下载</span>
+  <div class="space-y-3 border-t border-line pt-5">
+    <div class="flex items-center justify-between gap-3">
+      <div class="min-w-0">
+        <p class="flex items-center gap-2 text-body font-medium text-ink">
+          <Clock :size="15" class="text-subtle" aria-hidden="true" />
+          自动同步并下载
+        </p>
+        <p v-if="!enabled && !lastStatus && !canEnable" class="mt-0.5 text-caption text-subtle">
+          {{ disableReason || '请先设置 Cookie 和下载路径' }}
+        </p>
       </div>
-      <!-- Toggle -->
       <button
-        @click="toggleEnabled"
+        type="button"
+        role="switch"
+        :aria-checked="enabled"
+        aria-label="自动同步并下载"
         :disabled="!canEnable && !enabled"
         :title="!canEnable && !enabled ? (disableReason || '请先配置 Cookie 和下载路径') : (enabled ? '关闭' : '开启')"
-        :class="[
-          'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none',
-          enabled ? 'bg-accent' : 'bg-white/15',
-          (!canEnable && !enabled) ? 'opacity-40 cursor-not-allowed' : '',
-        ]"
+        class="relative h-6 w-10 shrink-0 rounded-full transition-colors focus-ring disabled:cursor-not-allowed disabled:opacity-45"
+        :class="enabled ? 'bg-accent' : 'bg-surface-3 ring-1 ring-inset ring-line-strong'"
+        @click="toggleEnabled"
       >
-        <span
-          :class="[
-            'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out',
-            enabled ? 'translate-x-[22px]' : 'translate-x-0.5',
-            'mt-0.5',
-          ]"
-        />
+        <span class="absolute left-1 top-1 size-4 rounded-full bg-white transition-transform" :class="enabled ? 'translate-x-4' : ''" />
       </button>
     </div>
 
-
-
-    <!-- Config (when enabled or has history) -->
     <template v-if="enabled || lastStatus">
-      <!-- Interval selector -->
       <div v-if="enabled" class="flex items-center gap-3">
-        <span class="text-xs text-white/45 shrink-0">间隔</span>
+        <span :class="[fieldLabelClass, 'mb-0 shrink-0']">间隔</span>
         <div class="relative flex-1">
           <button
             type="button"
+            :aria-expanded="intervalDropdownOpen"
+            aria-haspopup="listbox"
+            class="flex h-8 w-full items-center justify-between rounded-lg border border-line bg-surface-2 px-2.5 text-left text-meta text-ink transition-colors hover:border-line-strong focus-ring"
             @click="intervalDropdownOpen = !intervalDropdownOpen"
-            class="w-full bg-black/20 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-accent/50 flex items-center justify-between hover:bg-white/5 transition-all text-left"
           >
             <span>{{ currentIntervalLabel }}</span>
-            <ChevronDown :size="12" :class="intervalDropdownOpen ? 'rotate-180' : ''" class="transition-transform text-white/45" />
+            <ChevronDown :size="14" :class="intervalDropdownOpen ? 'rotate-180' : ''" class="text-subtle transition-transform" aria-hidden="true" />
           </button>
-          <div
-            v-if="intervalDropdownOpen"
-            class="absolute left-0 top-full mt-1 z-50 w-full rounded-xl border border-white/10 bg-sidebar/95 backdrop-blur-xl shadow-2xl p-1 max-h-48 overflow-y-auto"
-          >
+          <div v-if="intervalDropdownOpen" role="listbox" :class="[popoverClass, 'absolute left-0 top-full z-50 mt-1.5 max-h-60 w-full overflow-y-auto']">
             <button
               v-for="opt in intervalOptions"
               :key="opt.value"
               type="button"
+              role="option"
+              :aria-selected="intervalHours === opt.value"
+              :class="[menuItemClass, intervalHours === opt.value ? 'font-medium text-ink' : '']"
               @click="selectInterval(opt.value)"
-              :class="intervalHours === opt.value ? 'bg-accent text-white' : 'text-white/65 hover:text-white hover:bg-white/8'"
-              class="w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-bold transition-all"
             >
               {{ opt.label }}
             </button>
@@ -242,81 +241,57 @@ watch(() => props.sourceId, () => {
         </div>
       </div>
 
-      <!-- Status display -->
-      <div class="bg-black/15 rounded-xl px-3 py-2.5 space-y-1.5">
-        <div class="flex items-center justify-between">
+      <div class="space-y-1 rounded-lg bg-surface-2 px-3 py-2.5">
+        <div class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-1.5">
-            <component :is="statusIcon" :size="13" :class="[statusColor, lastStatus === 'running' ? 'animate-spin' : '']" />
-            <span class="text-xs font-semibold" :class="statusColor">{{ statusLabel }}</span>
+            <component :is="statusIcon" :size="14" :class="[statusColor, lastStatus === 'running' ? 'animate-spin' : '']" aria-hidden="true" />
+            <span class="text-meta font-medium" :class="statusColor">{{ statusLabel }}</span>
           </div>
-          <span v-if="lastRunAt" class="text-[10px] text-white/35">{{ formatTime(lastRunAt) }}</span>
+          <span v-if="lastRunAt" class="text-caption text-subtle tabular-nums">{{ formatTime(lastRunAt) }}</span>
         </div>
-        <p v-if="lastMessage" class="text-[11px] text-white/50 leading-relaxed">{{ lastMessage }}</p>
-        <p v-if="enabled && countdown" class="text-[11px] text-accent/70 font-medium">⏱ {{ countdown }}</p>
+        <p v-if="lastMessage" class="text-caption text-muted">{{ lastMessage }}</p>
+        <p v-if="enabled && countdown" class="text-caption text-subtle tabular-nums">下次：{{ countdown }}</p>
       </div>
 
-      <!-- Actions -->
       <div class="flex gap-2">
-        <button
-          @click="triggerNow"
-          :disabled="triggering || lastStatus === 'running' || !sourceId"
-          class="flex-1 h-9 rounded-xl bg-white/[0.06] border border-white/10 text-white/70 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-        >
-          <Play v-if="!triggering" :size="13" />
-          <Loader2 v-else :size="13" class="animate-spin" />
+        <UiButton size="sm" class="flex-1" :loading="triggering" :disabled="lastStatus === 'running' || !sourceId" @click="triggerNow">
+          <template #icon><Play :size="14" aria-hidden="true" /></template>
           {{ triggering ? '触发中' : '立即执行' }}
-        </button>
-        <button
-          @click="toggleLogs"
-          class="h-9 px-3 rounded-xl bg-white/[0.06] border border-white/10 text-white/50 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-white/10 hover:text-white/70 transition-all"
-        >
-          <RefreshCw :size="12" />
+        </UiButton>
+        <UiButton size="sm" variant="ghost" :aria-expanded="logsExpanded" @click="toggleLogs">
+          <template #icon><RefreshCw :size="14" aria-hidden="true" /></template>
           日志
-        </button>
+        </UiButton>
       </div>
 
-      <p v-if="triggerError" class="text-[11px] text-red-300 bg-red-400/10 border border-red-400/15 rounded-lg px-2.5 py-1.5">
+      <p v-if="triggerError" role="alert" class="rounded-lg border border-danger/25 bg-danger/10 px-3 py-2 text-caption text-danger">
         {{ triggerError }}
       </p>
 
-      <!-- Log panel -->
-      <div v-if="logsExpanded" class="space-y-1.5">
+      <div v-if="logsExpanded" class="space-y-2">
         <div class="flex items-center justify-between">
-          <span class="text-[10px] text-white/35 font-bold uppercase tracking-wider">执行历史</span>
-          <button @click="fetchLogs" class="text-[10px] text-white/30 hover:text-white/50 transition-colors">刷新</button>
+          <span class="text-caption font-medium text-subtle">执行历史</span>
+          <button type="button" class="rounded-md px-1.5 text-caption text-subtle transition-colors hover:text-ink focus-ring" @click="fetchLogs">刷新</button>
         </div>
-        <div v-if="logs.length === 0" class="text-[11px] text-white/30 text-center py-3">暂无执行记录</div>
-        <div
-          v-for="log in logs"
-          :key="log.id"
-          class="bg-black/10 rounded-lg px-2.5 py-2 text-[11px] space-y-0.5"
-        >
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-1.5">
-              <span
-                :class="[
-                  'inline-block w-1.5 h-1.5 rounded-full',
-                  log.status === 'success' ? 'bg-emerald-400' :
-                  log.status === 'failed' ? 'bg-red-400' : 'bg-amber-400',
-                ]"
-              />
-              <span class="text-white/60">{{ formatTime(log.started_at) }}</span>
+        <p v-if="logs.length === 0" class="py-3 text-center text-caption text-subtle">暂无执行记录</p>
+        <ul v-else class="divide-y divide-line overflow-hidden rounded-lg border border-line">
+          <li v-for="log in logs" :key="log.id" class="space-y-0.5 px-3 py-2 text-caption">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-1.5">
+                <span class="inline-block size-1.5 rounded-full" :class="logDotClass(log.status)" aria-hidden="true" />
+                <span class="text-muted tabular-nums">{{ formatTime(log.started_at) }}</span>
+              </div>
+              <span class="text-subtle tabular-nums">{{ formatDuration(log.duration_seconds) }}</span>
             </div>
-            <span class="text-white/35">{{ formatDuration(log.duration_seconds) }}</span>
-          </div>
-          <div class="flex gap-3 text-white/45">
-            <span v-if="log.synced_count">同步 {{ log.synced_count }}</span>
-            <span v-if="log.downloaded_count">下载 {{ log.downloaded_count }}</span>
-            <span v-if="log.failed_count" class="text-red-400/70">失败 {{ log.failed_count }}</span>
-          </div>
-          <p v-if="log.message" class="text-white/35 truncate">{{ log.message }}</p>
-        </div>
+            <div class="flex gap-3 text-subtle tabular-nums">
+              <span v-if="log.synced_count">同步 {{ log.synced_count }}</span>
+              <span v-if="log.downloaded_count">下载 {{ log.downloaded_count }}</span>
+              <span v-if="log.failed_count" class="text-danger">失败 {{ log.failed_count }}</span>
+            </div>
+            <p v-if="log.message" class="truncate text-subtle">{{ log.message }}</p>
+          </li>
+        </ul>
       </div>
     </template>
-
-    <!-- Disabled hint -->
-    <p v-else-if="!canEnable" class="text-[11px] text-white/30">
-      {{ disableReason || '请先设置 Cookie 和下载路径' }}
-    </p>
   </div>
 </template>

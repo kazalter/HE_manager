@@ -3,12 +3,11 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import axios from 'axios'
 import {
   CheckSquare,
+  ChevronRight,
   Download,
-  ExternalLink,
   Headphones,
   RefreshCw,
   Search,
-  ShieldCheck,
   Square,
   X,
 } from 'lucide-vue-next'
@@ -19,6 +18,10 @@ import { AsyncMediaDetail as MediaDetail } from '../asyncComponents'
 import ThemeSelect from '../ThemeSelect.vue'
 import { asmrDownloadStore } from '../../stores/asmrDownloadStore'
 import { useExternalFavoritesPage } from '../../composables/useExternalFavoritesPage'
+import { EmptyState, UiButton, UiIconButton, UiInput, UiModal, UiSkeleton, buttonClass, controlClass, fieldHintClass, fieldLabelClass, type Tone } from '../ui'
+import ExternalSourceLayout from './ExternalSourceLayout.vue'
+import ExternalItemCard from './ExternalItemCard.vue'
+import ExternalPickRow from './ExternalPickRow.vue'
 
 const AUDIO_FORMAT_OPTIONS: { value: 'all' | 'no_wav' | 'mp3_only'; label: string }[] = [
   { value: 'all', label: '全部格式' },
@@ -112,6 +115,7 @@ const syncing = ref(false)
 const errorMessage = ref('')
 const sources = ref<ExternalFavoriteSource[]>([])
 const activeSourceId = ref<number | null>(null)
+const sourcesLoaded = ref(false)
 const downloadPanelOpen = ref(false)
 const downloadButtonRef = ref<HTMLButtonElement | null>(null)
 const downloadCloseButtonRef = ref<HTMLButtonElement | null>(null)
@@ -181,6 +185,14 @@ const statusText = computed(() => {
   return '待同步'
 })
 
+const statusTone = computed<Tone>(() => {
+  const status = activeSource.value?.status
+  if (status === 'ok') return 'success'
+  if (status === 'syncing') return 'info'
+  if (status === 'error') return 'danger'
+  return 'neutral'
+})
+
 const formatTime = (value: string | null) => (value ? new Date(value).toLocaleString() : '-')
 const coverSrc = (item: ExternalFavoriteItem) => authUrl(`${API_BASE_URL}/external/favorites/${item.id}/cover`)
 
@@ -231,6 +243,7 @@ const persistSourceSettings = () => {
 const fetchSources = async () => {
   const res = await axios.get(`${API_BASE_URL}/external/sources`)
   sources.value = res.data
+  sourcesLoaded.value = true
   if (!activeSourceId.value && activeSiteSources.value.length > 0) {
     const first = activeSiteSources.value[0]
     activeSourceId.value = first.id
@@ -421,455 +434,298 @@ watch(favoritesError, message => { errorMessage.value = message })
 </script>
 
 <template>
-  <section class="space-y-6">
-    <div class="grid grid-cols-1 xl:grid-cols-[minmax(320px,420px),1fr] gap-6">
-      <div class="bg-white/[0.04] border border-white/10 rounded-2xl p-5 space-y-4">
-        <div class="flex items-center justify-between gap-3">
-          <div class="flex items-center gap-3 text-white">
-            <div class="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center border border-accent/20">
-              <Headphones :size="20" />
-            </div>
-            <div>
-              <h2 class="text-base font-black">ASMR · asmr.one</h2>
-              <p class="text-xs text-white/45">{{ statusText }} · {{ formatTime(activeSource?.last_synced_at || null) }}</p>
-            </div>
-          </div>
-          <div class="flex items-center gap-1.5 text-[11px] text-emerald-300 bg-emerald-400/10 border border-emerald-400/15 rounded-full px-2 py-1">
-            <ShieldCheck :size="13" />
-            本地保存
-          </div>
-        </div>
-
-        <div v-if="activeSiteSources.length > 0" class="flex flex-wrap gap-2">
-          <button
-            v-for="source in activeSiteSources"
-            :key="source.id"
-            @click="selectSource(source)"
-            :class="activeSourceId === source.id ? 'bg-accent text-white' : 'bg-white/5 text-white/55 hover:text-white'"
-            class="px-3 py-2 rounded-xl border border-white/10 text-xs font-bold transition-all"
-          >
-            {{ source.name }}
-          </button>
-        </div>
-
-        <label class="block space-y-2">
-          <span class="text-xs font-bold text-white/55">API 地址（镜像被封时自动回退其它镜像）</span>
-          <input
-            v-model="apiBase"
-            type="url"
-            placeholder="https://api.asmr-200.com"
-            class="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-3 text-sm text-white placeholder-white/35 focus:outline-none focus:ring-2 focus:ring-accent/50"
-          />
-        </label>
-
-        <label class="block space-y-2">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-bold text-white/55">镜像列表（每行一个，留空用内置默认）</span>
-            <button
-              type="button"
-              @click="pingMirrors"
-              :disabled="pinging"
-              class="text-xs font-bold text-accent hover:text-accent/80 disabled:opacity-40 transition-colors"
-            >{{ pinging ? '探活中…' : '探活' }}</button>
-          </div>
-          <textarea
-            v-model="apiMirrors"
-            rows="3"
-            spellcheck="false"
-            placeholder="https://api.asmr-200.com&#10;https://api.asmr.one&#10;https://api.asmr-100.com"
-            class="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-3 text-sm text-white placeholder-white/35 font-mono focus:outline-none focus:ring-2 focus:ring-accent/50 resize-y"
-          ></textarea>
-          <ul v-if="mirrorPings.length" class="space-y-1">
-            <li
-              v-for="p in mirrorPings"
-              :key="p.base"
-              class="flex items-center gap-2 text-xs"
-            >
-              <span :class="p.ok ? 'text-green-400' : 'text-red-400'">{{ p.ok ? '●' : '○' }}</span>
-              <span class="text-white/65 truncate flex-1 font-mono">{{ p.base }}</span>
-              <span v-if="p.ok" class="text-white/40 shrink-0">{{ p.latency_ms }}ms</span>
-              <span v-else class="text-red-400/70 shrink-0">连不上</span>
-            </li>
-          </ul>
-        </label>
-
-        <label class="block space-y-2">
-          <span class="text-xs font-bold text-white/55">「喜欢」播放列表地址<span class="text-white/35 font-medium">（自动保存）</span></span>
-          <input
-            v-model="playlistUrl"
-            type="text"
-            placeholder="https://asmr.one/playlist?id=xxxxxxxx-xxxx-…"
-            class="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-3 text-sm text-white placeholder-white/35 focus:outline-none focus:ring-2 focus:ring-accent/50"
-          />
-        </label>
-
-        <div class="grid grid-cols-2 gap-3">
-          <label class="block space-y-2">
-            <span class="text-xs font-bold text-white/55">账号 <span class="text-red-300">*</span></span>
-            <input
-              v-model="username"
-              type="text"
-              autocomplete="off"
-              placeholder="asmr.one 用户名"
-              class="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-3 text-sm text-white placeholder-white/35 focus:outline-none focus:ring-2 focus:ring-accent/50"
-            />
-          </label>
-          <label class="block space-y-2">
-            <span class="text-xs font-bold text-white/55">密码 <span class="text-red-300">*</span></span>
-            <input
-              v-model="password"
-              type="password"
-              autocomplete="off"
-              placeholder="asmr.one 密码"
-              class="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-3 text-sm text-white placeholder-white/35 focus:outline-none focus:ring-2 focus:ring-accent/50"
-            />
-          </label>
-        </div>
-        <div class="flex items-center justify-between text-[11px] gap-2">
-          <p class="text-white/35 flex-1">
-            <span v-if="username" class="text-accent/85 font-bold">已记住用户名，密码不会保存在浏览器</span>
-            <span v-else>密码只用于本次换取 token，不会保存在浏览器或后端。</span>
-          </p>
-          <button
-            v-if="username || password"
-            type="button"
-            @click="clearStoredCredentials"
-            class="text-white/45 hover:text-red-300 font-bold transition-colors shrink-0"
-          >
-            清除已保存
-          </button>
-        </div>
-
-        <div class="grid grid-cols-2 gap-3">
-          <label class="block space-y-2">
-            <span class="text-xs font-bold text-white/55">同步页数</span>
-            <input
-              v-model.number="pageLimit"
-              type="number"
-              min="1"
-              max="50"
-              class="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-accent/50"
-            />
-          </label>
-          <label class="block space-y-2">
-            <span class="text-xs font-bold text-white/55">下载位置</span>
-            <input
-              v-model="downloadRootPath"
-              type="text"
-              placeholder="例如 C:\Users\25768\Desktop\HE_Project\HE_manager\external_downloads"
-              class="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-3 text-sm text-white placeholder-white/35 focus:outline-none focus:ring-2 focus:ring-accent/50"
-            />
-          </label>
-        </div>
-
-        <label class="block space-y-2">
-          <span class="text-xs font-bold text-white/55">下载格式（单作品 WAV 可达数 GB）</span>
-          <ThemeSelect v-model="audioFormatFilter" :options="AUDIO_FORMAT_OPTIONS" />
-        </label>
-
-        <label class="block space-y-2">
-          <span class="text-xs font-bold text-white/55">SE 版本（按文件夹名启发式判断）</span>
-          <ThemeSelect v-model="audioVersionFilter" :options="AUDIO_VERSION_OPTIONS" />
-        </label>
-
-        <p class="text-[11px] flex items-center gap-1.5 min-h-[1rem]">
-          <span v-if="settingsStatus === 'saving'" class="text-accent">保存中…</span>
-          <span v-else-if="settingsStatus === 'saved'" class="text-emerald-300">已自动保存</span>
-          <span v-else class="text-white/35">下载格式 / SE 版本 / 播放列表地址改动后自动保存，刷新不会重置</span>
-        </p>
-
+  <ExternalSourceLayout
+    :status="statusText"
+    :status-tone="statusTone"
+    :meta="activeSource?.last_synced_at ? `上次同步 ${formatTime(activeSource.last_synced_at)}` : '尚未同步喜欢列表'"
+    :default-open="sourcesLoaded && !activeSource"
+  >
+    <template #config>
+      <div v-if="activeSiteSources.length > 0" class="flex flex-wrap gap-2">
         <button
-          @click="syncAsmr"
-          :disabled="syncing"
-          class="w-full h-12 rounded-xl bg-accent text-white font-black flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+          v-for="source in activeSiteSources"
+          :key="source.id"
+          type="button"
+          :aria-pressed="activeSourceId === source.id"
+          :class="[
+            'inline-flex h-8 items-center rounded-full border px-3 text-meta font-medium transition-colors focus-ring',
+            activeSourceId === source.id ? 'border-accent/50 bg-accent/15 text-accent-glow' : 'border-line bg-surface text-muted hover:border-line-strong hover:text-ink',
+          ]"
+          @click="selectSource(source)"
         >
-          <RefreshCw :size="18" :class="syncing ? 'animate-spin' : ''" />
-          {{ syncing ? '同步中' : '同步收藏' }}
+          {{ source.name }}
         </button>
+      </div>
 
-        <p class="text-[11px] text-white/35 leading-snug">
-          粘贴你的「喜欢」播放列表地址 + 你本人的 asmr.one 账号密码。该列表对外不可见，必须本人令牌才能读取（密码仅用于换令牌、不保存）。音频会下载到「下载位置」下的 audio 目录，下完即可在库内播放。
+      <label class="block">
+        <span :class="fieldLabelClass">「喜欢」播放列表地址</span>
+        <UiInput v-model="playlistUrl" placeholder="https://asmr.one/playlist?id=xxxxxxxx-xxxx-…" />
+        <span :class="fieldHintClass">该列表对外不可见，需要你本人的账号令牌才能读取。改动后自动保存。</span>
+      </label>
+
+      <div class="grid grid-cols-2 gap-3">
+        <label class="block min-w-0">
+          <span :class="fieldLabelClass">账号 <span class="text-danger">*</span></span>
+          <UiInput v-model="username" autocomplete="off" placeholder="用户名" />
+        </label>
+        <label class="block min-w-0">
+          <span :class="fieldLabelClass">密码 <span class="text-danger">*</span></span>
+          <UiInput v-model="password" type="password" autocomplete="off" placeholder="密码" />
+        </label>
+      </div>
+      <div class="-mt-3 flex items-start justify-between gap-3">
+        <p :class="[fieldHintClass, 'mt-0']">
+          {{ username ? '已记住用户名，密码不会保存在浏览器' : '密码只用于本次换取令牌，不会保存在浏览器或后端' }}
         </p>
+        <button
+          v-if="username || password"
+          type="button"
+          class="shrink-0 rounded-md px-1 text-caption font-medium text-subtle transition-colors hover:text-danger focus-ring"
+          @click="clearStoredCredentials"
+        >
+          清除已保存
+        </button>
+      </div>
 
-        <p v-if="activeSource?.last_error" class="text-xs text-red-300 bg-red-400/10 border border-red-400/20 rounded-xl px-3 py-2">
-          {{ activeSource.last_error }}
+      <div class="grid grid-cols-[96px_minmax(0,1fr)] gap-3">
+        <label class="block min-w-0">
+          <span :class="fieldLabelClass">同步页数</span>
+          <UiInput v-model.number="pageLimit" type="number" min="1" max="50" />
+        </label>
+        <label class="block min-w-0">
+          <span :class="fieldLabelClass">下载位置</span>
+          <UiInput v-model="downloadRootPath" placeholder="例如 /data/downloads" />
+        </label>
+      </div>
+
+      <label class="block">
+        <span :class="fieldLabelClass">下载格式</span>
+        <ThemeSelect v-model="audioFormatFilter" :options="AUDIO_FORMAT_OPTIONS" />
+        <span :class="fieldHintClass">单作品 WAV 可达数 GB</span>
+      </label>
+
+      <label class="block">
+        <span :class="fieldLabelClass">SE 版本</span>
+        <ThemeSelect v-model="audioVersionFilter" :options="AUDIO_VERSION_OPTIONS" />
+        <span :class="fieldHintClass">按文件夹名判断是否带音效 / 背景声</span>
+      </label>
+
+      <details class="group rounded-lg border border-line bg-surface-2">
+        <summary class="flex h-10 cursor-pointer list-none items-center gap-2 rounded-lg px-3 text-meta font-medium text-muted transition-colors hover:text-ink focus-ring-inset [&::-webkit-details-marker]:hidden">
+          <ChevronRight :size="15" class="shrink-0 transition-transform duration-150 group-open:rotate-90" aria-hidden="true" />
+          API 与镜像
+          <span class="ml-auto truncate text-caption font-normal text-subtle">{{ apiBase }}</span>
+        </summary>
+        <div class="space-y-4 border-t border-line p-3">
+          <label class="block">
+            <span :class="fieldLabelClass">API 地址</span>
+            <UiInput v-model="apiBase" type="url" placeholder="https://api.asmr-200.com" />
+            <span :class="fieldHintClass">镜像被封时会自动回退到其它镜像</span>
+          </label>
+          <div>
+            <div class="mb-1.5 flex items-center justify-between gap-2">
+              <label for="asmr-mirrors" class="text-meta font-medium text-muted">镜像列表</label>
+              <UiButton size="sm" variant="ghost" :loading="pinging" @click="pingMirrors">{{ pinging ? '探活中…' : '探活' }}</UiButton>
+            </div>
+            <textarea
+              id="asmr-mirrors"
+              v-model="apiMirrors"
+              rows="3"
+              spellcheck="false"
+              placeholder="https://api.asmr-200.com&#10;https://api.asmr.one&#10;https://api.asmr-100.com"
+              :class="[controlClass('md'), 'h-auto min-h-24 resize-y py-2 font-mono leading-relaxed']"
+            ></textarea>
+            <p :class="fieldHintClass">每行一个，留空使用内置默认</p>
+            <ul v-if="mirrorPings.length" class="mt-2 space-y-1">
+              <li v-for="p in mirrorPings" :key="p.base" class="flex items-center gap-2 text-caption">
+                <span class="size-1.5 shrink-0 rounded-full" :class="p.ok ? 'bg-success' : 'bg-danger'" aria-hidden="true"></span>
+                <span class="min-w-0 flex-1 truncate font-mono text-muted">{{ p.base }}</span>
+                <span v-if="p.ok" class="shrink-0 text-subtle tabular-nums">{{ p.latency_ms }} ms</span>
+                <span v-else class="shrink-0 text-danger">连不上</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </details>
+
+      <div class="space-y-2">
+        <UiButton variant="primary" size="lg" block :loading="syncing" @click="syncAsmr">
+          <template #icon><RefreshCw :size="16" aria-hidden="true" /></template>
+          {{ syncing ? '同步中' : '同步收藏' }}
+        </UiButton>
+        <p class="text-center text-caption" aria-live="polite">
+          <span v-if="settingsStatus === 'saving'" class="text-subtle">保存中…</span>
+          <span v-else-if="settingsStatus === 'saved'" class="text-success">已自动保存</span>
+          <span v-else class="text-subtle">音频下载到「下载位置」下的 audio 目录，下完即可在库内播放</span>
         </p>
       </div>
 
-      <div class="min-h-[360px] space-y-4">
-        <div class="bg-white/[0.04] border border-white/10 rounded-2xl px-3 py-3 flex flex-wrap items-center gap-3">
-          <p class="text-[11px] font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20 uppercase tracking-widest">
-            {{ totalItems }} WORKS
-          </p>
-          <div class="relative flex-1 min-w-[200px] group">
-            <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 group-focus-within:text-accent transition-colors" :size="16" />
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="搜索标题或社团"
-              class="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-white/35 focus:outline-none focus:ring-2 focus:ring-accent/50"
-            />
-          </div>
-          <button
-            @click="fetchItems()"
-            class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white flex items-center justify-center transition-all"
-            title="刷新列表"
-          >
-            <RefreshCw :size="16" />
-          </button>
-          <button
-            ref="downloadButtonRef"
-            @click="openDownloadPanel"
-            class="h-10 px-3.5 rounded-xl bg-accent text-white font-black border border-white/10 flex items-center gap-2 hover:brightness-110 transition-all text-sm"
-            title="下载选择"
-          >
-            <Download :size="16" />
-            <span>下载</span>
-            <span v-if="selectedDownloadItems.length > 0" class="min-w-5 h-5 rounded-full bg-white/20 px-1.5 text-[11px] leading-5 text-center">
-              {{ selectedDownloadItems.length }}
-            </span>
-          </button>
-        </div>
+      <p v-if="activeSource?.last_error" role="alert" class="rounded-lg border border-danger/25 bg-danger/10 px-3.5 py-3 text-meta text-danger">
+        {{ activeSource.last_error }}
+      </p>
+    </template>
 
-        <div v-if="downloadInProgress && downloadJob" class="bg-white/[0.04] border border-accent/25 rounded-2xl px-4 py-3 space-y-2">
-          <div class="flex items-center justify-between text-xs text-white/65">
-            <span class="truncate">下载中：{{ downloadJob.current_book_title || '准备中' }}</span>
-            <span>{{ asmrDownloadStore.downloadedTracks.value }}/{{ asmrDownloadStore.totalTracks.value }} 轨</span>
-          </div>
-          <div class="h-1.5 rounded-full bg-white/10 overflow-hidden">
-            <div class="h-full bg-accent transition-all" :style="{ width: `${asmrDownloadStore.progressPercent.value}%` }"></div>
-          </div>
-          <button
-            v-if="asmrDownloadStore.canCancel.value"
-            @click="asmrDownloadStore.cancelDownload()"
-            class="text-[11px] text-red-300 hover:text-red-200"
-          >
-            取消下载
-          </button>
-        </div>
+    <div class="flex items-center gap-2">
+      <p class="hidden shrink-0 pr-2 text-meta text-subtle tabular-nums sm:block">{{ totalItems }} 部</p>
+      <UiInput v-model="searchQuery" type="search" placeholder="搜索标题或社团" aria-label="搜索作品标题或社团" class="flex-1">
+        <template #leading><Search :size="16" /></template>
+      </UiInput>
+      <UiIconButton label="刷新列表" variant="secondary" @click="fetchItems()"><RefreshCw :size="16" aria-hidden="true" /></UiIconButton>
+      <button ref="downloadButtonRef" type="button" :class="buttonClass('primary', 'md')" title="下载选择" @click="openDownloadPanel">
+        <Download :size="16" aria-hidden="true" />
+        下载
+        <span v-if="selectedDownloadItems.length > 0" class="tabular-nums">{{ selectedDownloadItems.length }}</span>
+      </button>
+    </div>
 
-        <div v-if="errorMessage" class="bg-red-400/10 border border-red-400/20 text-red-200 rounded-xl px-4 py-3 text-sm">
-          {{ errorMessage }}
-        </div>
+    <div v-if="downloadInProgress && downloadJob" class="space-y-2 rounded-2xl border border-line bg-surface p-4">
+      <div class="flex items-center justify-between gap-3 text-meta">
+        <span class="min-w-0 truncate text-muted">下载中：<span class="font-medium text-ink">{{ downloadJob.current_book_title || '准备中' }}</span></span>
+        <span class="shrink-0 text-subtle tabular-nums">{{ asmrDownloadStore.downloadedTracks.value }} / {{ asmrDownloadStore.totalTracks.value }} 轨</span>
+      </div>
+      <div class="h-1 overflow-hidden rounded-sm bg-surface-3" role="progressbar" :aria-valuenow="asmrDownloadStore.progressPercent.value" aria-valuemin="0" aria-valuemax="100" aria-label="下载进度">
+        <div class="h-full rounded-sm bg-accent transition-[width] duration-200" :style="{ width: `${asmrDownloadStore.progressPercent.value}%` }"></div>
+      </div>
+      <UiButton
+        v-if="asmrDownloadStore.canCancel.value"
+        size="sm"
+        variant="ghost"
+        class="-ml-2 hover:!bg-danger/12 hover:!text-danger"
+        @click="asmrDownloadStore.cancelDownload()"
+      >
+        <template #icon><X :size="14" aria-hidden="true" /></template>
+        取消下载
+      </UiButton>
+    </div>
 
-        <div v-if="loading" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-5">
-          <div v-for="i in 10" :key="i" class="aspect-square bg-white/5 animate-pulse rounded-2xl border border-white/5"></div>
-        </div>
+    <p v-if="errorMessage" role="alert" class="rounded-lg border border-danger/25 bg-danger/10 px-3.5 py-3 text-meta text-danger">
+      {{ errorMessage }}
+    </p>
 
-        <div v-else-if="items.length > 0" class="space-y-5">
-          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-5">
-            <button
-              v-for="item in pagedItems"
-              :key="item.id"
-              type="button"
-              @click="openItem(item)"
-              class="group bg-white/[0.04] border border-white/10 rounded-2xl overflow-hidden hover:-translate-y-1 hover:border-accent/35 transition-all text-left"
-            >
-              <div class="aspect-square bg-black/30 overflow-hidden relative" style="transform: translateZ(0);">
-                <img
-                  v-if="item.cover_url"
-                  :src="coverSrc(item)"
-                  :alt="item.title"
-                  class="absolute inset-0 w-full h-full object-cover group-hover:scale-105"
-                  style="transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1); will-change: transform; backface-visibility: hidden;"
-                  loading="eager"
-                  decoding="async"
-                />
-                <div v-else class="w-full h-full flex items-center justify-center text-white/25">
-                  <Headphones :size="34" />
-                </div>
-                <span
-                  v-if="item.local_media_id"
-                  class="absolute left-2 top-2 rounded-lg bg-emerald-400/90 px-2 py-1 text-[10px] font-black text-slate-950"
-                >
-                  已下载
-                </span>
-                <span v-else class="absolute left-2 top-2 rounded-lg bg-black/55 px-2 py-1 text-[10px] font-black text-white/85">
-                  {{ item.external_id }}
-                </span>
-              </div>
-              <div class="p-3 space-y-2">
-                <h3 class="text-sm font-bold text-white line-clamp-2 leading-snug min-h-[2.6em]">{{ item.title }}</h3>
-                <div class="flex items-center justify-between gap-2 text-xs text-white/40">
-                  <span class="truncate">{{ item.category_name || 'asmr.one' }}</span>
-                  <ExternalLink :size="14" class="shrink-0 text-white/35 group-hover:text-accent" />
-                </div>
-              </div>
-            </button>
-          </div>
-
-          <div class="flex flex-wrap items-center justify-between gap-3 bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3">
-            <span class="text-xs text-white/45">{{ pageStart }}-{{ pageEnd }} / {{ totalItems }} 条</span>
-            <PaginationControl
-              v-if="totalPages > 1"
-              :page="currentPage"
-              :page-count="totalPages"
-              :total-items="totalItems"
-              :page-size="favoritesPageSize"
-              :disabled="loading"
-              item-label="条 ASMR"
-              @change="goToPage"
-            />
-          </div>
-        </div>
-
-        <div v-else class="min-h-[360px] flex flex-col items-center justify-center text-center text-white/35 border border-dashed border-white/10 rounded-2xl">
-          <Headphones :size="34" class="mb-4" />
-          <p class="text-lg font-bold text-white/45">还没有 ASMR 收藏</p>
-          <p class="text-sm mt-2">填好账号后点「同步收藏」</p>
-        </div>
+    <div v-if="loading" class="poster-grid pt-2" aria-busy="true">
+      <div v-for="i in 8" :key="i">
+        <UiSkeleton class="aspect-square w-full rounded-2xl" />
+        <UiSkeleton shape="text" class="mt-3 w-4/5" />
+        <UiSkeleton shape="text" class="mt-2 w-1/2" />
       </div>
     </div>
 
-    <Teleport to="body">
-      <div
-        v-if="downloadPanelOpen"
-        class="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-6"
-        role="presentation"
-        @click.self="closeDownloadPanel"
-      >
-        <section
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="asmr-download-title"
-          class="w-full max-w-5xl min-h-0 bg-sidebar border border-white/15 rounded-2xl sm:rounded-3xl shadow-2xl shadow-black/60 flex flex-col overflow-hidden"
-          style="height: min(900px, calc(100dvh - 1rem))"
-        >
-          <div class="px-5 sm:px-7 py-5 border-b border-white/10 flex items-center justify-between gap-3 bg-white/[0.03]">
-            <div class="flex items-center gap-4 min-w-0">
-              <div class="w-11 h-11 rounded-2xl bg-accent/15 border border-accent/25 text-accent flex items-center justify-center shrink-0">
-                <Download :size="21" />
-              </div>
-              <div class="min-w-0">
-                <p class="text-[11px] font-black tracking-[0.18em] text-accent uppercase">ASMR · asmr.one</p>
-                <h2 id="asmr-download-title" class="text-xl sm:text-2xl font-black text-white">选择下载作品</h2>
-                <p class="text-xs text-white/45 mt-1">当前列表 {{ filteredItems.length }} 个作品，已选 {{ selectedDownloadItems.length }} 个</p>
-              </div>
-            </div>
-            <button
-              ref="downloadCloseButtonRef"
-              @click="closeDownloadPanel"
-              class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white flex items-center justify-center shrink-0 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              aria-label="关闭下载界面"
-            >
-              <X :size="18" />
-            </button>
-          </div>
+    <template v-else-if="items.length > 0">
+      <div class="poster-grid pt-2">
+        <ExternalItemCard
+          v-for="item in pagedItems"
+          :key="item.id"
+          :title="item.title"
+          :cover="item.cover_url ? coverSrc(item) : null"
+          :meta="item.category_name || 'asmr.one'"
+          :code="item.external_id"
+          :downloaded="!!item.local_media_id"
+          aspect="1 / 1"
+          :placeholder-icon="Headphones"
+          @click="openItem(item)"
+        />
+      </div>
 
-        <div class="px-5 sm:px-7 py-4 border-b border-white/10 space-y-2">
-          <label class="block space-y-2">
-            <span class="text-xs font-bold text-white/70">下载位置 <span class="text-red-300">*</span></span>
-            <input
-              v-model="downloadRootPath"
-              type="text"
-              required
-              placeholder="例如 C:\Users\25768\Desktop\HE_Project\HE_manager\external_downloads"
-              class="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-3 text-sm text-white placeholder-white/35 focus:outline-none focus:ring-2 focus:ring-accent/50"
-            />
-          </label>
-          <p class="text-[11px] text-white/35">音频保存到该路径下的 audio 目录，单作品可能数百 MB~数 GB。</p>
-        </div>
+      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+        <span class="text-meta text-subtle tabular-nums">{{ pageStart }}–{{ pageEnd }} / {{ totalItems }} 部</span>
+        <PaginationControl
+          v-if="totalPages > 1"
+          :page="currentPage"
+          :page-count="totalPages"
+          :total-items="totalItems"
+          :page-size="favoritesPageSize"
+          :disabled="loading"
+          item-label="条 ASMR"
+          @change="goToPage"
+        />
+      </div>
+    </template>
 
-        <div class="px-5 sm:px-7 py-3 border-b border-white/10 flex flex-wrap items-center gap-2">
-          <button
-            @click="toggleSelectAll"
-            :disabled="downloadableItems.length === 0"
-            class="h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-white disabled:opacity-35 flex items-center gap-2 text-xs font-bold transition-all"
-          >
-            <CheckSquare v-if="allDownloadableSelected" :size="16" />
-            <Square v-else :size="16" />
+    <div v-else class="rounded-2xl border border-dashed border-line">
+      <EmptyState :icon="Headphones" title="还没有 ASMR 收藏" description="填好播放列表地址和账号后点「同步收藏」。" />
+    </div>
+
+    <UiModal
+      v-model:open="downloadPanelOpen"
+      title="选择下载作品"
+      :description="`当前列表 ${filteredItems.length} 个作品，已选 ${selectedDownloadItems.length} 个`"
+      placement="right"
+    >
+      <div class="space-y-4">
+        <label class="block">
+          <span :class="fieldLabelClass">下载位置 <span class="text-danger">*</span></span>
+          <UiInput v-model="downloadRootPath" required placeholder="例如 D:\HE\downloads 或 /data/downloads" />
+          <span :class="fieldHintClass">音频保存到该路径下的 audio 目录，单作品可能数百 MB 到数 GB。</span>
+        </label>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <UiButton size="sm" :disabled="downloadableItems.length === 0" @click="toggleSelectAll">
+            <template #icon>
+              <CheckSquare v-if="allDownloadableSelected" :size="14" aria-hidden="true" />
+              <Square v-else :size="14" aria-hidden="true" />
+            </template>
             全选未下载
-          </button>
-          <button
-            @click="selectedDownloadIds = new Set()"
-            :disabled="selectedDownloadItems.length === 0"
-            class="h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed text-xs font-bold transition-all"
-          >
-            清空选择
-          </button>
+          </UiButton>
+          <UiButton size="sm" variant="ghost" :disabled="selectedDownloadItems.length === 0" @click="selectedDownloadIds = new Set()">清空选择</UiButton>
         </div>
 
-        <div v-if="downloadInProgress && downloadJob" class="px-5 py-3 border-b border-white/10 bg-black/15 space-y-2">
-          <div class="flex items-center justify-between text-[11px] text-white/55">
-            <span class="truncate">{{ downloadJob.current_book_title || '准备中' }}</span>
-            <span>{{ asmrDownloadStore.downloadedTracks.value }}/{{ asmrDownloadStore.totalTracks.value }} 轨 · {{ asmrDownloadStore.progressPercent.value }}%</span>
-          </div>
-          <div class="h-1.5 rounded-full bg-white/10 overflow-hidden">
-            <div class="h-full bg-accent transition-all" :style="{ width: `${asmrDownloadStore.progressPercent.value}%` }"></div>
-          </div>
-        </div>
-        <div v-if="downloadJob?.results?.length" class="px-5 py-2 border-b border-white/10 bg-black/15 max-h-24 overflow-y-auto space-y-1">
-          <p
-            v-for="result in downloadJob.results.slice(-5)"
-            :key="`${result.item_id}-${result.status}`"
-            :class="result.status === 'completed' ? 'text-emerald-300' : result.status === 'canceled' ? 'text-amber-300' : 'text-red-300'"
-            class="text-[11px] truncate"
-          >
-            {{ result.status === 'completed' ? '完成' : result.status === 'canceled' ? '已取消' : '失败' }} ·
-            {{ result.title || result.item_id }}{{ result.error ? ` · ${result.error}` : '' }}
-          </p>
+        <div v-if="(downloadInProgress && downloadJob) || downloadJob?.results?.length" class="space-y-3 rounded-2xl border border-line bg-surface p-4">
+          <template v-if="downloadInProgress && downloadJob">
+            <div class="flex items-center justify-between gap-3 text-meta">
+              <span class="min-w-0 truncate font-medium text-ink">{{ downloadJob.current_book_title || '准备中' }}</span>
+              <span class="shrink-0 text-subtle tabular-nums">{{ asmrDownloadStore.downloadedTracks.value }} / {{ asmrDownloadStore.totalTracks.value }} 轨 · {{ asmrDownloadStore.progressPercent.value }}%</span>
+            </div>
+            <div class="h-1 overflow-hidden rounded-sm bg-surface-3">
+              <div class="h-full rounded-sm bg-accent transition-[width] duration-200" :style="{ width: `${asmrDownloadStore.progressPercent.value}%` }"></div>
+            </div>
+          </template>
+          <ul v-if="downloadJob?.results?.length" class="max-h-28 space-y-1 overflow-y-auto" :class="downloadInProgress ? 'border-t border-line pt-3' : ''">
+            <li
+              v-for="result in downloadJob.results.slice(-5)"
+              :key="`${result.item_id}-${result.status}`"
+              class="flex min-w-0 items-center gap-2 text-caption"
+            >
+              <span class="w-12 shrink-0 font-medium" :class="result.status === 'completed' ? 'text-success' : result.status === 'canceled' ? 'text-warning' : 'text-danger'">
+                {{ result.status === 'completed' ? '完成' : result.status === 'canceled' ? '已取消' : '失败' }}
+              </span>
+              <span class="min-w-0 truncate text-muted">{{ result.title || result.item_id }}{{ result.error ? ` · ${result.error}` : '' }}</span>
+            </li>
+          </ul>
         </div>
 
-        <div class="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 sm:px-7 space-y-3">
-          <label
+        <div class="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface">
+          <ExternalPickRow
             v-for="item in filteredItems"
             :key="item.id"
-            :class="item.local_media_id ? 'opacity-70 cursor-default' : 'cursor-pointer hover:border-accent/35'"
-            class="grid grid-cols-[auto_56px_minmax(0,1fr)_auto] gap-3 items-center rounded-2xl border border-white/10 bg-white/[0.04] p-3 transition-all"
-          >
-            <input
-              type="checkbox"
-              :checked="selectedDownloadIds.has(item.id) && !item.local_media_id"
-              :disabled="!!item.local_media_id"
-              class="w-4 h-4 accent-accent disabled:opacity-35 disabled:cursor-not-allowed"
-              @change="toggleSelect(item)"
-            />
-            <div class="w-14 h-14 rounded-lg bg-black/30 overflow-hidden border border-white/10">
-              <img v-if="item.cover_url" :src="coverSrc(item)" :alt="item.title" class="w-full h-full object-cover" />
-              <div v-else class="w-full h-full flex items-center justify-center text-white/25"><Headphones :size="20" /></div>
-            </div>
-            <div class="min-w-0">
-              <div class="flex items-start gap-2">
-                <p class="min-w-0 text-sm font-bold text-white line-clamp-2 leading-snug">{{ item.title }}</p>
-                <span
-                  v-if="item.local_media_id"
-                  class="shrink-0 rounded-md bg-emerald-400/15 border border-emerald-300/20 px-1.5 py-0.5 text-[10px] font-black text-emerald-200"
-                >
-                  已下载
-                </span>
-              </div>
-              <p class="text-xs text-white/40 mt-1 truncate">{{ item.external_id }} · {{ item.category_name || 'asmr.one' }}</p>
-            </div>
-            <a
-              :href="item.url"
-              target="_blank"
-              rel="noreferrer"
-              class="w-9 h-9 rounded-xl bg-white/5 border border-white/10 text-white/55 hover:text-accent flex items-center justify-center transition-all"
-              title="打开原站"
-              @click.stop
-            >
-              <ExternalLink :size="16" />
-            </a>
-          </label>
+            :title="item.title"
+            :meta="`${item.external_id} · ${item.category_name || 'asmr.one'}`"
+            :cover="item.cover_url ? coverSrc(item) : null"
+            :url="item.url"
+            :checked="selectedDownloadIds.has(item.id)"
+            :downloaded="!!item.local_media_id"
+            square
+            :placeholder-icon="Headphones"
+            @toggle="toggleSelect(item)"
+          />
         </div>
-
-        <div class="px-5 sm:px-7 py-4 border-t border-white/10 bg-sidebar flex flex-wrap items-center justify-between gap-3">
-          <p class="text-xs text-white/50">
-            <span class="font-bold text-white">{{ selectedDownloadItems.length }}</span> 个作品待下载
-            <span v-if="!downloadRootPath.trim()" class="block text-amber-300 mt-1">请先填写下载位置</span>
-          </p>
-          <button
-            @click="startDownload"
-            :disabled="selectedDownloadItems.length === 0 || !downloadRootPath.trim() || downloadInProgress"
-            class="h-11 min-w-36 px-5 rounded-xl bg-accent text-white disabled:opacity-45 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-black transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar focus-visible:ring-accent"
-          >
-            <Download :size="17" :class="downloadInProgress ? 'animate-pulse' : ''" />
-            {{ downloadInProgress ? '下载中' : '开始下载' }}
-          </button>
-        </div>
-        </section>
       </div>
-    </Teleport>
+
+      <template #footer>
+        <p class="mr-auto text-meta text-subtle">
+          <span class="font-medium text-ink tabular-nums">{{ selectedDownloadItems.length }}</span> 个作品待下载
+          <span v-if="!downloadRootPath.trim()" class="block text-warning">请先填写下载位置</span>
+        </p>
+        <UiButton
+          variant="primary"
+          :disabled="selectedDownloadItems.length === 0 || !downloadRootPath.trim()"
+          :loading="downloadInProgress"
+          @click="startDownload"
+        >
+          <template #icon><Download :size="16" aria-hidden="true" /></template>
+          {{ downloadInProgress ? '下载中' : '开始下载' }}
+        </UiButton>
+      </template>
+    </UiModal>
 
     <MediaDetail
       v-if="selectedLocalMedia"
@@ -879,5 +735,5 @@ watch(favoritesError, message => { errorMessage.value = message })
       @updated="updateLocalMediaInList"
       @navigate="selectedLocalMedia = $event"
     />
-  </section>
+  </ExternalSourceLayout>
 </template>

@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import { AlertCircle, Box, Download, Film, Loader2, Play, RefreshCw, Sparkles, Upload } from 'lucide-vue-next'
+import { EmptyState, PageHeader, UiButton, UiSegmented, UiSpinner, buttonClass, controlClass } from '../components/ui'
 import type { SpinePlayer as SpinePlayerInstance, SpinePlayerConfig } from '@esotericsoftware/spine-player'
 import '@esotericsoftware/spine-player/dist/spine-player.css'
 import { API_BASE_URL } from '../config'
@@ -341,198 +342,166 @@ watch(hideEffectLayers, () => applyEffectLayerFilter())
 </script>
 
 <template>
-  <div class="min-h-full p-6 lg:p-8 space-y-6">
-    <header class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-      <div>
-        <p class="text-xs uppercase tracking-[0.22em] text-white/35 font-bold">Brown Dust 2</p>
-        <h2 class="text-3xl font-black text-white mt-2">Spine 预览</h2>
-        <p class="text-sm text-white/45 mt-2 max-w-2xl">
-          测试 BD2 的 .skel / .atlas / texture 三件套。这里播放的是 Spine 动画数据，不是 Cubism Live2D。
-        </p>
-      </div>
-      <div class="flex flex-col gap-2 items-stretch lg:items-end min-w-0 lg:max-w-[520px] w-full">
+  <div class="min-h-full">
+    <PageHeader title="BD2 Spine 预览" description="测试 Brown Dust 2 的 .skel / .atlas / texture 三件套。这里播放的是 Spine 动画数据，不是 Cubism Live2D。">
+      <template #actions>
+        <UiButton variant="ghost" @click="loadAssets">
+          <template #icon><RefreshCw :size="16" aria-hidden="true" /></template>
+          刷新列表
+        </UiButton>
+      </template>
+
+      <div class="max-w-[720px] space-y-2">
         <div class="flex items-center gap-2">
           <input
             v-model="targetDir"
             type="text"
             spellcheck="false"
-            class="flex-1 min-w-0 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-mono text-white/85 focus:border-white/30 focus:outline-none"
+            aria-label="资源仓库目录"
+            :class="[controlClass('md'), 'flex-1 font-mono']"
             placeholder="git 仓库目标目录（首次会自动 clone，已有则 pull）"
             :disabled="isDownloading"
           />
           <button
-            class="inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition shrink-0"
-            :class="isDownloading
-              ? 'border-amber-300/35 bg-amber-300/12 text-amber-100 cursor-wait'
-              : downloadStatus === 'error'
-              ? 'border-red-400/25 bg-red-500/10 text-red-100'
-              : downloadStatus === 'done'
-              ? 'border-emerald-300/35 bg-emerald-500/12 text-emerald-100'
-              : 'border-white/10 bg-white/5 text-white/75 hover:bg-white/10 hover:text-white'
-              + (isAuthed && !isAdmin ? ' opacity-50 cursor-not-allowed' : '')"
+            type="button"
+            :class="buttonClass(isDownloading || downloadStatus === 'done' ? 'secondary' : downloadStatus === 'error' ? 'danger' : 'primary', 'md')"
             :disabled="isAuthed && !isAdmin"
-            :title="isAuthed && !isAdmin ? '需要管理员权限' : ''"
+            :title="isAuthed && !isAdmin ? '需要管理员权限' : isDownloading ? '点击取消' : ''"
             @click="isDownloading ? cancelDownload() : startDownload()"
           >
-            <Loader2 v-if="isDownloading" :size="16" class="animate-spin" />
-            <Upload v-else-if="downloadStatus === 'done'" :size="16" />
-            <Download v-else :size="16" />
+            <UiSpinner v-if="isDownloading" :size="16" />
+            <Upload v-else-if="downloadStatus === 'done'" :size="16" aria-hidden="true" />
+            <Download v-else :size="16" aria-hidden="true" />
             {{ buttonLabel }}
           </button>
         </div>
         <div v-if="isDownloading" class="space-y-1.5">
-          <div class="flex items-center justify-between text-[11px] font-bold text-white/55">
+          <div class="flex items-center justify-between gap-3 text-meta text-muted">
             <span class="truncate">{{ stepLabel }}</span>
-            <span class="tabular-nums text-white/75">
+            <span class="shrink-0 tabular-nums">
               {{ pctForBar }}%
-              <span class="text-white/30 mx-1">·</span>
-              {{ downloadMb.toFixed(1) }} MB
-              <span v-if="downloadSpeed > 0" class="text-white/30 mx-1">·</span>
-              <span v-if="downloadSpeed > 0">{{ downloadSpeed.toFixed(1) }} MB/s</span>
-              <span class="text-white/30 mx-1">·</span>
-              <span class="text-white/45">{{ etaText || '估算中' }}</span>
+              <span class="mx-1 text-faint">·</span>{{ downloadMb.toFixed(1) }} MB
+              <template v-if="downloadSpeed > 0"><span class="mx-1 text-faint">·</span>{{ downloadSpeed.toFixed(1) }} MB/s</template>
+              <span class="mx-1 text-faint">·</span><span class="text-subtle">{{ etaText || '估算中' }}</span>
             </span>
           </div>
-          <div class="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden">
-            <div
-              class="h-full bg-gradient-to-r from-amber-300/70 to-amber-200/90 transition-all duration-300"
-              :style="{ width: pctForBar + '%' }"
-            />
+          <div class="h-1 w-full overflow-hidden rounded-sm bg-surface-3">
+            <div class="h-full rounded-sm bg-accent transition-[width] duration-200" :style="{ width: pctForBar + '%' }" />
           </div>
-          <div v-if="downloadFemaleDirs > 0" class="text-[10px] text-white/35 font-bold">
-            目标：{{ downloadFemaleDirs }} 个女性角色目录
-          </div>
+          <p v-if="downloadFemaleDirs > 0" class="text-caption text-subtle tabular-nums">目标：{{ downloadFemaleDirs }} 个女性角色目录</p>
         </div>
-        <div v-else-if="downloadStatus === 'done'" class="text-[11px] font-bold text-emerald-300/80">
-          ✓ 已同步（{{ downloadMode === 'pull' ? '增量' : '首次' }}），点击「更新」再次拉取
-        </div>
-        <div v-else-if="downloadStatus === 'error'" class="text-[11px] text-red-300/80 break-all" :title="downloadError">
-          ✗ {{ downloadError }}
-        </div>
-        <div v-else-if="downloadStatus === 'cancelled'" class="text-[11px] text-white/45">
+        <p v-else-if="downloadStatus === 'done'" class="text-caption text-success">
+          已同步（{{ downloadMode === 'pull' ? '增量' : '首次' }}），点「更新」可再次拉取
+        </p>
+        <p v-else-if="downloadStatus === 'error'" class="truncate text-caption text-danger" :title="downloadError">
+          {{ downloadError }}
+        </p>
+        <p v-else-if="downloadStatus === 'cancelled'" class="text-caption text-subtle">
           已取消（下次按「下载」可断点续传 .git pack）
+        </p>
+        <p v-else-if="!isAuthed" class="text-caption text-warning">下载需要管理员账号</p>
+      </div>
+    </PageHeader>
+
+    <div class="page-gutter pb-12">
+      <div class="page-container space-y-4">
+        <div v-if="error" role="alert" class="flex items-start gap-3 rounded-lg border border-danger/25 bg-danger/10 px-3.5 py-3 text-meta text-danger">
+          <AlertCircle :size="16" class="mt-0.5 shrink-0" aria-hidden="true" />
+          <span>{{ error }}</span>
         </div>
-        <div v-else-if="!isAuthed" class="text-[11px] text-amber-300/70 font-bold">
-          下载需要 admin 账号
-        </div>
-        <div class="flex justify-end">
-          <button
-            class="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/65 hover:bg-white/10 hover:text-white transition"
-            @click="loadAssets"
-          >
-            <RefreshCw :size="13" />
-            刷新列表
-          </button>
+
+        <div class="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)] xl:gap-6">
+          <aside class="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-line bg-surface">
+            <div class="flex items-center justify-between gap-3 px-4 pb-3 pt-4">
+              <div class="min-w-0">
+                <h2 class="text-body font-semibold text-ink">测试资源</h2>
+                <p class="mt-0.5 text-meta text-subtle tabular-nums">{{ filteredAssets.length }} / {{ assets.length }} 组 Spine</p>
+              </div>
+              <UiSpinner v-if="loading" :size="16" label="加载中" />
+            </div>
+            <div class="px-3 pb-3">
+              <UiSegmented
+                v-model="selectedKind"
+                label="资源类型"
+                block
+                :options="[
+                  { value: 'char', label: `角色 ${charAssetCount}`, icon: Box },
+                  { value: 'cutscene', label: `过场 ${cutsceneAssetCount}`, icon: Film },
+                  { value: 'illust', label: `立绘 ${illustAssetCount}`, icon: Sparkles },
+                ]"
+              />
+            </div>
+            <div class="max-h-[calc(100vh-320px)] min-h-0 divide-y divide-line overflow-y-auto border-t border-line custom-scrollbar">
+              <button
+                v-for="asset in filteredAssets"
+                :key="asset.id"
+                type="button"
+                class="block w-full px-4 py-3 text-left transition-colors focus-ring-inset"
+                :class="selectedId === asset.id ? 'bg-accent/8 shadow-[inset_2px_0_0_rgb(var(--color-accent))]' : 'hover:bg-surface-2'"
+                :aria-pressed="selectedId === asset.id"
+                @click="selectedId = asset.id"
+              >
+                <span class="block truncate text-body font-medium" :class="selectedId === asset.id ? 'text-ink' : 'text-muted'">{{ asset.title }}</span>
+                <span class="mt-0.5 block truncate text-caption text-subtle tabular-nums">{{ asset.asset_id }} · {{ asset.textures.length }} 张贴图</span>
+              </button>
+              <p v-if="!loading && filteredAssets.length === 0" class="px-4 py-10 text-center text-meta text-subtle">
+                暂无 Spine 测试资源
+              </p>
+            </div>
+          </aside>
+
+          <section class="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+            <div class="flex flex-col gap-3 border-b border-line px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
+              <div class="min-w-0">
+                <h2 class="truncate text-body font-semibold text-ink">{{ selectedAsset?.title || '未选择资源' }}</h2>
+                <p class="mt-0.5 truncate font-mono text-caption text-subtle">{{ selectedAsset?.asset_id || sourceRoot || 'BD2 asset root not resolved' }}</p>
+              </div>
+              <div class="flex flex-wrap items-center gap-3">
+                <span class="text-meta text-subtle tabular-nums">{{ animationNames.length }} 个动画 · {{ skinNames.length }} 个皮肤</span>
+                <button
+                  type="button"
+                  :aria-pressed="hideEffectLayers"
+                  class="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-meta font-medium transition-colors focus-ring"
+                  :class="hideEffectLayers ? 'border-accent/50 bg-accent/15 text-accent-glow' : 'border-line bg-surface-2 text-muted hover:border-line-strong hover:text-ink'"
+                  @click="hideEffectLayers = !hideEffectLayers"
+                >
+                  <Sparkles :size="14" aria-hidden="true" />
+                  隐藏特效层
+                </button>
+              </div>
+            </div>
+
+            <div class="relative min-h-[420px] bg-black/40 sm:min-h-[620px]">
+              <div ref="playerHost" class="bd2-spine-host absolute inset-0"></div>
+              <div
+                v-if="playerLoading"
+                class="absolute inset-0 flex items-center justify-center gap-3 bg-black/45 text-meta text-white/80"
+              >
+                <Loader2 :size="20" class="animate-spin" aria-hidden="true" />
+                加载 Spine
+              </div>
+              <div
+                v-if="playerError"
+                role="alert"
+                class="absolute left-4 right-4 top-4 flex items-start gap-3 rounded-lg border border-danger/25 bg-danger/10 px-3.5 py-3 text-meta text-danger"
+              >
+                <AlertCircle :size="16" class="mt-0.5 shrink-0" aria-hidden="true" />
+                <div class="min-w-0">
+                  <p class="font-medium">Spine 资源加载失败</p>
+                  <p class="mt-1 line-clamp-3 break-all font-mono text-caption text-danger/80" :title="playerError">{{ playerError }}</p>
+                </div>
+              </div>
+              <EmptyState
+                v-if="!selectedAsset && !loading"
+                class="absolute inset-0"
+                :icon="Play"
+                title="没有可播放的 Spine 资源"
+                description="先在上方填写资源仓库目录并下载，再刷新列表。"
+              />
+            </div>
+          </section>
         </div>
       </div>
-    </header>
-
-    <div v-if="error" class="flex items-center gap-3 rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-      <AlertCircle :size="18" />
-      <span>{{ error }}</span>
-    </div>
-
-    <div class="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
-      <aside class="rounded-2xl border border-white/10 bg-white/[0.04] overflow-hidden">
-        <div class="border-b border-white/10 px-4 py-3 flex items-center justify-between">
-          <div>
-            <p class="text-sm font-black text-white">测试资源</p>
-            <p class="text-xs text-white/35 mt-1">{{ filteredAssets.length }} / {{ assets.length }} 组 Spine</p>
-          </div>
-          <Loader2 v-if="loading" :size="17" class="animate-spin text-white/45" />
-        </div>
-        <div class="grid grid-cols-3 gap-2 border-b border-white/10 p-3">
-          <button
-            class="inline-flex min-w-0 items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs font-black transition"
-            :class="selectedKind === 'char' ? 'bg-white/[0.12] text-white' : 'bg-white/[0.04] text-white/50 hover:text-white/75'"
-            @click="selectedKind = 'char'"
-          >
-            <Box :size="13" />
-            角色 {{ charAssetCount }}
-          </button>
-          <button
-            class="inline-flex min-w-0 items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs font-black transition"
-            :class="selectedKind === 'cutscene' ? 'bg-white/[0.12] text-white' : 'bg-white/[0.04] text-white/50 hover:text-white/75'"
-            @click="selectedKind = 'cutscene'"
-          >
-            <Film :size="13" />
-            Cut {{ cutsceneAssetCount }}
-          </button>
-          <button
-            class="inline-flex min-w-0 items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs font-black transition"
-            :class="selectedKind === 'illust' ? 'bg-white/[0.12] text-white' : 'bg-white/[0.04] text-white/50 hover:text-white/75'"
-            @click="selectedKind = 'illust'"
-          >
-            <Sparkles :size="13" />
-            立绘 {{ illustAssetCount }}
-          </button>
-        </div>
-        <div class="max-h-[calc(100vh-260px)] overflow-y-auto custom-scrollbar">
-          <button
-            v-for="asset in filteredAssets"
-            :key="asset.id"
-            class="w-full text-left px-4 py-3 border-b border-white/[0.06] hover:bg-white/[0.06] transition"
-            :class="selectedId === asset.id ? 'bg-accent/15 text-white' : 'text-white/65'"
-            @click="selectedId = asset.id"
-          >
-            <span class="block text-sm font-bold truncate">{{ asset.title }}</span>
-            <span class="block text-[11px] text-white/35 mt-1">{{ asset.asset_id }} · {{ asset.textures.length }} texture</span>
-          </button>
-          <div v-if="!loading && filteredAssets.length === 0" class="px-4 py-10 text-center text-sm text-white/40">
-            暂无 Spine 测试资源
-          </div>
-        </div>
-      </aside>
-
-      <section class="min-w-0 rounded-2xl border border-white/10 bg-black/30 overflow-hidden">
-        <div class="border-b border-white/10 px-5 py-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div class="min-w-0">
-            <p class="text-sm font-black text-white truncate">{{ selectedAsset?.title || '未选择资源' }}</p>
-            <p class="text-xs text-white/35 mt-1 truncate">{{ selectedAsset?.asset_id || sourceRoot || 'BD2 asset root not resolved' }}</p>
-          </div>
-          <div class="flex flex-wrap items-center gap-2 text-xs text-white/45">
-            <button
-              class="inline-flex items-center gap-2 rounded-lg border px-3 py-2 font-bold transition"
-              :class="hideEffectLayers ? 'border-amber-300/35 bg-amber-300/12 text-amber-100' : 'border-white/10 bg-white/[0.04] text-white/55 hover:text-white/80'"
-              @click="hideEffectLayers = !hideEffectLayers"
-            >
-              <Sparkles :size="14" />
-              隐藏特效层
-            </button>
-            <div class="inline-flex items-center gap-2">
-              <Box :size="15" />
-              <span>{{ animationNames.length }} animations</span>
-              <span class="text-white/20">/</span>
-              <span>{{ skinNames.length }} skins</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="relative min-h-[620px] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(0,0,0,0.18))]">
-          <div ref="playerHost" class="absolute inset-0 bd2-spine-host"></div>
-          <div
-            v-if="playerLoading"
-            class="absolute inset-0 flex items-center justify-center bg-black/45 text-white/70"
-          >
-            <Loader2 :size="22" class="animate-spin mr-3" />
-            加载 Spine
-          </div>
-          <div
-            v-if="playerError"
-            class="absolute left-5 right-5 top-5 flex items-center gap-3 rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-100"
-          >
-            <AlertCircle :size="18" />
-            <span>{{ playerError }}</span>
-          </div>
-          <div
-            v-if="!selectedAsset && !loading"
-            class="absolute inset-0 flex flex-col items-center justify-center text-white/45"
-          >
-            <Play :size="34" class="mb-3" />
-            <p class="font-bold">没有可播放的 Spine 资源</p>
-          </div>
-        </div>
-      </section>
     </div>
   </div>
 </template>
@@ -547,5 +516,11 @@ watch(hideEffectLayers, () => applyEffectLayerFilter())
 .bd2-spine-host :deep(canvas) {
   width: 100% !important;
   height: 100% !important;
+}
+
+/* The player's own error overlay (inline-styled raw text on black) duplicates
+   the playerError banner — its config.error callback always fires — so hide it. */
+.bd2-spine-host :deep(.spine-player-error) {
+  display: none !important;
 }
 </style>

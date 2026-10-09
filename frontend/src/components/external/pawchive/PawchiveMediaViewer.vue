@@ -488,24 +488,24 @@ onBeforeUnmount(() => {
 <template>
   <div ref="viewerRef" role="dialog" aria-modal="true" :aria-label="`Pawchive 查看器：${post.title}`" :class="nativeFullscreen ? 'h-screen w-screen' : ''" class="he-pawchive-viewer fixed inset-0 z-[70] bg-black/95 text-white flex flex-col">
     <header :class="isFullscreen ? ['absolute inset-x-0 top-0 z-30 bg-gradient-to-b from-black/90 via-black/65 to-transparent border-b-0', controlsVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'] : ''" class="shrink-0 px-3 sm:px-5 py-3 border-b border-white/15 flex items-center gap-3 transition-[transform,opacity] duration-300" @mouseenter="onControlsHover(true)" @mouseleave="onControlsHover(false)">
-      <button ref="closeRef" type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-xl hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" aria-label="返回列表" @click="emit('close')"><X :size="21" /></button>
+      <button ref="closeRef" type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" aria-label="返回列表" @click="emit('close')"><X :size="21" /></button>
       <div class="min-w-0 flex-1"><p class="text-xs text-white/55 truncate">{{ post.creator_name }} · {{ scopeLabel }}</p><h2 class="text-sm sm:text-base font-bold truncate">{{ post.title }}</h2></div>
-      <a :href="post.source_url" target="_blank" rel="noopener noreferrer" class="min-h-11 px-3 rounded-xl border border-white/15 text-xs font-semibold flex items-center gap-2 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent"><ExternalLink :size="15" />来源</a>
+      <a :href="post.source_url" target="_blank" rel="noopener noreferrer" class="min-h-11 px-3 rounded-lg text-meta font-medium flex items-center gap-2 text-white/90 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent"><ExternalLink :size="15" />来源</a>
       <button
         v-if="attachment.media_type === 'image'"
         type="button"
         :disabled="downloadBusy || busy || !attachment.stream_ref"
-        class="min-w-11 min-h-11 px-2 sm:px-3 flex items-center justify-center gap-2 rounded-xl border border-white/15 text-xs sm:text-sm font-semibold hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        class="min-w-11 min-h-11 px-2 sm:px-3 flex items-center justify-center gap-2 rounded-lg text-meta font-medium text-white/90 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         aria-label="下载当前图片到媒体库"
         title="下载当前图片到媒体库"
         @click="emit('downloadCurrent')"
       ><Download :size="17" aria-hidden="true" /><span class="hidden sm:inline">{{ downloadBusy ? '正在核对…' : '下载此图' }}</span></button>
-      <button type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-xl border border-white/15 hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" :aria-label="isFullscreen ? '退出全屏' : '进入全屏'" :title="isFullscreen ? '退出全屏' : '进入全屏'" :aria-pressed="isFullscreen" @click="toggleFullscreen"><Minimize2 v-if="isFullscreen" :size="18" aria-hidden="true" /><Maximize2 v-else :size="18" aria-hidden="true" /></button>
+      <button type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-lg text-white/90 hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" :aria-label="isFullscreen ? '退出全屏' : '进入全屏'" :title="isFullscreen ? '退出全屏' : '进入全屏'" :aria-pressed="isFullscreen" @click="toggleFullscreen"><Minimize2 v-if="isFullscreen" :size="18" aria-hidden="true" /><Maximize2 v-else :size="18" aria-hidden="true" /></button>
     </header>
     <div class="flex-1 min-h-0 relative flex" @wheel.capture="onMediaWheel">
       <img v-if="placeholderUrl && showPlaceholder && !imageReady && !loadFailed" :src="placeholderUrl" alt="" aria-hidden="true" draggable="false" class="pointer-events-none absolute inset-0 z-10 h-full w-full scale-105 object-contain opacity-60 blur-md" />
-      <div v-if="attachment.media_type === 'image' && !displayImageUrl && showPlaceholder && !loadFailed" role="status" class="pointer-events-none absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/75 px-4 py-2 text-sm shadow-xl backdrop-blur-md">
-        <Loader2 :size="16" class="shrink-0 animate-spin text-accent" aria-hidden="true" />
+      <div v-if="attachment.media_type === 'image' && !displayImageUrl && showPlaceholder && !loadFailed" role="status" class="pointer-events-none absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/75 px-4 py-2 text-sm ">
+        <Loader2 :size="16" class="shrink-0 animate-spin text-white/70" aria-hidden="true" />
         <span>正在加载原图<template v-if="loadProgress !== null"> {{ Math.round(loadProgress * 100) }}%</template></span>
       </div>
       <ImageViewer v-if="attachment.media_type === 'image' && displayImageUrl" :key="attachment.attachment_key" :media="{ title: attachment.filename }" :image-url="displayImageUrl" :show-controls="true" :click-only-controls="false" :controls-visible="!isFullscreen || controlsVisible" @viewer-click="onMediaSurfaceClick" @previous="emit('previous')" @next="emit('next')" @viewer-double-click="() => {}" @controls-hover="onControlsHover" @loaded="onImageLoaded" @load-error="onImageError" />
@@ -516,12 +516,12 @@ onBeforeUnmount(() => {
         <ImageOff :size="40" class="text-white/40" aria-hidden="true" />
         <p class="text-sm text-white/75">{{ attachment.media_type === 'video' ? '视频' : '图片' }}暂时无法加载</p>
         <div class="flex gap-2">
-          <button type="button" class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 px-4 text-sm hover:bg-white/10 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" @click="retryMedia"><RotateCw :size="15" aria-hidden="true" />重试</button>
-          <button type="button" :disabled="ended || busy" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-bold disabled:opacity-40 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white" @click="emit('next')">下一项<ArrowRight :size="15" aria-hidden="true" /></button>
+          <button type="button" class="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/20 px-4 text-sm hover:bg-white/10 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" @click="retryMedia"><RotateCw :size="15" aria-hidden="true" />重试</button>
+          <button type="button" :disabled="ended || busy" class="inline-flex min-h-11 items-center gap-2 rounded-lg bg-accent px-4 text-sm font-medium text-on-accent hover:bg-accent/90 disabled:opacity-40 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white" @click="emit('next')">下一项<ArrowRight :size="15" aria-hidden="true" /></button>
         </div>
       </div>
-      <div v-if="busy" role="status" :class="isFullscreen && controlsVisible ? 'top-20' : 'top-4'" class="pointer-events-none absolute left-1/2 z-30 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/75 px-4 py-2 text-sm shadow-xl backdrop-blur-md">
-        <Loader2 :size="16" class="shrink-0 animate-spin text-accent" aria-hidden="true" />
+      <div v-if="busy" role="status" :class="isFullscreen && controlsVisible ? 'top-20' : 'top-4'" class="pointer-events-none absolute left-1/2 z-30 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/75 px-4 py-2 text-sm ">
+        <Loader2 :size="16" class="shrink-0 animate-spin text-white/70" aria-hidden="true" />
         <span class="truncate">正在查找下一篇有媒体的帖子<template v-if="skipped"> · 已跳过 {{ skipped }} 篇</template></span>
       </div>
       <div v-if="countdownKey" :key="countdownKey" aria-hidden="true" class="pawchive-countdown pointer-events-none absolute bottom-0 left-0 z-20 h-0.5 bg-accent/80" :style="{ animationDuration: `${interval}s` }"></div>
@@ -529,13 +529,13 @@ onBeforeUnmount(() => {
     <footer :class="isFullscreen ? ['absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 via-black/65 to-transparent border-t-0', controlsVisible ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'] : ''" class="shrink-0 border-t border-white/15 px-3 sm:px-5 py-3 space-y-2 transition-[transform,opacity] duration-300" @mouseenter="onControlsHover(true)" @mouseleave="onControlsHover(false)">
       <nav v-if="attachments.length > 1" ref="thumbnailNavRef" aria-label="本帖媒体预览" class="relative border-b border-white/10 pb-2">
         <div class="mb-2 flex items-center justify-between gap-3 text-xs text-white/70">
-          <span class="font-semibold">本帖媒体</span>
-          <span>{{ attachmentIndex + 1 }} / {{ attachments.length }}</span>
+          <span class="font-medium">本帖媒体</span>
+          <span class="tabular-nums">{{ attachmentIndex + 1 }} / {{ attachments.length }}</span>
         </div>
         <div
           v-if="hoverPreviewIndex >= 0 && attachments[hoverPreviewIndex] && (!isFullscreen || controlsVisible)"
           aria-hidden="true"
-          class="pointer-events-none absolute bottom-[calc(100%+8px)] z-50 -translate-x-1/2 overflow-hidden rounded-xl border border-white/15 bg-black/95 p-1 shadow-2xl"
+          class="pointer-events-none absolute bottom-[calc(100%+8px)] z-50 -translate-x-1/2 overflow-hidden rounded-lg border border-white/15 bg-black/95 p-1 shadow-2xl"
           :style="{ left: hoverPreviewX + 'px', width: hoverPreviewWidth + 'px', height: '268px' }"
         >
           <div class="relative h-full w-full overflow-hidden rounded-lg bg-white/5">
@@ -550,7 +550,7 @@ onBeforeUnmount(() => {
             />
             <span v-else class="flex h-full w-full items-center justify-center text-white/50"><ImageIcon :size="40" aria-hidden="true" /></span>
             <span v-if="attachments[hoverPreviewIndex].media_type === 'video'" class="absolute inset-0 flex items-center justify-center"><Play :size="38" fill="currentColor" aria-hidden="true" /></span>
-            <span class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-2 pb-2 pt-5 text-center text-xs font-semibold text-white">第 {{ hoverPreviewIndex + 1 }} / {{ attachments.length }} 项</span>
+            <span class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-2 pb-2 pt-5 text-center text-caption font-medium text-white tabular-nums">第 {{ hoverPreviewIndex + 1 }} / {{ attachments.length }} 项</span>
           </div>
         </div>
         <div ref="thumbnailStripRef" class="flex gap-2 overflow-x-auto pb-2 custom-scrollbar" @wheel.stop @scroll="updateHoverPreviewPosition">
@@ -563,7 +563,7 @@ onBeforeUnmount(() => {
             :aria-label="`查看本帖第 ${index + 1} 个媒体：${item.filename}`"
             :title="item.filename"
             :class="index === attachmentIndex ? 'border-accent ring-2 ring-accent/40' : 'border-white/15 hover:border-white/45'"
-            class="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 bg-white/5 transition-colors sm:h-20 sm:w-20 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white cursor-pointer"
+            class="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 bg-white/5 transition-colors sm:h-20 sm:w-20 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white cursor-pointer"
             @mouseenter="showHoverPreview(index)"
             @mouseleave="hideHoverPreview(index)"
             @focus="showHoverPreview(index)"
@@ -573,28 +573,28 @@ onBeforeUnmount(() => {
             <PawchiveRetryImage v-if="item.preview_ref && !failedPreviewKeys.has(item.attachment_key)" :src="pawchiveMediaUrl(item.preview_ref)" alt="" loading="lazy" decoding="async" draggable="false" class="h-full w-full object-cover" @failed="markPreviewFailed(item.attachment_key)" />
             <span v-else class="flex h-full w-full items-center justify-center text-white/50"><ImageIcon :size="24" aria-hidden="true" /></span>
             <span v-if="item.media_type === 'video'" class="absolute inset-0 flex items-center justify-center bg-black/35"><Play :size="22" fill="currentColor" aria-hidden="true" /></span>
-            <span class="absolute bottom-1 right-1 rounded bg-black/75 px-1 text-[10px] font-bold text-white">{{ index + 1 }}</span>
+            <span class="absolute bottom-1 right-1 rounded bg-black/75 px-1 text-caption font-medium tabular-nums text-white">{{ index + 1 }}</span>
           </button>
         </div>
       </nav>
-      <p v-if="originalMissing" role="status" class="text-xs text-amber-200/90">来源站已缺失这张原图，当前显示的是缩略图。</p>
-      <p v-if="error" role="alert" class="text-sm text-amber-300">{{ error }}</p>
+      <p v-if="originalMissing" role="status" class="text-xs text-warning">来源站已缺失这张原图，当前显示的是缩略图。</p>
+      <p v-if="error" role="alert" class="text-sm text-warning">{{ error }}</p>
       <p v-else-if="notice" role="status" class="text-xs text-white/60">{{ notice }}</p>
-      <p v-if="downloadMessage" :role="downloadError ? 'alert' : 'status'" :class="downloadError ? 'text-red-300' : 'text-emerald-300'" class="text-sm">{{ downloadMessage }}</p>
+      <p v-if="downloadMessage" :role="downloadError ? 'alert' : 'status'" :class="downloadError ? 'text-danger' : 'text-success'" class="text-sm">{{ downloadMessage }}</p>
       <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between lg:gap-3">
         <p class="min-w-0 truncate text-xs text-white/65" :title="attachment.filename">本帖可播放附件 {{ attachmentIndex + 1 }} / {{ attachmentTotal }}<span class="ml-2">· {{ attachment.filename }}</span></p>
         <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
           <div class="flex flex-wrap items-center gap-2">
-            <button v-if="attachment.media_type !== 'image'" type="button" :disabled="downloadBusy || busy" class="min-h-11 px-3 rounded-xl border border-white/15 flex items-center gap-1 text-sm disabled:opacity-50 cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" @click="emit('downloadCurrent')"><Download :size="15" />当前附件</button>
-            <button type="button" :disabled="downloadBusy" class="min-h-11 px-3 rounded-xl border border-white/15 flex items-center gap-1 text-sm disabled:opacity-50 cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" @click="emit('downloadPost')">下载本帖</button>
+            <button v-if="attachment.media_type !== 'image'" type="button" :disabled="downloadBusy || busy" class="min-h-11 px-3 rounded-lg border border-white/15 flex items-center gap-1 text-sm disabled:opacity-50 cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" @click="emit('downloadCurrent')"><Download :size="15" />当前附件</button>
+            <button type="button" :disabled="downloadBusy" class="min-h-11 px-3 rounded-lg border border-white/15 flex items-center gap-1 text-sm disabled:opacity-50 cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" @click="emit('downloadPost')">下载本帖</button>
             <label class="text-xs text-white/70 flex items-center gap-2">图片间隔
-              <input type="number" min="1" max="300" :value="interval" class="w-16 min-h-11 rounded-lg bg-white/10 border border-white/15 px-2 text-white" @change="emit('update:interval', Math.min(300, Math.max(1, Number(($event.target as HTMLInputElement).value) || 5)))" />秒
+              <input type="number" min="1" max="300" :value="interval" class="w-16 min-h-11 rounded-lg bg-white/10 border border-white/15 px-2 text-white tabular-nums focus:outline-none focus:border-white/40" @change="emit('update:interval', Math.min(300, Math.max(1, Number(($event.target as HTMLInputElement).value) || 5)))" />秒
             </label>
           </div>
           <div class="grid grid-cols-3 gap-2 sm:flex sm:items-center">
-            <button type="button" :disabled="!hasPrevious || busy" class="min-h-11 px-3 rounded-xl border border-white/15 flex items-center justify-center gap-1 text-sm disabled:opacity-40 cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" @click="emit('previous')"><ArrowLeft :size="16" />上一项</button>
-            <button type="button" class="min-h-11 px-3 rounded-xl border border-white/15 flex items-center justify-center gap-2 text-sm cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" :class="autoplay ? 'border-accent/60 bg-accent/15' : ''" :aria-pressed="autoplay" @click="emit('update:autoplay', !autoplay)"><Pause v-if="autoplay" :size="16" /><Play v-else :size="16" />{{ autoplay ? '暂停连播' : '自动连播' }}</button>
-            <button type="button" :disabled="ended || busy" class="min-h-11 px-3 rounded-xl bg-accent flex items-center justify-center gap-1 text-sm font-bold disabled:opacity-40 cursor-pointer focus-visible:ring-2 focus-visible:ring-white" @click="emit('next')">{{ ended ? '范围末尾' : '下一项' }}<ArrowRight :size="16" /></button>
+            <button type="button" :disabled="!hasPrevious || busy" class="min-h-11 px-3 rounded-lg border border-white/15 flex items-center justify-center gap-1 text-sm disabled:opacity-40 cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" @click="emit('previous')"><ArrowLeft :size="16" />上一项</button>
+            <button type="button" class="min-h-11 px-3 rounded-lg border border-white/15 flex items-center justify-center gap-2 text-sm cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" :class="autoplay ? 'border-accent/60 bg-accent/15 text-accent-glow' : ''" :aria-pressed="autoplay" @click="emit('update:autoplay', !autoplay)"><Pause v-if="autoplay" :size="16" /><Play v-else :size="16" />{{ autoplay ? '暂停连播' : '自动连播' }}</button>
+            <button type="button" :disabled="ended || busy" class="min-h-11 px-3 rounded-lg bg-accent text-on-accent hover:bg-accent/90 flex items-center justify-center gap-1 text-sm font-medium disabled:opacity-40 cursor-pointer focus-visible:ring-2 focus-visible:ring-white" @click="emit('next')">{{ ended ? '范围末尾' : '下一项' }}<ArrowRight :size="16" /></button>
           </div>
         </div>
       </div>
