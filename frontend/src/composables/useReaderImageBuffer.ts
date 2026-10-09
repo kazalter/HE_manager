@@ -10,14 +10,24 @@ export interface ReaderImageState {
 export function useReaderImageBuffer(onReady: (update: () => void) => void = update => update()) {
   const states = reactive(new Map<string, ReaderImageState>())
   const decoded = new Map<string, HTMLImageElement>()
+  const inFlight = new Map<string, { cancel: () => void }>()
   let queue: string[] = []
   let active = 0
   let generation = 0
   let disposed = false
   let wanted = new Set<string>()
+  let visible = new Set<string>()
 
   const pump = () => {
-    while (!disposed && active < 3 && queue.length) {
+    while (!disposed && queue.length) {
+      if (active >= 3) {
+        const visibleQueued = queue.some(url => visible.has(url) && states.get(url)?.status === 'queued')
+        if (!visibleQueued) break
+        // A slow speculative image must never hold the visible page or its retry hostage.
+        const speculative = [...inFlight.entries()].reverse().find(([url]) => !visible.has(url))
+        if (!speculative) break
+        speculative[1].cancel()
+      }
       const url = queue.shift()!
       const state = states.get(url)
       if (!state || state.status !== 'queued') continue
@@ -26,8 +36,11 @@ export function useReaderImageBuffer(onReady: (update: () => void) => void = upd
       const epoch = generation
       const img = new Image()
       img.decoding = 'async'
+      let finished = false
       const finish = (success: boolean) => {
-        if (epoch !== generation || disposed) return
+        if (finished || epoch !== generation || disposed) return
+        finished = true
+        inFlight.delete(url)
         active--
         onReady(() => {
           states.set(url, success
@@ -37,7 +50,23 @@ export function useReaderImageBuffer(onReady: (update: () => void) => void = upd
         if (success && wanted.has(url)) decoded.set(url, img)
         pump()
       }
+      inFlight.set(url, { cancel: () => {
+        if (finished) return
+        finished = true
+        inFlight.delete(url)
+        active--
+        img.onload = null
+        img.onerror = null
+        img.src = ''
+        if (wanted.has(url)) {
+          states.set(url, { status: 'queued' })
+          if (!queue.includes(url)) queue.push(url)
+        } else {
+          states.delete(url)
+        }
+      } })
       img.onload = async () => {
+        if (finished) return
         // A loaded file can still need decoding. Keep its decoded bitmap nearby.
         try { await img.decode() } catch { /* Loaded formats without decode support remain usable. */ }
         finish(true)
@@ -47,8 +76,10 @@ export function useReaderImageBuffer(onReady: (update: () => void) => void = upd
     }
   }
 
-  const requestWindow = (urls: string[]) => {
+  const requestWindow = (urls: string[], visibleCount = 1) => {
     wanted = new Set(urls)
+    visible = new Set(urls.slice(0, visibleCount))
+    for (const [url, request] of inFlight) if (!wanted.has(url)) request.cancel()
     for (const url of decoded.keys()) if (!wanted.has(url)) decoded.delete(url)
     for (const [url, state] of states) {
       if (state.status === 'queued' && !wanted.has(url)) states.delete(url)
@@ -64,16 +95,19 @@ export function useReaderImageBuffer(onReady: (update: () => void) => void = upd
   const retry = (url: string) => {
     if (states.get(url)?.status !== 'error') return
     states.set(url, { status: 'queued' })
+    visible.add(url)
     queue.unshift(url)
     pump()
   }
   const clear = () => {
     generation++
+    wanted.clear()
+    visible.clear()
+    for (const request of inFlight.values()) request.cancel()
     active = 0
     queue = []
     states.clear()
     decoded.clear()
-    wanted.clear()
   }
   const dispose = () => { clear(); disposed = true }
   return { states, requestWindow, retry, clear, dispose }

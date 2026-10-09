@@ -7,6 +7,7 @@ import {
   Columns2,
   GalleryHorizontal,
   Keyboard,
+  Loader2,
   RotateCcw,
   ScrollText,
   Square,
@@ -111,13 +112,14 @@ const stepSize = computed(() => (readMode.value === 'double' ? 2 : 1))
 const pageUrlFor = (page: number) => props.imagePages
   ? authUrl(`${API_BASE_URL}/stream/${props.imagePages[page]?.id}`)
   : authUrl(`${API_BASE_URL}/manga/${props.media.id}/page/${page}`)
-const pageUrl = computed(() => pageUrlFor(props.currentPage))
-const secondPageUrl = computed(() => {
-  if (readMode.value !== 'double') return null
-  const nextP = props.currentPage + 1
-  if (props.totalPages !== null && nextP >= props.totalPages) return null
-  return pageUrlFor(nextP)
+const canvasPages = computed(() => {
+  const pages = [props.currentPage]
+  if (readMode.value === 'double' && (props.totalPages === null || props.currentPage + 1 < props.totalPages)) {
+    pages.push(props.currentPage + 1)
+  }
+  return isRtl.value ? pages.reverse() : pages
 })
+const pageLabel = (page: number) => `第 ${page + 1} ${props.imagePages ? '张' : '页'}`
 const thumbnailUrl = (page: number) => authUrl(`${API_BASE_URL}/manga/${props.media.id}/page/${page}?thumbnail=true`)
 
 const totalPagesList = computed(() => {
@@ -429,7 +431,7 @@ const preloadAdjacentPages = () => {
   const page = props.currentPage
   // Six pages ahead, two behind; prioritize the visible spread before speculation.
   const indices = [page, page + 1, page + 2, page - 1, page + 3, page + 4, page - 2, page + 5, page + 6]
-  imageBuffer.requestWindow(indices.filter(p => p >= 0 && p < props.totalPages!).map(pageUrlFor))
+  imageBuffer.requestWindow(indices.filter(p => p >= 0 && p < props.totalPages!).map(pageUrlFor), readMode.value === 'single' ? 1 : 2)
 }
 watch(() => [props.totalPages, readMode.value, props.imagePages?.map(item => item.id).join(',')], preloadAdjacentPages)
 watch(() => props.showControls, visible => { if (!visible) showShortcutGuide.value = false })
@@ -567,57 +569,45 @@ onBeforeUnmount(() => {
         @touchstart="onTouchStart" @touchmove="onTouchMove" @touchend="onTouchEnd" @touchcancel="onTouchEnd"
         style="touch-action: none"
       >
-        <!-- Single Mode -->
+        <!-- Key each page by its source, so a pending page never retains the previous bitmap. -->
         <div
-          v-if="readMode === 'single'"
           class="w-full h-full flex items-center justify-center"
+          :class="readMode === 'double' ? 'gap-1 sm:gap-2 px-2' : ''"
           :style="{
             transform: `translate3d(${zoomTx}px, ${zoomTy}px, 0px) scale(${zoomScale})`,
             transition: isZoomPanning ? 'none' : 'transform 0.15s ease-out',
           }"
         >
-          <img
-            :src="pageUrl"
-            class="h-full w-full object-contain pointer-events-none"
-            :alt="media.title"
-          />
-        </div>
-
-        <!-- Double Page Mode -->
-        <div
-          v-else-if="readMode === 'double'"
-          class="w-full h-full flex items-center justify-center gap-1 sm:gap-2 px-2"
-          :style="{
-            transform: `translate3d(${zoomTx}px, ${zoomTy}px, 0px) scale(${zoomScale})`,
-            transition: isZoomPanning ? 'none' : 'transform 0.15s ease-out',
-          }"
-        >
-          <template v-if="isRtl">
+          <div
+            v-for="pageIndex in canvasPages"
+            :key="pageUrlFor(pageIndex)"
+            class="he-reader-canvas-page relative flex h-full min-w-0 flex-1 items-center justify-center"
+            :aria-label="pageLabel(pageIndex)"
+            :aria-busy="!pageReady(pageIndex) && !pageFailed(pageIndex)"
+          >
             <img
-              v-if="secondPageUrl"
-              :src="secondPageUrl"
-              class="h-full max-w-[50%] object-contain pointer-events-none"
-              :alt="`第 ${currentPage + 2} 页`"
+              v-if="pageReady(pageIndex)"
+              :src="pageUrlFor(pageIndex)"
+              decoding="sync"
+              class="h-full w-full object-contain pointer-events-none"
+              :alt="imagePages?.[pageIndex]?.title || pageLabel(pageIndex)"
             />
-            <img
-              :src="pageUrl"
-              class="h-full max-w-[50%] object-contain pointer-events-none"
-              :alt="`第 ${currentPage + 1} 页`"
-            />
-          </template>
-          <template v-else>
-            <img
-              :src="pageUrl"
-              class="h-full max-w-[50%] object-contain pointer-events-none"
-              :alt="`第 ${currentPage + 1} 页`"
-            />
-            <img
-              v-if="secondPageUrl"
-              :src="secondPageUrl"
-              class="h-full max-w-[50%] object-contain pointer-events-none"
-              :alt="`第 ${currentPage + 2} 页`"
-            />
-          </template>
+            <div v-else class="flex flex-col items-center justify-center gap-3 px-4 text-center text-meta text-white/75" role="status" aria-live="polite">
+              <template v-if="pageFailed(pageIndex)">
+                <span>{{ pageLabel(pageIndex) }}加载失败</span>
+                <button
+                  type="button"
+                  class="min-h-11 rounded-lg bg-white/10 px-4 text-body font-medium text-white transition-colors hover:bg-white/15 focus-ring"
+                  @mousedown.stop @touchstart.stop @dblclick.stop
+                  @click.stop="imageBuffer.retry(pageUrlFor(pageIndex))"
+                >重新加载</button>
+              </template>
+              <template v-else>
+                <Loader2 :size="28" class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                <span>正在加载{{ pageLabel(pageIndex) }}…</span>
+              </template>
+            </div>
+          </div>
         </div>
       </div>
 
