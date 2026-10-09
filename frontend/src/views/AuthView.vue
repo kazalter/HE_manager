@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { bootstrapAdmin, login } from '../auth'
+import UiButton from '../components/ui/UiButton.vue'
+import { controlClass, fieldLabelClass } from '../components/ui/classes'
 
 const props = defineProps<{
   hasUsers: boolean
@@ -14,6 +16,7 @@ const errorMessage = ref('')
 
 const modeText = computed(() => props.hasUsers ? '登录' : '创建管理员')
 const hintText = computed(() => props.hasUsers ? '输入账号密码进入媒体库' : '第一次使用，请先创建管理员账号')
+const inputClass = controlClass('lg')
 
 const submit = async () => {
   if (!username.value.trim() || !password.value) return
@@ -34,109 +37,75 @@ const submit = async () => {
 </script>
 
 <template>
-  <div class="he-auth-view min-h-screen w-full bg-background text-white flex items-center justify-center px-6 relative overflow-hidden">
-    <!-- Apple-style Dynamic Ambient Glow -->
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="glow-sphere sphere-1"></div>
-      <div class="glow-sphere sphere-2"></div>
-      <div class="glow-sphere sphere-3"></div>
-    </div>
+  <div class="he-auth-view relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-background px-4 text-ink">
+    <div class="he-auth-ambient" aria-hidden="true"></div>
 
     <form
+      class="relative z-10 w-full max-w-[380px] space-y-6 rounded-3xl border border-line bg-surface p-6 shadow-pop sm:p-8"
       @submit.prevent="submit"
-      class="relative z-10 w-full max-w-sm bg-white/[0.02] backdrop-blur-3xl border border-white/8 rounded-3xl p-8 shadow-[inset_0_1px_1px_rgba(255,255,255,0.08),0_24px_50px_-12px_rgba(0,0,0,0.5)] space-y-6"
     >
-      <div class="text-center sm:text-left">
-        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-accent to-indigo-400 text-white font-black flex items-center justify-center mx-auto sm:mx-0 mb-5 shadow-lg shadow-accent/25">
-          <span class="text-base tracking-wide">HE</span>
+      <div>
+        <div class="mb-6 flex items-center gap-3">
+          <div class="grid size-10 place-items-center rounded-xl bg-accent text-sm font-semibold tracking-wide text-on-accent">HE</div>
+          <div class="min-w-0">
+            <p class="text-body font-semibold leading-tight text-ink">HE Manager</p>
+            <p class="text-caption text-subtle">个人媒体中心</p>
+          </div>
         </div>
-        <h1 class="text-2xl font-black tracking-tight text-white/95">{{ modeText }}</h1>
-        <p class="text-xs text-white/45 mt-1.5 font-medium leading-relaxed">{{ hintText }}</p>
+        <h1 class="text-title font-semibold text-ink">{{ modeText }}</h1>
+        <p class="mt-1.5 text-meta text-subtle">{{ hintText }}</p>
       </div>
 
-      <div v-if="startupError" class="text-xs text-amber-200 bg-amber-500/10 border border-amber-500/20 rounded-2xl px-4 py-3 leading-relaxed shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
+      <div v-if="startupError" role="status" class="rounded-lg border border-warning/25 bg-warning/10 px-3.5 py-3 text-meta leading-relaxed text-warning">
         {{ startupError }}
       </div>
 
       <div class="space-y-4">
-        <label class="block space-y-2">
-          <span class="text-xs font-bold text-white/55 tracking-wider uppercase">用户名</span>
+        <label class="block">
+          <span :class="fieldLabelClass">用户名</span>
           <input
             v-model="username"
             autocomplete="username"
             placeholder="请输入用户名"
-            class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:bg-white/10 focus:border-accent/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.15)] transition-all duration-300"
+            :class="inputClass"
           />
         </label>
 
-        <label class="block space-y-2">
-          <span class="text-xs font-bold text-white/55 tracking-wider uppercase">密码</span>
+        <label class="block">
+          <span :class="fieldLabelClass">密码</span>
           <input
             v-model="password"
             type="password"
             autocomplete="current-password"
             placeholder="请输入密码"
-            class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:bg-white/10 focus:border-accent/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.15)] transition-all duration-300"
+            :class="inputClass"
           />
         </label>
       </div>
 
-      <div v-if="errorMessage" class="text-xs text-red-200 bg-red-500/10 border border-red-500/20 rounded-2xl px-4 py-3 leading-relaxed shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
+      <div v-if="errorMessage" role="alert" class="rounded-lg border border-danger/25 bg-danger/10 px-3.5 py-3 text-meta leading-relaxed text-danger">
         {{ errorMessage }}
       </div>
 
-      <button
+      <UiButton
         type="submit"
-        :disabled="loading || !username.trim() || !password"
-        class="w-full h-12 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 text-white font-black hover:opacity-95 active:scale-[0.98] disabled:opacity-40 disabled:scale-100 disabled:cursor-not-allowed shadow-lg shadow-indigo-600/20 transition-all duration-300 cursor-pointer"
+        variant="primary"
+        size="lg"
+        block
+        :loading="loading"
+        :disabled="!username.trim() || !password"
       >
-        <span v-if="loading" class="flex items-center justify-center gap-2">
-          <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          正在安全连接
-        </span>
-        <span v-else>{{ modeText }}</span>
-      </button>
+        {{ loading ? '正在安全连接' : modeText }}
+      </UiButton>
     </form>
   </div>
 </template>
 
 <style>
-.glow-sphere {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(140px);
-  opacity: 0.15;
+.he-auth-ambient {
+  position: fixed;
+  inset: 0;
   pointer-events: none;
-  mix-blend-mode: screen;
-}
-
-.sphere-1 {
-  top: -20%;
-  left: -10%;
-  width: 60%;
-  height: 60%;
-  background: radial-gradient(circle, #6366f1 0%, transparent 70%);
-  animation: float-slow 25s infinite alternate ease-in-out;
-}
-
-.sphere-2 {
-  bottom: -15%;
-  right: -10%;
-  width: 55%;
-  height: 55%;
-  background: radial-gradient(circle, #8b5cf6 0%, transparent 70%);
-  animation: float-slow-reverse 20s infinite alternate ease-in-out;
-}
-
-.sphere-3 {
-  top: 30%;
-  right: 15%;
-  width: 40%;
-  height: 40%;
-  background: radial-gradient(circle, #06b6d4 0%, transparent 70%);
-  animation: float-slow-alt 30s infinite alternate ease-in-out;
+  background: radial-gradient(1400px 760px at 50% -25%, rgb(var(--color-accent) / 0.11), rgb(var(--color-accent) / 0.04) 45%, transparent 80%);
 }
 </style>

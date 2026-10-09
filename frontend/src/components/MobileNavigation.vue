@@ -90,7 +90,7 @@ onBeforeUnmount(() => { resetGesture(); window.clearTimeout(clickTimer) })
     <div ref="surface" class="he-nav-surface" :class="{ 'is-dragging': dragPosition !== null }" :style="{ '--he-nav-index': lensPosition }" @pointerdown="onPointerDown" @pointermove="onPointerMove" @pointerup="onPointerUp" @pointercancel="resetGesture" @lostpointercapture="onLostPointerCapture" @click.capture="onClick" @dragstart.prevent>
       <div class="he-nav-lens" aria-hidden="true"></div>
       <router-link v-for="(item, index) in items" :key="item.key" :to="item.to" :aria-current="section === item.key ? 'page' : undefined" :class="{ active: section === item.key, 'is-preview': previewIndex === index }" draggable="false">
-        <component :is="item.icon" :size="22" aria-hidden="true" />
+        <component :is="item.icon" :size="21" :stroke-width="section === item.key ? 2.2 : 1.9" aria-hidden="true" />
         <span>{{ item.title }}</span>
       </router-link>
     </div>
