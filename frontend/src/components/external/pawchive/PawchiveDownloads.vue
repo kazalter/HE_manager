@@ -21,7 +21,7 @@ const STATUS: Record<string, { label: string; tone: Tone }> = {
   failed: { label: '失败', tone: 'danger' },
   canceled: { label: '已取消', tone: 'warning' },
   interrupted: { label: '已中断', tone: 'warning' },
-  pending: { label: '等待', tone: 'neutral' },
+  pending: { label: '等待中', tone: 'neutral' },
   downloading: { label: '下载中', tone: 'info' },
   skipped: { label: '已跳过', tone: 'neutral' },
 }
