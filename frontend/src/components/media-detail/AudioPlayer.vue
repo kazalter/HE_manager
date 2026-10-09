@@ -403,7 +403,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="he-audio-player relative flex-1 min-h-0 bg-gradient-to-b from-[#0e0e12] to-black overflow-hidden flex flex-col">
+  <div class="he-audio-player relative flex min-h-0 flex-1 flex-col overflow-hidden bg-black text-white">
     <!-- Hidden native audio element -->
     <audio
       ref="audioRef"
@@ -419,285 +419,258 @@ onBeforeUnmount(() => {
     />
 
     <!-- Track tools sit below the viewer header in the normal layout flow. -->
-    <div class="flex min-h-12 items-center justify-between gap-3 border-b border-white/10 bg-black/40 px-4 py-2 sm:px-6">
-      <span class="min-w-0 truncate text-xs font-semibold text-white/60">
+    <div class="flex min-h-12 shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-2 sm:px-6">
+      <span class="min-w-0 truncate text-meta text-white/60 tabular-nums">
         {{ tracks.length ? `音轨 ${currentIndex} / ${tracks.length}` : loading ? '正在读取音轨…' : '播放列表' }}
       </span>
       <button
         v-if="currentTrack?.lyrics"
         type="button"
-        @click="showLyrics = !showLyrics"
-        class="flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-bold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        :class="showLyrics ? 'bg-accent text-white' : 'bg-white/8 text-white/70 hover:bg-white/15 hover:text-white'"
+        class="he-audio-chip gap-1.5 px-3"
+        :class="showLyrics ? 'bg-white/15 text-white' : 'text-white/75 hover:bg-white/10 hover:text-white'"
         :aria-pressed="showLyrics"
         title="切换歌词/唱片视图"
+        @click="showLyrics = !showLyrics"
       >
-        <FileText :size="14" aria-hidden="true" />
+        <FileText :size="15" aria-hidden="true" />
         <span>歌词</span>
       </button>
     </div>
 
-    <p v-if="playbackError" role="alert" class="px-4 py-2 text-sm text-red-300">{{ playbackError }}</p>
-    <!-- Center Stage: Vinyl Disc or Synchronized Lyrics View -->
-    <div class="he-audio-stage flex flex-col items-center justify-center py-4 px-6 relative shrink-0 min-h-[220px]">
-      <!-- Glow backlight -->
-      <div
-        class="absolute w-64 h-64 rounded-full bg-accent/20 blur-3xl pointer-events-none transition-opacity duration-700"
-        :class="isPlaying ? 'opacity-80 scale-105' : 'opacity-20 scale-95'"
-      ></div>
+    <p v-if="playbackError" role="alert" class="shrink-0 border-b border-danger/25 bg-danger/10 px-4 py-2 text-meta text-danger sm:px-6">{{ playbackError }}</p>
 
-      <!-- Realtime Scrolling Lyrics View -->
-      <div
-        v-if="showLyrics"
-        ref="lyricsContainerRef"
-        class="w-full max-w-md h-52 overflow-y-auto custom-scrollbar text-center py-8 px-4 rounded-2xl bg-black/40 border border-white/8 backdrop-blur-md select-none"
-      >
-        <div v-if="lyricsLoading" class="text-sm text-white/40 py-12">正在加载歌词...</div>
-        <div v-else-if="lyrics.length === 0" class="text-sm text-white/40 py-12">暂无可用同步歌词</div>
-        <div v-else class="space-y-2">
-          <p
-            v-for="(line, i) in lyrics"
-            :key="i"
-            :id="`lyric-line-${i}`"
-            @click="seekToLyric(line.t)"
-            class="py-1 transition-all duration-300 cursor-pointer select-none"
-            :class="i === activeLyricIndex
-              ? 'text-accent font-black text-base scale-105 drop-shadow-[0_0_12px_rgba(129,140,248,0.7)]'
-              : 'text-white/40 hover:text-white/80 text-xs'"
-          >
-            {{ line.text }}
-          </p>
+    <div class="he-audio-body flex min-h-0 flex-1 flex-col lg:flex-row">
+      <!-- Stage: artwork or synchronized lyrics, track info and transport -->
+      <div class="he-audio-stage flex shrink-0 flex-col items-center justify-center px-6 py-8 lg:w-[46%] lg:max-w-[640px] lg:px-10">
+        <div
+          v-if="showLyrics"
+          ref="lyricsContainerRef"
+          class="custom-scrollbar aspect-square w-full max-w-60 select-none overflow-y-auto rounded-2xl bg-white/5 px-5 py-10 text-center ring-1 ring-inset ring-white/10 sm:max-w-72 lg:max-w-sm"
+        >
+          <div v-if="lyricsLoading" class="py-12 text-meta text-white/55">正在加载歌词…</div>
+          <div v-else-if="lyrics.length === 0" class="py-12 text-meta text-white/55">暂无可用同步歌词</div>
+          <div v-else class="space-y-2.5">
+            <p
+              v-for="(line, i) in lyrics"
+              :key="i"
+              :id="`lyric-line-${i}`"
+              class="cursor-pointer select-none transition-colors duration-200"
+              :class="i === activeLyricIndex
+                ? 'text-body font-semibold text-white'
+                : 'text-meta text-white/45 hover:text-white/80'"
+              @click="seekToLyric(line.t)"
+            >
+              {{ line.text }}
+            </p>
+          </div>
         </div>
-      </div>
 
-      <!-- Vinyl Disc View -->
-      <div
-        v-else
-        class="relative w-40 h-40 sm:w-48 sm:h-48 rounded-full bg-gradient-to-tr from-neutral-950 via-neutral-900 to-neutral-800 border-[5px] border-neutral-700/40 shadow-2xl flex items-center justify-center select-none"
-        :class="isPlaying ? 'animate-[spin_24s_linear_infinite]' : ''"
-      >
-        <!-- Vinyl Grooves -->
-        <div class="absolute inset-2 rounded-full border border-white/5 pointer-events-none"></div>
-        <div class="absolute inset-5 rounded-full border border-white/5 pointer-events-none"></div>
-        <div class="absolute inset-8 rounded-full border border-white/5 pointer-events-none"></div>
-
-        <!-- Disc Center Label / Artwork -->
-        <div class="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 border-white/20 shadow-inner bg-neutral-900 flex items-center justify-center relative">
-          <img v-if="coverUrl" :src="coverUrl" class="w-full h-full object-cover pointer-events-none" :alt="media.title" />
-          <Music v-else :size="28" class="text-white/40" />
-          <!-- Spindle center hole -->
-          <div class="absolute w-3.5 h-3.5 rounded-full bg-neutral-950 border border-white/20 shadow-inner"></div>
+        <div v-else class="relative aspect-square w-full max-w-60 select-none overflow-hidden rounded-2xl bg-white/5 sm:max-w-72 lg:max-w-sm">
+          <img v-if="coverUrl" :src="coverUrl" class="pointer-events-none h-full w-full object-cover" :alt="media.title" />
+          <div v-else class="grid h-full w-full place-items-center text-white/40">
+            <Music :size="40" aria-hidden="true" />
+          </div>
+          <div class="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10"></div>
         </div>
-      </div>
 
-      <!-- Current Track Info Display -->
-      <div class="mt-3 text-center max-w-md w-full px-4">
-        <h4 class="text-base font-bold text-white truncate">
-          {{ currentTrack?.title || media.title }}
-        </h4>
-        <div class="flex items-center justify-center gap-2 mt-0.5">
-          <span v-if="currentTrack?.lyrics" class="text-[10px] font-black text-accent bg-accent/15 px-1.5 py-0.2 rounded uppercase tracking-wider">
-            LRC
-          </span>
-          <span class="text-xs font-mono text-white/45">
-            {{ formatTime(currentTime) }} / {{ formatTime(duration) }}
-          </span>
+        <div class="mt-6 w-full max-w-sm text-center">
+          <h4 class="truncate text-heading font-semibold text-white" :title="currentTrack?.title || media.title">
+            {{ currentTrack?.title || media.title }}
+          </h4>
+          <div class="mt-1 flex min-w-0 items-center justify-center gap-2">
+            <span v-if="currentTrack?.lyrics" class="inline-flex h-5 shrink-0 items-center rounded-md bg-white/10 px-1.5 text-caption font-medium text-white/80">LRC</span>
+            <span class="truncate text-meta text-white/60">{{ media.title }}</span>
+          </div>
         </div>
-      </div>
 
-      <!-- Player Controls Deck -->
-      <div class="w-full max-w-md mt-3 px-2 space-y-2.5">
-        <!-- Progress Bar (Scrubber) -->
-        <div class="space-y-1">
-          <div class="relative flex items-center h-4 group/progress cursor-pointer">
-            <!-- Background track -->
-            <div class="w-full h-1.5 rounded-full bg-white/10 overflow-hidden relative">
-              <!-- Buffer bar -->
+        <div class="mt-5 w-full max-w-sm">
+          <div class="relative flex h-5 cursor-pointer items-center">
+            <div class="relative h-1 w-full overflow-hidden rounded-sm bg-white/15">
               <div
-                class="absolute inset-y-0 left-0 bg-white/20 rounded-full transition-all duration-200"
+                class="absolute inset-y-0 left-0 bg-white/25"
                 :style="{ width: `${duration ? Math.min(100, (bufferedTime / duration) * 100) : 0}%` }"
               ></div>
-              <!-- Played bar -->
               <div
-                class="absolute inset-y-0 left-0 bg-accent rounded-full"
+                class="absolute inset-y-0 left-0 bg-accent"
                 :style="{ width: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%` }"
               ></div>
             </div>
-            <!-- Interactive input range slider overlay -->
             <input
               type="range"
               :min="0"
               :max="duration || 1"
               :value="currentTime"
               step="0.1"
-              @pointerdown="isScrubbing = true" @pointercancel="isScrubbing = false"
               aria-label="音频播放进度"
+              class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              @pointerdown="isScrubbing = true" @pointercancel="isScrubbing = false"
               @input="onScrubInput"
               @change="onScrubChange"
-              class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />
           </div>
-          <div class="flex justify-between text-[11px] font-mono text-white/40">
+          <div class="mt-0.5 flex justify-between text-caption text-white/55 tabular-nums">
             <span>{{ formatTime(currentTime) }}</span>
             <span>{{ formatTime(duration) }}</span>
           </div>
-        </div>
 
-        <!-- Buttons Row -->
-        <div class="he-audio-controls flex items-center justify-between gap-1.5">
-          <!-- Loop / Shuffle Mode Button -->
-          <button
-            type="button"
-            @click="toggleLoopMode"
-            class="w-8 h-8 rounded-xl flex items-center justify-center transition-all cursor-pointer"
-            :class="loopMode !== 'off' ? 'text-accent bg-accent/15' : 'text-white/40 hover:text-white hover:bg-white/5'"
-            :title="loopMode === 'list' ? '列表循环' : loopMode === 'single' ? '单曲循环' : loopMode === 'shuffle' ? '随机播放' : '顺序播放 (单次)'"
-          >
-            <Repeat1 v-if="loopMode === 'single'" :size="16" />
-            <Shuffle v-else-if="loopMode === 'shuffle'" :size="16" />
-            <Repeat v-else :size="16" />
-          </button>
-
-          <!-- Prev Track Button -->
-          <button
-            type="button"
-            @click="prevTrack"
-            class="w-8 h-8 rounded-xl flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-            aria-label="上一首" title="上一首"
-          >
-            <SkipBack :size="17" />
-          </button>
-
-          <!-- Rewind 5s Button -->
-          <button
-            type="button"
-            @click="seekRelative(-5)"
-            class="w-8 h-8 rounded-xl flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-            title="快退 5 秒"
-          >
-            <RotateCcw :size="16" />
-          </button>
-
-          <!-- Big Play / Pause Button -->
-          <button
-            type="button"
-            @click="togglePlay"
-            class="w-11 h-11 rounded-full bg-accent text-white shadow-xl shadow-accent/30 hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
-            :aria-label="isPlaying ? '暂停' : '播放'" :title="isPlaying ? '暂停' : '播放'"
-          >
-            <Pause v-if="isPlaying" :size="20" class="fill-current" />
-            <Play v-else :size="20" class="fill-current ml-0.5" />
-          </button>
-
-          <!-- Fast Forward 5s Button -->
-          <button
-            type="button"
-            @click="seekRelative(5)"
-            class="w-8 h-8 rounded-xl flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-            title="快进 5 秒"
-          >
-            <RotateCw :size="16" />
-          </button>
-
-          <!-- Next Track Button -->
-          <button
-            type="button"
-            @click="nextTrack"
-            class="w-8 h-8 rounded-xl flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-            aria-label="下一首" title="下一首"
-          >
-            <SkipForward :size="17" />
-          </button>
-
-          <!-- Playback Rate Button -->
-          <button
-            type="button"
-            @click="cyclePlaybackRate"
-            class="px-2 py-1 rounded-lg text-xs font-mono font-bold text-white/70 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-            :class="playbackRate !== 1.0 ? 'text-accent bg-accent/15' : ''"
-            data-audio-rate title="点击切换播放倍速"
-          >
-            {{ playbackRate }}x
-          </button>
-
-          <!-- Volume Controls -->
-          <div class="he-audio-volume flex items-center gap-1 pl-1">
+          <div class="he-audio-controls mt-3 flex items-center justify-center gap-2 sm:gap-3">
+            <button type="button" class="he-audio-btn" aria-label="上一首" title="上一首" @click="prevTrack">
+              <SkipBack :size="20" aria-hidden="true" />
+            </button>
+            <button type="button" class="he-audio-btn" aria-label="快退 5 秒" title="快退 5 秒" @click="seekRelative(-5)">
+              <RotateCcw :size="19" aria-hidden="true" />
+            </button>
             <button
               type="button"
-              @click="toggleMute"
-              class="w-7 h-7 rounded-lg flex items-center justify-center text-white/60 hover:text-white transition-colors cursor-pointer"
-              :title="isMuted ? '取消静音' : '静音'"
+              class="mx-1 grid size-14 shrink-0 place-items-center rounded-full bg-accent text-on-accent transition-colors duration-150 hover:bg-accent/90 focus-ring"
+              :aria-label="isPlaying ? '暂停' : '播放'" :title="isPlaying ? '暂停' : '播放'"
+              @click="togglePlay"
             >
-              <VolumeX v-if="isMuted || volume === 0" :size="15" />
-              <Volume1 v-else-if="volume < 0.5" :size="15" />
-              <Volume2 v-else :size="15" />
+              <Pause v-if="isPlaying" :size="22" class="fill-current" aria-hidden="true" />
+              <Play v-else :size="22" class="ml-0.5 fill-current" aria-hidden="true" />
             </button>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.02"
-              :value="isMuted ? 0 : volume"
-              @input="(e) => setVolume(Number((e.target as HTMLInputElement).value))"
-              class="w-14 sm:w-16 accent-accent h-1.5 rounded-full cursor-pointer bg-white/15 focus:outline-none"
-              :title="`音量: ${Math.round((isMuted ? 0 : volume) * 100)}%`"
-            />
+            <button type="button" class="he-audio-btn" aria-label="快进 5 秒" title="快进 5 秒" @click="seekRelative(5)">
+              <RotateCw :size="19" aria-hidden="true" />
+            </button>
+            <button type="button" class="he-audio-btn" aria-label="下一首" title="下一首" @click="nextTrack">
+              <SkipForward :size="20" aria-hidden="true" />
+            </button>
+          </div>
+
+          <div class="mt-3 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              class="he-audio-chip w-9 pointer-coarse:w-11"
+              :class="loopMode !== 'off' ? 'bg-accent/20 text-accent-glow' : 'text-white/65 hover:bg-white/10 hover:text-white'"
+              :aria-label="loopMode === 'list' ? '列表循环' : loopMode === 'single' ? '单曲循环' : loopMode === 'shuffle' ? '随机播放' : '顺序播放 (单次)'"
+              :title="loopMode === 'list' ? '列表循环' : loopMode === 'single' ? '单曲循环' : loopMode === 'shuffle' ? '随机播放' : '顺序播放 (单次)'"
+              @click="toggleLoopMode"
+            >
+              <Repeat1 v-if="loopMode === 'single'" :size="17" aria-hidden="true" />
+              <Shuffle v-else-if="loopMode === 'shuffle'" :size="17" aria-hidden="true" />
+              <Repeat v-else :size="17" aria-hidden="true" />
+            </button>
+
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                class="he-audio-chip min-w-11 px-2 tabular-nums"
+                :class="playbackRate !== 1.0 ? 'bg-accent/20 text-accent-glow' : 'text-white/70 hover:bg-white/10 hover:text-white'"
+                data-audio-rate title="点击切换播放倍速"
+                :aria-label="`播放倍速 ${playbackRate}×`"
+                @click="cyclePlaybackRate"
+              >
+                {{ playbackRate }}×
+              </button>
+
+              <div class="he-audio-volume flex items-center gap-1">
+                <button
+                  type="button"
+                  class="he-audio-chip w-9 text-white/70 hover:bg-white/10 hover:text-white"
+                  :aria-label="isMuted ? '取消静音' : '静音'"
+                  :title="isMuted ? '取消静音' : '静音'"
+                  @click="toggleMute"
+                >
+                  <VolumeX v-if="isMuted || volume === 0" :size="17" aria-hidden="true" />
+                  <Volume1 v-else-if="volume < 0.5" :size="17" aria-hidden="true" />
+                  <Volume2 v-else :size="17" aria-hidden="true" />
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.02"
+                  :value="isMuted ? 0 : volume"
+                  class="he-audio-range w-20 cursor-pointer"
+                  :style="{ '--fill': `${Math.round((isMuted ? 0 : volume) * 100)}%` }"
+                  aria-label="音量"
+                  :title="`音量: ${Math.round((isMuted ? 0 : volume) * 100)}%`"
+                  @input="(e) => setVolume(Number((e.target as HTMLInputElement).value))"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Bottom Tracklist -->
-    <div class="flex-1 overflow-y-auto px-4 py-2 custom-scrollbar border-t border-white/10 bg-black/30">
-      <div v-if="loading" class="text-sm text-white/55 py-4 text-center">正在加载音轨…</div>
-      <div v-else-if="error" class="text-sm text-red-300 py-4 text-center">{{ error }}</div>
-      <div v-else-if="tracks.length === 0" class="text-sm text-white/45 py-4 text-center">没有可播放的音轨</div>
-      <div v-else class="space-y-1 max-w-3xl mx-auto">
-        <div class="text-[11px] font-bold text-white/40 uppercase tracking-wider px-3 py-1.5 flex items-center justify-between">
-          <span>播放列表 ({{ tracks.length }})</span>
-          <span class="text-[10px] text-white/30 font-normal">点击曲目切换</span>
+      <!-- Tracklist -->
+      <div class="he-audio-tracks custom-scrollbar min-h-0 flex-1 overflow-y-auto border-t border-white/10 px-3 py-4 sm:px-6 lg:border-l lg:border-t-0 lg:py-6">
+        <div v-if="loading" class="py-6 text-center text-meta text-white/60">正在加载音轨…</div>
+        <div v-else-if="error" class="py-6 text-center text-meta text-danger">{{ error }}</div>
+        <div v-else-if="tracks.length === 0" class="py-6 text-center text-meta text-white/55">没有可播放的音轨</div>
+        <div v-else class="mx-auto max-w-3xl">
+          <div class="mb-2 flex items-baseline justify-between px-3">
+            <span class="text-body font-medium text-white">播放列表 <span class="ml-1 text-meta font-normal text-white/55 tabular-nums">{{ tracks.length }} 首</span></span>
+            <span class="text-caption text-white/45 pointer-coarse:hidden">点击曲目切换</span>
+          </div>
+          <div class="space-y-0.5">
+            <button
+              v-for="track in tracks"
+              :key="track.index"
+              type="button"
+              :class="track.index === currentIndex
+                ? 'bg-white/10 text-white'
+                : 'text-white/80 hover:bg-white/5 hover:text-white'"
+              class="flex min-h-12 w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors duration-150 focus-ring-inset"
+              :aria-current="track.index === currentIndex ? 'true' : undefined"
+              @click="playTrack(track.index)"
+            >
+              <span class="grid w-6 shrink-0 place-items-center text-caption tabular-nums" :class="track.index === currentIndex ? 'text-accent-glow' : 'text-white/45'">
+                <Volume2 v-if="track.index === currentIndex && isPlaying" :size="15" aria-label="正在播放" />
+                <template v-else>{{ track.index.toString().padStart(2, '0') }}</template>
+              </span>
+              <span class="min-w-0 flex-1 truncate text-body" :class="track.index === currentIndex ? 'font-medium' : ''">
+                {{ track.title }}
+              </span>
+              <span v-if="track.lyrics" class="inline-flex h-5 shrink-0 items-center rounded-md bg-white/10 px-1.5 text-caption font-medium text-white/75">LRC</span>
+              <span v-if="track.duration" class="shrink-0 text-meta text-white/55 tabular-nums">
+                {{ formatTime(track.duration) }}
+              </span>
+            </button>
+          </div>
         </div>
-        <button
-          v-for="track in tracks"
-          :key="track.index"
-          type="button"
-          @click="playTrack(track.index)"
-          :class="track.index === currentIndex
-            ? 'bg-accent/20 border-accent/40 text-white shadow-sm'
-            : 'border-white/5 text-white/70 hover:text-white hover:bg-white/[0.04]'"
-          class="w-full text-left rounded-xl border px-3.5 py-2.5 transition-all flex items-center gap-3 cursor-pointer group"
-        >
-          <span
-            class="text-xs font-mono w-6 shrink-0 text-center"
-            :class="track.index === currentIndex ? 'text-accent font-bold' : 'text-white/40'"
-          >
-            {{ track.index === currentIndex && isPlaying ? '▶' : track.index.toString().padStart(2, '0') }}
-          </span>
-          <span class="flex-1 min-w-0 truncate text-sm font-medium" :class="track.index === currentIndex ? 'font-bold text-white' : ''">
-            {{ track.title }}
-          </span>
-          <span v-if="track.duration" class="text-xs font-mono text-white/40 shrink-0">
-            {{ formatTime(track.duration) }}
-          </span>
-          <span v-if="track.lyrics" class="text-[10px] font-black text-accent/80 bg-accent/10 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">
-            LRC
-          </span>
-        </button>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+.he-audio-btn {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 9999px;
+  color: rgb(255 255 255 / 0.8);
+  transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out);
+}
+.he-audio-btn:hover { background: rgb(255 255 255 / 0.1); color: #fff; }
+.he-audio-chip {
+  display: inline-flex;
+  height: 36px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font-size: var(--text-meta);
+  font-weight: 500;
+  transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out);
+}
+@media (pointer: coarse) {
+  .he-audio-chip { height: 44px; min-width: 44px; }
+}
+.he-audio-range { appearance: none; -webkit-appearance: none; height: 20px; background: transparent; }
+.he-audio-range::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: linear-gradient(to right, rgb(255 255 255 / 0.85) var(--fill, 0%), rgb(255 255 255 / 0.2) var(--fill, 0%)); }
+.he-audio-range::-moz-range-track { height: 4px; border-radius: 4px; background: linear-gradient(to right, rgb(255 255 255 / 0.85) var(--fill, 0%), rgb(255 255 255 / 0.2) var(--fill, 0%)); }
+.he-audio-range::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; margin-top: -4px; border-radius: 9999px; background: #fff; }
+.he-audio-range::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 9999px; background: #fff; }
 @media (max-width: 899px) {
   .he-audio-player { overflow-y: auto; padding-bottom: env(safe-area-inset-bottom); }
-  .he-audio-stage { padding: 20px 16px; }
-  .he-audio-stage h4 { white-space: normal; font-size: 18px; }
-  .he-audio-controls { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
-  .he-audio-controls > button { min-width: 44px; min-height: 44px; justify-self: center; }
-  .he-audio-controls > button:first-child { grid-column: 1; grid-row: 2; }
-  .he-audio-controls [data-audio-rate] { grid-column: 5; grid-row: 2; }
-  .he-audio-controls > button:nth-child(4) { width: 56px; height: 56px; }
+  .he-audio-body { flex: none; }
+  .he-audio-tracks { flex: none; overflow: visible; }
+  .he-audio-stage { padding: 24px 16px 20px; }
+  .he-audio-stage h4 { white-space: normal; }
   .he-audio-volume { display: none; }
   .he-audio-stage input[type="range"] { min-height: 32px; }
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { Book, Eye, Film, Headphones, Image as ImageIcon, Play, Star } from 'lucide-vue-next'
+import { computed, ref, watch } from 'vue'
+import { Book, Check, Film, Headphones, Image as ImageIcon, Star } from 'lucide-vue-next'
 import { thumbnailUrl } from '../config'
 import mediaPlaceholderUrl from '../assets/media-placeholder.svg?no-inline'
 import type { Media } from '../types'
@@ -10,10 +10,21 @@ const props = withDefaults(defineProps<{
   index?: number
   eager?: boolean
   virtualized?: boolean
+  /**
+   * poster: uniform 2:3 tile for mixed walls; 16:9 / square art is shown whole
+   * on a blurred backdrop instead of being cropped.
+   * natural: the tile takes the media type's own aspect (video 16:9, audio 1:1,
+   * manga 2:3, image its real ratio), for single-type grids.
+   */
+  shape?: 'poster' | 'natural'
+  /** Show the type badge (turn off on single-type pages). */
+  showType?: boolean
 }>(), {
   index: 0,
   eager: false,
-  virtualized: false
+  virtualized: false,
+  shape: 'poster',
+  showType: true,
 })
 
 const imageLoadFailed = ref(false)
@@ -26,6 +37,7 @@ watch(() => props.media.cover_path, () => {
 })
 
 const getThumb = (path: string | null) => path ? thumbnailUrl(path) : mediaPlaceholderUrl
+const coverSrc = computed(() => imageLoadFailed.value ? mediaPlaceholderUrl : getThumb(props.media.cover_path))
 
 const formatSize = (bytes: number) => {
   if (bytes === 0) return '本地目录'
@@ -36,9 +48,11 @@ const formatSize = (bytes: number) => {
 }
 
 const formatDuration = (seconds: number) => {
-  const minutes = Math.floor(seconds / 60)
-  const rest = seconds % 60
-  return `${minutes}:${rest.toString().padStart(2, '0')}`
+  const total = Math.max(0, Math.floor(seconds))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const rest = String(total % 60).padStart(2, '0')
+  return hours ? `${hours}:${String(minutes).padStart(2, '0')}:${rest}` : `${minutes}:${rest}`
 }
 
 const progressPercent = (media: Media) => {
@@ -46,7 +60,8 @@ const progressPercent = (media: Media) => {
     return Math.min(100, Math.max(0, Math.round((media.progress / media.duration) * 100)))
   }
 
-  if (media.media_type === 'manga' && media.page_count && media.progress >= 0) {
+  // Manga progress is a 0-based page index, so page 0 only counts once reading started.
+  if (media.media_type === 'manga' && media.page_count && media.progress >= 0 && media.view_status !== 'unviewed') {
     return Math.min(100, Math.max(0, Math.round(((media.progress + 1) / media.page_count) * 100)))
   }
 
@@ -56,22 +71,18 @@ const progressPercent = (media: Media) => {
 const mangaProgressText = (media: Media) => {
   if (media.media_type !== 'manga' || !media.page_count) return ''
   const current = Math.min(media.page_count, Math.max(1, media.progress + 1))
-  return `${current} / ${media.page_count}`
+  return `${current}/${media.page_count}`
 }
 
 const formatMeta = (media: Media) => {
   if (media.media_type === 'video') {
-    const parts = []
-    if (media.duration) parts.push(formatDuration(media.duration))
     const percent = progressPercent(media)
-    if (percent > 0) parts.push(`已看 ${percent}%`)
-    return parts.length ? parts.join(' · ') : formatSize(media.file_size)
+    return percent > 0 ? `已看 ${percent}%` : formatSize(media.file_size)
   }
   if (media.media_type === 'manga' && media.page_count) {
-    const percent = progressPercent(media)
-    return percent > 0 ? `${mangaProgressText(media)} 页 · ${percent}%` : `${media.page_count} 页`
+    return progressPercent(media) > 0 ? `${mangaProgressText(media)} 页` : `${media.page_count} 页`
   }
-  if (media.width && media.height) return `${media.width} x ${media.height}`
+  if (media.width && media.height) return `${media.width}×${media.height}`
   return formatSize(media.file_size)
 }
 
@@ -82,111 +93,124 @@ const typeLabel = (type: Media['media_type']) => {
   return '杂图'
 }
 
-const hoverShadowClass = (type: Media['media_type']) => {
-  if (type === 'video') return 'group-hover:shadow-[0_20px_40px_-15px_rgba(129,140,248,0.35)]'
-  if (type === 'manga') return 'group-hover:shadow-[0_20px_40px_-15px_rgba(192,132,252,0.35)]'
-  if (type === 'audio') return 'group-hover:shadow-[0_20px_40px_-15px_rgba(34,211,238,0.35)]'
-  return 'group-hover:shadow-[0_20px_40px_-15px_rgba(74,222,128,0.25)]'
-}
+const percent = computed(() => progressPercent(props.media))
+const extension = computed(() => props.media.extension.replace('.', '').toUpperCase() || 'DIR')
+const showDuration = computed(() => (props.media.media_type === 'video' || props.media.media_type === 'audio') && !!props.media.duration)
+
+// Video stills and album art are not 2:3; fit them whole inside a poster tile.
+const contained = computed(() => props.shape === 'poster' && (props.media.media_type === 'video' || props.media.media_type === 'audio'))
+
+const frameStyle = computed(() => {
+  if (props.shape === 'poster') return { aspectRatio: '2 / 3' }
+  const media = props.media
+  if (media.media_type === 'video') return { aspectRatio: '16 / 9' }
+  if (media.media_type === 'audio') return { aspectRatio: '1 / 1' }
+  if (media.media_type === 'image' && media.width && media.height) {
+    return { aspectRatio: String(Math.min(2, Math.max(0.5, media.width / media.height))) }
+  }
+  return { aspectRatio: '2 / 3' }
+})
 </script>
 
 <template>
   <button
-    :style="{ animationDelay: `${Math.min(24, index) * 35}ms` }"
+    type="button"
+    :style="{ animationDelay: `${Math.min(24, index) * 30}ms` }"
     :class="{
       'animate-fluid-entrance': !virtualized && index < 16,
       'virtual-card': virtualized,
     }"
-    class="w-full lazy-card tap-active group relative text-left flex flex-col cursor-pointer rounded-2xl focus:outline-none focus:ring-2 focus:ring-accent/40"
-    style="transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
+    class="he-media-card lazy-card tap-active group relative flex w-full flex-col rounded-2xl text-left focus:outline-none"
   >
     <div
-      class="aspect-[3/4.5] w-full relative overflow-hidden bg-gradient-to-b from-white/5 to-white/[0.01] rounded-2xl border border-white/8 shadow-md group-hover:border-white/20 transition-all duration-300 ease-out"
-      :class="hoverShadowClass(media.media_type)"
-      style="transform: translateZ(0);"
+      class="he-media-card__frame relative w-full overflow-hidden rounded-2xl bg-surface-2 transition-shadow duration-200 ease-out group-focus-visible:ring-2 group-focus-visible:ring-accent group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-background"
+      :style="frameStyle"
     >
       <img
-        :src="imageLoadFailed ? mediaPlaceholderUrl : getThumb(media.cover_path)"
+        v-if="contained"
+        :src="coverSrc"
+        alt=""
+        aria-hidden="true"
+        :loading="eager || !virtualized || index < 36 ? 'eager' : 'lazy'"
+        decoding="async"
+        class="he-media-card__backdrop absolute inset-0 h-full w-full object-cover"
+      />
+      <img
+        :src="coverSrc"
         :alt="media.title"
         :loading="eager || !virtualized || index < 36 ? 'eager' : 'lazy'"
         decoding="async"
-        class="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.04]"
-        style="transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1); will-change: transform; backface-visibility: hidden;"
+        class="he-media-card__art absolute inset-0 h-full w-full"
+        :class="contained ? 'object-contain' : 'object-cover'"
         @error="onImageError"
       />
 
-      <!-- Subtle overlay gradient on hover -->
-      <div class="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/5 opacity-70 group-hover:opacity-85 pointer-events-none transition-opacity duration-300"></div>
+      <!-- Bottom scrim keeps overlay badges readable on bright art. -->
+      <div class="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/45 to-transparent"></div>
+      <div class="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/8 transition-colors duration-200 group-hover:ring-white/20"></div>
 
-      <!-- Play / Action Overlay Icon -->
-      <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-250">
-        <div class="w-11 h-11 rounded-full bg-black/60 backdrop-blur-md border border-white/25 shadow-lg flex items-center justify-center scale-90 group-hover:scale-100 hover:scale-105 active:scale-95 transition-transform duration-250">
-          <Play v-if="media.media_type === 'video'" :size="18" fill="white" class="ml-0.5 text-white" />
-          <Book v-else-if="media.media_type === 'manga'" :size="18" class="text-white" />
-          <Headphones v-else-if="media.media_type === 'audio'" :size="18" class="text-white" />
-          <ImageIcon v-else :size="18" class="text-white" />
-        </div>
+      <div v-if="media.favorite" class="absolute left-2 top-2 grid size-6 place-items-center rounded-md bg-black/60 text-star" title="已收藏">
+        <Star :size="13" fill="currentColor" aria-hidden="true" />
+        <span class="sr-only">已收藏</span>
       </div>
 
-      <!-- Type Badge -->
-      <div class="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-black/75 border border-white/10 flex items-center gap-1 z-20">
-        <Film v-if="media.media_type === 'video'" :size="10" class="text-accent" />
-        <Book v-else-if="media.media_type === 'manga'" :size="10" class="text-purple-300" />
-        <Headphones v-else-if="media.media_type === 'audio'" :size="10" class="text-cyan-300" />
-        <ImageIcon v-else :size="10" class="text-green-300" />
-        <span class="text-[10.5px] font-black text-white/90 uppercase tracking-wider">{{ typeLabel(media.media_type) }}</span>
+      <div v-if="showType" class="absolute right-2 top-2 inline-flex h-6 items-center gap-1 rounded-md bg-black/60 px-1.5 text-caption font-medium text-white/90">
+        <Film v-if="media.media_type === 'video'" :size="12" aria-hidden="true" />
+        <Book v-else-if="media.media_type === 'manga'" :size="12" aria-hidden="true" />
+        <Headphones v-else-if="media.media_type === 'audio'" :size="12" aria-hidden="true" />
+        <ImageIcon v-else :size="12" aria-hidden="true" />
+        <span>{{ typeLabel(media.media_type) }}</span>
       </div>
 
-      <!-- Favorite Badge -->
-      <div v-if="media.favorite" class="absolute top-2 left-2 w-6 h-6 rounded-md bg-black/75 border border-white/10 flex items-center justify-center text-amber-300 z-20">
-        <Star :size="12" fill="currentColor" />
-      </div>
-
-      <!-- Progress Badge (Manga) -->
-      <div v-if="media.media_type === 'manga' && media.page_count && progressPercent(media) > 0" class="absolute left-2 bottom-3 rounded-md bg-black/75 border border-white/10 px-1.5 py-0.5 z-20">
-        <span class="text-[10.5px] font-black text-white/90">{{ mangaProgressText(media) }}</span>
-      </div>
-
-      <!-- Progress Bar -->
-      <div v-if="progressPercent(media) > 0" class="absolute inset-x-0 bottom-0 h-1 bg-black/40">
-        <div
-          class="h-full rounded-full transition-all duration-300"
-          :class="media.media_type === 'manga' ? 'bg-purple-400' : 'bg-accent'"
-          :style="{ width: `${progressPercent(media)}%` }"
-        ></div>
-      </div>
-
-      <!-- Missing File Overlay -->
-      <div v-if="media.is_missing" class="absolute inset-x-2 bottom-2 rounded-md bg-red-500/90 border border-red-400/20 px-1.5 py-1 text-center text-[11px] font-black text-white z-20 shadow-md">
+      <div v-if="media.is_missing" class="absolute bottom-2.5 left-2 inline-flex h-6 items-center rounded-md bg-danger px-1.5 text-caption font-semibold text-black/85">
         文件丢失
+      </div>
+
+      <span v-if="showDuration" class="absolute bottom-2.5 right-2 inline-flex h-6 items-center rounded-md bg-black/70 px-1.5 text-caption font-medium tabular-nums text-white">
+        {{ formatDuration(media.duration!) }}
+      </span>
+
+      <div v-if="percent > 0" class="absolute inset-x-0 bottom-0 h-[3px] bg-black/45" role="progressbar" :aria-valuenow="percent" aria-valuemin="0" aria-valuemax="100" :aria-label="`进度 ${percent}%`">
+        <div class="h-full bg-accent" :style="{ width: `${percent}%` }"></div>
       </div>
     </div>
 
-    <!-- Title and Meta -->
-    <div class="mt-2.5 px-0.5 tracking-tight min-w-0 w-full flex flex-col justify-between">
-      <h3
-        class="text-[13.5px] sm:text-sm font-bold text-white/90 group-hover:text-accent line-clamp-2 min-h-[2.5rem] leading-snug mb-1.5 transition-colors duration-200"
-        :title="media.title"
-      >
+    <div class="mt-2.5 w-full min-w-0 px-0.5">
+      <h3 class="line-clamp-2 min-h-[2.75em] wrap-anywhere text-meta font-medium leading-snug text-ink sm:text-body sm:leading-snug" :title="media.title">
         {{ media.title }}
       </h3>
-      <div class="flex items-center gap-1.5 text-[11.5px] text-white/55 font-semibold tracking-wide min-w-0">
-        <span class="px-1.5 py-0.5 rounded bg-white/8 border border-white/10 font-bold text-white/60 shrink-0 text-[9.5px] uppercase tracking-wider">
-          {{ media.extension.replace('.', '') || 'DIR' }}
-        </span>
-        <span class="truncate text-white/45">{{ formatMeta(media) }}</span>
+      <div class="mt-1 flex min-w-0 items-center gap-1.5 text-caption text-subtle tabular-nums">
+        <span class="shrink-0 font-medium text-muted">{{ extension }}</span>
+        <span class="shrink-0 text-faint" aria-hidden="true">·</span>
+        <span class="truncate">{{ formatMeta(media) }}</span>
 
-        <!-- Rating Indicator -->
-        <span v-if="media.rating" class="ml-auto flex items-center gap-0.5 text-amber-300 font-bold text-[11.5px] shrink-0" :title="`评分: ${media.rating} 星`">
-          <Star :size="11" fill="currentColor" />
+        <span v-if="media.rating" class="ml-auto inline-flex shrink-0 items-center gap-0.5 font-medium text-star" :title="`评分: ${media.rating} 星`">
+          <Star :size="11" fill="currentColor" aria-hidden="true" />
           <span>{{ media.rating }}</span>
         </span>
 
-        <!-- Viewed Status -->
-        <span v-if="media.view_status === 'viewed'" class="text-emerald-400 shrink-0" :class="{ 'ml-auto': !media.rating }" title="已看">
-          <Eye :size="12" />
+        <span v-if="media.view_status === 'viewed'" class="shrink-0 text-success" :class="{ 'ml-auto': !media.rating }" title="已看">
+          <Check :size="13" :stroke-width="2.5" aria-hidden="true" />
+          <span class="sr-only">已看</span>
         </span>
       </div>
     </div>
   </button>
 </template>
+
+<style>
+.he-media-card__backdrop {
+  transform: scale(1.25);
+  filter: blur(16px) saturate(1.2) brightness(0.55);
+}
+
+.he-media-card__art {
+  transition: transform var(--duration-slow) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .he-media-card:hover .he-media-card__art {
+    transform: scale(1.03);
+  }
+}
+</style>

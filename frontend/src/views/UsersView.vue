@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import axios from 'axios'
-import { Edit, Plus, RefreshCw, ShieldCheck, Trash2, UserRound, X } from 'lucide-vue-next'
+import { Pencil, Plus, RefreshCw, ShieldAlert, ShieldCheck, Trash2, Users } from 'lucide-vue-next'
 import { API_BASE_URL } from '../config'
 import { authState } from '../auth'
 import type { User } from '../types'
+import { EmptyState, PageHeader, UiBadge, UiButton, UiCard, UiIconButton, UiModal, controlClass, fieldHintClass, fieldLabelClass, listRowClass } from '../components/ui'
 
 const users = ref<User[]>([])
 const loading = ref(false)
@@ -98,144 +99,113 @@ const deleteUser = async (user: User) => {
   }
 }
 
+const initial = (name: string) => (name.trim()[0] || '?').toUpperCase()
+const formatCreated = (value: string) => new Date(value).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
+
 onMounted(fetchUsers)
 </script>
 
 <template>
-  <div class="z-10 relative min-h-screen px-6 md:px-8 py-7">
-    <header class="he-page-header flex flex-wrap items-center justify-between gap-4 mb-6">
-      <div>
-        <h1 class="text-2xl md:text-3xl font-black text-white tracking-tight">用户管理</h1>
-        <p class="text-sm text-white/45 mt-1">管理可以登录网页端和安卓端的账号</p>
-      </div>
-      <div class="flex items-center gap-3">
-        <button
-          v-if="authState.user?.is_admin"
-          @click="openDialog()"
-          class="h-11 px-4 rounded-xl bg-accent text-white flex items-center gap-2 text-sm font-bold transition-all border border-transparent hover:brightness-110 hover:border-white/20 hover:shadow-lg hover:shadow-accent/30 hover:-translate-y-0.5"
-        >
-          <Plus :size="16" />
-          创建用户
-        </button>
-        <button
-          @click="onRefreshClick"
-          class="h-11 px-4 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10 flex items-center gap-2 text-sm font-bold transition-all"
-        >
-          <RefreshCw :size="16" :class="(loading || refreshSpinning) ? 'animate-spin' : ''" />
+  <div class="min-h-full">
+    <PageHeader title="用户管理" :count="authState.user?.is_admin ? `${users.length} 个用户` : undefined" description="管理可以登录网页端和安卓端的账号">
+      <template #actions>
+        <UiButton variant="secondary" class="pointer-coarse:h-11" :disabled="loading" @click="onRefreshClick">
+          <template #icon><RefreshCw :size="16" :class="(loading || refreshSpinning) ? 'animate-spin' : ''" /></template>
           刷新
-        </button>
-      </div>
-    </header>
+        </UiButton>
+        <UiButton v-if="authState.user?.is_admin" variant="primary" class="pointer-coarse:h-11" @click="openDialog()">
+          <template #icon><Plus :size="16" /></template>
+          创建用户
+        </UiButton>
+      </template>
+    </PageHeader>
 
-    <div v-if="!authState.user?.is_admin" class="rounded-2xl border border-amber-300/20 bg-amber-400/10 p-5 text-amber-100">
-      当前账号不是管理员，不能管理用户。
+    <div class="page-gutter pb-12">
+      <div class="page-container">
+        <div class="max-w-[960px]">
+          <div v-if="!authState.user?.is_admin" role="alert" class="flex items-start gap-3 rounded-lg border border-warning/25 bg-warning/10 px-3.5 py-3 text-meta text-warning">
+            <ShieldAlert :size="18" class="mt-0.5 shrink-0" aria-hidden="true" />
+            <p><span class="font-medium text-ink">没有权限</span><br>当前账号不是管理员，不能管理用户。</p>
+          </div>
+
+          <template v-else>
+            <p v-if="errorMessage && !showDialog" role="alert" class="mb-4 flex items-start gap-3 rounded-lg border border-danger/25 bg-danger/10 px-3.5 py-3 text-meta text-danger">{{ errorMessage }}</p>
+            <UiCard padding="none" class="divide-y divide-line overflow-hidden">
+              <div v-for="user in users" :key="user.id" :class="listRowClass">
+                <div class="grid size-10 shrink-0 place-items-center rounded-full bg-surface-3 text-body font-medium text-muted" aria-hidden="true">{{ initial(user.username) }}</div>
+                <div class="min-w-0 flex-1">
+                  <p class="flex min-w-0 items-center gap-2">
+                    <span class="truncate text-body font-medium text-ink">{{ user.username }}</span>
+                    <span v-if="user.id === authState.user?.id" class="shrink-0 text-caption text-subtle">（你）</span>
+                  </p>
+                  <div class="mt-1 flex min-w-0 items-center gap-1.5 sm:mt-0.5">
+                    <UiBadge v-if="user.is_admin" tone="accent" class="sm:hidden">管理员</UiBadge>
+                    <UiBadge :tone="user.is_active ? 'success' : 'danger'" class="sm:hidden">{{ user.is_active ? '启用' : '停用' }}</UiBadge>
+                    <p class="min-w-0 truncate text-meta text-subtle tabular-nums"><span class="hidden sm:inline">创建于 </span>{{ formatCreated(user.created_at) }}</p>
+                  </div>
+                </div>
+                <div class="hidden shrink-0 items-center gap-1.5 sm:flex">
+                  <UiBadge v-if="user.is_admin" tone="accent"><ShieldCheck :size="12" aria-hidden="true" />管理员</UiBadge>
+                  <UiBadge :tone="user.is_active ? 'success' : 'danger'">{{ user.is_active ? '启用' : '停用' }}</UiBadge>
+                </div>
+                <div class="flex shrink-0 items-center gap-1">
+                  <UiIconButton :label="`编辑用户 ${user.username}`" @click="openDialog(user)"><Pencil :size="16" /></UiIconButton>
+                  <UiIconButton
+                    v-if="user.id !== authState.user?.id"
+                    :label="`删除用户 ${user.username}`"
+                    class="hover:!bg-danger/12 hover:!text-danger"
+                    @click="deleteUser(user)"
+                  ><Trash2 :size="16" /></UiIconButton>
+                  <span v-else class="size-9 pointer-coarse:size-11" aria-hidden="true" />
+                </div>
+              </div>
+              <EmptyState v-if="!users.length && !loading" compact :icon="Users" title="还没有用户" description="创建账号后即可登录网页端和安卓端。" />
+            </UiCard>
+          </template>
+        </div>
+      </div>
     </div>
 
-    <section v-else class="bg-white/[0.04] border border-white/10 rounded-2xl overflow-hidden">
-      <div class="px-5 py-4 border-b border-white/10 flex items-center justify-between">
-        <h2 class="text-base font-black text-white">用户列表</h2>
-        <span class="text-xs text-white/40">{{ users.length }} 个用户</span>
-      </div>
-      <div class="divide-y divide-white/10">
-        <div v-for="user in users" :key="user.id" class="px-5 py-4 flex flex-col items-stretch sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div class="flex w-full sm:w-auto items-center gap-3 min-w-0">
-            <div class="w-10 h-10 shrink-0 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/70">
-              <UserRound :size="19" />
-            </div>
-            <div class="min-w-0">
-              <p class="font-black text-white truncate">{{ user.username }}</p>
-              <p class="text-xs text-white/60">创建于 {{ new Date(user.created_at).toLocaleString() }}</p>
-            </div>
-          </div>
-          <div class="flex w-full sm:w-auto items-center justify-between sm:justify-end gap-4 shrink-0">
-            <div class="flex items-center gap-2">
-              <span v-if="user.is_admin" class="rounded-lg bg-accent/15 border border-accent/20 text-accent px-2 py-1 text-[11px] font-black flex items-center gap-1">
-                <ShieldCheck :size="13" />
-                管理员
-              </span>
-              <span :class="user.is_active ? 'text-emerald-300 bg-emerald-400/10 border-emerald-400/15' : 'text-red-300 bg-red-400/10 border-red-400/15'" class="rounded-lg border px-2 py-1 text-[11px] font-black">
-                {{ user.is_active ? '启用' : '停用' }}
-              </span>
-            </div>
-            
-            <div class="flex items-center gap-1">
-              <button type="button" @click="openDialog(user)" :aria-label="`编辑用户 ${user.username}`" class="w-11 h-11 rounded-lg bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent flex items-center justify-center transition-all">
-                <Edit :size="14" />
-              </button>
-              <button 
-                v-if="user.id !== authState.user?.id"
-                type="button"
-                @click="deleteUser(user)" 
-                :aria-label="`删除用户 ${user.username}`"
-                class="w-11 h-11 rounded-lg bg-white/5 border border-white/10 text-red-400/80 hover:text-red-400 hover:bg-red-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent flex items-center justify-center transition-all"
-              >
-                <Trash2 :size="14" />
-              </button>
-            </div>
-          </div>
+    <UiModal
+      v-model:open="showDialog"
+      :title="editingUser ? '修改用户' : '创建用户'"
+      :description="editingUser ? '修改账号属性或密码' : '新用户可登录手机 app 和网页端'"
+      size="sm"
+      :close-on-backdrop="false"
+    >
+      <form id="user-form" class="space-y-5" @submit.prevent="saveUser">
+        <label class="block">
+          <span :class="fieldLabelClass">用户名</span>
+          <input v-model="username" autocomplete="username" :class="controlClass('md')" />
+        </label>
+
+        <label class="block">
+          <span :class="fieldLabelClass">{{ editingUser ? '新密码' : '初始密码' }}</span>
+          <input v-model="password" type="password" autocomplete="new-password" :class="controlClass('md')" />
+          <p v-if="editingUser" :class="fieldHintClass">留空则保持原密码不变</p>
+        </label>
+
+        <div class="grid grid-cols-2 gap-3">
+          <label class="flex h-10 cursor-pointer items-center gap-2.5 rounded-lg border border-line bg-surface-2 px-3 transition-colors hover:border-line-strong">
+            <input v-model="isAdmin" type="checkbox" class="size-4 rounded-sm accent-accent" />
+            <span class="text-body text-ink">管理员</span>
+          </label>
+          <label class="flex h-10 cursor-pointer items-center gap-2.5 rounded-lg border border-line bg-surface-2 px-3 transition-colors hover:border-line-strong">
+            <input v-model="isActive" type="checkbox" class="size-4 rounded-sm accent-accent" />
+            <span class="text-body text-ink">启用账号</span>
+          </label>
         </div>
-      </div>
-    </section>
 
-    <Teleport to="body">
-      <Transition name="modal-snap">
-        <div v-if="showDialog" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/60 backdrop-blur-xl" @click.self="closeDialog">
-          <div class="modal-content relative bg-[rgb(var(--color-sidebar))] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl">
-          <div class="flex items-center justify-between mb-5">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center">
-                <Edit v-if="editingUser" :size="20" />
-                <Plus v-else :size="20" />
-              </div>
-              <div>
-                <h3 class="text-base font-black text-white">{{ editingUser ? '修改用户' : '创建用户' }}</h3>
-                <p class="text-xs text-white/45">{{ editingUser ? '修改账号属性或密码' : '新用户可登录手机 app 和网页端' }}</p>
-              </div>
-            </div>
-            <button @click="closeDialog" class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/50 hover:text-white flex items-center justify-center transition-all">
-              <X :size="16" />
-            </button>
-          </div>
-
-          <form @submit.prevent="saveUser" class="space-y-4">
-            <label class="block space-y-2">
-              <span class="text-xs font-bold text-white/55">用户名</span>
-              <input v-model="username" class="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-accent/50" />
-            </label>
-
-            <label class="block space-y-2">
-              <span class="text-xs font-bold text-white/55">{{ editingUser ? '修改密码 (留空保持不变)' : '初始密码' }}</span>
-              <input v-model="password" type="password" class="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-accent/50" />
-            </label>
-
-            <div class="grid grid-cols-2 gap-3">
-              <label class="flex items-center gap-3 rounded-xl bg-black/30 border border-white/10 px-3 py-3 cursor-pointer">
-                <input v-model="isAdmin" type="checkbox" class="w-4 h-4 accent-accent" />
-                <span class="text-sm font-bold text-white/70">管理员</span>
-              </label>
-
-              <label class="flex items-center gap-3 rounded-xl bg-black/30 border border-white/10 px-3 py-3 cursor-pointer">
-                <input v-model="isActive" type="checkbox" class="w-4 h-4 accent-accent" />
-                <span class="text-sm font-bold text-white/70">启用账号</span>
-              </label>
-            </div>
-
-            <p v-if="errorMessage" class="text-sm text-red-200 bg-red-400/10 border border-red-400/20 rounded-xl px-3 py-2">
-              {{ errorMessage }}
-            </p>
-
-            <div class="flex gap-3 pt-2">
-              <button type="button" @click="closeDialog" class="flex-1 h-12 rounded-xl bg-white/5 border border-white/10 text-white/70 font-bold hover:bg-white/10 transition-all">
-                取消
-              </button>
-              <button type="submit" :disabled="saving || !username.trim() || (!editingUser && !password)" class="flex-1 h-12 rounded-xl bg-accent text-white font-black disabled:opacity-45 disabled:cursor-not-allowed transition-all">
-                {{ saving ? '保存中' : (editingUser ? '保存' : '创建') }}
-              </button>
-            </div>
-          </form>
-        </div>
-        </div>
-      </Transition>
-    </Teleport>
+        <p v-if="errorMessage" role="alert" class="flex items-start gap-3 rounded-lg border border-danger/25 bg-danger/10 px-3.5 py-3 text-meta text-danger">
+          {{ errorMessage }}
+        </p>
+      </form>
+      <template #footer>
+        <UiButton variant="ghost" @click="closeDialog">取消</UiButton>
+        <UiButton variant="primary" type="submit" form="user-form" :loading="saving" :disabled="saving || !username.trim() || (!editingUser && !password)">
+          {{ editingUser ? '保存' : '创建' }}
+        </UiButton>
+      </template>
+    </UiModal>
   </div>
 </template>

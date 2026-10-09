@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
-import { Tags as TagsIcon, RefreshCw, Pencil, GitMerge, Trash2, Check, X, Search, ExternalLink } from 'lucide-vue-next'
+import { Tags as TagsIcon, RefreshCw, Pencil, GitMerge, Trash2, Check, X, Search, ChevronDown, AlertTriangle } from 'lucide-vue-next'
 import { API_BASE_URL } from '../config'
 import type { Tag } from '../types'
 import ThemeSelect from '../components/ThemeSelect.vue'
+import { EmptyState, PageHeader, SectionHeader, UiButton, UiCard, UiIconButton, UiInput, UiSkeleton, controlClass } from '../components/ui'
 
 const NAMESPACES = [
   { value: 'general', label: '通用' },
@@ -183,138 +184,136 @@ const removeTag = async (t: Tag) => {
 </script>
 
 <template>
-  <div class="p-6 md:p-8 max-w-5xl mx-auto">
-    <div class="he-page-header flex items-center justify-between mb-8">
-      <div>
-        <h1 class="text-2xl font-black text-white flex items-center gap-3">
-          <TagsIcon :size="26" class="text-accent" />
-          标签管理
-        </h1>
-        <p class="text-white/45 text-sm mt-1">重命名、合并、清理标签 · 共 {{ tags.length }} 个</p>
-      </div>
-      <div class="flex items-center gap-3">
-        <button
+  <div class="min-h-full">
+    <PageHeader title="标签管理" :count="`${tags.length} 个`" description="重命名、合并、清理标签">
+      <template #actions>
+        <UiButton
           v-if="zeroCountTags.length > 0"
-          @click="cleanupZeroCountTags"
+          variant="secondary"
+          class="pointer-coarse:h-11"
           :disabled="busy"
-          class="px-3 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-200 hover:bg-amber-500/25 flex items-center gap-1.5 text-xs font-bold transition-all disabled:opacity-50"
           :title="`一键清理 ${zeroCountTags.length} 个 0 引用标签`"
+          @click="cleanupZeroCountTags"
         >
-          <Trash2 :size="14" />
+          <template #icon><Trash2 :size="16" class="text-warning" /></template>
           清理 {{ zeroCountTags.length }} 个孤立标签
-        </button>
-        <button
-          @click="refresh"
-          class="p-2.5 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition-all"
-          title="刷新"
-        >
+        </UiButton>
+        <UiIconButton label="刷新" variant="secondary" @click="refresh">
           <RefreshCw :size="18" :class="{ 'animate-spin': refreshSpinning }" />
-        </button>
-      </div>
-    </div>
+        </UiIconButton>
+      </template>
+      <UiInput v-model="search" type="search" placeholder="搜索标签名…" aria-label="搜索标签名" class="w-full sm:w-80">
+        <template #leading><Search :size="16" /></template>
+        <template #trailing><UiIconButton v-if="search" label="清除搜索" size="sm" @click="search = ''"><X :size="14" /></UiIconButton></template>
+      </UiInput>
+    </PageHeader>
 
-    <div class="relative mb-6">
-      <Search :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-      <input
-        v-model="search"
-        class="w-full rounded-xl bg-white/5 border border-white/10 pl-10 pr-3 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-accent/50"
-        placeholder="搜索标签名…"
-      />
-    </div>
-
-    <div v-if="loading" class="text-white/40 py-24 text-center">正在加载标签…</div>
-    <div
-      v-else-if="errorMessage"
-      class="py-16 text-center text-red-200 bg-red-400/10 border border-red-400/20 rounded-2xl"
-    >
-      {{ errorMessage }}
-    </div>
-    <div v-else-if="totalShown === 0" class="text-white/40 py-24 text-center">没有匹配的标签。</div>
-
-    <div v-else class="space-y-5">
-      <section
-        v-for="group in grouped"
-        :key="group.ns"
-        class="rounded-2xl bg-white/[0.03] border border-white/10 overflow-hidden"
-      >
-        <button
-          @click="toggleGroup(group.ns)"
-          class="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/[0.04] transition-colors"
-        >
-          <span class="text-sm font-bold text-white/80 flex items-center gap-2">
-            {{ group.label }}
-            <span class="text-xs font-medium text-white/35">{{ group.items.length }}</span>
-          </span>
-          <span class="text-xs text-white/35">{{ collapsed.has(group.ns) ? '展开' : '收起' }}</span>
-        </button>
-
-        <div v-if="!collapsed.has(group.ns)" class="divide-y divide-white/[0.06]">
-          <div v-for="t in group.items" :key="t.id" class="px-4 py-2.5">
-            <!-- view row -->
-            <div v-if="editId !== t.id && mergeId !== t.id" class="flex items-center gap-3">
-              <span class="flex-1 min-w-0 truncate text-sm text-white">{{ t.name }}</span>
-              <span class="shrink-0 text-xs text-white/40 tabular-nums">{{ t.count ?? 0 }}</span>
-              <div class="shrink-0 flex items-center gap-1">
-                <router-link
-                  :to="{ path: '/', query: { tag: t.name } }"
-                  class="p-1.5 rounded-lg text-white/40 hover:text-accent hover:bg-white/8 transition-colors"
-                  title="前往媒体库查看此标签作品"
-                >
-                  <ExternalLink :size="15" />
-                </router-link>
-                <button @click="startEdit(t)" class="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/8" title="重命名 / 改类别">
-                  <Pencil :size="15" />
-                </button>
-                <button @click="startMerge(t)" class="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/8" title="合并到另一个标签">
-                  <GitMerge :size="15" />
-                </button>
-                <button @click="removeTag(t)" class="p-1.5 rounded-lg text-white/40 hover:text-red-300 hover:bg-white/8" title="删除标签">
-                  <Trash2 :size="15" />
-                </button>
-              </div>
-            </div>
-
-            <!-- edit row -->
-            <div v-else-if="editId === t.id" class="flex items-center gap-2">
-              <input
-                v-model="editName"
-                @keydown.enter="saveEdit(t)"
-                @keydown.esc="cancelEdit"
-                class="min-w-0 flex-1 rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-accent/50"
-              />
-              <ThemeSelect v-model="editNs" :options="NAMESPACES" class="w-28 shrink-0" />
-              <button @click="saveEdit(t)" :disabled="busy" class="p-1.5 rounded-lg bg-accent/80 text-white hover:bg-accent disabled:opacity-50" title="保存">
-                <Check :size="15" />
-              </button>
-              <button @click="cancelEdit" class="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/8" title="取消">
-                <X :size="15" />
-              </button>
-            </div>
-
-            <!-- merge row -->
-            <div v-else class="flex flex-wrap items-center gap-2">
-              <span class="shrink-0 text-sm text-white/70 truncate max-w-[20%]">合并「{{ t.name }}」→</span>
-              <div class="relative w-36 shrink-0">
-                <Search :size="13" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/30" />
-                <input
-                  v-model="mergeSearch"
-                  placeholder="筛选目标…"
-                  class="w-full rounded-lg bg-white/5 border border-white/10 pl-7 pr-2 py-1.5 text-xs text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-accent/50"
-                />
-              </div>
-              <ThemeSelect v-model="mergeTargetId" :options="mergeOptions" class="min-w-0 flex-1" />
-              <button @click="confirmMerge(t)" :disabled="busy || !mergeTargetId" class="p-1.5 rounded-lg bg-accent/80 text-white hover:bg-accent disabled:opacity-40" title="确认合并">
-                <Check :size="15" />
-              </button>
-              <button @click="mergeId = null" class="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/8" title="取消">
-                <X :size="15" />
-              </button>
-            </div>
-
-            <p v-if="rowError && rowError.id === t.id" class="mt-1.5 text-xs text-red-300">{{ rowError.msg }}</p>
-          </div>
+    <div class="page-gutter pb-12">
+      <div class="page-container">
+        <div v-if="loading" class="space-y-10" aria-busy="true">
+          <section v-for="n in 2" :key="n">
+            <UiSkeleton shape="text" class="mb-3 w-24" />
+            <UiCard padding="sm" class="grid grid-cols-1 gap-x-6 gap-y-3 md:grid-cols-2 xl:grid-cols-3">
+              <UiSkeleton v-for="m in 9" :key="m" class="h-9 w-full rounded-lg" />
+            </UiCard>
+          </section>
         </div>
-      </section>
+
+        <UiCard v-else-if="errorMessage" padding="none">
+          <EmptyState tone="danger" :icon="AlertTriangle" title="加载标签失败" :description="errorMessage">
+            <UiButton variant="secondary" size="sm" @click="refresh"><template #icon><RefreshCw :size="14" /></template>重试</UiButton>
+          </EmptyState>
+        </UiCard>
+
+        <EmptyState
+          v-else-if="totalShown === 0"
+          :icon="search ? Search : TagsIcon"
+          :title="search ? '没有匹配的标签' : '还没有标签'"
+          :description="search ? '换个关键词试试。' : '在媒体详情里添加标签后，会在这里集中管理。'"
+        >
+          <UiButton v-if="search" variant="secondary" size="sm" @click="search = ''">清除搜索</UiButton>
+        </EmptyState>
+
+        <div v-else class="space-y-10">
+          <section v-for="group in grouped" :key="group.ns">
+            <SectionHeader :title="group.label" :count="group.items.length">
+              <template #actions>
+                <UiButton variant="ghost" size="sm" :aria-expanded="!collapsed.has(group.ns)" @click="toggleGroup(group.ns)">
+                  {{ collapsed.has(group.ns) ? '展开' : '收起' }}
+                  <template #trailing><ChevronDown :size="14" class="transition-transform duration-150" :class="collapsed.has(group.ns) ? '-rotate-90' : ''" /></template>
+                </UiButton>
+              </template>
+            </SectionHeader>
+
+            <UiCard v-if="!collapsed.has(group.ns)" padding="none" class="grid grid-cols-1 gap-x-2 p-1.5 md:grid-cols-2 xl:grid-cols-3">
+              <div
+                v-for="t in group.items"
+                :key="t.id"
+                :class="editId === t.id || mergeId === t.id ? 'col-span-full my-1 rounded-lg bg-surface-2 p-2.5' : ''"
+              >
+                <!-- view row -->
+                <div v-if="editId !== t.id && mergeId !== t.id" class="tag-row group flex min-h-11 items-center gap-1 rounded-lg pl-2.5 transition-colors duration-150 hover:bg-surface-2 focus-within:bg-surface-2">
+                  <router-link
+                    :to="{ path: '/', query: { tag: t.name } }"
+                    class="flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-md focus-ring"
+                    title="前往媒体库查看此标签作品"
+                  >
+                    <span class="min-w-0 truncate text-body text-ink">{{ t.name }}</span>
+                    <span class="shrink-0 text-caption tabular-nums" :class="(t.count ?? 0) === 0 ? 'text-warning' : 'text-subtle'">{{ t.count ?? 0 }}</span>
+                  </router-link>
+                  <div class="tag-actions flex shrink-0 items-center">
+                    <UiIconButton label="重命名 / 改类别" size="sm" class="pointer-coarse:size-10" @click="startEdit(t)"><Pencil :size="15" /></UiIconButton>
+                    <UiIconButton label="合并到另一个标签" size="sm" class="pointer-coarse:size-10" @click="startMerge(t)"><GitMerge :size="15" /></UiIconButton>
+                    <UiIconButton label="删除标签" size="sm" class="pointer-coarse:size-10 hover:!bg-danger/12 hover:!text-danger" @click="removeTag(t)"><Trash2 :size="15" /></UiIconButton>
+                  </div>
+                </div>
+
+                <!-- edit row -->
+                <div v-else-if="editId === t.id" class="flex flex-wrap items-center gap-2">
+                  <input
+                    v-model="editName"
+                    aria-label="标签名"
+                    autofocus
+                    @keydown.enter="saveEdit(t)"
+                    @keydown.esc="cancelEdit"
+                    :class="[controlClass('md'), 'h-10 min-w-40 flex-1']"
+                  />
+                  <ThemeSelect v-model="editNs" :options="NAMESPACES" class="w-32 shrink-0" />
+                  <div class="flex shrink-0 items-center gap-1">
+                    <UiIconButton label="保存" variant="primary" :disabled="busy" @click="saveEdit(t)"><Check :size="16" /></UiIconButton>
+                    <UiIconButton label="取消" @click="cancelEdit"><X :size="16" /></UiIconButton>
+                  </div>
+                </div>
+
+                <!-- merge row -->
+                <div v-else class="space-y-2">
+                  <p class="truncate text-meta text-muted">合并「<span class="text-ink">{{ t.name }}</span>」到…</p>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <UiInput v-model="mergeSearch" type="search" placeholder="筛选目标…" aria-label="筛选合并目标" class="w-full sm:w-44">
+                      <template #leading><Search :size="14" /></template>
+                    </UiInput>
+                    <ThemeSelect v-model="mergeTargetId" :options="mergeOptions" class="min-w-0 flex-1 basis-56" />
+                    <div class="flex shrink-0 items-center gap-1">
+                      <UiIconButton label="确认合并" variant="primary" :disabled="busy || !mergeTargetId" @click="confirmMerge(t)"><Check :size="16" /></UiIconButton>
+                      <UiIconButton label="取消" @click="mergeId = null"><X :size="16" /></UiIconButton>
+                    </div>
+                  </div>
+                </div>
+
+                <p v-if="rowError && rowError.id === t.id" role="alert" class="mt-1.5 px-2.5 text-caption text-danger">{{ rowError.msg }}</p>
+              </div>
+            </UiCard>
+          </section>
+        </div>
+      </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Row actions stay quiet until the row is hovered or focused; touch screens always show them. */
+@media (hover: hover) and (pointer: fine) {
+  .tag-row .tag-actions { opacity: 0; transition: opacity var(--duration-fast) var(--ease-out); }
+  .tag-row:hover .tag-actions, .tag-row:focus-within .tag-actions { opacity: 1; }
+}
+</style>

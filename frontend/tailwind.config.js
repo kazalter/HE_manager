@@ -1,4 +1,6 @@
 /** @type {import('tailwindcss').Config} */
+const token = name => `rgb(var(--color-${name}) / <alpha-value>)`
+
 export default {
   content: [
     "./index.html",
@@ -6,26 +8,33 @@ export default {
   ],
   theme: {
     extend: {
+      // Every color is a theme token from src/style.css (see DESIGN_SPEC.md).
       colors: {
-        background: 'rgb(var(--color-background) / <alpha-value>)',
-        sidebar: 'rgb(var(--color-sidebar) / <alpha-value>)',
-        accent: 'rgb(var(--color-accent) / <alpha-value>)',
-        'accent-glow': 'rgb(var(--color-accent-glow) / <alpha-value>)',
+        // Surfaces, darkest to lightest.
+        background: token('background'),
+        sidebar: token('sidebar'),
+        surface: token('surface'),
+        'surface-2': token('surface-2'),
+        'surface-3': token('surface-3'),
+        // Hairlines.
+        line: token('line'),
+        'line-strong': token('line-strong'),
+        // Text, strongest to weakest.
+        ink: token('ink'),
+        muted: token('muted'),
+        subtle: token('subtle'),
+        faint: token('faint'),
+        // Accent.
+        accent: token('accent'),
+        'accent-glow': token('accent-glow'),
+        'on-accent': token('on-accent'),
+        // Status.
+        success: token('success'),
+        warning: token('warning'),
+        danger: token('danger'),
+        info: token('info'),
+        star: token('star'),
       },
-      backgroundImage: {
-        'mesh-dark': 'radial-gradient(at 40% 20%, rgba(55, 48, 163, 0.15) 0px, transparent 50%), radial-gradient(at 80% 0%, rgba(88, 28, 135, 0.15) 0px, transparent 50%), radial-gradient(at 0% 50%, rgba(30, 58, 138, 0.15) 0px, transparent 50%)',
-      },
-      animation: {
-        'blob': 'blob 7s infinite',
-      },
-      keyframes: {
-        blob: {
-          '0%': { transform: 'translate(0px, 0px) scale(1)' },
-          '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
-          '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
-          '100%': { transform: 'translate(0px, 0px) scale(1)' },
-        }
-      }
     },
   },
   plugins: [],

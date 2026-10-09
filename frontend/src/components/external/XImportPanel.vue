@@ -2,12 +2,9 @@
 import { computed, ref } from 'vue'
 import {
   AlertTriangle,
-  AtSign,
   CheckCircle2,
-  Cloud,
+  ChevronRight,
   ExternalLink,
-  FolderOpen,
-  Key,
   Pause,
   Play,
   PlayCircle,
@@ -18,6 +15,8 @@ import {
 import { xImportStore } from '../../stores/xImportStore'
 import { useXImportPanelData } from '../../composables/useXImportPanelData'
 import AutoSyncSection from './AutoSyncSection.vue'
+import ExternalSourceLayout from './ExternalSourceLayout.vue'
+import { UiBadge, UiButton, UiCard, UiIconButton, UiInput, fieldHintClass, fieldLabelClass, iconButtonClass, type Tone } from '../ui'
 
 const downloadRootPath = ref('')
 const cookieString = ref('')
@@ -69,6 +68,14 @@ const statusLabel = computed(() => {
     canceled: '已取消',
   }
   return map[job.value.status] || job.value.status
+})
+
+const jobTone = computed<Tone>(() => {
+  const status = job.value?.status
+  if (status === 'completed') return 'success'
+  if (status === 'failed') return 'danger'
+  if (status === 'paused' || status === 'canceled') return 'warning'
+  return 'info'
 })
 
 const totalPostsRemaining = computed(() => {
@@ -190,362 +197,298 @@ const handleAutoSyncUpdate = updateAutoSync
 </script>
 
 <template>
-  <section class="space-y-6">
-    <div v-if="errorMessage" class="bg-red-400/10 border border-red-400/20 text-red-200 rounded-xl px-4 py-3 text-sm flex items-center justify-between gap-3">
-      <span>{{ errorMessage }}</span>
-      <button @click="xImportStore.clearError()" class="text-white/55 hover:text-white">
-        <XIcon :size="16" />
-      </button>
-    </div>
-
-    <div class="grid grid-cols-1 xl:grid-cols-[minmax(360px,460px),1fr] gap-6">
-      <!-- Config column -->
-      <div class="bg-white/[0.04] border border-white/10 rounded-2xl p-5 space-y-5">
-        <div class="flex items-center justify-between gap-3">
-          <div class="flex items-center gap-3 text-white">
-            <div class="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center border border-accent/20">
-              <AtSign :size="20" />
-            </div>
-            <div>
-              <h2 class="text-base font-black">X (Twitter)</h2>
-              <p class="text-xs text-white/45">
-                {{ source?.last_archive_imported_at ? `归档：${formatTime(source?.last_archive_imported_at)}` : '尚未上传归档' }}
-              </p>
-            </div>
-          </div>
-          <div class="flex items-center gap-1.5 text-[11px] text-emerald-300 bg-emerald-400/10 border border-emerald-400/15 rounded-full px-2 py-1">
-            归档导入
-          </div>
+  <ExternalSourceLayout
+    :status="source?.cookie_saved ? '已登录' : '归档模式'"
+    :status-tone="source?.cookie_saved ? 'success' : 'neutral'"
+    :meta="source?.last_archive_imported_at ? `归档导入于 ${formatTime(source?.last_archive_imported_at)}` : '尚未上传归档'"
+  >
+    <template #config>
+      <div>
+        <label class="block" for="x-download-root"><span :class="fieldLabelClass">下载位置 <span class="text-danger">*</span></span></label>
+        <div class="flex gap-2">
+          <UiInput id="x-download-root" v-model="downloadRootPath" placeholder="例如 D:\HE\downloads 或 /data/downloads" class="flex-1" />
+          <UiButton title="保存" @click="saveDownloadRoot">保存</UiButton>
         </div>
+        <p :class="fieldHintClass">文件结构 <code class="font-mono">{root}/x/&lt;作者&gt;/&lt;tweet_id&gt;/</code>，每个 Post 目录写入 info.json。</p>
+      </div>
 
-        <div class="rounded-xl border border-white/10 bg-black/15 p-3 text-[11px] text-white/55 leading-relaxed">
-          第一版用 X 数据归档（免费、稳定）。在 X 网页端「设置 → 你的账号 → 下载你的数据归档」申请并下载 zip 后上传这里。
-          读取 <code class="text-accent/85">data/like.js</code>，用公开 syndication 接口拉取每条 Post 的媒体，无需登录态。
+      <div>
+        <div class="mb-1.5 flex items-center justify-between gap-2">
+          <label for="x-cookie" class="text-meta font-medium text-muted">登录 Cookie <span class="font-normal text-subtle">（可选）</span></label>
+          <UiBadge v-if="source?.cookie_saved" tone="success">已保存</UiBadge>
         </div>
+        <div class="flex gap-2">
+          <UiInput id="x-cookie" v-model="cookieString" type="password" placeholder="auth_token=...; ct0=...;" class="flex-1" />
+          <UiButton title="保存" @click="saveCookie">保存</UiButton>
+        </div>
+        <p :class="fieldHintClass">提供网页端 Cookie 以解除官方 API 对成人内容的访问限制，也用于直接同步收藏。</p>
+      </div>
 
-        <label class="block space-y-2">
-          <span class="text-xs font-bold text-white/65">下载位置 <span class="text-red-300">*</span></span>
-          <div class="flex gap-2">
-            <input
-              v-model="downloadRootPath"
-              type="text"
-              placeholder="例如 C:\Users\25768\Desktop\HE_Project\HE_manager\external_downloads"
-              class="flex-1 bg-black/20 border border-white/10 rounded-xl px-3 py-3 text-sm text-white placeholder-white/35 focus:outline-none focus:ring-2 focus:ring-accent/50"
-            />
-            <button
-              @click="saveDownloadRoot"
-              class="h-12 px-3 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-white text-xs font-bold flex items-center gap-1.5"
-              title="保存"
-            >
-              <FolderOpen :size="14" /> 保存
-            </button>
-          </div>
-          <p class="text-[11px] text-white/35">
-            文件结构：<code>{root}/x/&lt;作者&gt;/&lt;tweet_id&gt;/</code>，每个 Post 目录写入 info.json。
-          </p>
-        </label>
-
-        <label class="block space-y-2">
-          <span class="text-xs font-bold text-white/65 flex items-center justify-between">
-            <span>账号登录凭证 (Cookie) <span class="text-white/30 font-normal ml-1">(可选)</span></span>
-            <span v-if="source?.cookie_saved" class="text-emerald-400 text-[10px] bg-emerald-400/10 px-1.5 py-0.5 rounded">已保存</span>
-          </span>
-          <div class="flex gap-2">
-            <input
-              v-model="cookieString"
-              type="password"
-              placeholder="粘贴 auth_token=...; ct0=...;"
-              class="flex-1 bg-black/20 border border-white/10 rounded-xl px-3 py-3 text-sm text-white placeholder-white/35 focus:outline-none focus:ring-2 focus:ring-accent/50"
-            />
-            <button
-              @click="saveCookie"
-              class="h-12 px-3 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-white text-xs font-bold flex items-center gap-1.5"
-              title="保存"
-            >
-              <Key :size="14" /> 保存
-            </button>
-          </div>
-          <p class="text-[11px] text-white/35">
-            提供网页端 Cookie 以解除官方 API 对成人内容的访问限制。
-          </p>
-        </label>
-
-        <div class="rounded-xl border border-white/10 bg-black/15 p-3 space-y-2">
+      <div class="space-y-2 border-t border-line pt-5">
+        <div class="flex items-center justify-between gap-2">
+          <p class="text-body font-medium text-ink">直接同步收藏 <span class="text-meta font-normal text-subtle">无需归档</span></p>
+          <UiButton
+            v-if="syncJob && syncInProgress"
+            size="sm"
+            variant="ghost"
+            class="hover:!bg-danger/12 hover:!text-danger"
+            :disabled="syncJob?.cancel_requested"
+            @click="xImportStore.cancelSync()"
+          >
+            取消
+          </UiButton>
+        </div>
+        <UiButton
+          block
+          :loading="syncInProgress"
+          :disabled="!source?.cookie_saved"
+          :title="!source?.cookie_saved ? '需要先保存 cookie' : '通过 GraphQL 接口直接拉取最新喜欢列表，扫到已存在的就停'"
+          @click="onStartSync"
+        >
+          <template #icon><RefreshCw :size="16" aria-hidden="true" /></template>
+          {{ syncInProgress ? '同步中…' : '同步最新收藏' }}
+        </UiButton>
+        <div v-if="syncJob" class="space-y-1 rounded-lg bg-surface-2 px-3 py-2.5 text-caption">
           <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2 text-white/70">
-              <Cloud :size="14" class="text-accent" />
-              <span class="text-xs font-bold">直接同步收藏</span>
-              <span class="text-[10px] text-white/35">无需归档</span>
-            </div>
-            <button
-              v-if="syncJob && syncInProgress"
-              @click="xImportStore.cancelSync()"
-              :disabled="syncJob?.cancel_requested"
-              class="text-[11px] text-red-300/80 hover:text-red-200 disabled:opacity-50"
-            >
-              取消
-            </button>
+            <span class="font-medium text-ink">{{ syncStatusLabel }}</span>
+            <span class="ml-2 truncate text-subtle">{{ syncJob.message }}</span>
           </div>
-          <button
-            @click="onStartSync"
-            :disabled="syncInProgress || !source?.cookie_saved"
-            class="w-full h-10 rounded-lg bg-accent/15 border border-accent/25 text-accent hover:bg-accent/20 hover:text-white text-xs font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            :title="!source?.cookie_saved ? '需要先保存 cookie' : '通过 GraphQL 接口直接拉取最新喜欢列表，扫到已存在的就停'"
-          >
-            <RefreshCw :size="13" :class="syncInProgress ? 'animate-spin' : ''" />
-            {{ syncInProgress ? '同步中…' : '同步最新收藏' }}
-          </button>
-          <div v-if="syncJob" class="space-y-1">
-            <div class="flex items-center justify-between text-[11px]">
-              <span class="text-white/55">{{ syncStatusLabel }}</span>
-              <span class="text-white/45 truncate ml-2">{{ syncJob.message }}</span>
-            </div>
-            <p class="text-[11px] text-white/45">
-              扫描 {{ syncJob.pages_scanned }} 页 · 见到 {{ syncJob.posts_seen }} 条 ·
-              <span class="text-emerald-300">新增 {{ syncJob.new_posts }}</span> · 已有 {{ syncJob.existing_posts }}
-            </p>
-            <button
-              v-if="!syncInProgress && ['completed','canceled','failed'].includes(syncJob.status)"
-              @click="xImportStore.dismissSyncJob()"
-              class="text-[10px] text-white/35 hover:text-white"
-            >
-              关闭报告
-            </button>
-          </div>
-          <p class="text-[10px] text-white/35 leading-relaxed">
-            从 X 网页端 GraphQL 拉取你账号的喜欢，每页 20 条，间隔 2.5 秒。扫到连续两页都是已有的就自动停。仅发现新 Post，下载请点「开始导入」。
+          <p class="text-muted tabular-nums">
+            扫描 {{ syncJob.pages_scanned }} 页 · 见到 {{ syncJob.posts_seen }} 条 ·
+            <span class="text-success">新增 {{ syncJob.new_posts }}</span> · 已有 {{ syncJob.existing_posts }}
           </p>
-        </div>
-
-        <label class="block space-y-2">
-          <span class="text-xs font-bold text-white/65">X 数据归档 (.zip)</span>
-          <input ref="fileInput" type="file" accept=".zip" class="hidden" @change="onFileChange" />
           <button
-            @click="onPickFile"
-            :disabled="uploading"
-            class="w-full h-12 rounded-xl bg-white/5 border border-dashed border-white/15 hover:border-accent/40 text-white/70 hover:text-white flex items-center justify-center gap-2 text-sm font-bold transition-all disabled:opacity-60"
+            v-if="!syncInProgress && ['completed','canceled','failed'].includes(syncJob.status)"
+            type="button"
+            class="rounded-md text-caption text-subtle transition-colors hover:text-ink focus-ring"
+            @click="xImportStore.dismissSyncJob()"
           >
-            <Upload :size="16" :class="uploading ? 'animate-pulse' : ''" />
-            {{ uploading ? '正在解析归档…' : (source?.last_archive_name ? `重新上传归档 (${source?.last_archive_name})` : '选择 X 数据归档 zip') }}
+            关闭报告
           </button>
-          <p v-if="uploadResult" class="text-[11px] text-emerald-200 bg-emerald-400/10 border border-emerald-400/15 rounded-lg px-2.5 py-1.5">
-            解析 {{ uploadResult.parsed }} 条喜欢，新增 {{ uploadResult.new_posts }}，已存在 {{ uploadResult.existing_posts }}。
-          </p>
-        </label>
-
-        <div class="rounded-xl border border-white/10 bg-black/15 p-3 space-y-1.5 text-[11px] text-white/45 leading-relaxed">
-          <p>· 归档由 X 异步生成，通常 24-72 小时后可下载。</p>
-          <p>· 增量同步同样靠归档：再次上传新归档时，只处理新增和失败的 Post。</p>
-          <p>· 媒体地址用公开 syndication 接口拉取，对你的账号不做任何写操作（不点赞、不关注、不发推）。</p>
         </div>
-
-        <!-- Auto-sync section -->
-        <AutoSyncSection
-          v-if="source"
-          source-type="x"
-          :source-id="source.id"
-          :enabled="source.auto_sync_enabled"
-          :interval-hours="source.auto_sync_interval_hours"
-          :last-run-at="source.auto_sync_last_run_at"
-          :next-run-at="source.auto_sync_next_run_at"
-          :last-status="source.auto_sync_last_status"
-          :last-message="source.auto_sync_last_message"
-          :can-enable="!!source.cookie_saved && !!source.download_root_path"
-          disable-reason="请先保存 Cookie 并设置下载位置"
-          @update="handleAutoSyncUpdate"
-        />
+        <p :class="[fieldHintClass, 'mt-0']">每页 20 条，间隔 2.5 秒；连续两页都是已有的就自动停。只发现新 Post，下载请点「开始导入」。</p>
       </div>
 
-      <!-- Action / progress -->
-      <div class="space-y-5">
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div class="rounded-2xl bg-white/[0.04] border border-white/10 p-4">
-            <p class="text-[11px] text-white/45 font-bold uppercase tracking-widest">已发现</p>
-            <p class="text-2xl font-black text-white mt-1">{{ stats?.total_posts ?? 0 }}</p>
-            <p class="text-[11px] text-white/40 mt-1">条 Post</p>
-          </div>
-          <div class="rounded-2xl bg-white/[0.04] border border-white/10 p-4">
-            <p class="text-[11px] text-emerald-300 font-bold uppercase tracking-widest">已完成</p>
-            <p class="text-2xl font-black text-white mt-1">{{ stats?.completed_posts ?? 0 }}</p>
-            <p class="text-[11px] text-white/40 mt-1">{{ stats?.downloaded_media ?? 0 }} 个媒体</p>
-          </div>
-          <div class="rounded-2xl bg-white/[0.04] border border-white/10 p-4">
-            <p class="text-[11px] text-amber-300 font-bold uppercase tracking-widest">失败</p>
-            <p class="text-2xl font-black text-white mt-1">{{ stats?.failed_posts ?? 0 }}</p>
-            <p class="text-[11px] text-white/40 mt-1">可重试</p>
-          </div>
-          <div class="rounded-2xl bg-white/[0.04] border border-white/10 p-4">
-            <p class="text-[11px] text-white/45 font-bold uppercase tracking-widest">待处理</p>
-            <p class="text-2xl font-black text-white mt-1">{{ totalPostsRemaining }}</p>
-            <p class="text-[11px] text-white/40 mt-1">下次导入</p>
-          </div>
-        </div>
-
-        <div class="rounded-2xl bg-white/[0.04] border border-white/10 p-5 space-y-4">
-          <div class="flex flex-wrap items-center gap-2.5">
-            <button
-              @click="onStart"
-              :disabled="inProgress || !source?.download_root_path || !stats?.total_posts"
-              class="h-12 px-5 rounded-xl bg-accent text-white font-black flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:brightness-110"
-            >
-              <PlayCircle :size="18" />
-              开始导入
-            </button>
-            <button
-              v-if="job && inProgress && !isPaused"
-              @click="xImportStore.pauseImport()"
-              class="h-12 px-4 rounded-xl bg-white/10 border border-white/15 text-white font-bold flex items-center gap-2 hover:bg-white/15"
-            >
-              <Pause :size="16" /> 暂停
-            </button>
-            <button
-              v-if="job && isPaused"
-              @click="xImportStore.resumeImport()"
-              class="h-12 px-4 rounded-xl bg-white/10 border border-white/15 text-white font-bold flex items-center gap-2 hover:bg-white/15"
-            >
-              <Play :size="16" /> 继续
-            </button>
-            <button
-              v-if="job && inProgress"
-              @click="xImportStore.cancelImport()"
-              :disabled="job?.cancel_requested"
-              class="h-12 px-4 rounded-xl bg-red-500/10 border border-red-400/20 text-red-200 font-bold flex items-center gap-2 hover:bg-red-500/20 disabled:opacity-50"
-            >
-              <XIcon :size="16" /> 取消
-            </button>
-            <button
-              @click="onRetryFailed"
-              :disabled="inProgress || !stats?.failed_posts"
-              class="h-12 px-4 rounded-xl bg-white/5 border border-white/10 text-white/80 font-bold flex items-center gap-2 hover:text-white hover:bg-white/10 disabled:opacity-40"
-            >
-              <RefreshCw :size="16" /> 重试失败 ({{ stats?.failed_posts ?? 0 }})
-            </button>
-            <button
-              @click="onRetrySkipped"
-              :disabled="inProgress || !stats?.skipped_posts"
-              class="h-12 px-4 rounded-xl bg-white/5 border border-white/10 text-white/80 font-bold flex items-center gap-2 hover:text-white hover:bg-white/10 disabled:opacity-40"
-              title="重跑早先被标记为跳过的 Post（多为成人内容，需 cookie 才能拉取）"
-            >
-              <RefreshCw :size="16" /> 重试跳过 ({{ stats?.skipped_posts ?? 0 }})
-            </button>
-          </div>
-
-          <div v-if="job" class="space-y-3">
-            <div class="flex items-center justify-between gap-2">
-              <p class="text-sm font-bold text-white">{{ statusLabel }}</p>
-              <p class="text-xs text-white/50 truncate max-w-[60%]">{{ job.message }}</p>
-            </div>
-
-            <div class="space-y-1">
-              <div class="flex items-center justify-between text-[11px] text-white/55">
-                <span>Post 进度 {{ job.completed_posts + job.skipped_posts + job.failed_posts }} / {{ job.total_posts }}</span>
-                <span>{{ postProgress }}%</span>
-              </div>
-              <div class="h-2 rounded-full bg-white/5 overflow-hidden">
-                <div class="h-full bg-accent transition-all" :style="{ width: `${postProgress}%` }"></div>
-              </div>
-            </div>
-
-            <div class="space-y-1">
-              <div class="flex items-center justify-between text-[11px] text-white/55">
-                <span>媒体下载 {{ job.media_downloaded }} / {{ job.media_total }}</span>
-                <span>{{ mediaProgress }}%</span>
-              </div>
-              <div class="h-2 rounded-full bg-white/5 overflow-hidden">
-                <div class="h-full bg-emerald-400 transition-all" :style="{ width: `${mediaProgress}%` }"></div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-              <div class="rounded-lg bg-black/20 px-2.5 py-2 border border-white/5">
-                <p class="text-white/40">含媒体 Post</p>
-                <p class="text-white font-bold mt-0.5">{{ job.media_posts }}</p>
-              </div>
-              <div class="rounded-lg bg-black/20 px-2.5 py-2 border border-white/5">
-                <p class="text-white/40">跳过</p>
-                <p class="text-white font-bold mt-0.5">{{ job.skipped_posts }}</p>
-              </div>
-              <div class="rounded-lg bg-black/20 px-2.5 py-2 border border-white/5">
-                <p class="text-white/40">失败</p>
-                <p class="text-white font-bold mt-0.5">{{ job.failed_posts }}</p>
-              </div>
-              <div class="rounded-lg bg-black/20 px-2.5 py-2 border border-white/5">
-                <p class="text-white/40">媒体失败</p>
-                <p class="text-white font-bold mt-0.5">{{ job.media_failed }}</p>
-              </div>
-            </div>
-
-            <div v-if="job.current_post_id || job.current_author" class="text-[11px] text-white/55 truncate">
-              当前：@{{ job.current_author || '?' }} / {{ job.current_post_id }}
-              <span v-if="job.current_file" class="text-white/40">· {{ job.current_file }}</span>
-            </div>
-
-            <div v-if="['completed', 'canceled', 'failed'].includes(job.status)" class="rounded-xl bg-black/20 border border-white/5 p-3 space-y-1">
-              <p class="text-xs font-bold text-white flex items-center gap-2">
-                <CheckCircle2 v-if="job.status === 'completed'" :size="14" class="text-emerald-300" />
-                <AlertTriangle v-else :size="14" class="text-amber-300" />
-                导入结果报告
-              </p>
-              <p class="text-[11px] text-white/55">
-                扫描 {{ job.scanned_posts }} 个 Post · 含媒体 {{ job.media_posts }} ·
-                成功 {{ job.completed_posts }} · 跳过 {{ job.skipped_posts }} · 失败 {{ job.failed_posts }}
-              </p>
-              <p class="text-[11px] text-white/45">媒体下载 {{ job.media_downloaded }} / {{ job.media_total }}（失败 {{ job.media_failed }}）</p>
-              <button
-                v-if="!inProgress"
-                @click="xImportStore.dismissJob()"
-                class="mt-1 text-[11px] text-white/45 hover:text-white"
-              >
-                关闭报告
-              </button>
-            </div>
-          </div>
-
-          <p v-else class="text-xs text-white/45">
-            上传归档并设置好下载位置后，点击「开始导入」。任务在后台运行，切换页面也会继续。
-          </p>
-        </div>
-
-        <div class="rounded-2xl bg-white/[0.04] border border-white/10 p-5 space-y-3">
-          <div class="flex items-center justify-between">
-            <h3 class="text-sm font-black text-white">失败项</h3>
-            <button
-              @click="fetchFailedPosts"
-              class="text-[11px] text-white/55 hover:text-white flex items-center gap-1"
-              :disabled="failedLoading"
-            >
-              <RefreshCw :size="12" :class="failedLoading ? 'animate-spin' : ''" /> 刷新
-            </button>
-          </div>
-          <div v-if="failedPosts.length === 0" class="text-xs text-white/40">没有失败项。</div>
-          <ul v-else class="space-y-2 max-h-72 overflow-y-auto pr-1">
-            <li
-              v-for="post in failedPosts"
-              :key="post.id"
-              class="text-[11px] rounded-lg bg-black/20 border border-white/5 px-3 py-2 flex items-start justify-between gap-2"
-            >
-              <div class="min-w-0">
-                <p class="text-white truncate">@{{ post.author_screen_name || '?' }} · {{ post.tweet_id }}</p>
-                <p class="text-red-300/80 truncate">{{ post.error_message || '未知错误' }}</p>
-              </div>
-              <a :href="post.url" target="_blank" rel="noreferrer" class="shrink-0 text-white/45 hover:text-accent">
-                <ExternalLink :size="14" />
-              </a>
-            </li>
+      <div class="space-y-2 border-t border-line pt-5">
+        <p class="text-body font-medium text-ink">X 数据归档 (.zip)</p>
+        <input ref="fileInput" type="file" accept=".zip" class="hidden" @change="onFileChange" />
+        <button
+          type="button"
+          :disabled="uploading"
+          class="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-line-strong bg-surface-2 px-3 py-2 text-body font-medium text-muted transition-colors hover:border-accent/50 hover:text-ink focus-ring disabled:opacity-45"
+          @click="onPickFile"
+        >
+          <Upload :size="16" class="shrink-0" :class="uploading ? 'animate-pulse' : ''" aria-hidden="true" />
+          <span class="truncate">{{ uploading ? '正在解析归档…' : (source?.last_archive_name ? `重新上传归档 (${source?.last_archive_name})` : '选择 X 数据归档 zip') }}</span>
+        </button>
+        <p v-if="uploadResult" role="status" class="rounded-lg border border-success/25 bg-success/10 px-3 py-2 text-caption text-success tabular-nums">
+          解析 {{ uploadResult.parsed }} 条喜欢，新增 {{ uploadResult.new_posts }}，已存在 {{ uploadResult.existing_posts }}。
+        </p>
+        <details class="group">
+          <summary class="flex cursor-pointer list-none items-center gap-1 rounded-md text-caption text-subtle transition-colors hover:text-ink focus-ring [&::-webkit-details-marker]:hidden">
+            <ChevronRight :size="14" class="transition-transform duration-150 group-open:rotate-90" aria-hidden="true" />
+            如何获取归档
+          </summary>
+          <ul class="mt-2 list-disc space-y-1 pl-5 text-caption text-subtle">
+            <li>在 X 网页端「设置 → 你的账号 → 下载你的数据归档」申请，通常 24–72 小时后可下载 zip。</li>
+            <li>读取 <code class="font-mono text-muted">data/like.js</code>，用公开 syndication 接口拉取每条 Post 的媒体，无需登录态。</li>
+            <li>再次上传新归档时，只处理新增和失败的 Post。</li>
+            <li>对你的账号不做任何写操作（不点赞、不关注、不发推）。</li>
           </ul>
-        </div>
-
-        <div v-if="job?.errors?.length" class="rounded-2xl bg-white/[0.04] border border-white/10 p-5 space-y-2">
-          <h3 class="text-sm font-black text-white">错误日志</h3>
-          <ul class="space-y-1 max-h-48 overflow-y-auto pr-1 text-[11px] text-white/55">
-            <li v-for="err in job.errors.slice().reverse()" :key="`${err.tweet_id}-${err.at}`" class="truncate">
-              <span class="text-white/35">{{ err.at.slice(11, 19) }}</span>
-              <span v-if="err.tweet_id"> · {{ err.tweet_id }}</span>
-              · <span class="text-amber-200">{{ err.message }}</span>
-            </li>
-          </ul>
-        </div>
+        </details>
       </div>
+
+      <AutoSyncSection
+        v-if="source"
+        source-type="x"
+        :source-id="source.id"
+        :enabled="source.auto_sync_enabled"
+        :interval-hours="source.auto_sync_interval_hours"
+        :last-run-at="source.auto_sync_last_run_at"
+        :next-run-at="source.auto_sync_next_run_at"
+        :last-status="source.auto_sync_last_status"
+        :last-message="source.auto_sync_last_message"
+        :can-enable="!!source.cookie_saved && !!source.download_root_path"
+        disable-reason="请先保存 Cookie 并设置下载位置"
+        @update="handleAutoSyncUpdate"
+      />
+    </template>
+
+    <div v-if="errorMessage" role="alert" class="flex items-start gap-3 rounded-lg border border-danger/25 bg-danger/10 py-2 pl-3.5 pr-2 text-meta text-danger">
+      <span class="min-w-0 flex-1 py-1">{{ errorMessage }}</span>
+      <UiIconButton label="关闭提示" size="sm" class="!text-danger hover:!bg-danger/20" @click="xImportStore.clearError()"><XIcon :size="16" aria-hidden="true" /></UiIconButton>
     </div>
-  </section>
+
+    <div class="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+      <UiCard padding="md">
+        <p class="text-meta text-subtle">已发现</p>
+        <p class="mt-1 text-title font-semibold text-ink tabular-nums">{{ stats?.total_posts ?? 0 }}</p>
+        <p class="mt-1 truncate text-caption text-subtle">条 Post</p>
+      </UiCard>
+      <UiCard padding="md">
+        <p class="text-meta text-subtle">已完成</p>
+        <p class="mt-1 text-title font-semibold text-ink tabular-nums">{{ stats?.completed_posts ?? 0 }}</p>
+        <p class="mt-1 truncate text-caption text-subtle tabular-nums">{{ stats?.downloaded_media ?? 0 }} 个媒体</p>
+      </UiCard>
+      <UiCard padding="md">
+        <p class="text-meta text-subtle">失败</p>
+        <p class="mt-1 text-title font-semibold tabular-nums" :class="stats?.failed_posts ? 'text-danger' : 'text-ink'">{{ stats?.failed_posts ?? 0 }}</p>
+        <p class="mt-1 truncate text-caption text-subtle">可重试</p>
+      </UiCard>
+      <UiCard padding="md">
+        <p class="text-meta text-subtle">待处理</p>
+        <p class="mt-1 text-title font-semibold text-ink tabular-nums">{{ totalPostsRemaining }}</p>
+        <p class="mt-1 truncate text-caption text-subtle">下次导入</p>
+      </UiCard>
+    </div>
+
+    <UiCard padding="md" class="space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex min-w-0 items-center gap-2">
+          <h3 class="text-heading font-semibold text-ink">导入任务</h3>
+          <UiBadge v-if="job" :tone="jobTone">{{ statusLabel }}</UiBadge>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <UiButton v-if="job && inProgress && !isPaused" @click="xImportStore.pauseImport()">
+            <template #icon><Pause :size="16" aria-hidden="true" /></template>
+            暂停
+          </UiButton>
+          <UiButton v-if="job && isPaused" @click="xImportStore.resumeImport()">
+            <template #icon><Play :size="16" aria-hidden="true" /></template>
+            继续
+          </UiButton>
+          <UiButton v-if="job && inProgress" variant="danger" :disabled="job?.cancel_requested" @click="xImportStore.cancelImport()">
+            <template #icon><XIcon :size="16" aria-hidden="true" /></template>
+            取消
+          </UiButton>
+          <UiButton variant="primary" :disabled="inProgress || !source?.download_root_path || !stats?.total_posts" @click="onStart">
+            <template #icon><PlayCircle :size="16" aria-hidden="true" /></template>
+            开始导入
+          </UiButton>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <UiButton size="sm" :disabled="inProgress || !stats?.failed_posts" @click="onRetryFailed">
+          <template #icon><RefreshCw :size="14" aria-hidden="true" /></template>
+          重试失败 <span class="tabular-nums text-subtle">{{ stats?.failed_posts ?? 0 }}</span>
+        </UiButton>
+        <UiButton
+          size="sm"
+          :disabled="inProgress || !stats?.skipped_posts"
+          title="重跑早先被标记为跳过的 Post（多为成人内容，需 cookie 才能拉取）"
+          @click="onRetrySkipped"
+        >
+          <template #icon><RefreshCw :size="14" aria-hidden="true" /></template>
+          重试跳过 <span class="tabular-nums text-subtle">{{ stats?.skipped_posts ?? 0 }}</span>
+        </UiButton>
+      </div>
+
+      <div v-if="job" class="space-y-4 border-t border-line pt-4">
+        <p v-if="job.message" class="truncate text-meta text-muted">{{ job.message }}</p>
+
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between text-meta text-muted tabular-nums">
+            <span>Post 进度 {{ job.completed_posts + job.skipped_posts + job.failed_posts }} / {{ job.total_posts }}</span>
+            <span>{{ postProgress }}%</span>
+          </div>
+          <div class="h-1 overflow-hidden rounded-sm bg-surface-3">
+            <div class="h-full rounded-sm bg-accent transition-[width] duration-200" :style="{ width: `${postProgress}%` }"></div>
+          </div>
+        </div>
+
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between text-meta text-muted tabular-nums">
+            <span>媒体下载 {{ job.media_downloaded }} / {{ job.media_total }}</span>
+            <span>{{ mediaProgress }}%</span>
+          </div>
+          <div class="h-1 overflow-hidden rounded-sm bg-surface-3">
+            <div class="h-full rounded-sm bg-accent transition-[width] duration-200" :style="{ width: `${mediaProgress}%` }"></div>
+          </div>
+        </div>
+
+        <dl class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div class="rounded-lg bg-surface-2 px-3 py-2">
+            <dt class="text-caption text-subtle">含媒体 Post</dt>
+            <dd class="mt-0.5 text-body font-medium text-ink tabular-nums">{{ job.media_posts }}</dd>
+          </div>
+          <div class="rounded-lg bg-surface-2 px-3 py-2">
+            <dt class="text-caption text-subtle">跳过</dt>
+            <dd class="mt-0.5 text-body font-medium text-ink tabular-nums">{{ job.skipped_posts }}</dd>
+          </div>
+          <div class="rounded-lg bg-surface-2 px-3 py-2">
+            <dt class="text-caption text-subtle">失败</dt>
+            <dd class="mt-0.5 text-body font-medium text-ink tabular-nums">{{ job.failed_posts }}</dd>
+          </div>
+          <div class="rounded-lg bg-surface-2 px-3 py-2">
+            <dt class="text-caption text-subtle">媒体失败</dt>
+            <dd class="mt-0.5 text-body font-medium text-ink tabular-nums">{{ job.media_failed }}</dd>
+          </div>
+        </dl>
+
+        <p v-if="job.current_post_id || job.current_author" class="truncate text-meta text-subtle">
+          当前：@{{ job.current_author || '?' }} / {{ job.current_post_id }}
+          <span v-if="job.current_file">· {{ job.current_file }}</span>
+        </p>
+
+        <div v-if="['completed', 'canceled', 'failed'].includes(job.status)" class="space-y-1 rounded-lg bg-surface-2 p-3">
+          <p class="flex items-center gap-2 text-meta font-medium text-ink">
+            <CheckCircle2 v-if="job.status === 'completed'" :size="15" class="text-success" aria-hidden="true" />
+            <AlertTriangle v-else :size="15" class="text-warning" aria-hidden="true" />
+            导入结果报告
+          </p>
+          <p class="text-caption text-muted tabular-nums">
+            扫描 {{ job.scanned_posts }} 个 Post · 含媒体 {{ job.media_posts }} ·
+            成功 {{ job.completed_posts }} · 跳过 {{ job.skipped_posts }} · 失败 {{ job.failed_posts }}
+          </p>
+          <p class="text-caption text-subtle tabular-nums">媒体下载 {{ job.media_downloaded }} / {{ job.media_total }}（失败 {{ job.media_failed }}）</p>
+          <button
+            v-if="!inProgress"
+            type="button"
+            class="mt-1 rounded-md text-caption text-subtle transition-colors hover:text-ink focus-ring"
+            @click="xImportStore.dismissJob()"
+          >
+            关闭报告
+          </button>
+        </div>
+      </div>
+
+      <p v-else class="text-meta text-subtle">
+        上传归档并设置好下载位置后，点击「开始导入」。任务在后台运行，切换页面也会继续。
+      </p>
+    </UiCard>
+
+    <UiCard padding="none" class="overflow-hidden">
+      <div class="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
+        <h3 class="text-body font-semibold text-ink">失败项 <span class="ml-1 text-meta font-normal text-subtle tabular-nums">{{ failedPosts.length }}</span></h3>
+        <UiButton size="sm" variant="ghost" :loading="failedLoading" @click="fetchFailedPosts">
+          <template #icon><RefreshCw :size="14" aria-hidden="true" /></template>
+          刷新
+        </UiButton>
+      </div>
+      <p v-if="failedPosts.length === 0" class="border-t border-line px-4 py-6 text-center text-meta text-subtle sm:px-5">没有失败项</p>
+      <ul v-else class="max-h-80 divide-y divide-line overflow-y-auto border-t border-line">
+        <li v-for="post in failedPosts" :key="post.id" class="flex items-center gap-3 px-4 py-2.5 sm:px-5">
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-meta font-medium text-ink">@{{ post.author_screen_name || '?' }} <span class="font-normal text-subtle tabular-nums">· {{ post.tweet_id }}</span></p>
+            <p class="truncate text-caption text-danger">{{ post.error_message || '未知错误' }}</p>
+          </div>
+          <a :href="post.url" target="_blank" rel="noreferrer" :class="iconButtonClass('ghost', 'sm')" aria-label="打开原帖" title="打开原帖">
+            <ExternalLink :size="15" aria-hidden="true" />
+          </a>
+        </li>
+      </ul>
+    </UiCard>
+
+    <UiCard v-if="job?.errors?.length" padding="none" class="overflow-hidden">
+      <h3 class="px-4 py-3 text-body font-semibold text-ink sm:px-5">错误日志</h3>
+      <ul class="max-h-56 space-y-1 overflow-y-auto border-t border-line px-4 py-3 text-caption text-muted sm:px-5">
+        <li v-for="err in job.errors.slice().reverse()" :key="`${err.tweet_id}-${err.at}`" class="truncate">
+          <span class="text-subtle tabular-nums">{{ err.at.slice(11, 19) }}</span>
+          <span v-if="err.tweet_id" class="tabular-nums"> · {{ err.tweet_id }}</span>
+          · <span class="text-warning">{{ err.message }}</span>
+        </li>
+      </ul>
+    </UiCard>
+  </ExternalSourceLayout>
 </template>

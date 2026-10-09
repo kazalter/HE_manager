@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, type Component } from 'vue'
+import { useRoute, type RouteLocationRaw } from 'vue-router'
 import {
   BarChart3,
   Book,
   Box,
-  ChevronLeft,
-  ChevronRight,
   CopyMinus,
   Film,
   Globe2,
@@ -15,6 +13,8 @@ import {
   Image as ImageIcon,
   LogOut,
   Palette,
+  PanelLeftClose,
+  PanelLeftOpen,
   Settings as SettingsIcon,
   Sparkles,
   Star,
@@ -40,6 +40,64 @@ const route = useRoute()
 
 const isHomeActive = computed(() => route.path === '/' && route.query.favorite !== 'true')
 const isFavoriteActive = computed(() => route.path === '/' && route.query.favorite === 'true')
+const rail = computed(() => props.collapsed && !props.isCompact)
+
+interface NavItem {
+  to: RouteLocationRaw
+  label: string
+  icon: Component
+  /** Explicit active state; otherwise the route path prefix decides. */
+  active?: boolean
+  admin?: boolean
+}
+
+const sections = computed(() => ([
+  {
+    label: '媒体库',
+    items: [
+      { to: '/', label: '全部媒体', icon: Home, active: isHomeActive.value },
+      { to: '/type/video', label: '视频', icon: Film },
+      { to: '/type/manga', label: '漫画', icon: Book },
+      { to: '/type/image', label: '杂图', icon: ImageIcon },
+      { to: '/type/audio', label: '音频', icon: Headphones },
+      { to: { path: '/', query: { favorite: 'true' } }, label: '收藏', icon: Star, active: isFavoriteActive.value },
+    ],
+  },
+  {
+    label: '发现与整理',
+    items: [
+      { to: '/external', label: '外部收藏', icon: Globe2, admin: true },
+      { to: '/recommend', label: 'AI 推荐', icon: Sparkles },
+      { to: '/creators', label: '创作者', icon: Palette },
+      { to: '/tags', label: '标签管理', icon: Tags },
+    ],
+  },
+  {
+    label: '系统与工具',
+    items: [
+      { to: '/bd2-spine', label: 'BD2 动态', icon: Box },
+      { to: '/stats', label: '统计看板', icon: BarChart3 },
+      { to: '/dedup', label: '重复管理', icon: CopyMinus, admin: true },
+    ],
+  },
+] as { label: string; items: NavItem[] }[]).map(section => ({ ...section, items: section.items.filter(item => !item.admin || props.user?.is_admin) })))
+
+const footerItems = computed<NavItem[]>(() => [
+  { to: '/settings', label: '设置', icon: SettingsIcon, admin: true },
+  { to: '/users', label: '用户管理', icon: Users, admin: true },
+].filter(item => !item.admin || props.user?.is_admin))
+
+const isActive = (item: NavItem) => {
+  if (item.active !== undefined) return item.active
+  const path = typeof item.to === 'string' ? item.to : ''
+  return !!path && (route.path === path || route.path.startsWith(path + '/'))
+}
+
+const itemClass = (active: boolean) => [
+  'group relative flex items-center rounded-lg text-body font-medium transition-colors duration-150 ease-out focus-ring',
+  rail.value ? 'mx-auto size-10 justify-center' : 'h-9 gap-3 px-3',
+  active ? 'bg-accent/12 text-ink' : 'text-muted hover:bg-surface-2 hover:text-ink',
+]
 
 const toggle = () => {
   emit('update:collapsed', !props.collapsed)
@@ -57,368 +115,133 @@ const handleLogout = () => {
     :role="isCompact && !collapsed ? 'dialog' : undefined"
     :aria-modal="isCompact && !collapsed ? 'true' : undefined"
     :aria-label="isCompact && !collapsed ? '主导航菜单' : undefined"
-    :class="[
-      isCompact
-        ? (collapsed ? 'w-64 -translate-x-full opacity-0 pointer-events-none fixed left-0 top-0 z-50 h-full my-0 ml-0 rounded-none border-r border-white/10' : 'w-64 translate-x-0 opacity-100 fixed left-0 top-0 z-50 h-full my-0 ml-0 rounded-none border-r border-white/10 shadow-2xl')
-        : (collapsed ? 'w-[4.5rem] p-2.5' : 'w-64 p-4'),
-      !isCompact ? 'h-[calc(100vh-2rem)] my-4 ml-4 rounded-2xl border border-white/8 shadow-[0_15px_35px_-10px_rgba(0,0,0,0.6)]' : ''
-    ]"
-    class="bg-sidebar/85 backdrop-blur-2xl flex flex-col transition-all duration-300 ease-in-out group z-40 select-none"
+    :class="isCompact
+      ? ['fixed left-0 top-0 z-50 h-full w-64 shadow-modal transition-transform duration-200 ease-out', collapsed ? '-translate-x-full pointer-events-none' : 'translate-x-0']
+      : ['h-full transition-[width] duration-200 ease-out', collapsed ? 'w-[72px]' : 'w-60']"
+    class="flex flex-col border-r border-line bg-sidebar select-none"
   >
-    <!-- Toggle Collapse Floating Button (Desktop) -->
-    <button
-      v-if="!isCompact"
-      type="button"
-      @click="toggle"
-      class="absolute -right-4 top-8 w-8 h-8 rounded-full bg-accent border border-white/20 flex items-center justify-center text-white shadow-md shadow-accent/25 hover:scale-110 active:scale-95 transition-all z-50 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white cursor-pointer"
-      :title="collapsed ? '展开侧边栏' : '收起侧边栏'"
-      :aria-label="collapsed ? '展开侧边栏' : '收起侧边栏'"
-      :aria-expanded="!collapsed"
-    >
-      <ChevronLeft v-if="!collapsed" :size="13" />
-      <ChevronRight v-else :size="13" />
-    </button>
-
-    <!-- App Brand & Title Header -->
-    <div
-      class="mb-4 flex items-center overflow-hidden whitespace-nowrap transition-all"
-      :class="collapsed && !isCompact ? 'justify-center px-0 py-1' : 'px-2 py-1'"
-    >
-      <div class="flex items-center gap-3 min-w-0">
-        <div class="shrink-0 w-9 h-9 rounded-xl bg-gradient-to-tr from-accent to-indigo-500 shadow-md shadow-accent/25 flex items-center justify-center overflow-hidden">
-          <span class="text-sm font-black text-white tracking-wide">HE</span>
-        </div>
-
-        <div v-if="!collapsed || isCompact" class="min-w-0">
-          <h1 class="text-lg font-black tracking-tight text-white truncate">
-            HE Manager
-          </h1>
-          <p class="text-xs text-white/45 font-medium -mt-0.5">个人媒体中心</p>
-        </div>
+    <!-- Brand -->
+    <div class="flex h-16 shrink-0 items-center gap-3" :class="rail ? 'justify-center px-0' : 'px-4'">
+      <div class="grid size-8 shrink-0 place-items-center rounded-lg bg-accent text-[13px] font-semibold tracking-wide text-on-accent">HE</div>
+      <div v-if="!rail" class="min-w-0 flex-1">
+        <p class="truncate text-body font-semibold leading-tight text-ink">HE Manager</p>
+        <p class="truncate text-caption text-subtle">个人媒体中心</p>
       </div>
+      <button
+        v-if="!isCompact && !collapsed"
+        type="button"
+        class="grid size-8 shrink-0 place-items-center rounded-lg text-subtle transition-colors hover:bg-surface-2 hover:text-ink focus-ring"
+        title="收起侧边栏"
+        aria-label="收起侧边栏"
+        :aria-expanded="true"
+        @click="toggle"
+      >
+        <PanelLeftClose :size="18" aria-hidden="true" />
+      </button>
       <button
         v-if="isCompact && !collapsed"
         data-mobile-close
         type="button"
-        class="ml-auto w-11 h-11 shrink-0 rounded-xl text-white/70 hover:bg-white/10 hover:text-white flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        class="grid size-11 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-ink focus-ring"
         aria-label="关闭导航菜单"
         @click="toggle"
       >
-        <X :size="20" />
+        <X :size="20" aria-hidden="true" />
       </button>
     </div>
 
-    <!-- Navigation Scroll Area -->
-    <nav aria-label="主导航" class="flex-1 space-y-1 overflow-x-hidden overflow-y-auto custom-scrollbar pr-0.5">
-      <!-- Section 1: 媒体库 -->
-      <div class="space-y-1">
-        <div v-if="!collapsed || isCompact" class="px-3 pt-2 pb-1 text-xs font-bold uppercase tracking-wider text-white/55">
-          媒体库
-        </div>
+    <button
+      v-if="rail"
+      type="button"
+      class="mx-auto mb-1 grid size-10 shrink-0 place-items-center rounded-lg text-subtle transition-colors hover:bg-surface-2 hover:text-ink focus-ring"
+      title="展开侧边栏"
+      aria-label="展开侧边栏"
+      :aria-expanded="false"
+      @click="toggle"
+    >
+      <PanelLeftOpen :size="18" aria-hidden="true" />
+    </button>
 
+    <!-- Navigation -->
+    <nav aria-label="主导航" class="custom-scrollbar flex-1 pb-3" :class="rail ? 'overflow-visible px-2' : 'overflow-x-hidden overflow-y-auto px-3'">
+      <div v-for="(section, sectionIndex) in sections" :key="section.label" class="space-y-0.5">
+        <div v-if="!rail" class="px-3 pb-1.5 text-caption font-medium text-subtle" :class="sectionIndex ? 'pt-5' : 'pt-1'">{{ section.label }}</div>
+        <div v-else-if="sectionIndex" class="mx-2 my-2 border-t border-line" aria-hidden="true"></div>
         <router-link
-          to="/"
-          :class="[
-            collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5',
-            isHomeActive ? 'bg-accent/20 text-white border-accent/40 font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]' : 'text-white/60 hover:text-white hover:bg-white/6 border-transparent'
-          ]"
-          class="flex items-center rounded-xl border transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
-          title="全部媒体"
+          v-for="item in section.items"
+          :key="item.label"
+          :to="item.to"
+          :class="itemClass(isActive(item))"
+          :aria-current="isActive(item) ? 'page' : undefined"
+          :title="item.label"
         >
-          <Home :size="20" class="group-hover:scale-110 transition-transform shrink-0" />
-          <span v-if="!collapsed || isCompact" class="font-medium text-sm whitespace-nowrap overflow-hidden">全部媒体</span>
-          <div
-            v-if="collapsed && !isCompact"
-            class="pointer-events-none absolute left-[calc(100%+0.65rem)] top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-sidebar/95 backdrop-blur-xl border border-white/12 text-xs font-bold text-white shadow-xl z-50 whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200"
-          >
-            全部媒体
-          </div>
-        </router-link>
-
-        <router-link
-          to="/type/video"
-          :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
-          active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
-          title="视频"
-        >
-          <Film :size="20" class="group-hover:scale-110 transition-transform shrink-0" />
-          <span v-if="!collapsed || isCompact" class="font-medium text-sm whitespace-nowrap overflow-hidden">视频</span>
-          <div
-            v-if="collapsed && !isCompact"
-            class="pointer-events-none absolute left-[calc(100%+0.65rem)] top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-sidebar/95 backdrop-blur-xl border border-white/12 text-xs font-bold text-white shadow-xl z-50 whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200"
-          >
-            视频
-          </div>
-        </router-link>
-
-        <router-link
-          to="/type/manga"
-          :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
-          active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
-          title="漫画"
-        >
-          <Book :size="20" class="group-hover:scale-110 transition-transform shrink-0" />
-          <span v-if="!collapsed || isCompact" class="font-medium text-sm whitespace-nowrap overflow-hidden">漫画</span>
-          <div
-            v-if="collapsed && !isCompact"
-            class="pointer-events-none absolute left-[calc(100%+0.65rem)] top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-sidebar/95 backdrop-blur-xl border border-white/12 text-xs font-bold text-white shadow-xl z-50 whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200"
-          >
-            漫画
-          </div>
-        </router-link>
-
-        <router-link
-          to="/type/image"
-          :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
-          active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
-          title="杂图"
-        >
-          <ImageIcon :size="20" class="group-hover:scale-110 transition-transform shrink-0" />
-          <span v-if="!collapsed || isCompact" class="font-medium text-sm whitespace-nowrap overflow-hidden">杂图</span>
-          <div
-            v-if="collapsed && !isCompact"
-            class="pointer-events-none absolute left-[calc(100%+0.65rem)] top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-sidebar/95 backdrop-blur-xl border border-white/12 text-xs font-bold text-white shadow-xl z-50 whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200"
-          >
-            杂图
-          </div>
-        </router-link>
-
-        <router-link
-          to="/type/audio"
-          :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
-          active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
-          title="音频"
-        >
-          <Headphones :size="20" class="group-hover:scale-110 transition-transform shrink-0" />
-          <span v-if="!collapsed || isCompact" class="font-medium text-sm whitespace-nowrap overflow-hidden">音频</span>
-          <div
-            v-if="collapsed && !isCompact"
-            class="pointer-events-none absolute left-[calc(100%+0.65rem)] top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-sidebar/95 backdrop-blur-xl border border-white/12 text-xs font-bold text-white shadow-xl z-50 whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200"
-          >
-            音频
-          </div>
-        </router-link>
-
-        <router-link
-          :to="{ path: '/', query: { favorite: 'true' } }"
-          :class="[
-            collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5',
-            isFavoriteActive ? 'bg-accent/20 text-white border-accent/40 font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]' : 'text-white/60 hover:text-white hover:bg-white/6 border-transparent'
-          ]"
-          class="flex items-center rounded-xl border transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
-          title="收藏"
-        >
-          <Star :size="20" class="group-hover:scale-110 transition-transform shrink-0 text-amber-300" :fill="isFavoriteActive ? 'currentColor' : 'none'" />
-          <span v-if="!collapsed || isCompact" class="font-medium text-sm whitespace-nowrap overflow-hidden">收藏</span>
-          <div
-            v-if="collapsed && !isCompact"
-            class="pointer-events-none absolute left-[calc(100%+0.65rem)] top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-sidebar/95 backdrop-blur-xl border border-white/12 text-xs font-bold text-white shadow-xl z-50 whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200"
-          >
-            收藏
-          </div>
-        </router-link>
-      </div>
-
-      <!-- Section Divider -->
-      <div class="border-t border-white/6 my-2 mx-1"></div>
-
-      <!-- Section 2: 发现与整理 -->
-      <div class="space-y-1">
-        <div v-if="!collapsed || isCompact" class="px-3 pt-1 pb-1 text-xs font-bold uppercase tracking-wider text-white/55">
-          发现与整理
-        </div>
-
-        <router-link
-          v-if="user?.is_admin"
-          to="/external"
-          :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
-          active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
-          title="外部收藏"
-        >
-          <Globe2 :size="20" class="group-hover:scale-110 transition-transform shrink-0" />
-          <span v-if="!collapsed || isCompact" class="font-medium text-sm whitespace-nowrap overflow-hidden">外部收藏</span>
-          <div
-            v-if="collapsed && !isCompact"
-            class="pointer-events-none absolute left-[calc(100%+0.65rem)] top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-sidebar/95 backdrop-blur-xl border border-white/12 text-xs font-bold text-white shadow-xl z-50 whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200"
-          >
-            外部收藏
-          </div>
-        </router-link>
-
-        <router-link
-          to="/recommend"
-          :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
-          active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
-          title="AI 推荐"
-        >
-          <Sparkles :size="20" class="group-hover:scale-110 transition-transform shrink-0" />
-          <span v-if="!collapsed || isCompact" class="font-medium text-sm whitespace-nowrap overflow-hidden">AI 推荐</span>
-          <div
-            v-if="collapsed && !isCompact"
-            class="pointer-events-none absolute left-[calc(100%+0.65rem)] top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-sidebar/95 backdrop-blur-xl border border-white/12 text-xs font-bold text-white shadow-xl z-50 whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200"
-          >
-            AI 推荐
-          </div>
-        </router-link>
-
-        <router-link
-          to="/creators"
-          :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
-          active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
-          title="创作者"
-        >
-          <Palette :size="20" class="group-hover:scale-110 transition-transform shrink-0" />
-          <span v-if="!collapsed || isCompact" class="font-medium text-sm whitespace-nowrap overflow-hidden">创作者</span>
-          <div
-            v-if="collapsed && !isCompact"
-            class="pointer-events-none absolute left-[calc(100%+0.65rem)] top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-sidebar/95 backdrop-blur-xl border border-white/12 text-xs font-bold text-white shadow-xl z-50 whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200"
-          >
-            创作者
-          </div>
-        </router-link>
-
-        <router-link
-          to="/tags"
-          :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
-          active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
-          title="标签管理"
-        >
-          <Tags :size="20" class="group-hover:scale-110 transition-transform shrink-0" />
-          <span v-if="!collapsed || isCompact" class="font-medium text-sm whitespace-nowrap overflow-hidden">标签管理</span>
-          <div
-            v-if="collapsed && !isCompact"
-            class="pointer-events-none absolute left-[calc(100%+0.65rem)] top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-sidebar/95 backdrop-blur-xl border border-white/12 text-xs font-bold text-white shadow-xl z-50 whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200"
-          >
-            标签管理
-          </div>
-        </router-link>
-      </div>
-
-      <!-- Section Divider -->
-      <div class="border-t border-white/6 my-2 mx-1"></div>
-
-      <!-- Section 3: 系统与工具 -->
-      <div class="space-y-1">
-        <div v-if="!collapsed || isCompact" class="px-3 pt-1 pb-1 text-xs font-bold uppercase tracking-wider text-white/55">
-          系统与工具
-        </div>
-
-        <router-link
-          to="/bd2-spine"
-          :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
-          active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
-          title="BD2 动态"
-        >
-          <Box :size="20" class="group-hover:scale-110 transition-transform shrink-0" />
-          <span v-if="!collapsed || isCompact" class="font-medium text-sm whitespace-nowrap overflow-hidden">BD2 动态</span>
-          <div
-            v-if="collapsed && !isCompact"
-            class="pointer-events-none absolute left-[calc(100%+0.65rem)] top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-sidebar/95 backdrop-blur-xl border border-white/12 text-xs font-bold text-white shadow-xl z-50 whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200"
-          >
-            BD2 动态
-          </div>
-        </router-link>
-
-        <router-link
-          to="/stats"
-          :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
-          active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
-          title="统计看板"
-        >
-          <BarChart3 :size="20" class="group-hover:scale-110 transition-transform shrink-0" />
-          <span v-if="!collapsed || isCompact" class="font-medium text-sm whitespace-nowrap overflow-hidden">统计看板</span>
-          <div
-            v-if="collapsed && !isCompact"
-            class="pointer-events-none absolute left-[calc(100%+0.65rem)] top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-sidebar/95 backdrop-blur-xl border border-white/12 text-xs font-bold text-white shadow-xl z-50 whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200"
-          >
-            统计看板
-          </div>
-        </router-link>
-
-        <router-link
-          v-if="user?.is_admin"
-          to="/dedup"
-          :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-          class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
-          active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
-          title="重复管理"
-        >
-          <CopyMinus :size="20" class="group-hover:scale-110 transition-transform shrink-0" />
-          <span v-if="!collapsed || isCompact" class="font-medium text-sm whitespace-nowrap overflow-hidden">重复管理</span>
-          <div
-            v-if="collapsed && !isCompact"
-            class="pointer-events-none absolute left-[calc(100%+0.65rem)] top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-sidebar/95 backdrop-blur-xl border border-white/12 text-xs font-bold text-white shadow-xl z-50 whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200"
-          >
-            重复管理
-          </div>
+          <component
+            :is="item.icon"
+            :size="18"
+            class="shrink-0 transition-colors"
+            :class="isActive(item) ? (item.icon === Star ? 'text-star' : 'text-accent') : 'text-subtle group-hover:text-muted'"
+            :fill="item.icon === Star && isActive(item) ? 'currentColor' : 'none'"
+            aria-hidden="true"
+          />
+          <span v-if="!rail" class="truncate">{{ item.label }}</span>
+          <span v-else class="he-rail-tip">{{ item.label }}</span>
         </router-link>
       </div>
     </nav>
 
-    <!-- Bottom Actions Area -->
-    <div class="mt-auto space-y-1 pt-3 border-t border-white/8 overflow-hidden">
+    <!-- Footer -->
+    <div class="shrink-0 space-y-0.5 border-t border-line py-3" :class="rail ? 'px-2' : 'px-3'">
       <router-link
-        v-if="user?.is_admin"
-        to="/settings"
-        :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-        class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
-        active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
-        title="设置"
+        v-for="item in footerItems"
+        :key="item.label"
+        :to="item.to"
+        :class="itemClass(isActive(item))"
+        :aria-current="isActive(item) ? 'page' : undefined"
+        :title="item.label"
       >
-        <SettingsIcon :size="20" class="group-hover:rotate-45 transition-transform shrink-0" />
-        <span v-if="!collapsed || isCompact" class="font-medium text-sm whitespace-nowrap overflow-hidden">设置</span>
-        <div
-          v-if="collapsed && !isCompact"
-          class="pointer-events-none absolute left-[calc(100%+0.65rem)] top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-sidebar/95 backdrop-blur-xl border border-white/12 text-xs font-bold text-white shadow-xl z-50 whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200"
-        >
-          设置
-        </div>
+        <component :is="item.icon" :size="18" class="shrink-0 transition-colors" :class="isActive(item) ? 'text-accent' : 'text-subtle group-hover:text-muted'" aria-hidden="true" />
+        <span v-if="!rail" class="truncate">{{ item.label }}</span>
+        <span v-else class="he-rail-tip">{{ item.label }}</span>
       </router-link>
-
-      <router-link
-        v-if="user?.is_admin"
-        to="/users"
-        :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-        class="flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/60 hover:text-white hover:bg-white/6"
-        active-class="!bg-accent/20 !text-white !border-accent/40 !font-bold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
-        title="用户管理"
-      >
-        <Users :size="20" class="group-hover:scale-110 transition-transform shrink-0" />
-        <span v-if="!collapsed || isCompact" class="font-medium text-sm whitespace-nowrap overflow-hidden">用户管理</span>
-        <div
-          v-if="collapsed && !isCompact"
-          class="pointer-events-none absolute left-[calc(100%+0.65rem)] top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-sidebar/95 backdrop-blur-xl border border-white/12 text-xs font-bold text-white shadow-xl z-50 whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200"
-        >
-          用户管理
-        </div>
-      </router-link>
-
       <button
         type="button"
-        @click="handleLogout"
-        :class="collapsed && !isCompact ? 'w-full justify-center p-2.5' : 'px-3 py-2.5 gap-3.5'"
-        class="w-full flex items-center rounded-xl border border-transparent transition-all duration-200 group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 text-white/55 hover:text-red-300 hover:bg-red-500/10 cursor-pointer text-left"
+        class="group relative flex w-full items-center rounded-lg text-left text-body font-medium text-muted transition-colors duration-150 ease-out hover:bg-danger/10 hover:text-danger focus-ring"
+        :class="rail ? 'mx-auto size-10 justify-center' : 'h-9 gap-3 px-3'"
         title="退出登录"
+        @click="handleLogout"
       >
-        <LogOut :size="20" class="group-hover:scale-110 transition-transform shrink-0" />
-        <span v-if="!collapsed || isCompact" class="font-medium text-sm whitespace-nowrap overflow-hidden">退出登录</span>
-        <div
-          v-if="collapsed && !isCompact"
-          class="pointer-events-none absolute left-[calc(100%+0.65rem)] top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-sidebar/95 backdrop-blur-xl border border-white/12 text-xs font-bold text-red-200 shadow-xl z-50 whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200"
-        >
-          退出登录
-        </div>
+        <LogOut :size="18" class="shrink-0 text-subtle transition-colors group-hover:text-danger" aria-hidden="true" />
+        <span v-if="!rail" class="truncate">退出登录</span>
+        <span v-else class="he-rail-tip">退出登录</span>
       </button>
     </div>
   </aside>
 </template>
+
+<style>
+/* Collapsed-rail tooltip; shown on hover and keyboard focus. */
+.he-rail-tip {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  z-index: 50;
+  padding: 4px 8px;
+  border: 1px solid rgb(var(--color-line-strong));
+  border-radius: 6px;
+  background: rgb(var(--color-surface-3));
+  box-shadow: var(--shadow-pop);
+  color: rgb(var(--color-ink));
+  font-size: 0.75rem;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-4px, -50%);
+  transition: opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+}
+
+.group:hover > .he-rail-tip,
+.group:focus-visible > .he-rail-tip {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+</style>

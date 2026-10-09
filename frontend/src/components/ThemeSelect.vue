@@ -70,14 +70,16 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocPointer))
   <div ref="root" class="relative" @keydown="onKeydown">
     <button
       type="button"
+      aria-haspopup="listbox"
+      :aria-expanded="open"
       @click="toggle"
       :class="[
-        'w-full flex items-center justify-between gap-2 bg-black/20 border rounded-xl px-3 py-3 text-sm text-white text-left transition-colors',
-        open ? 'border-accent/60 ring-2 ring-accent/40' : 'border-white/10 hover:border-white/20',
+        'w-full h-10 flex items-center justify-between gap-2 rounded-lg border bg-surface-2 px-3 text-body text-ink text-left transition-colors duration-150 ease-out focus:outline-none',
+        open ? 'border-accent ring-2 ring-accent/25' : 'border-line hover:border-line-strong focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/25',
       ]"
     >
       <span class="truncate">{{ selected?.label }}</span>
-      <ChevronDown :size="16" class="shrink-0 text-white/45 transition-transform duration-200" :class="open ? 'rotate-180' : ''" />
+      <ChevronDown :size="16" class="shrink-0 text-subtle transition-transform duration-200" :class="open ? 'rotate-180' : ''" aria-hidden="true" />
     </button>
 
     <transition
@@ -90,22 +92,25 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocPointer))
     >
       <div
         v-if="open"
-        class="absolute left-0 right-0 mt-2 z-50 p-1.5 rounded-xl border border-white/10 bg-sidebar/95 backdrop-blur-xl shadow-2xl shadow-black/60"
+        role="listbox"
+        class="absolute left-0 right-0 mt-1.5 z-50 max-h-72 overflow-y-auto p-1.5 rounded-2xl border border-line-strong bg-surface-3 shadow-pop"
       >
         <button
           v-for="(opt, i) in options"
           :key="opt.value"
           type="button"
+          role="option"
+          :aria-selected="opt.value === modelValue"
           @click="pick(opt.value)"
           @mousemove="activeIndex = i"
           :class="[
-            'w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-sm text-left transition-colors',
-            opt.value === modelValue ? 'bg-accent/15 text-accent font-bold' : 'text-white/80',
-            activeIndex === i && opt.value !== modelValue ? 'bg-white/5' : '',
+            'w-full h-9 flex items-center justify-between gap-2 px-2.5 rounded-lg text-body text-left transition-colors duration-100',
+            opt.value === modelValue ? 'text-ink font-medium' : 'text-muted',
+            activeIndex === i ? 'bg-line-strong/60 text-ink' : '',
           ]"
         >
           <span class="truncate">{{ opt.label }}</span>
-          <Check v-if="opt.value === modelValue" :size="15" class="shrink-0" />
+          <Check v-if="opt.value === modelValue" :size="15" class="shrink-0 text-accent" aria-hidden="true" />
         </button>
       </div>
     </transition>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ArrowLeft, ChevronLeft, ChevronRight, Clock3, Heart, Loader2, Search, Sparkles } from 'lucide-vue-next'
+import { ArrowLeft, ChevronLeft, ChevronRight, Heart, ImageOff, RefreshCw, Search, SearchX, TriangleAlert, Users } from 'lucide-vue-next'
+import { EmptyState, UiButton, UiInput, UiSpinner, controlClass, fieldHintClass, fieldLabelClass } from '../../ui'
 import type { PawchiveCapabilities, PawchiveCreator, PawchiveCreatorFavorite, PawchivePost, PawchiveScope } from '../../../types/pawchive'
 import PawchiveCreatorCard from './PawchiveCreatorCard.vue'
 import PawchivePostCard from './PawchivePostCard.vue'
@@ -133,109 +134,146 @@ const showLatest = () => emit('home', !!props.scope.creatorId)
 </script>
 
 <template>
-  <section class="space-y-7">
-    <div class="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-accent/15 via-white/[0.04] to-white/[0.015] p-5 sm:p-6">
-      <div class="pointer-events-none absolute -right-12 -top-20 h-64 w-64 rounded-full bg-accent/10 blur-3xl" aria-hidden="true"></div>
-      <div class="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div class="max-w-lg">
-          <div class="mb-2 inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent"><Sparkles :size="13" aria-hidden="true" />{{ scope.creatorId ? '创作者空间' : scope.query ? '寻找创作者' : '个人收藏' }}</div>
-          <h2 class="text-xl font-bold tracking-tight text-white sm:text-2xl">{{ scope.creatorId ? currentCreator?.creator_name : scope.query ? '搜索作者' : '喜欢的作者，最新动态' }}</h2>
-          <p class="mt-2 text-sm leading-6 text-white/70">{{ scope.creatorId ? '浏览这位作者的帖子与附件。' : scope.query ? '账号收藏优先，其他结果从公开帖子中寻找。' : '从 Pawchive 账号同步收藏，最近更新的作者排在前面。' }}</p>
+  <section class="space-y-5">
+    <div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+      <div class="min-w-0">
+        <div class="flex min-w-0 items-baseline gap-2.5">
+          <h2 :id="scope.creatorId ? undefined : 'pawchive-creators-heading'" class="truncate text-heading font-semibold text-ink">
+            {{ scope.creatorId ? currentCreator?.creator_name : scope.query ? `“${scope.query}”的结果` : '我喜欢的作者' }}
+          </h2>
+          <span v-if="!scope.creatorId && !scope.query && accountConnected" class="shrink-0 text-meta text-subtle tabular-nums">{{ favorites.length }} 位</span>
         </div>
-        <form class="w-full max-w-xl" role="search" @submit.prevent="search">
-          <label for="pawchive-search" class="mb-2 block text-xs font-semibold uppercase tracking-wider text-white/65">{{ scope.creatorId ? '搜索这位作者的帖子' : '搜索作者' }}</label>
-          <div class="flex flex-col gap-2 sm:flex-row">
-            <div class="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-white/20 bg-black/25 px-3 focus-within:border-accent/70 focus-within:ring-2 focus-within:ring-accent/25">
-              <Search :size="18" class="shrink-0 text-white/60" aria-hidden="true" />
-              <input id="pawchive-search" v-model="draft" type="search" :aria-describedby="validationMessage ? 'pawchive-search-help pawchive-search-error' : 'pawchive-search-help'" class="min-h-12 w-full min-w-0 bg-transparent text-sm text-white outline-none placeholder:text-white/45" :placeholder="scope.creatorId ? '输入帖子关键词' : '作者名、关键词或作者链接'" />
-            </div>
-            <button type="submit" class="min-h-12 rounded-xl bg-accent px-6 text-sm font-bold text-white shadow-lg shadow-accent/20 transition-colors hover:bg-accent/85 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">搜索</button>
-          </div>
-          <p id="pawchive-search-help" class="mt-2 text-xs leading-5 text-white/60">{{ scope.creatorId ? '输入至少 3 个字符搜索作品；清空后搜索可返回全部作品。' : '支持作者名、帖子关键词，或粘贴作者链接 / 服务/ID。少于 3 个字符时仅搜索账号收藏。' }}</p>
-        </form>
-      </div>
-    </div>
-    <p v-if="validationMessage" id="pawchive-search-error" role="alert" class="text-xs text-amber-200">{{ validationMessage }}</p>
-    <p v-if="favoriteMessage" role="alert" class="text-xs text-red-200">{{ favoriteMessage }}</p>
-
-    <div v-if="scope.creatorId" class="flex flex-wrap items-end gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-      <label class="min-w-40 flex-1 sm:flex-none">
-        <span class="block text-xs font-semibold text-white/65 mb-2">媒体类型</span>
-        <select :value="scope.mediaType" :disabled="!capabilities" class="w-full min-h-11 rounded-xl bg-background border border-white/15 px-3 text-sm text-white disabled:opacity-50" @change="emit('scope', { ...scope, mediaType: ($event.target as HTMLSelectElement).value as PawchiveScope['mediaType'] })">
-          <option value="all">全部</option><option value="image">图片</option><option value="video">视频</option>
-        </select>
-      </label>
-      <label class="min-w-40 flex-1 sm:flex-none">
-        <span class="block text-xs font-semibold text-white/65 mb-2">作者标签</span>
-        <input v-model="draftTag" type="text" :disabled="!capabilities?.creator_tags" class="w-full min-h-11 rounded-xl bg-black/20 border border-white/15 px-3 text-sm text-white disabled:opacity-45" placeholder="输入标签" />
-      </label>
-      <button type="button" :disabled="!capabilities?.creator_tags" class="min-h-11 px-4 rounded-xl border border-white/15 text-sm text-white disabled:opacity-45 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" @click="applyFilters">应用标签</button>
-      <p class="text-xs text-white/50 self-center">媒体类型筛选作者帖子中的附件；标签由 Pawchive 按作者范围应用。</p>
-    </div>
-
-    <div v-if="scope.creatorId" class="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-4">
-      <div>
-        <div class="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-accent"><Sparkles :size="14" aria-hidden="true" />WORKS</div>
-        <h3 class="text-xl font-bold tracking-tight text-white sm:text-2xl">作者作品</h3>
-        <p class="mt-1 text-sm text-white/65">{{ scope.service }} · {{ scope.creatorId }} · 已载入 {{ posts.length }} 篇 · 按最新发布排序</p>
+        <p class="mt-0.5 text-meta text-subtle">
+          <template v-if="scope.creatorId"><span class="tabular-nums">{{ scope.service }} · {{ scope.creatorId }} · 已载入 {{ posts.length }} 篇</span> · 按最新发布排序</template>
+          <template v-else-if="scope.query">先显示账号收藏，再显示公开帖子匹配的作者。</template>
+          <template v-else>{{ accountConnected ? '最近更新的作者排在前面。' : '登录 Pawchive 后，你收藏的作者会显示在这里。' }}</template>
+        </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <button v-if="currentCreator" type="button" :disabled="!accountConnected || favoriteBusyKeys.includes(favoriteKey(currentCreator))" class="min-h-11 rounded-xl border border-white/20 bg-white/[0.05] px-4 text-sm font-semibold text-white/85 transition-colors hover:bg-white/10 disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" :aria-pressed="currentIsFavorite" @click="toggleFavorite(currentCreator)">{{ currentIsFavorite ? '已收藏作者' : '收藏作者' }}</button>
-        <button type="button" class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/[0.05] px-4 text-sm font-semibold text-white/80 transition-colors hover:bg-white/10 hover:text-white cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" @click="showLatest"><ArrowLeft :size="16" aria-hidden="true" />返回作者</button>
+        <template v-if="scope.creatorId">
+          <UiButton variant="ghost" size="sm" @click="showLatest">
+            <template #icon><ArrowLeft :size="14" aria-hidden="true" /></template>
+            返回作者
+          </UiButton>
+          <button
+            v-if="currentCreator"
+            type="button"
+            :disabled="!accountConnected || favoriteBusyKeys.includes(favoriteKey(currentCreator))"
+            :aria-pressed="currentIsFavorite"
+            class="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-meta font-medium transition-colors focus-ring disabled:opacity-45"
+            :class="currentIsFavorite ? 'border-accent/50 bg-accent/15 text-accent-glow' : 'border-line bg-surface-2 text-ink hover:border-line-strong hover:bg-surface-3'"
+            @click="toggleFavorite(currentCreator)"
+          >
+            <Heart :size="14" :fill="currentIsFavorite ? 'currentColor' : 'none'" aria-hidden="true" />
+            {{ currentIsFavorite ? '已收藏作者' : '收藏作者' }}
+          </button>
+        </template>
+        <UiButton v-else-if="scope.query" size="sm" @click="showLatest">返回我的收藏</UiButton>
+        <UiButton v-else-if="accountConnected" size="sm" variant="ghost" :loading="favoritesLoading" @click="emit('refresh')">
+          <template #icon><RefreshCw :size="14" aria-hidden="true" /></template>
+          {{ favoritesLoading ? '同步中…' : '刷新收藏' }}
+        </UiButton>
       </div>
     </div>
 
-    <p v-for="warning in warnings" :key="warning" class="text-xs text-amber-300">{{ warning }}</p>
+    <form role="search" @submit.prevent="search">
+      <label for="pawchive-search" class="sr-only">{{ scope.creatorId ? '搜索这位作者的帖子' : '搜索作者' }}</label>
+      <div class="flex gap-2">
+        <UiInput
+          id="pawchive-search"
+          v-model="draft"
+          type="search"
+          class="flex-1"
+          :aria-describedby="validationMessage ? 'pawchive-search-help pawchive-search-error' : 'pawchive-search-help'"
+          :placeholder="scope.creatorId ? '搜索这位作者的帖子' : '作者名、关键词或作者链接'"
+        >
+          <template #leading><Search :size="16" /></template>
+        </UiInput>
+        <UiButton type="submit" variant="primary">搜索</UiButton>
+      </div>
+      <p id="pawchive-search-help" :class="fieldHintClass">{{ scope.creatorId ? '输入至少 3 个字符搜索作品；清空后搜索可返回全部作品。' : '支持作者名、帖子关键词，或粘贴作者链接 / 服务/ID。少于 3 个字符时仅搜索账号收藏。' }}</p>
+    </form>
+    <p v-if="validationMessage" id="pawchive-search-error" role="alert" class="-mt-3 text-caption text-warning">{{ validationMessage }}</p>
+    <p v-if="favoriteMessage" role="alert" class="rounded-lg border border-danger/25 bg-danger/10 px-3.5 py-3 text-meta text-danger">{{ favoriteMessage }}</p>
+
+    <div v-if="scope.creatorId" class="space-y-2 border-y border-line py-4">
+      <div class="grid grid-cols-[104px_minmax(0,1fr)_auto] items-end gap-2 sm:flex sm:gap-3">
+        <label class="block sm:w-32">
+          <span :class="fieldLabelClass">媒体类型</span>
+          <select :value="scope.mediaType" :disabled="!capabilities" :class="[controlClass('md'), 'select-native']" @change="emit('scope', { ...scope, mediaType: ($event.target as HTMLSelectElement).value as PawchiveScope['mediaType'] })">
+            <option value="all">全部</option><option value="image">图片</option><option value="video">视频</option>
+          </select>
+        </label>
+        <label class="block min-w-0 sm:w-60">
+          <span :class="fieldLabelClass">作者标签</span>
+          <UiInput v-model="draftTag" :disabled="!capabilities?.creator_tags" placeholder="输入标签" />
+        </label>
+        <UiButton :disabled="!capabilities?.creator_tags" @click="applyFilters">应用标签</UiButton>
+      </div>
+      <p class="text-caption text-subtle">媒体类型筛选作者帖子中的附件；标签由 Pawchive 按作者范围应用。</p>
+    </div>
+
+    <p v-for="warning in warnings" :key="warning" class="flex items-start gap-2 rounded-lg border border-warning/25 bg-warning/10 px-3.5 py-3 text-meta text-warning">{{ warning }}</p>
 
     <template v-if="!scope.creatorId">
       <section aria-labelledby="pawchive-creators-heading" class="space-y-5">
-        <div class="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-4">
-          <div>
-            <div class="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-accent"><Heart :size="14" :fill="scope.query ? 'none' : 'currentColor'" aria-hidden="true" />{{ scope.query ? 'DISCOVER' : 'FAVORITES' }}</div>
-            <h3 id="pawchive-creators-heading" class="text-xl font-bold tracking-tight text-white sm:text-2xl">{{ scope.query ? `“${scope.query}”的结果` : '我喜欢的作者' }}</h3>
-            <p class="mt-1 text-sm text-white/65">{{ scope.query ? '先显示账号收藏，再显示公开帖子匹配的作者。' : accountConnected ? `共 ${favorites.length} 位 · 按最近更新时间排序` : '登录 Pawchive 后，你收藏的作者会显示在这里。' }}</p>
-          </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <button v-if="scope.query" type="button" class="min-h-11 rounded-xl border border-white/20 bg-white/[0.05] px-4 text-sm font-semibold text-white/80 transition-colors hover:bg-white/10 hover:text-white cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" @click="showLatest">返回我的收藏</button>
-            <button v-else-if="accountConnected" type="button" :disabled="favoritesLoading" class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/[0.05] px-4 text-sm font-semibold text-white/80 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" @click="emit('refresh')"><Clock3 :size="16" aria-hidden="true" />{{ favoritesLoading ? '同步中…' : '刷新收藏' }}</button>
-          </div>
+        <p v-if="(scope.query && status === 'loading') || (!scope.query && favoritesLoading)" role="status" class="flex items-center justify-center gap-2 py-12 text-meta text-subtle"><UiSpinner :size="16" />{{ scope.query ? '正在搜索公开帖子…' : '正在同步喜欢的作者…' }}</p>
+        <div v-if="scope.query && status === 'error'" role="alert" class="rounded-2xl border border-line bg-surface">
+          <EmptyState compact tone="danger" :icon="TriangleAlert" title="搜索失败" :description="error">
+            <UiButton size="sm" @click="emit('scope', scope)">重试搜索</UiButton>
+          </EmptyState>
         </div>
-
-        <div v-if="(scope.query && status === 'loading') || (!scope.query && favoritesLoading)" role="status" class="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/75"><Loader2 :size="18" class="animate-spin text-accent" aria-hidden="true" />{{ scope.query ? '正在搜索公开帖子…' : '正在同步喜欢的作者…' }}</div>
-        <div v-if="scope.query && status === 'error'" role="alert" class="rounded-2xl border border-red-400/25 bg-red-400/5 p-5 text-sm text-red-200"><p>{{ error }}</p><button type="button" class="mt-3 min-h-11 rounded-xl bg-white/10 px-4 cursor-pointer" @click="emit('scope', scope)">重试搜索</button></div>
-        <div v-if="pagedCreators.length && (scope.query || !favoritesLoading)" class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 sm:gap-4">
+        <div v-if="pagedCreators.length && (scope.query || !favoritesLoading)" class="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3 sm:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] sm:gap-4">
           <PawchiveCreatorCard v-for="entry in pagedCreators" :key="favoriteKey(entry.creator)" :creator="entry.creator" :latest-post="entry.latestPost" :post-count="entry.postCount" :favorite="entry.favorite" :busy="favoriteBusyKeys.includes(favoriteKey(entry.creator))" :can-favorite="accountConnected" @open="openCreator(entry.creator)" @favorite="toggleFavorite(entry.creator)" />
         </div>
-        <div v-else-if="!scope.query && !favoritesLoading && !accountConnected" class="rounded-2xl border border-dashed border-white/20 bg-white/[0.025] p-8 text-center"><Heart :size="28" class="mx-auto mb-3 text-accent" aria-hidden="true" /><p class="font-semibold text-white">先连接你的 Pawchive 账号</p><p class="mt-1 text-sm text-white/65">登录后自动同步喜欢的作者，也可以搜索并收藏新作者。</p></div>
-        <div v-else-if="!scope.query && !favoritesLoading && accountConnected && !favoriteMessage" class="rounded-2xl border border-dashed border-white/20 bg-white/[0.025] p-8 text-center"><Heart :size="28" class="mx-auto mb-3 text-accent" aria-hidden="true" /><p class="font-semibold text-white">还没有喜欢的作者</p><p class="mt-1 text-sm text-white/65">搜索作者后，点击卡片上的收藏按钮即可加入这里。</p></div>
-        <p v-else-if="scope.query && status === 'ready' && !visibleCreators.length" class="rounded-2xl border border-dashed border-white/20 bg-white/[0.025] p-8 text-center text-sm text-white/70">暂时没有匹配作者。试试别的关键词，或粘贴作者页链接 / 服务/ID。</p>
+        <div v-else-if="!scope.query && !favoritesLoading && !accountConnected" class="rounded-2xl border border-dashed border-line">
+          <EmptyState :icon="Users" title="先连接你的 Pawchive 账号" description="登录后自动同步喜欢的作者，也可以搜索并收藏新作者。" />
+        </div>
+        <div v-else-if="!scope.query && !favoritesLoading && accountConnected && !favoriteMessage" class="rounded-2xl border border-dashed border-line">
+          <EmptyState :icon="Heart" title="还没有喜欢的作者" description="搜索作者后，点击卡片上的收藏按钮即可加入这里。" />
+        </div>
+        <div v-else-if="scope.query && status === 'ready' && !visibleCreators.length" class="rounded-2xl border border-dashed border-line">
+          <EmptyState :icon="SearchX" title="暂时没有匹配作者" description="试试别的关键词，或粘贴作者页链接 / 服务/ID。" />
+        </div>
 
-        <nav v-if="pageCount > 1" aria-label="作者分页" class="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
-          <p class="text-sm text-white/65">第 {{ page }} / {{ pageCount }} 页 · 每页最多 30 位作者</p>
+        <nav v-if="pageCount > 1" aria-label="作者分页" class="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+          <p class="text-meta text-subtle tabular-nums">第 {{ page }} / {{ pageCount }} 页 · 每页最多 30 位作者</p>
           <div class="flex items-center gap-2">
-            <button type="button" :disabled="page === 1" class="inline-flex min-h-11 items-center gap-1 rounded-xl border border-white/20 px-4 text-sm font-semibold text-white disabled:opacity-35 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" @click="showPage(page - 1)"><ChevronLeft :size="16" aria-hidden="true" />上一页</button>
-            <button type="button" :disabled="page === pageCount" class="inline-flex min-h-11 items-center gap-1 rounded-xl border border-white/20 px-4 text-sm font-semibold text-white disabled:opacity-35 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" @click="showPage(page + 1)">下一页<ChevronRight :size="16" aria-hidden="true" /></button>
+            <UiButton size="sm" :disabled="page === 1" @click="showPage(page - 1)">
+              <template #icon><ChevronLeft :size="14" aria-hidden="true" /></template>
+              上一页
+            </UiButton>
+            <UiButton size="sm" :disabled="page === pageCount" @click="showPage(page + 1)">
+              下一页
+              <template #trailing><ChevronRight :size="14" aria-hidden="true" /></template>
+            </UiButton>
           </div>
         </nav>
       </section>
     </template>
 
     <template v-else>
-      <div v-if="selectedKeys.length" class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent/35 bg-accent/10 px-4 py-3">
-        <p class="text-sm font-semibold text-white">已选择 {{ selectedKeys.length }} 篇作品</p>
-        <button type="button" :disabled="downloadBusy" class="min-h-11 rounded-xl bg-accent px-5 text-sm font-bold text-white shadow-lg shadow-accent/20 disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white" @click="emit('downloadSelected')">{{ downloadBusy ? '正在核对…' : '下载选中作品' }}</button>
+      <div v-if="selectedKeys.length" class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent/40 bg-accent/10 py-2 pl-4 pr-2">
+        <p class="text-body font-medium text-ink">已选择 <span class="tabular-nums">{{ selectedKeys.length }}</span> 篇作品</p>
+        <UiButton variant="primary" :loading="downloadBusy" @click="emit('downloadSelected')">{{ downloadBusy ? '正在核对…' : '下载选中作品' }}</UiButton>
       </div>
-      <p v-if="status === 'loading'" role="status" class="flex items-center justify-center gap-2 py-16 text-center text-white/70"><Loader2 :size="18" class="animate-spin text-accent" aria-hidden="true" />正在读取作者作品…</p>
-      <div v-else-if="status === 'error'" role="alert" class="rounded-2xl border border-red-400/25 bg-red-400/5 p-6 text-center text-sm text-red-200"><p>{{ error }}</p><button type="button" class="mt-3 min-h-11 px-4 rounded-xl bg-white/10 cursor-pointer" @click="emit('scope', scope)">重试</button></div>
-      <p v-else-if="status === 'ready' && posts.length === 0" class="rounded-2xl border border-dashed border-white/20 bg-white/[0.025] py-16 text-center text-sm text-white/70">这位作者暂时没有符合条件的作品。</p>
-      <div v-if="posts.length" class="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
+      <p v-if="status === 'loading'" role="status" class="flex items-center justify-center gap-2 py-16 text-meta text-subtle"><UiSpinner :size="16" />正在读取作者作品…</p>
+      <div v-else-if="status === 'error'" role="alert" class="rounded-2xl border border-line bg-surface">
+        <EmptyState compact tone="danger" :icon="TriangleAlert" title="读取失败" :description="error">
+          <UiButton size="sm" @click="emit('scope', scope)">重试</UiButton>
+        </EmptyState>
+      </div>
+      <div v-else-if="status === 'ready' && posts.length === 0" class="rounded-2xl border border-dashed border-line">
+        <EmptyState :icon="ImageOff" title="没有符合条件的作品" description="这位作者暂时没有符合条件的作品，试试调整媒体类型或标签。" />
+      </div>
+      <div v-if="posts.length" class="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3 sm:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] sm:gap-4">
         <PawchivePostCard v-for="(post, index) in posts" :key="post.post_key" :post="post" :selected="selectedKeys.includes(post.post_key)" @open="emit('open', index)" @select="emit('select', post)" />
       </div>
     </template>
 
-    <div v-if="scope.creatorId || scope.query" class="text-center">
-      <p v-if="error && posts.length" role="alert" class="text-sm text-red-300 mb-2">{{ error }}</p>
-      <button v-if="hasMore" type="button" :disabled="loadingMore" class="min-h-11 px-6 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-sm font-semibold text-white disabled:opacity-50 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" @click="emit('more')">{{ loadingMore ? '正在加载…' : scope.creatorId ? '加载更多帖子' : '加载更多搜索结果' }}</button>
+    <div v-if="scope.creatorId || scope.query" class="flex flex-col items-center gap-2">
+      <p v-if="error && posts.length" role="alert" class="text-meta text-danger">{{ error }}</p>
+      <UiButton v-if="hasMore" :loading="loadingMore" @click="emit('more')">{{ loadingMore ? '正在加载…' : scope.creatorId ? '加载更多帖子' : '加载更多搜索结果' }}</UiButton>
     </div>
   </section>
 </template>
