@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
-import { Plus, Star, Tag as TagIcon, Trash2, X } from 'lucide-vue-next'
+import { Plus, Star, X } from 'lucide-vue-next'
 import { API_BASE_URL } from '../../config'
 import type { Media, Tag } from '../../types'
+import { buttonClass, controlClass, iconButtonClass, menuItemClass, popoverClass } from '../ui'
 
 const props = defineProps<{
   media: Media
+  /** Render in page flow (phone video detail) instead of as a sidebar / bottom sheet. */
+  inline?: boolean
   coverUrl: string
   mediaTypeLabel: string
   videoProgressPercent: number
@@ -59,6 +62,34 @@ const formatDuration = (seconds: number | null) => {
     : `${minutes}:${rest.toString().padStart(2, '0')}`
 }
 
+const formatSize = (bytes: number) => {
+  if (!bytes) return '本地目录'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
+}
+
+const progressPercent = computed(() =>
+  props.media.media_type === 'video' ? props.videoProgressPercent : props.media.media_type === 'manga' ? props.mangaProgressPercent : 0)
+const showProgress = computed(() =>
+  (props.media.media_type === 'video' && !!props.media.duration) || (props.media.media_type === 'manga' && props.mangaPageTotal > 0))
+const progressLabel = computed(() => props.media.media_type === 'manga' ? '阅读进度' : '观看进度')
+const progressValue = computed(() => props.media.media_type === 'manga'
+  ? `${props.mangaProgressText} 页`
+  : `${formatDuration(props.media.progress || 0)} / ${formatDuration(props.media.duration)}`)
+
+const details = computed(() => {
+  const media = props.media
+  const rows: { label: string; value: string }[] = [{ label: '类型', value: props.mediaTypeLabel }]
+  if (media.media_type === 'video' || media.media_type === 'audio') rows.push({ label: '时长', value: formatDuration(media.duration) })
+  else if (media.media_type === 'manga') rows.push({ label: '页数', value: props.mangaPageTotal ? `${props.mangaPageTotal} 页` : media.page_count ? `${media.page_count} 页` : '-' })
+  if (media.width && media.height) rows.push({ label: '尺寸', value: `${media.width}×${media.height}` })
+  rows.push({ label: '格式', value: media.extension.replace('.', '').toUpperCase() || '目录' })
+  rows.push({ label: '大小', value: formatSize(media.file_size) })
+  return rows
+})
+
 const submitTag = (suggestedName?: string) => {
   const name = (suggestedName ?? tagInput.value).trim()
   if (!name) return
@@ -79,147 +110,181 @@ const onTagInputBlur = () => {
 </script>
 
 <template>
-  <aside class="he-metadata-panel hidden min-[1100px]:flex w-[340px] 2xl:w-[380px] shrink-0 border-l border-white/10 bg-background/95 p-5 flex-col gap-5 overflow-y-auto custom-scrollbar animate-fluid-entrance">
-    <div class="flex items-center justify-between min-[900px]:hidden"><h2 class="text-base font-bold">媒体信息</h2><button ref="closeRef" type="button" class="min-h-11 min-w-11 rounded-xl bg-white/10" aria-label="关闭媒体信息" @click="emit('close')"><X :size="20" class="mx-auto" aria-hidden="true" /></button></div>
-    <div class="flex gap-4">
-      <div class="w-24 h-24 rounded-xl bg-white/5 border border-white/10 overflow-hidden shrink-0">
-        <img v-if="coverUrl" :src="coverUrl" class="w-full h-full object-cover" :alt="media.title" />
+  <aside
+    :class="inline
+      ? 'he-metadata-inline flex w-full flex-col gap-6 bg-background px-4 pt-5'
+      : 'he-metadata-panel custom-scrollbar hidden w-[360px] shrink-0 flex-col gap-6 overflow-y-auto border-l border-line bg-surface p-5 min-[1100px]:flex 2xl:w-[400px] 2xl:p-6'"
+    :aria-label="inline ? '媒体信息' : undefined"
+  >
+    <div v-if="!inline" class="flex items-center justify-between min-[900px]:hidden">
+      <h2 class="text-heading font-semibold text-ink">媒体信息</h2>
+      <button ref="closeRef" type="button" :class="iconButtonClass('ghost', 'lg')" aria-label="关闭媒体信息" title="关闭媒体信息" @click="emit('close')">
+        <X :size="20" aria-hidden="true" />
+      </button>
+    </div>
+
+    <header class="flex gap-4">
+      <div v-if="coverUrl && !inline" class="relative size-20 shrink-0 overflow-hidden rounded-lg bg-surface-2">
+        <img :src="coverUrl" class="h-full w-full object-cover" :alt="media.title" />
+        <div class="pointer-events-none absolute inset-0 rounded-lg ring-1 ring-inset ring-white/8"></div>
       </div>
       <div class="min-w-0 flex-1">
-        <p class="text-xs font-bold text-white/40 uppercase tracking-widest mb-2">媒体信息</p>
-        <h3 class="text-xl font-black text-white leading-snug break-words">{{ media.title }}</h3>
-        <p class="mt-2 text-xs text-white/40 break-all line-clamp-2">{{ media.relative_path }}</p>
+        <h3 class="line-clamp-3 break-words text-heading font-semibold leading-snug text-ink" :title="media.title">{{ media.title }}</h3>
+        <p class="mt-1.5 line-clamp-2 break-all font-mono text-caption text-subtle" :title="media.relative_path">{{ media.relative_path }}</p>
       </div>
-    </div>
+    </header>
 
-    <div class="grid grid-cols-2 gap-2 text-sm">
-      <div class="rounded-xl bg-white/5 p-3 border border-white/10">
-        <p class="text-white/35 text-xs mb-1">类型</p>
-        <p class="font-semibold">{{ mediaTypeLabel }}</p>
-      </div>
-      <div class="rounded-xl bg-white/5 p-3 border border-white/10">
-        <p class="text-white/35 text-xs mb-1">进度</p>
-        <p class="font-semibold">{{ media.media_type === 'video' ? `${videoProgressPercent}%` : media.media_type === 'manga' ? `${mangaProgressPercent}%` : '-' }}</p>
-      </div>
-      <div class="rounded-xl bg-white/5 p-3 border border-white/10">
-        <p class="text-white/35 text-xs mb-1">时长/页数</p>
-        <p class="font-semibold">{{ media.media_type === 'video' ? formatDuration(media.duration) : media.media_type === 'manga' ? mangaProgressText : (media.page_count || '-') }}</p>
-      </div>
-      <div class="rounded-xl bg-white/5 p-3 border border-white/10">
-        <p class="text-white/35 text-xs mb-1">尺寸</p>
-        <p class="font-semibold">{{ media.width && media.height ? `${media.width} x ${media.height}` : '-' }}</p>
-      </div>
-    </div>
-
-    <div v-if="media.media_type === 'video'" class="rounded-xl border border-white/8 bg-white/[0.025] px-3.5 py-3 text-[11px] leading-relaxed text-white/45">
-      <p class="font-bold text-white/65 mb-1.5">快捷播放</p>
-      <p><kbd class="text-white/75">←</kbd> / <kbd class="text-white/75">→</kbd> 短按跳转 10 秒，长按快退 / 2× 快进</p>
-    </div>
-
-    <div v-if="media.media_type === 'manga' && mangaPageTotal" class="rounded-2xl bg-white/5 border border-white/10 p-4">
-      <div class="flex items-center justify-between text-sm">
-        <span class="font-bold text-white/75">阅读进度</span>
-        <span class="font-mono font-bold text-purple-200">{{ mangaProgressText }}</span>
-      </div>
-      <div class="mt-3 h-1.5 rounded-full bg-white/10 overflow-hidden">
-        <div class="h-full bg-purple-300 transition-all duration-300" :style="{ width: `${mangaProgressPercent}%` }"></div>
-      </div>
-    </div>
-
-    <button
-      type="button"
-      @click="emit('toggleFavorite')"
-      :class="media.favorite ? 'bg-amber-400 text-black shadow-lg shadow-amber-400/20' : 'bg-white/5 text-white/70 hover:text-white hover:bg-white/10'"
-      class="w-full h-11 rounded-xl border border-white/10 font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
-    >
-      <Star :size="17" :fill="media.favorite ? 'currentColor' : 'none'" />
-      {{ media.favorite ? '已收藏' : '收藏' }}
-    </button>
-
-    <div>
-      <div class="flex items-center justify-between mb-2">
-        <p class="text-xs font-bold text-white/40 uppercase tracking-widest">评分</p>
-        <span v-if="media.rating" class="text-xs font-bold text-amber-300">{{ media.rating }} 星</span>
-      </div>
-      <div class="flex gap-2" @mouseleave="hoverScore = 0">
+    <div class="flex items-center gap-3">
+      <div class="-ml-1.5 flex items-center pointer-coarse:-ml-2.5" role="group" aria-label="评分" @mouseleave="hoverScore = 0">
         <button
           v-for="score in 5"
           :key="score"
           type="button"
+          class="grid size-8 place-items-center rounded-lg text-star transition-colors duration-150 hover:bg-surface-2 focus-ring pointer-coarse:size-10"
+          :title="`${score} 星`"
+          :aria-label="`评为 ${score} 星`"
           @mouseenter="hoverScore = score"
           @click.stop="emit('setRating', score)"
-          class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 transition-all text-amber-300 flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95"
-          :title="`${score} 星`"
         >
           <Star
-            :size="20"
-            class="mx-auto transition-transform"
+            :size="18"
+            :class="(hoverScore > 0 ? hoverScore >= score : media.rating >= score) ? '' : 'text-faint'"
             :fill="(hoverScore > 0 ? hoverScore >= score : media.rating >= score) ? 'currentColor' : 'none'"
+            aria-hidden="true"
           />
         </button>
       </div>
+      <span class="whitespace-nowrap text-meta text-subtle tabular-nums">{{ media.rating ? `${media.rating} 星` : '未评分' }}</span>
+      <button
+        type="button"
+        class="ml-auto"
+        :class="[buttonClass('secondary', inline ? 'lg' : 'md'), media.favorite ? '!border-star/30 !bg-star/12 !text-star' : '']"
+        :aria-pressed="media.favorite"
+        @click="emit('toggleFavorite')"
+      >
+        <Star :size="16" :fill="media.favorite ? 'currentColor' : 'none'" aria-hidden="true" />
+        {{ media.favorite ? '已收藏' : '收藏' }}
+      </button>
     </div>
 
-    <div>
-      <div class="flex items-center gap-2 text-xs font-bold text-white/40 uppercase tracking-widest mb-2">
-        <TagIcon :size="14" />
-        <span>标签</span>
+    <section v-if="showProgress">
+      <div class="flex items-baseline justify-between gap-3">
+        <span class="text-meta font-medium text-muted">{{ progressLabel }}</span>
+        <span class="text-meta text-subtle tabular-nums">{{ progressValue }} · {{ progressPercent }}%</span>
       </div>
-      <div class="flex flex-wrap gap-2 mb-3">
-        <span v-for="tag in media.tags" :key="tag.id" class="inline-flex items-center gap-1.5 rounded-lg bg-white/8 border border-white/10 px-2.5 py-1 text-xs">
-          <span>{{ tag.name }}</span>
-          <button type="button" @click="emit('removeTag', tag.id)" class="text-white/35 hover:text-red-300 cursor-pointer" title="移除标签">
-            <Trash2 :size="12" />
+      <div class="mt-2 h-1 overflow-hidden rounded-sm bg-surface-3" role="progressbar" :aria-label="progressLabel" :aria-valuenow="progressPercent" aria-valuemin="0" aria-valuemax="100">
+        <div class="h-full rounded-sm bg-accent transition-[width] duration-200" :style="{ width: `${progressPercent}%` }"></div>
+      </div>
+    </section>
+
+    <section>
+      <h4 class="mb-1 text-meta font-medium text-muted">文件信息</h4>
+      <dl class="divide-y divide-line">
+        <div v-for="row in details" :key="row.label" class="flex items-center justify-between gap-4 py-2 text-meta">
+          <dt class="shrink-0 text-subtle">{{ row.label }}</dt>
+          <dd class="truncate text-right text-ink tabular-nums">{{ row.value }}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section>
+      <h4 class="mb-2.5 text-meta font-medium text-muted">标签</h4>
+      <div class="mb-3 flex flex-wrap gap-1.5">
+        <span v-for="tag in media.tags" :key="tag.id" class="inline-flex h-7 items-center gap-1 rounded-full border border-line bg-surface-2 pl-2.5 pr-1 text-caption font-medium text-muted">
+          <span class="truncate">{{ tag.name }}</span>
+          <button
+            type="button"
+            class="grid size-5 place-items-center rounded-full text-subtle transition-colors hover:bg-danger/12 hover:text-danger focus-ring pointer-coarse:size-8"
+            title="移除标签"
+            :aria-label="`移除标签 ${tag.name}`"
+            @click="emit('removeTag', tag.id)"
+          >
+            <X :size="12" aria-hidden="true" />
           </button>
         </span>
-        <span v-if="media.tags.length === 0" class="text-sm text-white/35">还没有标签</span>
+        <span v-if="media.tags.length === 0" class="text-meta text-subtle">还没有标签</span>
       </div>
 
-      <!-- Tag Autocomplete Input Container -->
       <div class="relative">
         <div class="flex gap-2">
           <input
             v-model="tagInput"
+            :class="controlClass(inline ? 'lg' : 'md')"
+            placeholder="添加标签"
+            aria-label="添加标签"
             @focus="onTagInputFocus"
             @blur="onTagInputBlur"
             @input="showSuggestions = true"
             @keydown.stop
             @keydown.enter="submitTag()"
-            class="min-w-0 flex-1 rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-accent/50"
-            placeholder="添加标签"
           />
-          <button type="button" @click="submitTag()" class="w-10 rounded-xl bg-accent text-white flex items-center justify-center hover:brightness-110 cursor-pointer shrink-0" title="添加标签">
-            <Plus :size="18" />
+          <button type="button" :class="iconButtonClass('secondary', inline ? 'lg' : 'md')" title="添加标签" aria-label="添加标签" @click="submitTag()">
+            <Plus :size="18" aria-hidden="true" />
           </button>
         </div>
 
-        <!-- Tag Suggestions Dropdown -->
         <div
           v-if="showSuggestions && tagSuggestions.length > 0"
-          class="absolute left-0 right-0 bottom-full mb-1.5 bg-sidebar/95 backdrop-blur-2xl border border-white/15 rounded-xl p-1 shadow-2xl z-50 max-h-48 overflow-y-auto custom-scrollbar"
+          :class="popoverClass"
+          class="custom-scrollbar absolute bottom-full left-0 right-0 z-50 mb-1.5 max-h-56 overflow-y-auto"
         >
-          <div class="px-2.5 py-1 text-[10px] font-bold text-white/40 uppercase tracking-wider border-b border-white/8">
-            匹配已有标签
-          </div>
+          <p class="px-2.5 pb-1 pt-0.5 text-caption text-subtle">匹配已有标签</p>
           <button
             v-for="sug in tagSuggestions"
             :key="sug.id"
             type="button"
+            :class="menuItemClass"
             @mousedown="submitTag(sug.name)"
-            class="w-full px-2.5 py-1.5 text-left text-xs text-white/80 hover:text-white hover:bg-accent/20 rounded-lg flex items-center justify-between transition-colors cursor-pointer"
           >
-            <span>{{ sug.name }}</span>
-            <span v-if="sug.count" class="text-[10px] text-white/40 font-mono">{{ sug.count }} 项</span>
+            <span class="truncate">{{ sug.name }}</span>
+            <span v-if="sug.count" class="ml-auto shrink-0 text-caption text-subtle tabular-nums">{{ sug.count }} 项</span>
           </button>
         </div>
       </div>
-    </div>
+    </section>
+
+    <section v-if="media.media_type === 'video' && !inline" class="rounded-lg bg-surface-2 p-3 text-caption leading-relaxed text-subtle pointer-coarse:hidden">
+      <p class="mb-1 font-medium text-muted">快捷播放</p>
+      <p>
+        <kbd class="he-kbd">←</kbd> / <kbd class="he-kbd">→</kbd>
+        短按跳转 10 秒，长按快退 / 2× 快进
+      </p>
+    </section>
   </aside>
 </template>
 
 <style scoped>
+.he-kbd {
+  display: inline-flex;
+  height: 20px;
+  min-width: 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid rgb(var(--color-line-strong));
+  background: rgb(var(--color-surface-3));
+  padding-inline: 4px;
+  color: rgb(var(--color-muted));
+}
+
+.he-metadata-inline {
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
 @media (max-width: 899px) {
-  .he-metadata-panel { display: flex; position: absolute; z-index: 60; inset: auto 0 0; width: 100%; max-height: 75dvh; border-radius: 24px 24px 0 0; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
-  .he-metadata-panel button { min-width: 44px; min-height: 44px; }
+  .he-metadata-panel {
+    display: flex;
+    position: absolute;
+    z-index: 60;
+    inset: auto 0 0;
+    width: 100%;
+    max-height: 75dvh;
+    border-left: 0;
+    border-top: 1px solid rgb(var(--color-line-strong));
+    border-radius: 20px 20px 0 0;
+    background: rgb(var(--color-surface-3));
+    box-shadow: var(--shadow-modal);
+    padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
+  }
 }
 </style>

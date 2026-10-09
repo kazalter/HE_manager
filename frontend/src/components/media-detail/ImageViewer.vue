@@ -184,10 +184,10 @@ onBeforeUnmount(() => {
       >
         <div
           v-if="showLoading"
-          class="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-full bg-black/65 backdrop-blur-md border border-white/10 px-4 py-2 z-10 pointer-events-none shadow-xl text-white/80"
+          class="pointer-events-none absolute left-1/2 top-6 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/75 px-4 py-2 text-white/85 ring-1 ring-inset ring-white/10"
         >
-          <Loader2 class="w-4 h-4 text-accent animate-spin" />
-          <span class="text-xs font-medium tracking-wide">加载中...</span>
+          <Loader2 class="size-4 animate-spin" aria-hidden="true" />
+          <span class="text-meta">加载中…</span>
         </div>
       </Transition>
 
@@ -203,10 +203,10 @@ onBeforeUnmount(() => {
             : clickOnlyControls
               ? 'opacity-0 -translate-x-6 pointer-events-none'
               : 'opacity-0 -translate-x-6 hover:opacity-100 hover:translate-x-0')"
-        class="absolute left-5 z-20 w-14 h-14 rounded-2xl bg-black/45 backdrop-blur-md text-white/55 hover:text-white hover:bg-black/70 transition-all duration-300 cursor-pointer"
-        title="上一项"
+        class="he-page-nav absolute left-5 z-20 grid size-12 place-items-center rounded-full bg-black/60 text-white/80 transition-[opacity,transform,background-color,color] duration-200 ease-out hover:bg-black/80 hover:text-white focus-ring"
+        title="上一项" aria-label="上一项"
       >
-        <ChevronLeft :size="34" class="mx-auto" />
+        <ChevronLeft :size="26" aria-hidden="true" />
       </button>
 
       <!-- Main Image Container -->
@@ -244,10 +244,10 @@ onBeforeUnmount(() => {
             : clickOnlyControls
               ? 'opacity-0 translate-x-6 pointer-events-none'
               : 'opacity-0 translate-x-6 hover:opacity-100 hover:translate-x-0')"
-        class="absolute right-5 z-20 w-14 h-14 rounded-2xl bg-black/45 backdrop-blur-md text-white/55 hover:text-white hover:bg-black/70 transition-all duration-300 cursor-pointer"
-        title="下一项"
+        class="he-page-nav absolute right-5 z-20 grid size-12 place-items-center rounded-full bg-black/60 text-white/80 transition-[opacity,transform,background-color,color] duration-200 ease-out hover:bg-black/80 hover:text-white focus-ring"
+        title="下一项" aria-label="下一项"
       >
-        <ChevronRight :size="34" class="mx-auto" />
+        <ChevronRight :size="26" aria-hidden="true" />
       </button>
 
       <!-- Floating Toolbar Pill -->
@@ -255,7 +255,7 @@ onBeforeUnmount(() => {
         :class="(controlsVisible === undefined ? showControls || isZoomed || rotation !== 0 : controlsVisible)
           ? 'opacity-100 translate-y-0'
           : 'opacity-0 translate-y-3 pointer-events-none'"
-        class="image-viewer-toolbar absolute bottom-6 right-6 z-20 flex items-center gap-1.5 rounded-2xl bg-black/70 backdrop-blur-md border border-white/10 px-3 py-1.5 shadow-2xl transition-all duration-300 select-none text-white/80"
+        class="image-viewer-toolbar absolute bottom-6 right-6 z-20 flex select-none items-center gap-0.5 rounded-2xl bg-black/75 p-1 text-white/80 ring-1 ring-inset ring-white/10 transition-[opacity,transform] duration-200 ease-out"
         @click.stop
         @mouseenter="emit('controlsHover', true)"
         @mouseleave="emit('controlsHover', false)"
@@ -264,31 +264,32 @@ onBeforeUnmount(() => {
         <button
           type="button"
           @click="rotateClockwise"
-          class="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all text-white/70 hover:text-white cursor-pointer"
+          class="he-viewer-btn w-8 hover:bg-white/10 hover:text-white text-white/75"
+          aria-label="顺时针旋转 90°"
           :title="`顺时针旋转 90° (当前: ${rotation}°)`"
         >
-          <RotateCw :size="15" />
+          <RotateCw :size="16" aria-hidden="true" />
         </button>
 
-        <div class="h-4 w-px bg-white/10 mx-0.5"></div>
+        <div class="mx-0.5 h-5 w-px bg-white/15" aria-hidden="true"></div>
 
         <!-- Zoom Out -->
         <button
           type="button"
           @click="zoomOut()"
           :disabled="zoomScale <= 1"
-          class="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/10 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
+          class="he-viewer-btn w-8 hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-35"
           :title="wheelBehavior === 'zoom' ? '缩小 (滚轮向下 / 快捷键: -)' : '缩小 (Ctrl + 滚轮向下 / 快捷键: -)'"
         >
-          <ZoomOut :size="15" />
+          <ZoomOut :size="16" aria-hidden="true" />
         </button>
 
         <!-- Current Zoom Percentage -->
         <button
           type="button"
           @click="resetAll"
-          class="px-2 py-1 rounded-lg text-xs font-mono font-bold hover:bg-white/10 hover:text-white transition-all cursor-pointer"
-          :class="isZoomed ? 'text-accent' : 'text-white/60'"
+          class="he-viewer-btn min-w-14 px-2 text-meta font-medium tabular-nums hover:bg-white/10 hover:text-white"
+          :class="isZoomed ? 'text-white' : 'text-white/65'"
           title="重置缩放与旋转 (快捷键: 0)"
         >
           {{ zoomPercent }}%
@@ -299,18 +300,19 @@ onBeforeUnmount(() => {
           type="button"
           @click="zoomIn()"
           :disabled="zoomScale >= 5"
-          class="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/10 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
+          class="he-viewer-btn w-8 hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-35"
           :title="wheelBehavior === 'zoom' ? '放大 (滚轮向上 / 快捷键: +)' : '放大 (Ctrl + 滚轮向上 / 快捷键: +)'"
         >
-          <ZoomIn :size="15" />
+          <ZoomIn :size="16" aria-hidden="true" />
         </button>
 
         <!-- 1:1 Pixel Toggle -->
         <button
           type="button"
           @click="toggleActualSize"
-          class="px-2 py-1 rounded-lg text-xs font-mono font-bold hover:bg-white/10 hover:text-white transition-all cursor-pointer ml-0.5"
-          :class="isActualSize ? 'text-accent bg-accent/20' : 'text-white/60'"
+          class="he-viewer-btn px-2 text-meta font-medium tabular-nums hover:bg-white/10 hover:text-white"
+          :class="isActualSize ? 'bg-white/15 text-white' : 'text-white/65'"
+          :aria-pressed="isActualSize"
           :title="isActualSize ? '适应屏幕 (快捷键: 0)' : '按 1:1 原图像素显示'"
         >
           1:1
@@ -321,10 +323,11 @@ onBeforeUnmount(() => {
           v-if="isZoomed || rotation !== 0"
           type="button"
           @click="resetAll"
-          class="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/10 text-white/60 hover:text-white transition-all cursor-pointer ml-0.5"
+          class="he-viewer-btn w-8 hover:bg-white/10 hover:text-white text-white/65"
+          aria-label="适应屏幕"
           title="适应屏幕 (快捷键: 0)"
         >
-          <RotateCcw :size="14" />
+          <RotateCcw :size="15" aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -332,10 +335,19 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.he-viewer-btn {
+  display: inline-flex;
+  height: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out);
+}
 @media (max-width: 899px) {
-  .image-viewer-toolbar { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); justify-content: center; gap: 2px; padding-inline: 4px; }
+  .image-viewer-toolbar { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); justify-content: center; gap: 2px; }
   .image-viewer-toolbar button { min-width: 44px; min-height: 44px; }
-  button.absolute.left-5 { left: 8px; width: 44px; height: 44px; }
-  button.absolute.right-5 { right: 8px; width: 44px; height: 44px; }
+  .he-page-nav.left-5 { left: 8px; width: 44px; height: 44px; }
+  .he-page-nav.right-5 { right: 8px; width: 44px; height: 44px; }
 }
 </style>

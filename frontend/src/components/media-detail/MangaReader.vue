@@ -12,6 +12,7 @@ import {
   Square,
   ZoomIn,
   ZoomOut,
+  X,
 } from 'lucide-vue-next'
 import { API_BASE_URL, authUrl } from '../../config'
 import type { Media } from '../../types'
@@ -512,10 +513,10 @@ onBeforeUnmount(() => {
           : clickOnlyControls
             ? 'opacity-0 -translate-x-6 pointer-events-none'
             : 'opacity-0 -translate-x-6 hover:opacity-100 hover:translate-x-0'"
-        class="absolute left-5 z-20 w-14 h-14 rounded-2xl bg-black/45 backdrop-blur-md text-white/55 hover:text-white hover:bg-black/70 transition-all duration-300 cursor-pointer"
-        title="上一页" :tabindex="showControls ? 0 : -1"
+        class="he-page-nav absolute left-5 z-20 grid size-12 place-items-center rounded-full bg-black/60 text-white/80 transition-[opacity,transform,background-color,color] duration-200 ease-out hover:bg-black/80 hover:text-white focus-ring"
+        title="上一页" aria-label="上一页" :tabindex="showControls ? 0 : -1"
       >
-        <ChevronLeft :size="34" class="mx-auto" />
+        <ChevronLeft :size="26" aria-hidden="true" />
       </button>
 
       <!-- Webtoon Continuous Scroll Mode -->
@@ -530,7 +531,7 @@ onBeforeUnmount(() => {
           v-for="pageIndex in totalPagesList"
           :key="imagePages?.[pageIndex]?.id ?? pageIndex"
           :id="`webtoon-page-${pageIndex}`"
-          class="he-reader-page w-full max-w-[840px] shrink-0 my-1 relative group bg-neutral-900"
+          class="he-reader-page w-full max-w-[840px] shrink-0 my-1 relative group bg-white/5"
           :style="{ aspectRatio: `${pageDimensionsFor(pageIndex)[0]} / ${pageDimensionsFor(pageIndex)[1]}` }"
         >
           <img
@@ -543,14 +544,14 @@ onBeforeUnmount(() => {
             class="w-full h-full object-contain block rounded-sm"
             :alt="imagePages?.[pageIndex]?.title || `第 ${pageIndex + 1} 页`"
           />
-          <div v-else class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-sm text-white/50" role="status">
+          <div v-else class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-meta text-white/60" role="status">
             <template v-if="pageFailed(pageIndex)">
               <span>图片加载失败</span>
-              <button type="button" class="min-h-11 px-4 rounded-xl bg-white/10 text-white" @click.stop="imageBuffer.retry(pageUrlFor(pageIndex))">重新加载</button>
+              <button type="button" class="h-10 rounded-lg bg-white/10 px-4 text-body font-medium text-white transition-colors hover:bg-white/15 focus-ring pointer-coarse:h-11" @click.stop="imageBuffer.retry(pageUrlFor(pageIndex))">重新加载</button>
             </template>
             <span v-else>正在加载第 {{ pageIndex + 1 }} {{ imagePages ? '张' : '页' }}…</span>
           </div>
-          <div v-if="showControls" class="absolute top-2 right-2 bg-black/75 backdrop-blur-md text-white/70 text-[11px] font-mono px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          <div v-if="showControls" class="pointer-events-none absolute right-2 top-2 inline-flex h-6 items-center rounded-md bg-black/60 px-1.5 text-caption font-medium tabular-nums text-white/90 opacity-0 transition-opacity group-hover:opacity-100">
             {{ pageIndex + 1 }} / {{ totalPages }}
           </div>
         </div>
@@ -595,25 +596,25 @@ onBeforeUnmount(() => {
             <img
               v-if="secondPageUrl"
               :src="secondPageUrl"
-              class="h-full max-w-[50%] object-contain pointer-events-none shadow-xl"
+              class="h-full max-w-[50%] object-contain pointer-events-none"
               :alt="`第 ${currentPage + 2} 页`"
             />
             <img
               :src="pageUrl"
-              class="h-full max-w-[50%] object-contain pointer-events-none shadow-xl"
+              class="h-full max-w-[50%] object-contain pointer-events-none"
               :alt="`第 ${currentPage + 1} 页`"
             />
           </template>
           <template v-else>
             <img
               :src="pageUrl"
-              class="h-full max-w-[50%] object-contain pointer-events-none shadow-xl"
+              class="h-full max-w-[50%] object-contain pointer-events-none"
               :alt="`第 ${currentPage + 1} 页`"
             />
             <img
               v-if="secondPageUrl"
               :src="secondPageUrl"
-              class="h-full max-w-[50%] object-contain pointer-events-none shadow-xl"
+              class="h-full max-w-[50%] object-contain pointer-events-none"
               :alt="`第 ${currentPage + 2} 页`"
             />
           </template>
@@ -630,17 +631,17 @@ onBeforeUnmount(() => {
           : clickOnlyControls
             ? 'opacity-0 translate-x-6 pointer-events-none'
             : 'opacity-0 translate-x-6 hover:opacity-100 hover:translate-x-0'"
-        class="absolute right-5 z-20 w-14 h-14 rounded-2xl bg-black/45 backdrop-blur-md text-white/55 hover:text-white hover:bg-black/70 transition-all duration-300 cursor-pointer"
-        title="下一页" :tabindex="showControls ? 0 : -1"
+        class="he-page-nav absolute right-5 z-20 grid size-12 place-items-center rounded-full bg-black/60 text-white/80 transition-[opacity,transform,background-color,color] duration-200 ease-out hover:bg-black/80 hover:text-white focus-ring"
+        title="下一页" aria-label="下一页" :tabindex="showControls ? 0 : -1"
       >
-        <ChevronRight :size="34" class="mx-auto" />
+        <ChevronRight :size="26" aria-hidden="true" />
       </button>
 
       <!-- Bottom Floating Control Pill (Slider + Mode Switcher + Shortcuts) -->
       <div
         :class="showControls || !clickOnlyControls ? 'opacity-100' : 'opacity-0 pointer-events-none'"
         :inert="!showControls && clickOnlyControls"
-        class="he-manga-controls absolute left-1/2 z-20 w-[min(620px,calc(100%-2rem))] rounded-2xl bg-black/75 backdrop-blur-xl border border-white/12 p-3 sm:px-4 sm:py-3 shadow-2xl transition-[transform,opacity] duration-250 ease-out flex flex-col gap-2.5 select-none"
+        class="he-manga-controls absolute left-1/2 z-20 flex w-[min(640px,calc(100%-2rem))] select-none flex-col gap-2 rounded-2xl bg-black/75 p-2.5 text-white ring-1 ring-inset ring-white/10 transition-[transform,opacity] duration-200 ease-out sm:px-3"
         :style="{
           bottom: 'calc(12px + env(safe-area-inset-bottom))',
           transform: `translate3d(-50%, ${isStripOpen ? '-184px' : (showControls || !clickOnlyControls ? '0px' : '12px')}, 0)`,
@@ -650,38 +651,38 @@ onBeforeUnmount(() => {
         @mouseleave="emit('controlsHover', false)"
         @click.stop
       >
-        <div class="flex items-center justify-between gap-3 text-xs">
+        <div class="flex items-center justify-between gap-2">
           <!-- Reading Mode Switcher -->
-          <div class="flex items-center rounded-xl bg-white/8 p-0.5 border border-white/10 text-white/70">
+          <div class="flex items-center gap-0.5 rounded-lg bg-white/8 p-0.5" role="group" aria-label="阅读模式">
             <button
               type="button"
               @click="setReadMode('single')"
-              class="flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all font-medium cursor-pointer"
-              :class="readMode === 'single' ? 'bg-accent text-white shadow-md font-bold' : 'hover:text-white hover:bg-white/5'"
+              class="he-reader-seg"
+              :class="readMode === 'single' ? 'bg-white/15 text-white' : 'text-white/65 hover:text-white'"
               title="单页模式" :aria-pressed="readMode === 'single'"
             >
-              <Square :size="13" />
-              <span>单页</span>
+              <Square :size="14" aria-hidden="true" />
+              <span class="hidden sm:inline">单页</span>
             </button>
             <button
               type="button"
               @click="setReadMode('double')"
-              class="flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all font-medium cursor-pointer"
-              :class="readMode === 'double' ? 'bg-accent text-white shadow-md font-bold' : 'hover:text-white hover:bg-white/5'"
+              class="he-reader-seg"
+              :class="readMode === 'double' ? 'bg-white/15 text-white' : 'text-white/65 hover:text-white'"
               title="双页跨页模式" :aria-pressed="readMode === 'double'"
             >
-              <Columns2 :size="13" />
-              <span>双页</span>
+              <Columns2 :size="14" aria-hidden="true" />
+              <span class="hidden sm:inline">双页</span>
             </button>
             <button
               type="button"
               @click="setReadMode('webtoon')"
-              class="flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all font-medium cursor-pointer"
-              :class="readMode === 'webtoon' ? 'bg-accent text-white shadow-md font-bold' : 'hover:text-white hover:bg-white/5'"
+              class="he-reader-seg"
+              :class="readMode === 'webtoon' ? 'bg-white/15 text-white' : 'text-white/65 hover:text-white'"
               title="连续卷轴模式 (条漫)" :aria-pressed="readMode === 'webtoon'"
             >
-              <ScrollText :size="13" />
-              <span>卷轴</span>
+              <ScrollText :size="14" aria-hidden="true" />
+              <span class="hidden sm:inline">卷轴</span>
             </button>
           </div>
 
@@ -690,29 +691,29 @@ onBeforeUnmount(() => {
             v-if="readMode === 'double'"
             type="button"
             @click="toggleRtl"
-            class="px-2.5 py-1 rounded-lg bg-white/8 hover:bg-white/15 border border-white/10 text-[11px] font-mono font-bold text-white/80 transition-all cursor-pointer"
+            class="he-reader-btn px-2.5 text-meta font-medium text-white/80 hover:bg-white/10 hover:text-white"
             :title="isRtl ? '日漫从右往左翻 (RTL)' : '普通从左往右翻 (LTR)'"
           >
-            {{ isRtl ? '日漫 RTL' : '标准 LTR' }}
+            {{ isRtl ? '从右往左' : '从左往右' }}
           </button>
 
-          <button v-if="imagePages && hasNextBatch" type="button" title="加载后续图片" class="px-2 min-h-11 rounded-lg bg-white/8 text-white/80" @click="emit('loadMore')">更多图片</button>
+          <button v-if="imagePages && hasNextBatch" type="button" title="加载后续图片" class="he-reader-btn px-2.5 text-meta font-medium text-white/80 hover:bg-white/10 hover:text-white" @click="emit('loadMore')">更多图片</button>
 
           <!-- Middle Page info -->
-          <div class="flex items-center gap-2 font-mono tracking-wider ml-auto text-white/70">
-            <span>PAGE <b class="text-white font-bold">{{ progressText }}</b></span>
-            <span class="text-accent font-bold text-xs">{{ progressPercent }}%</span>
+          <div class="ml-auto flex items-baseline gap-2 whitespace-nowrap px-1 tabular-nums">
+            <span class="text-body font-medium text-white">{{ progressText }}</span>
+            <span class="text-meta text-white/60">{{ progressPercent }}%</span>
           </div>
 
           <!-- Shortcut Guide Toggle Button -->
           <button
             type="button"
             @click="toggleShortcutGuide"
-            class="w-7 h-7 rounded-lg flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            class="he-reader-btn w-8 text-white/70 hover:bg-white/10 hover:text-white"
             :class="{ 'bg-white/15 text-white': showShortcutGuide }"
-            title="快捷键指南" data-keyboard-guide
+            title="快捷键指南" aria-label="快捷键指南" :aria-expanded="showShortcutGuide" data-keyboard-guide
           >
-            <Keyboard :size="15" />
+            <Keyboard :size="16" aria-hidden="true" />
           </button>
 
           <!-- Toggle Thumbnail Strip Button -->
@@ -720,17 +721,17 @@ onBeforeUnmount(() => {
             v-if="!imagePages && totalPages && totalPages > 0"
             type="button"
             @click="toggleStripCollapsed"
-            class="h-7 px-2 rounded-lg flex items-center gap-1.5 text-xs text-white/60 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-            :class="{ 'bg-accent/20 text-accent font-bold': isStripOpen }"
+            class="he-reader-btn gap-1.5 px-2.5 text-meta font-medium text-white/70 hover:bg-white/10 hover:text-white"
+            :class="{ 'bg-white/15 text-white': isStripOpen }"
             :title="isStripOpen ? '收起底部预览长条' : '展开底部预览长条'"
           >
-            <GalleryHorizontal :size="14" />
-            <span class="text-[11px] hidden sm:inline">{{ isStripOpen ? '收起目录' : '展开目录' }}</span>
+            <GalleryHorizontal :size="15" aria-hidden="true" />
+            <span class="hidden sm:inline">{{ isStripOpen ? '收起目录' : '展开目录' }}</span>
           </button>
         </div>
 
         <!-- Interactive Progress Slider -->
-        <div class="relative flex items-center group/slider">
+        <div class="relative flex items-center px-1">
           <input
             type="range"
             :min="0"
@@ -738,7 +739,8 @@ onBeforeUnmount(() => {
             :step="stepSize"
             :value="currentPage"
             @input="onSliderInput"
-            class="w-full h-2 rounded-lg bg-white/15 appearance-none cursor-pointer accent-accent transition-all focus:outline-none"
+            class="he-reader-slider h-5 w-full cursor-pointer"
+            :style="{ '--fill': `${Math.min(100, Math.max(0, currentPage / Math.max(1, (totalPages || 1) - 1) * 100))}%` }"
             :title="`第 ${currentPage + 1} 页`"
           />
         </div>
@@ -747,42 +749,42 @@ onBeforeUnmount(() => {
       <!-- Shortcut Guide Popover -->
       <div
         v-if="showShortcutGuide"
-        class="absolute z-30 w-80 rounded-2xl bg-[#121216]/95 backdrop-blur-2xl border border-white/15 p-4 shadow-2xl text-xs text-white/85 animate-fluid-entrance select-none"
+        class="absolute z-30 w-80 max-w-[calc(100%-2rem)] select-none rounded-2xl bg-black/90 p-4 text-meta text-white/85 ring-1 ring-inset ring-white/12 animate-fluid-entrance"
         :style="{
           bottom: isStripOpen ? '280px' : '96px',
           left: '50%',
           transform: 'translateX(-50%)',
-          transition: 'bottom 240ms cubic-bezier(0.16, 1, 0.3, 1)',
+          transition: 'bottom 240ms var(--ease-out)',
         }"
         @click.stop
       >
-        <div class="flex items-center justify-between pb-2 mb-2.5 border-b border-white/10">
-          <span class="font-bold flex items-center gap-1.5 text-accent">
-            <Keyboard :size="14" />
-            阅读器快捷键指南
+        <div class="mb-3 flex items-center justify-between">
+          <span class="flex items-center gap-2 text-body font-medium text-white">
+            <Keyboard :size="16" class="text-white/60" aria-hidden="true" />
+            阅读器快捷键
           </span>
-          <button @click="showShortcutGuide = false" class="text-white/40 hover:text-white text-sm cursor-pointer">✕</button>
+          <button type="button" class="he-reader-btn w-8 text-white/60 hover:bg-white/10 hover:text-white" aria-label="关闭快捷键指南" title="关闭" @click="showShortcutGuide = false"><X :size="16" aria-hidden="true" /></button>
         </div>
-        <div class="space-y-2 text-[11px]">
+        <div class="space-y-2.5">
           <div class="flex items-center justify-between">
-            <span class="text-white/50">翻页 / 换页</span>
-            <kbd class="px-1.5 py-0.5 rounded bg-white/10 border border-white/15 font-mono">← / →</kbd>
+            <span class="text-white/65">翻页 / 换页</span>
+            <kbd class="he-reader-kbd">← / →</kbd>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-white/50">滚轮翻页</span>
-            <kbd class="px-1.5 py-0.5 rounded bg-white/10 border border-white/15 font-mono">鼠标滚轮</kbd>
+            <span class="text-white/65">滚轮翻页</span>
+            <kbd class="he-reader-kbd">鼠标滚轮</kbd>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-white/50">画面缩放</span>
-            <kbd class="px-1.5 py-0.5 rounded bg-white/10 border border-white/15 font-mono">Ctrl + 滚轮 / + -</kbd>
+            <span class="text-white/65">画面缩放</span>
+            <kbd class="he-reader-kbd">Ctrl + 滚轮 / + -</kbd>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-white/50">适应屏幕 / 重置</span>
-            <kbd class="px-1.5 py-0.5 rounded bg-white/10 border border-white/15 font-mono">0 / 双击</kbd>
+            <span class="text-white/65">适应屏幕 / 重置</span>
+            <kbd class="he-reader-kbd">0 / 双击</kbd>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-white/50">拖拽平移</span>
-            <kbd class="px-1.5 py-0.5 rounded bg-white/10 border border-white/15 font-mono">按住鼠标左键</kbd>
+            <span class="text-white/65">拖拽平移</span>
+            <kbd class="he-reader-kbd">按住鼠标左键</kbd>
           </div>
         </div>
       </div>
@@ -794,7 +796,7 @@ onBeforeUnmount(() => {
           ? 'opacity-100'
           : 'opacity-0 pointer-events-none'"
         :inert="!showControls"
-        class="he-manga-zoom absolute right-6 z-20 flex items-center gap-1 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 px-2 py-1.5 shadow-2xl transition-[transform,opacity] duration-250 ease-out select-none text-white/80"
+        class="he-manga-zoom absolute right-6 z-20 flex select-none items-center gap-0.5 rounded-2xl bg-black/75 p-1 text-white/80 ring-1 ring-inset ring-white/10 transition-[transform,opacity] duration-200 ease-out"
         :style="{
           bottom: 'calc(12px + env(safe-area-inset-bottom))',
           transform: `translate3d(0, ${isStripOpen ? '-184px' : (showControls ? '0px' : '12px')}, 0)`,
@@ -807,16 +809,17 @@ onBeforeUnmount(() => {
         <button
           @click="zoomOut()"
           :disabled="zoomScale <= 1"
-          class="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/10 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
+          class="he-reader-btn w-8 hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-35"
+          aria-label="缩小"
           title="缩小 (Ctrl + 滚轮向下 / 快捷键: -)"
         >
-          <ZoomOut :size="15" />
+          <ZoomOut :size="16" aria-hidden="true" />
         </button>
 
         <button
           @click="resetZoom"
-          class="px-2 py-1 rounded-lg text-xs font-mono font-bold hover:bg-white/10 hover:text-white transition-all cursor-pointer"
-          :class="isZoomed ? 'text-accent' : 'text-white/60'"
+          class="he-reader-btn min-w-14 px-2 text-meta font-medium tabular-nums hover:bg-white/10 hover:text-white"
+          :class="isZoomed ? 'text-white' : 'text-white/65'"
           title="重置缩放 (快捷键: 0)"
         >
           {{ zoomPercent }}%
@@ -825,19 +828,21 @@ onBeforeUnmount(() => {
         <button
           @click="zoomIn()"
           :disabled="zoomScale >= 5"
-          class="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/10 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
+          class="he-reader-btn w-8 hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-35"
+          aria-label="放大"
           title="放大 (Ctrl + 滚轮向上 / 快捷键: +)"
         >
-          <ZoomIn :size="15" />
+          <ZoomIn :size="16" aria-hidden="true" />
         </button>
 
         <button
           v-if="isZoomed"
           @click="resetZoom"
-          class="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/10 text-white/60 hover:text-white transition-all cursor-pointer ml-0.5"
+          class="he-reader-btn w-8 text-white/65 hover:bg-white/10 hover:text-white"
+          aria-label="适应屏幕"
           title="适应屏幕 (快捷键: 0)"
         >
-          <RotateCcw :size="13" />
+          <RotateCcw :size="15" aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -849,35 +854,35 @@ onBeforeUnmount(() => {
         ? 'translate-y-0 opacity-100'
         : 'translate-y-full opacity-0 pointer-events-none'"
       :inert="!isStripOpen"
-      class="he-manga-strip absolute bottom-0 inset-x-0 z-30 border-t border-white/10 bg-[#0c0c0e]/95 backdrop-blur-2xl transition-[transform,opacity] duration-250 ease-out flex flex-col shadow-2xl select-none"
+      class="he-manga-strip absolute inset-x-0 bottom-0 z-30 flex select-none flex-col border-t border-white/10 bg-black/90 transition-[transform,opacity] duration-200 ease-out"
       style="will-change: transform, opacity;"
       @click.stop
       @mouseenter="onStripMouseEnter"
       @mouseleave="onStripMouseLeave"
     >
-      <div class="flex items-center justify-between text-xs font-semibold px-6 py-1.5 text-white/50 border-b border-white/5">
-        <div class="flex items-center gap-3">
-          <span>预览目录 (共 {{ totalPages }} 页)</span>
-          <span class="text-white/30 text-[11px] font-mono">当前第 {{ currentPage + 1 }} 页</span>
+      <div class="flex items-center justify-between px-6 py-0.5 text-meta">
+        <div class="flex items-center gap-2 tabular-nums">
+          <span class="font-medium text-white/85">预览目录</span>
+          <span class="text-white/55">共 {{ totalPages }} 页 · 第 {{ currentPage + 1 }} 页</span>
         </div>
         <button
           type="button"
           @click="toggleStripCollapsed"
-          class="flex items-center gap-1 text-[11px] text-white/50 hover:text-white transition-colors cursor-pointer py-0.5 px-2 rounded-md hover:bg-white/10"
+          class="he-reader-btn !h-6 gap-1 px-2 text-meta text-white/65 hover:bg-white/10 hover:text-white"
           title="收起预览目录"
         >
-          <ChevronDown :size="14" />
+          <ChevronDown :size="14" aria-hidden="true" />
           <span>收起</span>
         </button>
       </div>
 
       <div
         v-if="hoverThumbIndex >= 0"
-        class="absolute z-50 pointer-events-none rounded-xl border border-white/15 bg-black/95 p-1 shadow-2xl"
+        class="pointer-events-none absolute z-50 rounded-2xl bg-black/95 p-1 ring-1 ring-inset ring-white/15"
         :style="{ width: '200px', height: '268px', left: `${hoverThumbX}px`, top: `${hoverThumbY}px`, transform: 'translate(-50%, -100%)' }"
       >
-        <img :src="thumbnailUrl(hoverThumbIndex)" class="w-full h-full object-contain rounded-lg" alt="Preview" />
-        <div class="absolute bottom-1 inset-x-1 bg-black/70 rounded-b-lg py-0.5 text-[10px] font-black text-center text-white/90">
+        <img :src="thumbnailUrl(hoverThumbIndex)" class="h-full w-full rounded-lg object-contain" alt="" />
+        <div class="absolute inset-x-1 bottom-1 rounded-b-lg bg-black/70 py-0.5 text-center text-caption font-medium tabular-nums text-white/90">
           第 {{ hoverThumbIndex + 1 }} 页
         </div>
       </div>
@@ -893,11 +898,11 @@ onBeforeUnmount(() => {
           <div
             v-for="item in visibleThumbnails"
             :key="item.index"
-            class="absolute top-0 cursor-pointer rounded-xl border-2 transition-[border-color,transform,box-shadow] duration-150"
+            class="absolute top-0.5 cursor-pointer overflow-hidden rounded-lg border-2 transition-colors duration-150"
             style="contain: layout paint style;"
             :class="isThumbnailActive(item.index)
-              ? 'border-accent shadow-[0_0_16px_rgba(129,140,248,0.5)] bg-accent/10 scale-105 z-10'
-              : 'border-white/8 hover:border-white/25 bg-white/5'"
+              ? 'z-10 border-accent bg-accent/10'
+              : 'border-transparent bg-white/5 hover:border-white/30'"
             :style="{ left: `${item.left}px`, width: `${THUMB_W}px`, height: `${THUMB_H}px` }"
             @click="onThumbClick(item.index)"
             @mouseenter="onThumbEnter(item.index, $event)"
@@ -907,14 +912,14 @@ onBeforeUnmount(() => {
               :src="thumbnailUrl(item.index)"
               loading="lazy"
               decoding="async"
-              class="w-full h-full object-cover rounded-[10px]"
-              :class="isThumbnailActive(item.index) ? 'brightness-110' : 'hover:brightness-110'"
+              class="h-full w-full object-cover"
+              :class="isThumbnailActive(item.index) ? '' : 'opacity-80 hover:opacity-100'"
               draggable="false"
-              alt="Page thumbnail"
+              alt=""
             />
             <div
-              class="absolute bottom-0 inset-x-0 rounded-b-[10px] py-0.5 text-[10px] font-black text-center"
-              :class="isThumbnailActive(item.index) ? 'bg-accent/80 text-white' : 'bg-black/60 text-white/75'"
+              class="absolute inset-x-0 bottom-0 py-0.5 text-center text-caption font-medium tabular-nums"
+              :class="isThumbnailActive(item.index) ? 'bg-accent text-on-accent' : 'bg-black/65 text-white/85'"
             >
               {{ item.index + 1 }}
             </div>
@@ -926,6 +931,70 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.he-reader-seg {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 6px;
+  padding-inline: 10px;
+  font-size: var(--text-meta, 0.8125rem);
+  font-weight: 500;
+  transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out);
+}
+.he-reader-btn {
+  display: inline-flex;
+  height: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out);
+}
+.he-reader-kbd {
+  display: inline-flex;
+  height: 22px;
+  align-items: center;
+  border-radius: 6px;
+  border: 1px solid rgb(255 255 255 / 0.15);
+  background: rgb(255 255 255 / 0.08);
+  padding-inline: 6px;
+  font-size: 0.75em;
+  color: rgb(255 255 255 / 0.85);
+}
+.he-reader-slider {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+}
+.he-reader-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(to right, rgb(var(--color-accent)) var(--fill, 0%), rgb(255 255 255 / 0.2) var(--fill, 0%));
+}
+.he-reader-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(to right, rgb(var(--color-accent)) var(--fill, 0%), rgb(255 255 255 / 0.2) var(--fill, 0%));
+}
+.he-reader-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgb(var(--color-accent) / 0.45);
+}
+.he-reader-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgb(var(--color-accent) / 0.45);
+}
+.he-reader-slider:focus-visible { outline: 2px solid rgb(var(--color-accent)); outline-offset: 2px; border-radius: 4px; }
 @media (max-width: 899px) {
   .he-manga-controls > div:first-child { flex-wrap: wrap; gap: 4px; }
   .he-manga-controls button { min-height: 44px; min-width: 44px; }
@@ -935,7 +1004,7 @@ onBeforeUnmount(() => {
   .he-manga-zoom button { min-height: 44px; min-width: 44px; }
   .he-manga-strip { padding-bottom: env(safe-area-inset-bottom); }
   .he-manga-strip button { min-height: 44px; }
-  button.absolute.left-5 { left: 8px; width: 44px; height: 44px; }
-  button.absolute.right-5 { right: 8px; width: 44px; height: 44px; }
+  .he-page-nav.left-5 { left: 8px; width: 44px; height: 44px; }
+  .he-page-nav.right-5 { right: 8px; width: 44px; height: 44px; }
 }
 </style>
