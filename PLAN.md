@@ -91,6 +91,13 @@ Pawchive 外部源模块（关联设计：`docs/pawchive-api-contract.md` 与用
 | PW-14 | Windows、Linux Docker 与窄屏检查 | [x] Linux Docker 健康、Chrome 320/390/768/1440px 与 Windows CI 均通过 |
 | PW-15 | 运维说明、开关、备份与回滚验证 | [x] 生产健康、数据库热备与完整性检查、旧镜像在迁移后数据库副本上的回滚冒烟通过 |
 
+## Hermes 媒体库管家（2026-10-10）
+
+- [x] 已确认网页聊天、管理员入口、建议经确认才写入；设计与实施计划已按仓库代码及官方协议文档复核。
+- [ ] 后续依实施计划执行并上线；当前尚未开始安装、代码实现、业务测试或部署。H01 先取得版本、模型兼容性、工具权限与资源运行证据。
+- [设计文档](docs/superpowers/specs/2026-10-10-hermes-media-steward-design.md)
+- [实施任务与验收清单](docs/superpowers/plans/2026-10-10-hermes-media-steward.md)
+
 ## 长期可选项
 
 - 媒体达到 5～10 万项后再评估 SQLite FTS5、组合索引或 keyset pagination。
