@@ -176,7 +176,7 @@ const frameStyle = computed(() => {
     </div>
 
     <div class="mt-2.5 w-full min-w-0 px-0.5">
-      <h3 class="line-clamp-2 min-h-[2.75em] text-meta font-medium leading-snug text-ink sm:text-body sm:leading-snug" :title="media.title">
+      <h3 class="line-clamp-2 min-h-[2.75em] wrap-anywhere text-meta font-medium leading-snug text-ink sm:text-body sm:leading-snug" :title="media.title">
         {{ media.title }}
       </h3>
       <div class="mt-1 flex min-w-0 items-center gap-1.5 text-caption text-subtle tabular-nums">

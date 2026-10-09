@@ -403,8 +403,3 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
   </div>
   </div>
 </template>
-
-<style scoped>
-/* Long unbroken file names (twitter_@name_1784…) must wrap inside the card title clamp. */
-.creator-media-grid :deep(h3) { overflow-wrap: anywhere; }
-</style>

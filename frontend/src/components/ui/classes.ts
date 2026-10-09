@@ -61,7 +61,7 @@ export const controlClass = (size: ControlSize = 'md', invalid = false) => [
 
 export const chipClass = (selected = false, size: 'sm' | 'md' = 'md') => [
   'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border font-medium transition-colors duration-150 ease-out focus-ring',
-  size === 'sm' ? 'h-7 px-2.5 text-caption' : 'h-8 px-3 text-meta',
+  size === 'sm' ? 'h-7 px-2.5 text-caption pointer-coarse:h-9' : 'h-8 px-3 text-meta pointer-coarse:h-10',
   selected
     ? 'border-accent/50 bg-accent/15 text-accent-glow'
     : 'border-line bg-surface text-muted hover:border-line-strong hover:text-ink',

@@ -45,7 +45,7 @@ const onKeydown = (event: KeyboardEvent, index: number) => {
       :tabindex="model === option.value ? 0 : -1"
       class="inline-flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-medium transition-colors duration-150 ease-out focus-ring-inset"
       :class="[
-        size === 'sm' ? 'h-7 px-2.5 text-caption' : 'h-8 px-3 text-meta',
+        size === 'sm' ? 'h-7 px-2.5 text-caption pointer-coarse:h-9' : 'h-8 px-3 text-meta pointer-coarse:h-10',
         block ? 'flex-1' : '',
         model === option.value ? 'bg-surface-3 text-ink shadow-[0_1px_2px_rgb(0_0_0/0.35)]' : 'text-subtle hover:text-ink',
       ]"
