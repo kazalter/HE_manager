@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
-import { Check, FolderOpen, FolderPlus, HardDrive, Image as ImageIcon, Keyboard, Loader2, Network, Palette, RefreshCw, Sparkles, Timer, Trash2, X } from 'lucide-vue-next'
+import { Check, CheckCircle2, FolderOpen, FolderPlus, HardDrive, Pipette, RefreshCw, Trash2 } from 'lucide-vue-next'
+import { EmptyState, PageHeader, SectionHeader, UiBadge, UiButton, UiCard, UiIconButton, UiModal, UiSpinner, controlClass, fieldHintClass, fieldLabelClass } from '../components/ui'
 import { API_BASE_URL } from '../config'
 import { applyTheme, getStoredTheme, themes } from '../theme'
 import type { Folder } from '../types'
@@ -239,9 +240,24 @@ const removeFolder = async (id: number) => {
   }
 }
 
+const addModalOpen = computed({
+  get: () => showAddModal.value,
+  set: (value: boolean) => { if (!value) closeAddModal() },
+})
+
+const shortcutGroups = [
+  { title: '全局与导航', items: [['打开 / 聚焦搜索', '/ 或 Ctrl+K'], ['关闭浮层 / 弹窗', 'Esc'], ['展开 / 折叠侧栏', '点击底栏']] },
+  { title: '漫画阅读器', items: [['前一页 / 后一页', '← / →'], ['重置 / 适合屏幕', '0'], ['放大 / 缩小图像', '+ / -']] },
+  { title: '视频播放器', items: [['播放 / 暂停', 'Space'], ['快退 / 快进 5 秒', '← / →'], ['音量调节 / 全屏', '↑ / ↓ / F']] },
+  { title: '音频与打标', items: [['音频播放 / 暂停', 'Space'], ['一键快速打星', '1 ~ 5'], ['联想选择补全标签', 'Enter']] },
+]
+
 const formatLocalTime = (timeStr: string | null) => {
   if (!timeStr) return ''
-  return timeStr.replace('T', ' ').split('.')[0]
+  const full = timeStr.replace('T', ' ').split('.')[0] || ''
+  // "2026-10-08 21:00:00" -> "10-08 21:00" this year, "2025-10-08 21:00" otherwise.
+  const minutes = full.slice(0, 16)
+  return minutes.startsWith(`${new Date().getFullYear()}-`) ? minutes.slice(5) : minutes
 }
 
 onMounted(() => {
@@ -251,385 +267,310 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="p-6 md:p-8 max-w-5xl mx-auto z-10 relative">
-    <header class="he-page-header mb-10 flex flex-wrap justify-between items-end gap-5">
-      <div>
-        <h1 class="text-3xl md:text-4xl font-black mb-3 text-white">偏好设置</h1>
-        <p class="text-white/50 text-base md:text-lg">配置媒体库来源、扫描行为和界面主题。</p>
-      </div>
-      <button @click="openAddModal" class="bg-accent hover:bg-accent-glow text-white px-5 py-3 rounded-xl font-semibold flex items-center gap-2 transition-all shadow-lg shadow-accent/20 active:scale-95">
-        <FolderPlus :size="20" />
-        添加媒体库
-      </button>
-    </header>
+  <div class="min-h-full">
+    <PageHeader title="设置" description="配置媒体库来源、扫描行为和界面主题">
+      <template #actions>
+        <UiButton variant="primary" class="pointer-coarse:h-11" @click="openAddModal">
+          <template #icon><FolderPlus :size="16" /></template>
+          添加媒体库
+        </UiButton>
+      </template>
+    </PageHeader>
 
-    <div class="space-y-8">
-      <section class="border border-white/6 bg-white/[0.02] backdrop-blur-3xl rounded-3xl p-5 md:p-6 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)]">
-        <div class="flex items-center justify-between mb-4">
-          <div class="flex items-center gap-2.5">
-            <Palette class="text-accent" :size="20" />
-            <h2 class="text-base font-bold text-white/90">界面主题</h2>
-            <span class="text-xs text-white/40">选择全局高亮配色</span>
-          </div>
-        </div>
+    <div class="page-gutter pb-12">
+      <div class="page-container">
+        <div class="max-w-[960px] space-y-10">
+          <!-- 媒体库目录 -->
+          <section>
+            <SectionHeader title="媒体库目录" :count="folders.length ? `${folders.length} 个` : undefined" description="扫描这些目录中的视频、漫画、图片和音频">
+              <template #actions>
+                <UiButton
+                  v-if="folders.length > 0"
+                  variant="secondary"
+                  size="sm"
+                  class="pointer-coarse:h-10"
+                  :disabled="isAnyScanning"
+                  :title="isAnyScanning ? '正在扫描目录中' : '一键刷新扫描所有已挂载目录'"
+                  @click="scanAllFolders"
+                >
+                  <template #icon><RefreshCw :size="14" :class="{ 'animate-spin': isAnyScanning }" /></template>
+                  {{ isAnyScanning ? '扫描中…' : '全部重新扫描' }}
+                </UiButton>
+              </template>
+            </SectionHeader>
 
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-          <button
-            v-for="theme in themes"
-            :key="theme.id"
-            type="button"
-            @click="selectTheme(theme.id)"
-            :aria-pressed="selectedTheme === theme.id"
-            :class="selectedTheme === theme.id ? 'border-accent bg-accent/15 text-white ring-1 ring-accent/30 shadow-md shadow-accent/10' : 'border-white/8 bg-white/[0.02] text-white/75 hover:bg-white/5 hover:border-white/15'"
-            class="group relative text-left rounded-xl border p-2.5 transition-all flex items-center gap-2.5 cursor-pointer"
-          >
-            <div class="flex shrink-0">
-              <span
-                v-for="color in theme.swatches.slice(0, 2)"
-                :key="color"
-                class="w-4 h-4 rounded-full border border-white/20 -mr-1 shadow-sm"
-                :style="{ backgroundColor: color }"
-              ></span>
-            </div>
-            <div class="min-w-0 flex-1">
-              <p class="font-bold text-xs text-white truncate">{{ theme.name }}</p>
-            </div>
-            <span v-if="selectedTheme === theme.id" class="w-2 h-2 rounded-full bg-accent shrink-0 ring-2 ring-accent/30"></span>
-          </button>
+            <UiCard v-if="folders.length === 0" padding="none">
+              <EmptyState compact :icon="HardDrive" title="尚未添加任何扫描来源" description="添加一个本机目录后，HE Manager 会自动识别其中的媒体。">
+                <UiButton variant="secondary" size="sm" @click="openAddModal"><template #icon><FolderPlus :size="14" /></template>添加媒体库</UiButton>
+              </EmptyState>
+            </UiCard>
 
-          <!-- Custom Theme Picker -->
-          <label
-            :class="selectedTheme.startsWith('#') ? 'border-accent bg-accent/15 text-white ring-1 ring-accent/30 shadow-md shadow-accent/10' : 'border-white/8 bg-white/[0.02] text-white/75 hover:bg-white/5 hover:border-white/15'"
-            class="relative text-left rounded-xl border p-2.5 transition-all flex items-center gap-2.5 cursor-pointer"
-          >
-            <input 
-              type="color" 
-              :value="selectedTheme.startsWith('#') ? selectedTheme : '#818cf8'"
-              @input="(e) => selectTheme((e.target as HTMLInputElement).value)"
-              class="absolute opacity-0 w-0 h-0"
-              title="选择自定义颜色"
-            />
-            <span
-              class="w-4 h-4 rounded-full shrink-0 border border-white/20 shadow-sm"
-              :style="selectedTheme.startsWith('#') ? { backgroundColor: selectedTheme } : { background: 'linear-gradient(135deg, #ff0000, #ffff00, #00ffff, #9400d3)' }"
-            ></span>
-            <div class="min-w-0 flex-1 pointer-events-none">
-              <p class="font-bold text-xs text-white truncate">自定义颜色</p>
-            </div>
-            <span v-if="selectedTheme.startsWith('#')" class="w-2 h-2 rounded-full bg-accent shrink-0 ring-2 ring-accent/30"></span>
-          </label>
-        </div>
-      </section>
-
-      <section class="border border-white/6 bg-white/[0.02] backdrop-blur-3xl rounded-3xl p-6 md:p-8 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)]">
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center border border-accent/20">
-              <Network :size="20" />
-            </div>
-            <div>
-              <h2 class="text-base font-bold text-white/90">外部收藏代理</h2>
-              <p class="text-xs text-white/45 mt-0.5">统一用于 WNACG、X 收藏和 Pawchive 的服务端请求</p>
-            </div>
-          </div>
-          <span v-if="loadingProxy" role="status" class="text-xs text-white/45 flex items-center gap-1.5">
-            <Loader2 :size="14" class="animate-spin text-accent" /> 正在读取
-          </span>
-          <span v-else-if="proxySaved" role="status" class="text-xs text-emerald-400 flex items-center gap-1.5">
-            <Check :size="14" /> 已保存
-          </span>
-        </div>
-
-        <form class="space-y-3" @submit.prevent="saveExternalProxy">
-          <label for="external-favorites-proxy" class="block text-xs font-semibold text-white/65">HTTP 代理地址</label>
-          <div class="flex flex-col sm:flex-row gap-3">
-            <input
-              id="external-favorites-proxy"
-              v-model="externalProxy"
-              @input="proxyTestMessage = ''; proxyTestSucceeded = false"
-              type="url"
-              autocomplete="url"
-              :disabled="loadingProxy || savingProxy || testingProxy"
-              placeholder="例如 http://127.0.0.1:7890"
-              class="flex-1 min-w-0 bg-black/25 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/35 focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:opacity-50"
-            />
-            <div class="grid grid-cols-2 gap-3 sm:flex">
-              <button
-                type="button"
-                :disabled="loadingProxy || savingProxy || testingProxy"
-                class="min-h-11 px-4 rounded-xl border border-white/10 bg-white/5 text-white/80 text-sm font-bold inline-flex items-center justify-center gap-2 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                @click="testExternalProxy"
+            <UiCard v-else padding="none" class="divide-y divide-line overflow-hidden">
+              <div
+                v-for="folder in folders"
+                :key="folder.id"
+                class="flex items-start gap-3 px-4 py-3.5 sm:items-center"
+                :class="folder.status === 'error' ? 'bg-danger/5' : ''"
               >
-                <Loader2 v-if="testingProxy" :size="15" class="animate-spin" />
-                <RefreshCw v-else :size="15" />
-                测试连通性
-              </button>
-              <button
-                type="submit"
-                :disabled="loadingProxy || savingProxy || testingProxy"
-                class="min-h-11 px-5 rounded-xl bg-accent text-white text-sm font-bold inline-flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-              >
-                <Loader2 v-if="savingProxy" :size="15" class="animate-spin" />
-                保存设置
-              </button>
-            </div>
-          </div>
-          <p class="text-xs text-white/40">留空表示直连。支持无账号密码的 HTTP 代理；该设置也会用于 Pawchive 登录、作者列表和媒体请求。</p>
-          <p v-if="proxyTestMessage" :role="proxyTestSucceeded ? 'status' : 'alert'" :class="proxyTestSucceeded ? 'text-xs text-emerald-300' : 'text-xs text-red-300'">{{ proxyTestMessage }}</p>
-          <p v-if="proxyError" role="alert" class="text-xs text-red-300">{{ proxyError }}</p>
-        </form>
-      </section>
-
-      <section class="border border-white/6 bg-white/[0.02] backdrop-blur-3xl rounded-3xl p-6 md:p-8 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)]">
-        <div class="flex flex-col items-start sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <h2 class="text-xs font-black tracking-wider uppercase text-white/55 flex items-center gap-3">
-            <HardDrive class="text-emerald-400" :size="18" />
-            已挂载目录
-            <span v-if="folders.length > 0" class="text-white/30 text-[11px] font-mono font-normal">({{ folders.length }})</span>
-          </h2>
-
-          <button
-            v-if="folders.length > 0"
-            @click="scanAllFolders"
-            :disabled="isAnyScanning"
-            class="min-h-9 w-full sm:w-auto px-3.5 rounded-xl bg-white/5 hover:bg-accent/20 hover:text-accent border border-white/10 hover:border-accent/30 flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:pointer-events-none active:scale-95 text-xs font-bold text-white/80 cursor-pointer shadow-sm"
-            :title="isAnyScanning ? '正在扫描目录中' : '一键刷新扫描所有已挂载目录'"
-          >
-            <RefreshCw :class="{ 'animate-spin text-accent': isAnyScanning }" :size="14" />
-            <span>{{ isAnyScanning ? '扫描中...' : '一键刷新所有目录' }}</span>
-          </button>
-        </div>
-
-        <div v-if="folders.length === 0" class="text-center py-12 border border-dashed border-white/10 rounded-xl bg-white/[0.01]">
-          <p class="text-white/35 font-medium text-sm">尚未添加任何扫描来源</p>
-        </div>
-
-        <div v-else class="space-y-4">
-          <div
-            v-for="folder in folders"
-            :key="folder.id"
-            class="group relative flex flex-col items-stretch sm:flex-row sm:items-center sm:justify-between gap-4 p-5 bg-white/[0.01] hover:bg-white/5 border rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] transition-all duration-300"
-            :class="folder.status === 'scanning' ? 'border-accent/40 bg-accent/[0.04]' : 'border-white/8'"
-          >
-            <div class="min-w-0 w-full sm:w-auto sm:flex-1">
-              <p class="font-mono text-sm md:text-base text-white/90 break-all" :title="folder.path">{{ folder.path }}</p>
-              <div class="flex flex-wrap items-center gap-3 mt-2">
-                <span class="text-[10px] font-black bg-white/10 px-2 py-0.5 rounded border border-white/10 text-white/65">
-                  {{ scanModeLabel(folder.scan_mode) }}
+                <span
+                  class="mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg sm:mt-0"
+                  :class="folder.status === 'error' ? 'bg-danger/12 text-danger' : folder.status === 'scanning' ? 'bg-accent/15 text-accent-glow' : 'bg-surface-2 text-subtle'"
+                  aria-hidden="true"
+                >
+                  <HardDrive :size="18" />
                 </span>
-                <span v-if="folder.scan_mode === 'video' || folder.scan_mode === 'auto'" class="text-[10px] font-black bg-white/10 px-2 py-0.5 rounded border border-white/10 text-white/65">
-                  {{ folder.thumbnail_enabled ? `预览间隔 ${folder.thumbnail_interval} 秒` : '进度预览关闭' }}
-                </span>
-                <p class="text-sm flex flex-wrap items-center gap-2" :class="folder.status === 'scanning' ? 'text-accent font-bold' : 'text-white/80'">
-                  <span v-if="folder.status === 'scanning'" class="relative flex h-2.5 w-2.5">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-accent"></span>
-                  </span>
-                  <span v-else class="w-2 h-2 rounded-full bg-emerald-400"></span>
-                  {{ folder.status === 'scanning' ? '深度扫描中...' : '空闲' }}
-                  <span class="text-white/50 font-normal" v-if="folder.last_scanned_at">
-                    上次扫描: {{ formatLocalTime(folder.last_scanned_at) }}
-                  </span>
-                </p>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate font-mono text-meta text-ink" :title="folder.path">{{ folder.path }}</p>
+                  <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                    <UiBadge>{{ scanModeLabel(folder.scan_mode) }}</UiBadge>
+                    <UiBadge v-if="folder.scan_mode === 'video' || folder.scan_mode === 'auto'">
+                      {{ folder.thumbnail_enabled ? `预览 ${folder.thumbnail_interval} 秒` : '预览关闭' }}
+                    </UiBadge>
+                    <span class="inline-flex items-center gap-1.5 text-caption" :class="folder.status === 'scanning' ? 'text-accent-glow' : folder.status === 'error' ? 'text-danger' : 'text-subtle'">
+                      <span class="size-1.5 rounded-full" :class="folder.status === 'scanning' ? 'bg-accent animate-pulse' : folder.status === 'error' ? 'bg-danger' : 'bg-success'" aria-hidden="true"></span>
+                      {{ folder.status === 'scanning' ? '扫描中' : folder.status === 'error' ? '扫描出错' : '空闲' }}
+                    </span>
+                    <span v-if="folder.last_scanned_at" class="whitespace-nowrap text-caption text-subtle tabular-nums" :title="folder.last_scanned_at.replace('T', ' ').split('.')[0]">上次扫描 {{ formatLocalTime(folder.last_scanned_at) }}</span>
+                  </div>
+                </div>
+                <div class="flex shrink-0 items-center gap-1">
+                  <UiIconButton :label="folder.status === 'scanning' ? '扫描中' : '重新扫描'" :disabled="folder.status === 'scanning'" @click="scanFolder(folder.id)">
+                    <RefreshCw :size="16" :class="{ 'animate-spin': folder.status === 'scanning' }" />
+                  </UiIconButton>
+                  <UiIconButton label="从库中移除" class="hover:!bg-danger/12 hover:!text-danger" @click="removeFolder(folder.id)">
+                    <Trash2 :size="16" />
+                  </UiIconButton>
+                </div>
               </div>
-            </div>
+            </UiCard>
+          </section>
 
-            <div class="flex w-full sm:w-auto justify-end gap-2 shrink-0">
+          <!-- 界面主题 -->
+          <section>
+            <SectionHeader title="界面主题" description="选择全局强调色" />
+            <div class="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3">
               <button
-                @click="scanFolder(folder.id)"
-                :disabled="folder.status === 'scanning'"
-                class="h-11 px-3 rounded-xl bg-white/5 hover:bg-accent/20 hover:text-accent flex items-center justify-center gap-2 transition-all disabled:opacity-50 active:scale-95"
-                title="重新扫描"
+                v-for="theme in themes"
+                :key="theme.id"
+                type="button"
+                :aria-pressed="selectedTheme === theme.id"
+                class="group rounded-2xl border bg-surface p-2 text-left transition-colors duration-150 focus-ring"
+                :class="selectedTheme === theme.id ? 'border-accent' : 'border-line hover:border-line-strong'"
+                @click="selectTheme(theme.id)"
               >
-                <RefreshCw :class="{ 'animate-spin text-accent': folder.status === 'scanning' }" :size="20" />
-                <span class="hidden lg:inline text-xs font-bold">{{ folder.status === 'scanning' ? '扫描中' : '重新扫描' }}</span>
+                <span class="block h-14 overflow-hidden rounded-lg border border-line p-2" :style="{ backgroundColor: theme.swatches[0] }" aria-hidden="true">
+                  <span class="flex h-full items-end gap-1.5">
+                    <span class="h-full flex-1 rounded-md" :style="{ backgroundColor: theme.swatches[1] }"></span>
+                    <span class="h-3/5 flex-1 rounded-md" :style="{ backgroundColor: theme.swatches[1] }"></span>
+                    <span class="size-4 shrink-0 self-start rounded-full" :style="{ backgroundColor: theme.swatches[2] }"></span>
+                  </span>
+                </span>
+                <span class="mt-2 flex items-center gap-1.5 px-1 pb-0.5">
+                  <span class="min-w-0 flex-1 truncate text-meta font-medium" :class="selectedTheme === theme.id ? 'text-ink' : 'text-muted'">{{ theme.name }}</span>
+                  <Check v-if="selectedTheme === theme.id" :size="15" class="shrink-0 text-accent" aria-hidden="true" />
+                </span>
               </button>
 
-              <button
-                @click="removeFolder(folder.id)"
-                class="h-11 px-3 rounded-xl bg-red-500/5 border border-red-400/10 text-red-300/70 hover:bg-red-500/15 hover:text-red-200 hover:border-red-400/25 flex items-center justify-center gap-2 transition-all active:scale-95"
-                title="从库中移除"
+              <label
+                class="group relative cursor-pointer rounded-2xl border bg-surface p-2 text-left transition-colors duration-150 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent"
+                :class="selectedTheme.startsWith('#') ? 'border-accent' : 'border-line hover:border-line-strong'"
               >
-                <Trash2 :size="20" />
-                <span class="hidden lg:inline text-xs font-bold">移除</span>
-              </button>
+                <input
+                  type="color"
+                  :value="selectedTheme.startsWith('#') ? selectedTheme : '#818cf8'"
+                  @input="(e) => selectTheme((e.target as HTMLInputElement).value)"
+                  class="absolute h-0 w-0 opacity-0"
+                  title="选择自定义颜色"
+                />
+                <span class="grid h-14 place-items-center rounded-lg border border-dashed border-line-strong bg-surface-2 text-subtle" aria-hidden="true">
+                  <span v-if="selectedTheme.startsWith('#')" class="size-6 rounded-full" :style="{ backgroundColor: selectedTheme }"></span>
+                  <Pipette v-else :size="18" />
+                </span>
+                <span class="pointer-events-none mt-2 flex items-center gap-1.5 px-1 pb-0.5">
+                  <span class="min-w-0 flex-1 truncate text-meta font-medium" :class="selectedTheme.startsWith('#') ? 'text-ink' : 'text-muted'">自定义颜色</span>
+                  <Check v-if="selectedTheme.startsWith('#')" :size="15" class="shrink-0 text-accent" aria-hidden="true" />
+                </span>
+              </label>
             </div>
-          </div>
+          </section>
+
+          <!-- 外部收藏代理 -->
+          <section>
+            <SectionHeader title="网络代理" description="统一用于 WNACG、X 收藏和 Pawchive 的服务端请求">
+              <template #actions>
+                <span v-if="loadingProxy" role="status" class="flex items-center gap-1.5 text-meta text-subtle">
+                  <UiSpinner :size="14" label="正在读取" /> 正在读取
+                </span>
+                <span v-else-if="proxySaved" role="status" class="flex items-center gap-1.5 text-meta text-success">
+                  <Check :size="14" aria-hidden="true" /> 已保存
+                </span>
+              </template>
+            </SectionHeader>
+            <UiCard padding="md">
+              <form @submit.prevent="saveExternalProxy">
+                <label for="external-favorites-proxy" :class="fieldLabelClass">HTTP 代理地址</label>
+                <div class="flex flex-col gap-3 sm:flex-row">
+                  <input
+                    id="external-favorites-proxy"
+                    v-model="externalProxy"
+                    @input="proxyTestMessage = ''; proxyTestSucceeded = false"
+                    type="url"
+                    autocomplete="url"
+                    :disabled="loadingProxy || savingProxy || testingProxy"
+                    placeholder="例如 http://127.0.0.1:7890"
+                    :class="[controlClass('md'), 'sm:flex-1']"
+                  />
+                  <div class="grid grid-cols-2 gap-2 sm:flex">
+                    <UiButton variant="secondary" :loading="testingProxy" :disabled="loadingProxy || savingProxy || testingProxy" @click="testExternalProxy">
+                      <template #icon><RefreshCw :size="16" /></template>
+                      测试连通性
+                    </UiButton>
+                    <UiButton variant="primary" type="submit" :loading="savingProxy" :disabled="loadingProxy || savingProxy || testingProxy">
+                      保存
+                    </UiButton>
+                  </div>
+                </div>
+                <p :class="fieldHintClass">留空表示直连。支持无账号密码的 HTTP 代理；该设置也会用于 Pawchive 登录、作者列表和媒体请求。</p>
+                <p
+                  v-if="proxyTestMessage"
+                  :role="proxyTestSucceeded ? 'status' : 'alert'"
+                  class="mt-3 flex items-start gap-2.5 rounded-lg border px-3.5 py-3 text-meta"
+                  :class="proxyTestSucceeded ? 'border-success/25 bg-success/10 text-success' : 'border-danger/25 bg-danger/10 text-danger'"
+                >{{ proxyTestMessage }}</p>
+                <p v-if="proxyError" role="alert" class="mt-3 flex items-start gap-2.5 rounded-lg border border-danger/25 bg-danger/10 px-3.5 py-3 text-meta text-danger">{{ proxyError }}</p>
+              </form>
+            </UiCard>
+          </section>
+
+          <!-- 全站键盘快捷键指南 -->
+          <section class="pointer-coarse:hidden">
+            <SectionHeader title="键盘快捷键" description="熟悉快捷键，浏览与播放更顺手" />
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <UiCard v-for="group in shortcutGroups" :key="group.title" padding="none">
+                <h3 class="px-4 pt-3.5 pb-1 text-meta font-medium text-muted">{{ group.title }}</h3>
+                <dl class="px-4 pb-2">
+                  <div v-for="[action, keys] in group.items" :key="action" class="flex min-h-10 items-center justify-between gap-3 border-t border-line first:border-t-0">
+                    <dt class="text-body text-ink">{{ action }}</dt>
+                    <dd><kbd class="inline-flex h-6 min-w-6 items-center justify-center whitespace-nowrap rounded-md border border-line-strong bg-surface-2 px-1.5 font-mono text-caption text-muted">{{ keys }}</kbd></dd>
+                  </div>
+                </dl>
+              </UiCard>
+            </div>
+          </section>
         </div>
-      </section>
-
-      <!-- 全站键盘快捷键指南 -->
-      <section class="border border-white/6 bg-white/[0.02] backdrop-blur-3xl rounded-3xl p-6 md:p-8 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)]">
-        <div class="flex items-center gap-3 mb-6">
-          <Keyboard class="text-accent" :size="22" />
-          <div>
-            <h2 class="text-lg font-bold text-white/90">全站键盘快捷键指南</h2>
-            <p class="text-xs text-white/45 mt-0.5">熟悉快捷键可获得极致流畅的浏览与播放体验</p>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div class="rounded-2xl border border-white/8 bg-white/[0.02] p-4 space-y-3">
-            <h3 class="text-xs font-black uppercase text-accent tracking-wider">全局与导航</h3>
-            <div class="space-y-2 text-xs">
-              <div class="flex items-center justify-between"><span class="text-white/60">打开 / 聚焦搜索</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">/ 或 Ctrl+K</kbd></div>
-              <div class="flex items-center justify-between"><span class="text-white/60">关闭浮层 / 弹窗</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">Esc</kbd></div>
-              <div class="flex items-center justify-between"><span class="text-white/60">展开 / 折叠侧栏</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">点击底栏</kbd></div>
-            </div>
-          </div>
-
-          <div class="rounded-2xl border border-white/8 bg-white/[0.02] p-4 space-y-3">
-            <h3 class="text-xs font-black uppercase text-accent tracking-wider">漫画阅读器</h3>
-            <div class="space-y-2 text-xs">
-              <div class="flex items-center justify-between"><span class="text-white/60">前一页 / 后一页</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">← / →</kbd></div>
-              <div class="flex items-center justify-between"><span class="text-white/60">重置 / 适合屏幕</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">0</kbd></div>
-              <div class="flex items-center justify-between"><span class="text-white/60">放大 / 缩小图像</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">+ / -</kbd></div>
-            </div>
-          </div>
-
-          <div class="rounded-2xl border border-white/8 bg-white/[0.02] p-4 space-y-3">
-            <h3 class="text-xs font-black uppercase text-accent tracking-wider">视频播放器</h3>
-            <div class="space-y-2 text-xs">
-              <div class="flex items-center justify-between"><span class="text-white/60">播放 / 暂停</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">Space</kbd></div>
-              <div class="flex items-center justify-between"><span class="text-white/60">快退 / 快进 5秒</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">← / →</kbd></div>
-              <div class="flex items-center justify-between"><span class="text-white/60">音量调节 / 全屏</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">↑ / ↓ / F</kbd></div>
-            </div>
-          </div>
-
-          <div class="rounded-2xl border border-white/8 bg-white/[0.02] p-4 space-y-3">
-            <h3 class="text-xs font-black uppercase text-accent tracking-wider">音频与打标</h3>
-            <div class="space-y-2 text-xs">
-              <div class="flex items-center justify-between"><span class="text-white/60">音频播放 / 暂停</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">Space</kbd></div>
-              <div class="flex items-center justify-between"><span class="text-white/60">一键快速打星</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">1 ~ 5</kbd></div>
-              <div class="flex items-center justify-between"><span class="text-white/60">联想选择补全标签</span><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/15 text-white/85 font-mono text-[11px]">Enter</kbd></div>
-            </div>
-          </div>
-        </div>
-      </section>
+      </div>
     </div>
 
-    <Teleport to="body">
-      <div v-if="showAddModal" class="fixed inset-0 z-[200] flex items-center justify-center">
-        <div class="absolute inset-0 bg-background/80 backdrop-blur-sm" @click="closeAddModal"></div>
+    <UiModal v-model:open="addModalOpen" title="添加媒体库" description="选择一个本机目录和它的识别方式" size="lg" :close-on-backdrop="false">
+      <div class="space-y-6">
+        <div>
+          <label for="settings-new-path" :class="fieldLabelClass">文件夹绝对路径 <span class="text-danger">*</span></label>
+          <div class="flex gap-2">
+            <input
+              id="settings-new-path"
+              v-model="newPath"
+              type="text"
+              autofocus
+              :class="[controlClass('md'), 'font-mono']"
+              placeholder="例如: D:\Manga\Collection"
+            />
+            <UiButton variant="secondary" title="浏览文件夹" aria-label="浏览文件夹" @click="browseFolder">
+              <template #icon><FolderOpen :size="16" /></template>
+              <span class="hidden sm:inline">浏览</span>
+            </UiButton>
+          </div>
+          <p :class="fieldHintClass">请确认路径在服务器上真实存在。</p>
+        </div>
 
-        <div class="relative w-full max-w-2xl bg-sidebar/95 backdrop-blur-xl border border-white/10 rounded-2xl p-6 md:p-8 shadow-2xl m-4">
-          <div class="flex justify-between items-center mb-7">
-            <h2 class="text-2xl font-bold flex items-center gap-3 text-white/90">
-              <FolderPlus class="text-accent" />
-              添加新来源
-            </h2>
-            <button @click="closeAddModal" class="text-white/45 hover:text-white transition-colors w-10 h-10 rounded-xl hover:bg-white/5 flex items-center justify-center">
-              <X :size="23" />
+        <fieldset>
+          <legend :class="fieldLabelClass">识别模式</legend>
+          <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <button
+              v-for="mode in modes"
+              :key="mode.id"
+              type="button"
+              :aria-pressed="scanMode === mode.id"
+              class="flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors duration-150 focus-ring"
+              :class="scanMode === mode.id ? 'border-accent/50 bg-accent/10' : 'border-line bg-surface-2 hover:border-line-strong'"
+              @click="scanMode = mode.id"
+            >
+              <span
+                class="mt-1 grid size-4 shrink-0 place-items-center rounded-full border"
+                :class="scanMode === mode.id ? 'border-accent bg-accent' : 'border-line-strong'"
+                aria-hidden="true"
+              ><span v-if="scanMode === mode.id" class="size-1.5 rounded-full bg-on-accent"></span></span>
+              <span class="min-w-0">
+                <span class="block text-body font-medium" :class="scanMode === mode.id ? 'text-ink' : 'text-muted'">{{ mode.label }}</span>
+                <span class="mt-0.5 block text-caption text-subtle">{{ mode.description }}</span>
+              </span>
+            </button>
+          </div>
+        </fieldset>
+
+        <div v-if="scanMode === 'video' || scanMode === 'auto'" class="rounded-lg border border-line bg-surface-2 p-4">
+          <div class="flex items-center justify-between gap-4">
+            <div class="min-w-0">
+              <p class="text-body font-medium text-ink">生成进度条预览</p>
+              <p class="mt-0.5 text-caption text-subtle">封面始终生成，此选项只影响播放器悬停预览。</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-label="生成进度条预览"
+              :aria-checked="thumbnailEnabled"
+              :aria-pressed="thumbnailEnabled"
+              class="relative h-6 w-10 shrink-0 rounded-full transition-colors focus-ring"
+              :class="thumbnailEnabled ? 'bg-accent' : 'border border-line-strong bg-surface-3'"
+              @click="thumbnailEnabled = !thumbnailEnabled"
+            >
+              <span class="absolute top-1 left-1 size-4 rounded-full bg-white transition-transform" :class="thumbnailEnabled ? 'translate-x-4' : ''" />
             </button>
           </div>
 
-          <div class="space-y-6">
-            <div>
-              <label class="block text-xs font-bold text-white/45 uppercase tracking-widest mb-2 ml-1">文件夹绝对路径</label>
-              <div class="flex gap-2">
-                <input
-                  v-model="newPath"
-                  type="text"
-                  class="flex-1 min-w-0 bg-black/35 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all"
-                  placeholder="例如: D:\Manga\Collection"
-                />
-                <button
-                  @click="browseFolder"
-                  class="shrink-0 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-white/70 hover:text-white transition-all flex items-center gap-2 active:scale-95"
-                  title="浏览文件夹"
-                >
-                  <FolderOpen :size="20" />
-                  <span class="text-sm font-medium hidden sm:inline">浏览</span>
-                </button>
-              </div>
+          <div :class="thumbnailEnabled ? '' : 'pointer-events-none opacity-45'" class="mt-4 border-t border-line pt-4 transition-opacity">
+            <div class="mb-2 flex items-center justify-between">
+              <label for="settings-thumb-interval" class="text-meta font-medium text-muted">生成间隔</label>
+              <span class="text-meta text-ink tabular-nums">{{ thumbnailInterval }} 秒</span>
             </div>
-
-            <div>
-              <label class="block text-xs font-bold text-white/45 uppercase tracking-widest mb-2 ml-1">识别模式</label>
-              <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <button
-                  v-for="mode in modes"
-                  :key="mode.id"
-                  @click="scanMode = mode.id"
-                  :class="scanMode === mode.id ? 'bg-accent/20 border-accent text-white' : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10'"
-                  class="flex flex-col items-start p-4 rounded-xl border transition-all text-left min-h-[104px]"
-                >
-                  <span class="text-sm font-black uppercase tracking-widest mb-1">{{ mode.label }}</span>
-                  <span class="text-xs opacity-70 leading-relaxed">{{ mode.description }}</span>
-                </button>
-              </div>
+            <div class="flex items-center gap-4">
+              <input v-model.number="thumbnailInterval" type="range" min="1" max="60" step="1" aria-label="生成间隔（滑块）" class="flex-1 accent-accent" />
+              <input id="settings-thumb-interval" v-model.number="thumbnailInterval" type="number" min="1" max="60" :class="[controlClass('md'), 'w-20 tabular-nums']" />
             </div>
-
-            <div v-if="scanMode === 'video' || scanMode === 'auto'" class="rounded-xl border border-white/10 bg-black/20 p-5 space-y-5">
-              <div class="flex items-center justify-between gap-4">
-                <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center">
-                    <ImageIcon :size="20" />
-                  </div>
-                  <div>
-                    <p class="text-sm font-bold text-white/90">生成进度条预览</p>
-                    <p class="text-xs text-white/45 mt-0.5">封面始终生成，此选项只影响播放器悬停预览。</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  @click="thumbnailEnabled = !thumbnailEnabled"
-                  :class="thumbnailEnabled ? 'bg-accent' : 'bg-white/10'"
-                  class="relative w-12 h-7 rounded-full transition-colors shrink-0"
-                  :aria-pressed="thumbnailEnabled"
-                >
-                  <span
-                    :class="thumbnailEnabled ? 'translate-x-5' : 'translate-x-1'"
-                    class="absolute top-1 left-0 w-5 h-5 rounded-full bg-white transition-transform"
-                  ></span>
-                </button>
-              </div>
-
-              <div :class="thumbnailEnabled ? 'opacity-100' : 'opacity-40 pointer-events-none'" class="transition-opacity">
-                <div class="flex items-center justify-between mb-2">
-                  <label class="text-xs font-bold text-white/50 uppercase tracking-widest flex items-center gap-2">
-                    <Timer :size="14" />
-                    生成间隔
-                  </label>
-                  <span class="text-sm font-mono text-white/80">{{ thumbnailInterval }} 秒</span>
-                </div>
-                <div class="flex items-center gap-4">
-                  <input v-model.number="thumbnailInterval" type="range" min="1" max="60" step="1" class="flex-1 accent-indigo-400" />
-                  <input v-model.number="thumbnailInterval" type="number" min="1" max="60" class="w-20 bg-black/35 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-accent/60" />
-                </div>
-                <p class="text-xs text-white/35 mt-2">电脑性能一般可以设为 5-10 秒；想要更细的预览就设为 1-2 秒。</p>
-              </div>
-            </div>
-
-            <div class="flex items-center justify-between pt-5 border-t border-white/10 gap-4">
-              <p class="text-sm text-white/45 flex items-center gap-2">
-                <HardDrive :size="14" /> 请确认路径在本机真实存在
-              </p>
-              <button
-                @click="addFolder"
-                :disabled="loading"
-                class="bg-accent hover:bg-accent-glow text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all disabled:opacity-50 active:scale-95"
-              >
-                <RefreshCw v-if="loading" class="animate-spin" :size="18" />
-                <FolderPlus v-else :size="18" />
-                {{ loading ? '正在扫描...' : '确认添加' }}
-              </button>
-            </div>
+            <p :class="fieldHintClass">电脑性能一般可以设为 5-10 秒；想要更细的预览就设为 1-2 秒。</p>
           </div>
         </div>
       </div>
-    </Teleport>
+      <template #footer>
+        <UiButton variant="ghost" @click="closeAddModal">取消</UiButton>
+        <UiButton variant="primary" :loading="loading" :disabled="loading || !newPath" @click="addFolder">
+          <template #icon><FolderPlus :size="16" /></template>
+          {{ loading ? '正在添加…' : '确认添加' }}
+        </UiButton>
+      </template>
+    </UiModal>
 
     <Teleport to="body">
       <Transition name="fade">
         <div
           v-if="scanToast"
-          class="fixed bottom-6 right-6 z-[300] flex items-center gap-2.5 rounded-2xl border border-accent/30 bg-sidebar/95 px-5 py-3 text-sm font-bold text-white shadow-2xl backdrop-blur-xl"
+          role="status"
+          class="settings-toast fixed right-6 bottom-6 z-[270] flex max-w-sm items-start gap-3 rounded-2xl border border-line-strong bg-surface-3 px-4 py-3 text-body text-ink shadow-pop"
         >
-          <Sparkles class="text-accent shrink-0" :size="18" />
-          <span>{{ scanToast }}</span>
+          <CheckCircle2 class="mt-0.5 shrink-0 text-info" :size="18" aria-hidden="true" />
+          <span class="min-w-0 break-words">{{ scanToast }}</span>
         </div>
       </Transition>
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+@media (max-width: 899px) {
+  .settings-toast {
+    left: 16px;
+    right: 16px;
+    max-width: none;
+    bottom: calc(var(--he-nav-height, 64px) + env(safe-area-inset-bottom) + 12px);
+  }
+}
+</style>
