@@ -376,5 +376,31 @@
     "gateway_config.py": "413d01c0ecca49c450e248cca64f89ab7ee0191905722104eef3a6b6c68c3cd8",
     "api_server.py": "359c8be9d02e3bfb24272f829321dd5da3cefd31923cf7785d1bf36ea1f87420"
   },
-  "evidence_fixture": "backend/tests/fixtures/hermes/h01-evidence.json"
+  "evidence_fixture": "backend/tests/fixtures/hermes/h01-evidence.json",
+  "bridge": {
+    "sdk": "mcp==2.0.0",
+    "http_client": "httpx2==2.7.0",
+    "transport": "stateless Streamable HTTP",
+    "python": "3.12",
+    "tool_names": [
+      "search_media",
+      "get_media_detail",
+      "get_library_stats",
+      "recommend_media",
+      "list_duplicate_candidates",
+      "list_tags",
+      "list_folders",
+      "propose_media_update",
+      "propose_scan"
+    ],
+    "token_source": "current HTTP request only",
+    "input_keys": [
+      "context",
+      "args"
+    ],
+    "result_source": "validated HE ToolResultDTO.result",
+    "resources": false,
+    "prompts": false,
+    "direct_confirmation": false
+  }
 }
