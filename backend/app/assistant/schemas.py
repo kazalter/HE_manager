@@ -33,6 +33,9 @@ ToolName = Literal[
     "get_task_detail",
     "get_project_status",
     "get_project_settings",
+    "list_directory",
+    "read_text",
+    "get_media_preview",
     "propose_scan",
 ]
 
@@ -389,6 +392,48 @@ class ProjectSettingsDTO(DTO):
     next_offset: Count | None = None
 
 
+class DirectoryQuery(PageQuery):
+    folder_id: PositiveID
+    relative_path: str = Field(default="", max_length=4096)
+class TextQuery(DTO):
+    folder_id: PositiveID
+    relative_path: str = Field(min_length=1, max_length=4096)
+    offset_bytes: Count = 0
+class PreviewQuery(DTO):
+    media_id: PositiveID
+    page_index: Count = 0
+class DirectoryEntryDTO(DTO):
+    name: str
+    relative_path: str
+    entry_type: Literal["file", "directory", "link"]
+    size: Count | None = None
+    modified_at: datetime
+    media_id: PositiveID | None = None
+class DirectoryPageDTO(DTO):
+    items: list[DirectoryEntryDTO] = Field(max_length=50)
+    total: Count
+    offset: Count
+    has_more: bool
+    next_offset: Count | None = None
+class TextChunkDTO(DTO):
+    folder_id: PositiveID
+    relative_path: str
+    text: str
+    offset_bytes: Count
+    next_offset_bytes: Count | None = None
+    truncated: bool
+    encoding: Literal["utf-8"] = "utf-8"
+class PreviewDTO(DTO):
+    media_id: PositiveID
+    media_type: MediaType
+    page_index: Count | None = None
+    page_count: Count | None = None
+    preview_path: str
+    analysis_supported: bool = False
+    analysis_performed: bool = False
+    notice: str = "可在网页查看预览；当前模型未分析文件内容。"
+
+
 RESULT_TYPES = {
     "search_media": MediaPageDTO,
     "get_media_detail": MediaDetailDTO,
@@ -404,6 +449,9 @@ RESULT_TYPES = {
     "get_task_detail": TaskDTO,
     "get_project_status": ProjectStatusDTO,
     "get_project_settings": ProjectSettingsDTO,
+    "list_directory": DirectoryPageDTO,
+    "read_text": TextChunkDTO,
+    "get_media_preview": PreviewDTO,
     "propose_scan": ProposalAckDTO,
 }
 
@@ -426,6 +474,9 @@ class ToolResultDTO(DTO):
         | TaskDTO
         | ProjectStatusDTO
         | ProjectSettingsDTO
+        | DirectoryPageDTO
+        | TextChunkDTO
+        | PreviewDTO
         | TruncatedDTO
     )
 

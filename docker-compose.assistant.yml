@@ -20,6 +20,7 @@ services:
       HE_DATABASE_URL: sqlite:////data/library.db
       HE_ASSISTANT_ENABLED: "${HE_ASSISTANT_ENABLED:-0}"
       HE_AI_CONFIG_PATH: /data/deepseek.json
+      HE_ASSISTANT_MEDIA_ROOTS: /mnt/hdd
       HF_HOME: /data/huggingface
       SENTENCE_TRANSFORMERS_HOME: /data/huggingface
       HF_HUB_OFFLINE: "1"
@@ -36,6 +37,7 @@ services:
     pids_limit: 128
     tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
     volumes:
+      - {type: bind, source: /mnt/hdd, target: /mnt/hdd, read_only: true, bind: {create_host_path: false}}
       - {type: bind, source: ./data, target: /data, bind: {create_host_path: false}}
       - {type: bind, source: ./deploy/hermes/empty-dir, target: /data/hermes, read_only: true, bind: {create_host_path: false}}
       - {type: bind, source: ./deploy/hermes/empty-dir, target: /data/assistant, read_only: true, bind: {create_host_path: false}}

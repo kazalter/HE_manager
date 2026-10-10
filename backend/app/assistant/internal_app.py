@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 import logging
 from .tool_catalog import TOOL_CATALOG
 from .project_reads import PROJECT_TOOLS, execute_project_read
+from .file_reads import FILE_TOOLS, execute_file_read
 from .tool_errors import safe_tool_error
 from .models import AssistantToolEvent
 from .store import utcnow
@@ -96,6 +97,8 @@ def execute_and_record(db, token, body, name):
             result=json.loads(raw)
         except Exception:
             raise HTTPException(503,"assistant_tool_unavailable") from None
+    elif name in FILE_TOOLS:
+        result=execute_file_read(db,principal,body.context,name,body.args)
     elif name in PROJECT_TOOLS:
         try:
             result=execute_project_read(db,principal,body.context,name,body.args)

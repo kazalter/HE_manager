@@ -213,3 +213,12 @@ def internal_project_state(body: ProjectStateRequest, authorization: str = Heade
     principal=authenticate_tool_token(db,authorization[7:])
     require_tool_context(db,principal,body.context)
     return project_status(db)
+
+
+@router.get("/media/{media_id}/preview")
+def media_preview(media_id: int, page_index: int = Query(0, ge=0), user=Depends(auth.require_admin), db=Depends(get_db)):
+    from ..assistant.file_reads import preview_payload
+    from fastapi.responses import Response
+    store.require_admin(db,user.id)
+    payload,mime=preview_payload(db,media_id,page_index)
+    return Response(payload,media_type=mime,headers={"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"})

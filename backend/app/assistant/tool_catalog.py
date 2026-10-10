@@ -38,5 +38,8 @@ register("list_tasks", s.TaskQuery, "分页读取 HE 后台任务状态；不启
 register("get_task_detail", s.TaskDetailQuery, "按任务 ID 读取状态，无写入。")
 register("get_project_status", s.DTO, "读取 HE 健康、登记磁盘空间和备份清单；无凭据。")
 register("get_project_settings", s.PageQuery, "分页读取目录扫描与缩略图配置；不包含账号凭据。")
+register("list_directory", s.DirectoryQuery, "分页列出 HE 登记目录的文件和子目录；相对路径不能越界。")
+register("read_text", s.TextQuery, "读取 HE 目录内 UTF-8 文本，最多 32 KiB；按 next_offset_bytes 继续。")
+register("get_media_preview", s.PreviewQuery, "获取媒体/漫画页的网页预览；当前模型未分析文件内容。")
 READ_TOOLS = frozenset(k for k,v in TOOL_CATALOG.items() if v.mode == "read")
 PROPOSAL_TOOLS = frozenset(k for k,v in TOOL_CATALOG.items() if v.mode == "proposal")
