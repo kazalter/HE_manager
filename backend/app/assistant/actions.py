@@ -19,6 +19,10 @@ from .store import (
 
 def confirm_proposal(db, user_id, proposal_id, payload_hash, *, enqueue=None):
     config.require_enabled()
+    initial_kind=owned(db,user_id,proposal_id).kind
+    if initial_kind not in ("media_update","scan"):
+        from .operation_registry import confirm_operation
+        return confirm_operation(db,user_id,proposal_id,payload_hash)
     initial = owned(db, user_id, proposal_id)
     if initial.normalized_payload_hash != payload_hash:
         raise HTTPException(409, "assistant_proposal_hash_mismatch")
@@ -86,7 +90,7 @@ def confirm_proposal(db, user_id, proposal_id, payload_hash, *, enqueue=None):
                 else:
                     if proposal.kind == "media_update":
                         patch = payload["patch"]
-                        for name in ("rating", "favorite", "source_url"):
+                        for name in ("rating", "favorite", "source_url", "title", "artist", "view_status"):
                             if name in patch:
                                 setattr(media, name, patch[name])
                         remove = set(patch.get("remove_tag_ids", []))

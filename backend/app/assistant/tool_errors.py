@@ -1,6 +1,7 @@
 """Safe public errors; never forward exception text or credential-bearing bodies."""
 from .schemas import ToolErrorDTO
 MESSAGES = {
+    "assistant_tag_exists": "目标标签已存在，请改用标签合并。",
     "assistant_invalid_tool_args": "工具参数不正确，请按工具 schema 修正。",
     "assistant_invalid_proposal": "变更参数不正确。",
     "assistant_invalid_tool_token": "工具身份不可用，请检查管家连接配置。",

@@ -195,6 +195,12 @@ def ensure_assistant_tables(bind=None):
         with target.begin() as conn:
             conn.execute(text("ALTER TABLE assistant_runs ADD COLUMN tool_results_truncated BOOLEAN NOT NULL DEFAULT 0"))
 
+    columns = {c["name"] for c in inspect(target).get_columns("assistant_proposals")}
+    additions={"reason":"VARCHAR(1000) NOT NULL DEFAULT ''", "impact_count":"INTEGER NOT NULL DEFAULT 1", "reversibility":"VARCHAR(100) NOT NULL DEFAULT '需重新审批'", "targets_json":"TEXT NOT NULL DEFAULT '[]'"}
+    with target.begin() as conn:
+        for name,definition in additions.items():
+            if name not in columns:conn.execute(text(f"ALTER TABLE assistant_proposals ADD COLUMN {name} {definition}"))
+
 
 def run_schema_migrations():
     """Runs all manual idempotent schema migrations."""

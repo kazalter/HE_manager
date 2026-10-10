@@ -31,7 +31,7 @@ class ScanRequest(schemas.DTO):
     folder_id: schemas.PositiveID
 
 
-PROPOSAL_TOOLS = {"propose_media_update": "media_update", "propose_scan": "scan"}
+PROPOSAL_TOOLS = {"propose_media_update": "media_update", "propose_scan": "scan", "propose_media_batch_update":"media_batch_update", "propose_tag_rename":"tag_rename", "propose_tag_merge":"tag_merge", "propose_maintenance":"maintenance", "propose_file_move":"file_move"}
 
 
 def normalize(kind, payload):
@@ -126,6 +126,7 @@ def proposal_dto(row):
     return schemas.ProposalDTO(
         **ack(row).model_dump(),
         session_id=row.session_id,
+        targets=json.loads(row.targets_json or "[]"),
         before=json.loads(row.before_json),
         after=json.loads(row.after_json),
         payload_hash=row.normalized_payload_hash,
@@ -158,7 +159,8 @@ def get_owned_proposal(db, user_id, proposal_id):
 
 def create_proposal(db, principal, context, kind, payload):
     if kind not in ("media_update", "scan"):
-        raise HTTPException(404, "assistant_unknown_tool")
+        from .operation_registry import create_operation_proposal
+        return create_operation_proposal(db,principal,context,kind,payload)
     target_id, normalized = normalize(kind, payload)
     digest = input_hash(
         {
@@ -204,7 +206,7 @@ def create_proposal(db, principal, context, kind, payload):
                 for t in before["tags"]
             ):
                 raise HTTPException(422, "assistant_conflicting_tags")
-            for key in ("rating", "favorite", "source_url"):
+            for key in ("rating", "favorite", "source_url", "title", "artist", "view_status"):
                 if key in patch:
                     after[key] = patch[key]
             after["tags"] = [t for t in after["tags"] if t["id"] not in remove]

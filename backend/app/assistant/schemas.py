@@ -37,6 +37,11 @@ ToolName = Literal[
     "read_text",
     "get_media_preview",
     "read_logs",
+    "propose_media_batch_update",
+    "propose_tag_rename",
+    "propose_tag_merge",
+    "propose_maintenance",
+    "propose_file_move",
     "propose_scan",
 ]
 
@@ -138,6 +143,9 @@ class TagInput(DTO):
 
 
 class MediaPatch(DTO):
+    title: str | None = Field(default=None,min_length=1,max_length=500)
+    artist: str | None = Field(default=None,max_length=500)
+    view_status: Literal["unviewed","viewing","viewed"] | None = None
     rating: Annotated[int, Field(ge=0, le=5, strict=True)] | None = None
     favorite: Annotated[bool, Field(strict=True)] | None = None
     source_url: str | None = Field(default=None, max_length=2000)
@@ -148,9 +156,9 @@ class MediaPatch(DTO):
     def nullability(self):
         if any(
             name in self.model_fields_set and getattr(self, name) is None
-            for name in ("rating", "favorite")
+            for name in ("rating", "favorite", "title", "view_status")
         ):
-            raise ValueError("only source_url can be cleared")
+            raise ValueError("only source_url and artist can be cleared")
         return self
 
     @field_validator("source_url")
@@ -291,9 +299,12 @@ class FolderPageDTO(DTO):
 
 
 class ProposalAckDTO(DTO):
+    reason: str = ""
+    impact_count: Count = 1
+    reversibility: str = "需重新审批"
     id: UUID
-    kind: Literal["media_update", "scan"]
-    target_id: PositiveID
+    kind: Literal["media_update", "scan", "media_batch_update", "tag_rename", "tag_merge", "maintenance", "file_move"]
+    target_id: Count | None
     target_label: str = Field(max_length=500)
     state: Literal["pending", "applied", "queued", "rejected", "expired", "stale"]
     expires_at: datetime
@@ -309,6 +320,7 @@ class JobDTO(DTO):
 
 
 class ActionResultDTO(DTO):
+    items: list[dict] = Field(default_factory=list)
     proposal_id: UUID
     state: str
     media_id: PositiveID | None = None
@@ -317,6 +329,7 @@ class ActionResultDTO(DTO):
 
 
 class ProposalDTO(ProposalAckDTO):
+    targets: list[dict] = Field(default_factory=list)
     session_id: UUID
     before: dict
     after: dict
@@ -456,6 +469,46 @@ class LogPageDTO(DTO):
     truncated: bool = False
 
 
+class BatchPatchItem(DTO):
+    media_id: PositiveID
+    patch: MediaPatch
+class ProposalReason(DTO):
+    reason: str = Field(default="",max_length=1000)
+class BatchUpdateArgs(ProposalReason):
+    items: list[BatchPatchItem] = Field(min_length=1,max_length=50)
+    @model_validator(mode="after")
+    def unique_ids(self):
+        if len({x.media_id for x in self.items})!=len(self.items):raise ValueError("duplicate media IDs")
+        return self
+class TagRenameArgs(ProposalReason):
+    tag_id: PositiveID
+    name: str = Field(min_length=1,max_length=80)
+    namespace: str | None = Field(default=None,min_length=1,max_length=40)
+class TagMergeArgs(ProposalReason):
+    source_tag_id: PositiveID
+    target_tag_id: PositiveID
+class MaintenanceArgs(ProposalReason):
+    action: Literal["recheck_missing","recheck_duplicates","regenerate_thumbnail","backup_database"]
+    media_ids: list[PositiveID] = Field(default_factory=list,max_length=50)
+    all_media: bool = False
+class FileMoveArgs(ProposalReason):
+    media_id: PositiveID
+    destination_folder_id: PositiveID
+    destination_relative_path: str = Field(min_length=1,max_length=4096)
+class OperationPreviewDTO(DTO):
+    kind: str
+    target_id: Count = 0
+    label: str
+    targets: list[dict]
+    before: dict
+    after: dict
+    fingerprint: str
+    impact_count: Count
+    reversibility: str = "需重新审批"
+class SelectionRequest(DTO):
+    selected_target_ids: list[PositiveID] = Field(min_length=1,max_length=50)
+
+
 RESULT_TYPES = {
     "search_media": MediaPageDTO,
     "get_media_detail": MediaDetailDTO,
@@ -475,6 +528,11 @@ RESULT_TYPES = {
     "read_text": TextChunkDTO,
     "get_media_preview": PreviewDTO,
     "read_logs": LogPageDTO,
+    "propose_media_batch_update": ProposalAckDTO,
+    "propose_tag_rename": ProposalAckDTO,
+    "propose_tag_merge": ProposalAckDTO,
+    "propose_maintenance": ProposalAckDTO,
+    "propose_file_move": ProposalAckDTO,
     "propose_scan": ProposalAckDTO,
 }
 
