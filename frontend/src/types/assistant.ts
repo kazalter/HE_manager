@@ -45,7 +45,9 @@ export interface ToolResultsDTO {
 }
 export interface JobDTO {
   job_id: string
-  folder_id: number
+  folder_id: number | null
+  kind?: string
+  progress?: number | null
   status: string
   message: string | null
   created_at: string
@@ -61,8 +63,13 @@ export interface ActionResultDTO {
 export interface ProposalDTO {
   id: string
   session_id: string
-  kind: 'media_update' | 'scan'
-  target_id: number
+  kind: 'media_update' | 'scan' | 'media_batch_update' | 'tag_rename' | 'tag_merge' | 'maintenance' | 'file_move'
+  target_id: number | null
+  reason?: string
+  session_title?: string
+  impact_count?: number
+  reversibility?: string
+  targets?: { type: string; id: number | null; label: string }[]
   target_label: string
   state: string
   expires_at: string
@@ -82,4 +89,13 @@ export interface RequestOptions {
   signal?: AbortSignal
   offset?: number
   limit?: number
+}
+
+export interface ApprovalPageDTO extends Page<ProposalDTO> { pending_count: number }
+export interface CapabilitiesDTO {
+  read_tools: string[]
+  proposal_tools: string[]
+  file_roots: { id: number; display_name: string; path: string; readable: boolean }[]
+  image_analysis_supported: boolean
+  writes_require_approval: true
 }

@@ -18,11 +18,32 @@ import { PageHeader, UiButton, UiCard } from '../components/ui'
 import ChatMessages from '../components/assistant/ChatMessages.vue'
 import MediaResults from '../components/assistant/MediaResults.vue'
 import ProposalCard from '../components/assistant/ProposalCard.vue'
+import ApprovalPanel from '../components/assistant/ApprovalPanel.vue'
+import ProjectResultCard from '../components/assistant/ProjectResultCard.vue'
+import { useAssistantApprovals } from '../composables/useAssistantApprovals'
+import { getCapabilities } from '../utils/assistantApi'
+import type { ProposalDTO, CapabilitiesDTO } from '../types/assistant'
 import { AsyncMediaDetail as MediaDetail } from '../components/asyncComponents'
 import { useAssistantChat } from '../composables/useAssistantChat'
 import type { Media } from '../types'
 import type { SessionDTO } from '../types/assistant'
 const chat = useAssistantChat()
+const approvals = useAssistantApprovals()
+const { items: approvalItems, pendingCount, tab: approvalTab, busy: approvalBusy, error: approvalError, hasMore: approvalMore } = approvals
+const approvalOpen = ref(false), capabilities = ref<CapabilitiesDTO | null>(null)
+let capabilityRequest = new AbortController()
+async function loadCapabilities() {
+  capabilityRequest.abort(); capabilityRequest = new AbortController(); const request = capabilityRequest
+  try { const value = await getCapabilities({ signal: request.signal }); if (!request.signal.aborted) capabilities.value = value } catch { /* Capability unavailable is displayed explicitly. */ }
+}
+function approvalChanged() { void chat.refreshProposals(); void approvals.refresh() }
+function jumpToProposal(proposal: ProposalDTO) {
+  if (loading.value || sending.value) return
+  approvalOpen.value = false
+  const item = sessions.value.find(x => x.id === proposal.session_id) || { id: proposal.session_id, title: proposal.session_title || '历史对话', state: 'active' }
+  chooseSession(item)
+}
+
 const {
   sessions,
   session,
@@ -161,12 +182,15 @@ async function clear() {
 }
 onMounted(() => {
   void chat.initialize()
+  void loadCapabilities()
+  window.addEventListener('he-assistant-approval-changed', approvalChanged)
   window.visualViewport?.addEventListener('resize', keepComposerVisible)
   window.addEventListener('resize', keepComposerVisible)
 })
 watch(
   () => [authState.token, authState.user?.id, authState.user?.is_admin],
   () => {
+    capabilityRequest.abort(); capabilities.value = null; approvalOpen.value = false; void loadCapabilities()
     draft.value = ''
     selectedMedia.value = null
     clearPrompt.value = false
@@ -174,6 +198,7 @@ watch(
   },
 )
 onBeforeUnmount(() => {
+  capabilityRequest.abort(); window.removeEventListener('he-assistant-approval-changed', approvalChanged)
   alive = false
   cancelAnimationFrame(focusFrame)
   window.visualViewport?.removeEventListener('resize', keepComposerVisible)
@@ -259,7 +284,7 @@ onBeforeUnmount(() => {
               <p v-if="!availability.enabled" class="mb-2 text-xs leading-relaxed text-muted">管家暂未启用，历史和停止操作仍可使用。</p>
               <div class="flex items-start gap-2 text-xs leading-relaxed text-subtle">
                 <ShieldCheck :size="15" class="mt-0.5 shrink-0 text-muted" aria-hidden="true" />
-                <p>修改标签、资料和启动扫描都需要确认。管家只能查询媒体元数据。</p>
+                <p>可读取 HE 项目；修改需你批准。账号凭据默认隐藏。</p>
               </div>
             </div>
           </aside>
@@ -274,6 +299,7 @@ onBeforeUnmount(() => {
                 </p>
               </div>
               <div class="flex flex-wrap gap-2">
+                <UiButton class="min-h-11" size="sm" @click="approvalOpen = true; approvals.refresh()"><template #icon><ShieldCheck :size="16" /></template>待审批 <span class="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-accent/15 px-1.5 text-xs text-accent-glow" aria-live="polite">{{ pendingCount }}</span></UiButton>
                 <UiButton
                   v-if="run"
                   class="min-h-11"
@@ -300,7 +326,7 @@ onBeforeUnmount(() => {
             </div>
             <UiCard v-if="clearPrompt" padding="sm" class="space-y-3"
               ><p class="text-ink">
-                清除这段对话会先停止回复，并作废待确认建议。已确认的扫描和长期偏好会保留。
+                清除这段对话会先停止回复，并作废待确认建议。已批准的任务和长期偏好会保留。
               </p>
               <div class="flex flex-wrap gap-3">
                 <UiButton class="min-h-11" @click="clear">确认清除</UiButton
@@ -318,9 +344,11 @@ onBeforeUnmount(() => {
               @click="chat.loadOlder"
               >更早的消息</UiButton
             >
+            <details class="rounded-xl border border-line bg-surface/70 px-3 text-sm text-muted"><summary class="flex min-h-11 cursor-pointer items-center gap-2 focus-ring"><ShieldCheck :size="15" aria-hidden="true" />可读取 HE 项目 · 修改需要你批准</summary><div class="space-y-2 pb-3 leading-relaxed"><template v-if="capabilities"><p>查询媒体资料、作者、文件目录、任务、日志和存储状态。</p><p>文件读取范围：{{ capabilities.file_roots.filter(x => x.readable).map(x => x.display_name).join('、') || '暂无可读目录' }}</p><p>可提出资料修改、标签整理、维护任务与文件改名 / 移动。每次批准只执行审批卡中列出的操作。</p><p v-if="!capabilities.image_analysis_supported">可查看媒体预览；当前模型未分析图片、音视频内容。</p></template><p v-else>能力信息暂不可用，请稍后重新连接。</p></div></details>
             <ChatMessages :messages="messages" />
             <p v-if="toolStatus" class="text-sm text-muted">{{ toolStatus }}</p>
             <MediaResults :results="results" @open="openMedia" />
+            <ProjectResultCard :results="results" />
             <p v-if="truncated" class="text-sm text-muted">
               本轮部分结果超出展示上限，请缩小查询范围。
             </p>
@@ -335,7 +363,7 @@ onBeforeUnmount(() => {
                 :key="proposal.id"
                 :proposal="proposal"
                 :enabled="availability.enabled"
-                @changed="chat.refreshProposals"
+
               /><UiButton
                 v-if="moreProposals"
                 class="min-h-11"
@@ -410,6 +438,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
+    <ApprovalPanel v-if="allowed" v-model:open="approvalOpen" :items="approvalItems" :pending-count="pendingCount" :tab="approvalTab" :busy="approvalBusy" :error="approvalError" :has-more="approvalMore" :enabled="availability.enabled" @tab="approvalTab = $event" @refresh="approvals.refresh()" @more="approvals.loadMore()"  @jump="jumpToProposal" />
     <MediaDetail
       v-if="allowed && selectedMedia"
       :initial-media="selectedMedia"

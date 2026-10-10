@@ -225,3 +225,24 @@ def media_preview(media_id: int, page_index: int = Query(0, ge=0), user=Depends(
     store.require_admin(db,user.id)
     payload,mime=preview_payload(db,media_id,page_index)
     return Response(payload,media_type=mime,headers={"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"})
+
+
+@router.get("/approvals",response_model=schemas.ApprovalPageDTO)
+def approvals_list(tab: str=Query("pending",pattern="^(pending|history)$"),limit: int=Query(50,ge=1,le=50),offset: int=Query(0,ge=0),user=Depends(auth.require_admin),db=Depends(get_db)):
+    from ..assistant.approval_queries import list_approvals
+    return list_approvals(db,user.id,tab,limit,offset)
+
+@router.get("/capabilities",response_model=schemas.CapabilitiesDTO)
+def assistant_capabilities(user=Depends(auth.require_admin),db=Depends(get_db)):
+    from ..assistant.approval_queries import capabilities
+    return capabilities(db,user.id)
+
+@router.post("/proposals/{proposal_id}/selection",response_model=schemas.ProposalDTO)
+def proposal_selection(proposal_id: str,body: schemas.SelectionRequest,user=Depends(auth.require_admin),db=Depends(get_db)):
+    from ..assistant.operation_registry import derive_selected_proposal
+    return derive_selected_proposal(db,user.id,proposal_id,body.selected_target_ids)
+
+@router.get("/proposals/{proposal_id}/targets")
+def proposal_target_list(proposal_id: str,limit: int=Query(50,ge=1,le=50),offset: int=Query(0,ge=0),user=Depends(auth.require_admin),db=Depends(get_db)):
+    from ..assistant.approval_queries import proposal_targets
+    return proposal_targets(db,user.id,proposal_id,limit,offset)

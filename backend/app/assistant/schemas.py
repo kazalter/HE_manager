@@ -331,6 +331,7 @@ class ActionResultDTO(DTO):
 
 
 class ProposalDTO(ProposalAckDTO):
+    session_title: str = ""
     targets: list[dict] = Field(default_factory=list)
     session_id: UUID
     before: dict
@@ -648,3 +649,13 @@ class AvailabilityDTO(DTO):
     busy: bool
     active_run_id: UUID | None = None
     error_code: str | None = None
+
+
+class ApprovalPageDTO(ProposalPageDTO):
+    pending_count: Count
+class CapabilitiesDTO(DTO):
+    read_tools: list[str]
+    proposal_tools: list[str]
+    file_roots: list[FolderDTO] = Field(max_length=50)
+    image_analysis_supported: bool = False
+    writes_require_approval: Literal[True] = True

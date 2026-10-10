@@ -7,6 +7,10 @@ import {
   getJob,
   utcTime,
   AssistantApiError,
+  assistantErrorText,
+  selectProposalTargets,
+  getProposalTargets,
+  notifyApprovalChanged,
 } from '../../utils/assistantApi'
 import type { ProposalDTO, JobDTO } from '../../types/assistant'
 const props = withDefaults(
@@ -39,6 +43,32 @@ const incomplete = computed(
     (!Array.isArray(props.proposal.after.add_tags) ||
       !Array.isArray(props.proposal.after.remove_tags)),
 )
+const batchItems = computed(() => props.proposal.kind === 'media_batch_update' && Array.isArray(props.proposal.before.items) ? props.proposal.before.items as { media_id: number; title?: string }[] : [])
+const selection = ref<number[]>(batchItems.value.map(x => x.media_id))
+const selectionDirty = computed(() => batchItems.value.length > 0 && (selection.value.length !== batchItems.value.length || batchItems.value.some(x => !selection.value.includes(x.media_id))))
+const affected = ref<Record<string, unknown>[]>([]), affectedMore = ref(false), affectedOpen = ref(false), affectedBusy = ref(false)
+const kindLabels: Record<string, string> = { media_update: '修改媒体资料', media_batch_update: '批量修改资料', tag_rename: '标签改名', tag_merge: '合并标签', scan: '扫描目录', maintenance: '维护任务', file_move: '文件改名 / 移动' }
+const confirmLabel = computed(() => ({ scan: '批准启动扫描', maintenance: '批准启动任务', file_move: '批准移动', tag_merge: '批准合并', tag_rename: '批准改名' })[props.proposal.kind as 'scan'] || '批准修改')
+async function saveSelection() {
+  if (!selection.value.length || busy.value || expired.value || state.value !== 'pending') return
+  busy.value = true; error.value = ''
+  try {
+    await selectProposalTargets(props.proposal.id, selection.value, { signal: controller.signal })
+    if (!alive) return
+    state.value = 'stale'; notifyApprovalChanged(); emit('changed')
+  } catch (e) { if (alive) error.value = assistantErrorText(e) }
+  finally { if (alive) busy.value = false }
+}
+async function loadAffected(append = false) {
+  if (affectedBusy.value) return
+  affectedBusy.value = true; affectedOpen.value = true
+  try {
+    const page = await getProposalTargets(props.proposal.id, { offset: append ? affected.value.length : 0, signal: controller.signal })
+    if (!alive) return
+    affected.value = append ? [...affected.value, ...page.items] : page.items; affectedMore.value = page.has_more
+  } catch (e) { if (alive) error.value = assistantErrorText(e) }
+  finally { if (alive) affectedBusy.value = false }
+}
 const actionable = computed(
   () =>
     props.enabled &&
@@ -62,13 +92,15 @@ const status = computed(() =>
     : stateLabels[state.value] || '建议不可用',
 )
 const jobLabels: Record<string, string> = {
-  queued: '扫描等待中',
-  running: '正在扫描',
-  completed: '扫描完成',
-  failed: '扫描失败',
-  interrupted: '扫描已中断',
+  queued: '等待执行',
+  running: '正在执行',
+  completed: '执行完成',
+  failed: '执行失败',
+  interrupted: '执行中断',
+  needs_recovery: '需要恢复',
 }
 const labels: Record<string, string> = {
+  title: '标题', artist: '作者', view_status: '阅读 / 观看状态', items: '变更清单', media_id: '媒体编号', source_path: '源路径', destination_path: '目标路径', file_count: '文件项数', path_changes: '关联路径变更', fields: '资料', affected_media_count: '影响媒体数', affected_media_ids: '媒体编号', affected_list_truncated: '清单已截断', changes_truncated: '清单已截断', source_tag: '原标签', target_tag: '目标标签', namespace: '分类', name: '名称', media_count: '媒体数', media_ids: '媒体编号', list_truncated: '清单已截断',
   rating: '评分',
   favorite: '收藏',
   source_url: '来源链接',
@@ -86,6 +118,8 @@ const labels: Record<string, string> = {
   notice: '说明',
 }
 function formatValue(name: string, value: unknown): string {
+  if (name === 'view_status') return ({ unviewed: '未看', viewing: '正在看', viewed: '已看' } as Record<string, string>)[String(value)] || String(value)
+  if (name === 'action') return ({ recheck_missing: '复查缺失文件', recheck_duplicates: '复查重复媒体', regenerate_thumbnail: '重建缩略图', backup_database: '数据库备份' } as Record<string, string>)[String(value)] || String(value)
   if (name === 'tags_truncated')
     return value ? '仅展示前 50 个标签；本次增删见变更清单' : '完整'
   if (name === 'action' && value === 'scan') return '扫描'
@@ -128,7 +162,7 @@ function preview(value: Record<string, unknown>) {
 }
 
 async function act(confirm: boolean) {
-  if (!actionable.value) return
+  if (!actionable.value || (confirm && selectionDirty.value)) return
   busy.value = true
   error.value = ''
   try {
@@ -149,13 +183,14 @@ async function act(confirm: boolean) {
       if (!alive) return
       state.value = result.state
     }
+    notifyApprovalChanged()
     emit('changed')
   } catch (c) {
     if (alive) {
-      stale.value = c instanceof AssistantApiError && c.status === 409
+      stale.value = c instanceof AssistantApiError && ['assistant_proposal_stale', 'assistant_proposal_expired', 'assistant_proposal_consumed', 'assistant_proposal_unavailable'].includes(c.code)
       error.value = stale.value
         ? '资料已变化或建议不可用，请重新生成建议。'
-        : '操作暂不可用，请重新连接后核实状态。'
+        : assistantErrorText(c)
     }
   } finally {
     if (alive) busy.value = false
@@ -165,7 +200,7 @@ async function pollJob(id: string) {
   if (
     !alive ||
     (job.value &&
-      ['completed', 'failed', 'interrupted'].includes(job.value.status))
+      ['completed', 'failed', 'interrupted', 'needs_recovery'].includes(job.value.status))
   )
     return
   try {
@@ -179,7 +214,7 @@ async function pollJob(id: string) {
   if (
     alive &&
     (!job.value ||
-      !['completed', 'failed', 'interrupted'].includes(job.value.status))
+      !['completed', 'failed', 'interrupted', 'needs_recovery'].includes(job.value.status))
   )
     timer = setTimeout(() => {
       void pollJob(id)
@@ -190,9 +225,11 @@ watch(
   (p) => {
     state.value = p.state
     if (p.result?.job) job.value = p.result.job
+
   },
   { deep: true },
 )
+watch(() => props.proposal.id, () => { selection.value = batchItems.value.map(x => x.media_id) })
 if (props.proposal.result?.job_id) void pollJob(props.proposal.result.job_id)
 onBeforeUnmount(() => {
   alive = false
@@ -205,16 +242,25 @@ onBeforeUnmount(() => {
   <UiCard class="min-w-0 space-y-3 [overflow-wrap:anywhere]" padding="sm">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <h3 class="font-semibold text-ink">
-        {{ proposal.kind === 'scan' ? '扫描建议' : '资料整理建议' }}
+        {{ kindLabels[proposal.kind] || '操作审批' }}
       </h3>
       <span class="rounded-full bg-surface-2 px-3 py-1 text-sm text-muted">{{
-        status
+        job ? jobLabels[job.status] || status : status
       }}</span>
     </div>
     <p class="font-medium text-ink">
       {{ proposal.target_label }}
-      <span class="text-sm text-muted">#{{ proposal.target_id }}</span>
+      <span v-if="proposal.target_id" class="text-sm text-muted">#{{ proposal.target_id }}</span>
     </p>
+    <p v-if="proposal.reason" class="text-sm leading-relaxed text-muted">{{ proposal.reason }}</p>
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+      <span>影响 {{ proposal.impact_count || 1 }} 个对象</span><span v-if="proposal.reversibility">{{ proposal.reversibility }}</span>
+    </div>
+    <details v-if="batchItems.length" class="rounded-xl border border-line p-3">
+      <summary class="min-h-11 cursor-pointer text-sm text-ink focus-ring">选择要修改的媒体 · {{ selection.length }}/{{ batchItems.length }}</summary>
+      <label v-for="item in batchItems" :key="item.media_id" class="flex min-h-11 cursor-pointer items-center gap-3 py-2 text-sm text-ink"><input v-model="selection" type="checkbox" :value="item.media_id" :disabled="busy || state !== 'pending' || expired || !enabled" class="h-5 w-5 accent-accent" /><span class="min-w-0 [overflow-wrap:anywhere]">{{ item.title || '媒体' }} #{{ item.media_id }}</span></label>
+      <UiButton v-if="selectionDirty" class="mt-2 min-h-11" :disabled="!selection.length || busy || expired || !enabled" :loading="busy" @click="saveSelection">为选中的 {{ selection.length }} 项重新生成审批</UiButton>
+    </details>
     <div class="grid min-w-0 gap-3 sm:grid-cols-2">
       <div class="min-w-0 rounded-xl bg-surface-2 p-3">
         <h4 class="mb-2 text-sm font-medium text-muted">当前资料</h4>
@@ -229,6 +275,13 @@ onBeforeUnmount(() => {
           class="whitespace-pre-wrap font-sans text-sm leading-relaxed text-ink [overflow-wrap:anywhere]"
           >{{ preview(proposal.after) }}</pre
         >
+      </div>
+    </div>
+    <div v-if="(proposal.impact_count || 0) > 1 && proposal.kind !== 'media_batch_update'" class="space-y-2">
+      <UiButton class="min-h-11" variant="ghost" :disabled="affectedBusy" @click="loadAffected()">查看完整影响清单</UiButton>
+      <div v-if="affectedOpen" class="max-h-64 overflow-y-auto rounded-xl bg-surface-2 p-3 text-sm text-muted">
+        <p v-for="item in affected" :key="String(item.type) + String(item.id)" class="mb-2 [overflow-wrap:anywhere]">{{ item.label }} #{{ item.id }}<span v-if="item.before"><br />{{ preview(item.before as Record<string, unknown>) }} → {{ preview(item.after as Record<string, unknown>) }}</span></p>
+        <UiButton v-if="affectedMore" class="min-h-11" :disabled="affectedBusy" @click="loadAffected(true)">继续查看</UiButton>
       </div>
     </div>
     <p v-if="state === 'pending' && !expired" class="text-sm text-muted">
@@ -248,10 +301,10 @@ onBeforeUnmount(() => {
         data-confirm
         class="min-h-11"
         variant="primary"
-        :disabled="!actionable"
+        :disabled="!actionable || selectionDirty"
         :loading="busy"
         @click="act(true)"
-        >{{ proposal.kind === 'scan' ? '确认启动扫描' : '确认修改' }}</UiButton
+        >{{ confirmLabel }}</UiButton
       ><UiButton
         data-reject
         class="min-h-11"
@@ -261,7 +314,7 @@ onBeforeUnmount(() => {
       >
     </div>
     <p v-if="job" role="status" class="text-sm text-muted">
-      {{ jobLabels[job.status] || '扫描状态待核实' }} · {{ job.job_id
+      {{ jobLabels[job.status] || '任务状态待核实' }}<span v-if="job.progress != null"> · {{ job.progress }}%</span> · {{ job.job_id
       }}<br v-if="job.message" /><span v-if="job.message">{{
         job.message
       }}</span>

@@ -12,6 +12,8 @@ import type {
   MessageDTO,
   ToolResultsDTO,
   RequestOptions,
+  ApprovalPageDTO,
+  CapabilitiesDTO,
 } from '../types/assistant'
 
 export class AssistantApiError extends Error {
@@ -49,11 +51,24 @@ function headers() {
 async function check(response: Response, token: string) {
   if (response.status === 401 && authState.token === token) expireAuth()
   if (!response.ok) {
-    await response.body?.cancel()
-    throw new AssistantApiError(
-      response.status,
-      response.status === 409 ? 'assistant_conflict' : 'assistant_unavailable',
-    )
+    let code = response.status === 409 ? 'assistant_conflict' : 'assistant_unavailable'
+    const reader = response.body?.getReader()
+    try {
+      if (reader) {
+        const chunks: Uint8Array[] = []; let size = 0
+        while (true) {
+          const { value, done } = await reader.read(); if (done) break
+          size += value.byteLength; if (size > 8192) break; chunks.push(value)
+        }
+        const bytes = new Uint8Array(chunks.reduce((sum, x) => sum + x.length, 0)); let offset = 0
+        for (const x of chunks) { bytes.set(x, offset); offset += x.length }
+        const body = JSON.parse(new TextDecoder().decode(bytes))
+        const candidate = body.code ?? body.detail
+        if (typeof candidate === 'string' && candidate in assistantErrors) code = candidate
+      }
+    } catch { /* Fixed fallback for unknown/oversized error bodies. */ }
+    finally { await reader?.cancel(); reader?.releaseLock() }
+    throw new AssistantApiError(response.status, code)
   }
 }
 async function json<T>(
@@ -290,4 +305,42 @@ export async function subscribeRun(
     await reader.cancel()
     reader.releaseLock()
   }
+}
+
+export const assistantErrors: Record<string, string> = {
+  assistant_proposal_stale: '资料或文件已变化，请重新生成审批。',
+  assistant_proposal_expired: '审批已过期，请重新生成。',
+  assistant_proposal_consumed: '此审批已处理，请刷新状态。',
+  assistant_proposal_unavailable: '原对话已停止或失效，请重新提出操作。',
+  assistant_operation_busy: '相关操作正在执行，请稍后重试。',
+  assistant_file_needs_recovery: '文件操作需要恢复，请核对源路径、目标路径和媒体资料。',
+  assistant_file_destination_exists: '目标已存在，不能覆盖。',
+  assistant_cross_device_move: '只支持同一文件系统内移动。',
+  assistant_path_outside_root: '路径不在 HE 读取范围内。',
+  assistant_invalid_proposal: '变更参数不正确。',
+  assistant_file_unavailable: '文件暂时无法读取。',
+  assistant_tag_exists: '目标标签已存在，请改用标签合并。',
+}
+export function assistantErrorText(error: unknown) {
+  return error instanceof AssistantApiError ? assistantErrors[error.code] || '操作暂不可用，请刷新后核实状态。' : '连接失败，请稍后重试。'
+}
+export const listApprovals = (tab: 'pending' | 'history', opts: RequestOptions = {}) => json<ApprovalPageDTO>('/approvals' + query(opts, 50) + '&tab=' + tab, 'GET', undefined, opts)
+export const getCapabilities = (opts: RequestOptions = {}) => json<CapabilitiesDTO>('/capabilities', 'GET', undefined, opts)
+export const selectProposalTargets = (id: string, ids: number[], opts: RequestOptions = {}) => json<ProposalDTO>('/proposals/' + pathId(id) + '/selection', 'POST', { selected_target_ids: ids }, opts)
+export const getProposalTargets = (id: string, opts: RequestOptions = {}) => json<Page<Record<string, unknown>>>('/proposals/' + pathId(id) + '/targets' + query(opts, 50), 'GET', undefined, opts)
+export function notifyApprovalChanged() { window.dispatchEvent(new Event('he-assistant-approval-changed')) }
+export async function fetchPreview(path: string, signal: AbortSignal) {
+  if (!/^\/assistant\/media\/\d+\/preview(?:\?page_index=\d+)?$/.test(path)) throw new AssistantApiError(400)
+  const token = authState.token
+  const response = await fetch(API_BASE_URL + path, { headers: headers(), signal, cache: 'no-store', credentials: 'omit', redirect: 'error' })
+  await check(response, token)
+  const type = response.headers.get('content-type')?.split(';')[0] || ''
+  if (!['image/jpeg', 'video/mp4', 'audio/mpeg'].includes(type)) throw new AssistantApiError(502)
+  const reader = response.body?.getReader(); if (!reader) throw new AssistantApiError(502)
+  const chunks: Uint8Array[] = []; let size = 0
+  try {
+    while (true) { const { value, done } = await reader.read(); if (done) break; size += value.length; if (size > 9 * 1024 * 1024) throw new AssistantApiError(413); chunks.push(value) }
+  } finally { await reader.cancel(); reader.releaseLock() }
+  if (token !== authState.token) throw new AssistantApiError(401)
+  return new Blob(chunks as BlobPart[], { type })
 }
