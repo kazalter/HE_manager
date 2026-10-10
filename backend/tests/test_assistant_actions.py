@@ -70,6 +70,29 @@ class AssistantActionTests(unittest.TestCase):
         self.assertEqual(row.view_status, "unviewed")
         self.assertEqual(self.f.db.query(AssistantAudit).count(), 1)
 
+    def test_truncated_tag_preview_still_exposes_exact_additions_and_removals(self):
+        media = self.f.db.get(models.Media, 1)
+        for i in range(100, 160):
+            tag = models.Tag(id=i, name="已有标签" + str(i), namespace="general")
+            self.f.db.add(tag)
+            media.tags.append(tag)
+        self.f.db.commit()
+        before = business_snapshot(self.f.engine)
+        proposal = self.create(
+            patch={"add_tags": [{"name": "新增标签"}], "remove_tag_ids": [159]}
+        )
+        preview = self.preview(proposal)
+        self.assertTrue(preview.after["tags_truncated"])
+        self.assertEqual(
+            preview.after["add_tags"], [{"name": "新增标签", "namespace": "general"}]
+        )
+        self.assertEqual(
+            preview.after["remove_tags"],
+            [{"id": 159, "name": "已有标签159", "namespace": "general"}],
+        )
+        self.assertLessEqual(len(preview.after["tags"]), 50)
+        self.assertEqual(business_snapshot(self.f.engine), before)
+
     def test_retry_does_not_refresh_snapshot_or_expiration(self):
         p = self.create()
         self.f.db.expire_all()

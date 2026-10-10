@@ -10,7 +10,7 @@
 
 **Spec:** [已确认设计](../specs/2026-10-10-hermes-media-steward-design.md)
 
-日期：2026-10-10。状态：SSH 已恢复并核对远端 AGENTS、git status、提交与阶段记录；H01 已验收并完成阶段提交（后端228项通过、运行时门禁PASS），H02 身份/持久化已验收并提交；H03～H08 未开始。第二轮审查增量已合并且保留此前 H01 工作。开发、构建、测试和部署均通过 SSH 在 /opt/stacks/he-manager 完成，按依赖顺序逐阶段验收和 commit。
+日期：2026-10-10。状态：H01～H07 已验收并完成阶段提交；H08 待实施。H07 前端全量 93 项、后端全量 340 项通过，临时目录生产构建与四种宽度浏览器检查通过；聊天尚未部署。开发、构建、测试和部署均通过 SSH 在 /opt/stacks/he-manager 完成，按依赖顺序逐阶段验收和 commit。
 
 ## Global Constraints
 
@@ -263,22 +263,24 @@ assert public_confirm_calls == 0
 
 ## Task 7: H07 — 实现网页聊天和确认卡
 
-**Files:** 创建 frontend/src/types/assistant.ts、utils/assistantApi.ts、composables/useAssistantChat.ts、views/AssistantView.vue、components/assistant/{ChatMessages,MediaResults,ProposalCard}.vue；修改 router/index.ts、components/Sidebar.vue、views/MoreView.vue；测试 frontend/src/__tests__/{assistant-stream,assistant-actions,assistant-view}.test.ts。依赖：H04、H05。
+**Files:** 创建 frontend/src/types/assistant.ts、utils/assistantApi.ts、composables/useAssistantChat.ts、views/AssistantView.vue、components/assistant/{ChatMessages,MediaResults,ProposalCard}.vue；修改 router/index.ts、components/Sidebar.vue、views/MoreView.vue；测试 frontend/src/__tests__/{assistant-stream,assistant-actions,assistant-view}.test.ts。另修改 frontend/src/auth.ts、frontend/nginx.conf、backend/app/assistant/proposals.py 及 backend/tests/test_assistant_actions.py（鉴权失效、流代理和完整标签变更预览）。依赖：H04、H05。
 
 **Interfaces:** sendMessage(sessionId, text, clientRequestId) -> Promise<RunDTO>；subscribeRun(runId, signal, onEvent) -> Promise<void>；confirmProposal(proposalId, payloadHash), rejectProposal(proposalId), clearSession(sessionId)。fetch 明确读取 authState.token 设置 Authorization，不能依赖 axios interceptor。
 
-- [ ] Step 1：先写失败 UI 测试，覆盖鉴权隐藏、流拆包、重复点击/重连、确认/拒绝/过期/409、聊天 token/HTML 注入。
+- [x] Step 1：先写失败 UI 测试，覆盖鉴权隐藏、流拆包、重复点击/重连、确认/拒绝/过期/409、聊天 token/HTML 注入。
 ~~~typescript
 expect(renderedMessages.filter(m => m.id === finalId)).toHaveLength(1)
 expect(confirmRequestsBeforeUserClick).toBe(0)
 expect(untrustedTitleElement.querySelector('script')).toBeNull()
 expect(requestHeaders.Authorization).toBe('Bearer user-token')
 ~~~
-- [ ] Step 2：运行 cd frontend && npm run test -- src/__tests__/assistant-stream.test.ts src/__tests__/assistant-actions.test.ts src/__tests__/assistant-view.test.ts，预期新界面未实现而失败。
-- [ ] Step 3：实现具备 TextDecoder 流解码的 fetch SSE 与 AbortController；页面卸载只取消订阅，显式停止按钮调用 stop。重复发送使用原 clientRequestId，重连读取 status/history，按 final_message_id 替换半截回复并对账，不能假设 upstream 支持完整 Last-Event-ID 回放；401 沿用登录失效行为。
-- [ ] Step 4：实现独立聊天页（MediaResults 从 /runs/{rid}/results 和校验后的 tool_status.data.result 恢复）及桌面侧栏/手机“更多”中的管理员入口，复用 UI 组件和主题。提供发送、停止、历史、清除、错误/重试、usage 和工具状态（上游不提供 usage 时显示不可用，不按 0 或虚构费用）；不把 Docker/MCP 术语或内部端口呈现在日常聊天流。
-- [ ] Step 5：建议卡从 HE proposals endpoint 获取完整预览，展示目标、before/after、期限和确认/拒绝；确认等待期间禁用按钮，409 要求重新生成建议。消息和标题纯文本渲染，不用 v-html；媒体打开复用现有详情 UI（用户主动打开后才更新观看记录）。扫描卡显示 job ID 的实际状态；停止聊天不宣称停止已确认扫描。
-- [ ] Step 6：运行 Step 2 和 npm run build，预期 PASS；浏览器检查 320/390/768/1440px、键盘弹出、PWA safe area、焦点/按键和长文本，无横向溢出；提交 feat: add media steward chat interface。
+- [x] Step 2：运行 cd frontend && npm run test -- src/__tests__/assistant-stream.test.ts src/__tests__/assistant-actions.test.ts src/__tests__/assistant-view.test.ts，预期新界面未实现而失败。
+- [x] Step 3：实现具备 TextDecoder 流解码的 fetch SSE 与 AbortController；页面卸载只取消订阅，显式停止按钮调用 stop。重复发送使用原 clientRequestId，重连读取 status/history，按 final_message_id 替换半截回复并对账，不能假设 upstream 支持完整 Last-Event-ID 回放；401 沿用登录失效行为。
+- [x] Step 4：实现独立聊天页（MediaResults 从 /runs/{rid}/results 和校验后的 tool_status.data.result 恢复）及桌面侧栏/手机“更多”中的管理员入口，复用 UI 组件和主题。提供发送、停止、历史、清除、错误/重试、usage 和工具状态（上游不提供 usage 时显示不可用，不按 0 或虚构费用）；不把 Docker/MCP 术语或内部端口呈现在日常聊天流。
+- [x] Step 5：建议卡从 HE proposals endpoint 获取完整预览，展示目标、before/after、期限和确认/拒绝；确认等待期间禁用按钮，409 要求重新生成建议。消息和标题纯文本渲染，不用 v-html；媒体打开复用现有详情 UI（用户主动打开后才更新观看记录）。扫描卡显示 job ID 的实际状态；停止聊天不宣称停止已确认扫描。
+- [x] Step 6：运行 Step 2 和 npm run build，预期 PASS；浏览器检查 320/390/768/1440px、键盘弹出、PWA safe area、焦点/按键和长文本，无横向溢出；提交 feat: add media steward chat interface。
+
+H07 验收：目标 28 PASS；前端全量 93 PASS；后端全量 340 PASS；构建到 /tmp/he-hermes-h07-dist。320/390/768/1440px 均无横向溢出；显式确认、普通用户隐藏和纯文本长标题检查通过。PWA/键盘为 Chromium 视口模拟，焦点输入框保持可见；真实 iOS 设备验收待 H08。HTTP 内网 UUID 回退和重连最新终态回归均 RED→GREEN。
 
 ## Task 8: H08 — 可选 Compose 集成、端到端验收与运维
 

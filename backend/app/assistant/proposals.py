@@ -218,6 +218,23 @@ def create_proposal(db, principal, context, kind, payload):
             fingerprint = input_hash(before)
             display_before = public_snapshot(before)
             display_after = public_snapshot(after)
+            # The relationship preview is capped at 50. Explicit bounded changes
+            # remain fully reviewable even when an edited tag falls beyond it.
+            initial_tags = {(t["name"], t["namespace"]) for t in before["tags"]}
+            display_after["add_tags"] = [
+                t
+                for t in patch.get("add_tags", [])
+                if (t["name"], t["namespace"]) not in initial_tags
+            ]
+            display_after["remove_tags"] = [
+                {
+                    "id": t["id"],
+                    "name": t["name"][:80],
+                    "namespace": t["namespace"][:40],
+                }
+                for t in before["tags"]
+                if t["id"] in remove
+            ]
             label = (row.title or "")[:500]
         else:
             row = local.get(models.Folder, target_id)

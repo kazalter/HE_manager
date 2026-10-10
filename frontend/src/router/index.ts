@@ -4,6 +4,7 @@ import HomeView from '../views/HomeView.vue'
 const router = createRouter({
   history: createWebHashHistory(),
   routes: [
+    { path: '/assistant', name: 'assistant', component: () => import('../views/AssistantView.vue') },
     { path: '/more', name: 'more', component: () => import('../views/MoreView.vue') },
     { path: '/downloads', name: 'downloads', component: () => import('../views/DownloadsView.vue') },
     {

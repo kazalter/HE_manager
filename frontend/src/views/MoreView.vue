@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { BarChart3, Book, ChevronRight, CopyMinus, Download, LogOut, Palette, Settings, Smartphone, Sparkles, Tags, Users } from 'lucide-vue-next'
+import { BarChart3, Book, ChevronRight, CopyMinus, Download, LogOut, MessageSquare, Palette, Settings, Smartphone, Sparkles, Tags, Users } from 'lucide-vue-next'
 import { authState, logout } from '../auth'
 import { PageHeader, SectionHeader, UiButton, UiCard } from '../components/ui'
 
@@ -15,6 +15,7 @@ const links = [
   { to: '/settings', label: '设置', hint: '目录、同步与外观', icon: Settings, group: 'tools' },
 ]
 const adminLinks = [
+  { to: '/assistant', label: '媒体库管家', hint: '聊天查询与确认整理建议', icon: MessageSquare, group: 'admin' },
   { to: '/dedup', label: '重复媒体管理', hint: '检测并合并重复内容', icon: CopyMinus, group: 'admin' },
   { to: '/users', label: '用户管理', hint: '管理登录账号', icon: Users, group: 'admin' },
 ]

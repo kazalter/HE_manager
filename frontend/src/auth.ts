@@ -24,6 +24,8 @@ const applyToken = (token: string) => {
   }
 }
 
+export const expireAuth = () => { applyToken(''); authState.user = null }
+
 axios.interceptors.request.use(config => {
   const token = authState.token || localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || ''
   if (token) {
