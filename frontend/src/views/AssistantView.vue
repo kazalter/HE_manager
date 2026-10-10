@@ -81,6 +81,7 @@ function keepComposerVisible() {
   })
 }
 async function send() {
+  if (!canSend.value) return
   await chat.send(draft.value)
   if (run.value && !hasRetry.value) draft.value = ''
 }
@@ -115,10 +116,12 @@ onMounted(() => {
   window.addEventListener('resize', keepComposerVisible)
 })
 watch(
-  () => authState.token,
+  () => [authState.token, authState.user?.id, authState.user?.is_admin],
   () => {
+    draft.value = ''
     selectedMedia.value = null
     clearPrompt.value = false
+    if (allowed.value) void chat.initialize()
   },
 )
 onBeforeUnmount(() => {

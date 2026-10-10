@@ -126,6 +126,42 @@ def _profile_yaml(model):
     return text
 
 
+def prepare_gateway_root(root: Path):
+    """Private multiplex listener; default profile has no HE tools/model key."""
+    config.secure_directory(root)
+    if not (root / ".env").exists():
+        config.atomic_private_write(
+            root / ".env",
+            "API_SERVER_ENABLED=true\nAPI_SERVER_HOST=0.0.0.0\nAPI_SERVER_PORT=8642\nAPI_SERVER_KEY="
+            + secrets.token_urlsafe(48)
+            + "\n",
+        )
+    if not (root / "config.yaml").exists():
+        gateway_config = {
+            "model": {"default": "unconfigured", "provider": "custom:disabled"},
+            "providers": {},
+            "mcp_servers": {},
+            "toolsets": [],
+            "tools": {"tool_search": {"enabled": "off"}},
+            "platform_toolsets": {"api_server": []},
+            "agent": {
+                "max_turns": 8,
+                "run_budget_seconds": 180,
+                "agent_cache": {"max_size": 2, "protect_recent": 0},
+            },
+            "gateway": {
+                "multiplex_profiles": True,
+                "auto_multiplex_migration": False,
+                "api_server": {"max_concurrent_runs": 1},
+            },
+            "memory": {"memory_enabled": False, "user_profile_enabled": False},
+            "display": {"interim_assistant_messages": False},
+        }
+        config.atomic_private_write(
+            root / "config.yaml", json.dumps(gateway_config, indent=2)
+        )
+
+
 def prepare_profile(db, user_id, *, profile_root: Path | None = None) -> ProfileBinding:
     """Create explicit administrator profiles; repeated preparation preserves keys."""
     model = config.load_model()
@@ -151,7 +187,7 @@ def prepare_profile(db, user_id, *, profile_root: Path | None = None) -> Profile
         )
         if not isinstance(registry.get("profiles"), dict):
             raise HTTPException(503, "assistant_unconfigured")
-        config.secure_directory(root)
+        prepare_gateway_root(root)
         config.secure_directory(root / "profiles")
         config.secure_directory(home)
         env_path = home / ".env"

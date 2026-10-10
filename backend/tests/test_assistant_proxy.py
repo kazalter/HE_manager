@@ -188,6 +188,48 @@ class AssistantProxyTests(unittest.IsolatedAsyncioTestCase):
         self.f.db.expire_all()
         self.assertIsNone(self.f.db.get(AssistantRun, str(run.id)).executor_exited_at)
 
+    async def test_between_tools_user_cancel_proves_exit_and_releases_global_slot(self):
+        run = await self.submit()
+        self.fake.state.update(
+            status="cancelled",
+            last_event="run.cancelled",
+            turn_exit_reason="interrupted_by_user",
+            interrupted=True,
+            partial=False,
+            completed=False,
+        )
+        result = await self.service.reconcile_run(
+            self.f.db, 1, run.id, client=self.fake
+        )
+        self.assertEqual(result.status, "cancelled")
+        self.f.db.expire_all()
+        self.assertIsNotNone(
+            self.f.db.get(AssistantRun, str(run.id)).executor_exited_at
+        )
+        await self.submit("new request after confirmed executor exit")
+
+    async def test_between_tools_cancel_requires_all_flags_and_no_shutdown(self):
+        base = dict(
+            status="cancelled",
+            last_event="run.cancelled",
+            turn_exit_reason="interrupted_by_user",
+            interrupted=True,
+            partial=False,
+            completed=False,
+        )
+        for change in (
+            {"partial": True},
+            {"interrupted": False},
+            {"completed": True},
+            {"shutdown_requested_at": "synthetic"},
+            {"turn_exit_reason": "unknown"},
+        ):
+            with self.subTest(change=change):
+                self.assertFalse(self.service.proves_exit({**base, **change}))
+        missing = dict(base)
+        missing.pop("partial")
+        self.assertFalse(self.service.proves_exit(missing))
+
     async def test_normal_completed_is_one_authoritative_final_message(self):
         run = await self.submit()
         self.fake.state.update(

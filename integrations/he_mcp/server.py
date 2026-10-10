@@ -7,6 +7,7 @@ from mcp.server.mcpserver import Context
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from starlette.responses import JSONResponse
+from starlette.routing import Route
 from app.assistant import schemas
 from .client import HeToolClient, READ_TOOLS, valid_token, ToolError
 
@@ -128,6 +129,11 @@ def create_app(*, client=None):
             allowed_origins=[],
         ),
     )
+
+    async def health(_request):
+        return JSONResponse({"status": "ok", "tools": len(ARGS)})
+
+    app.routes.append(Route("/healthz", health, methods=["GET"]))
     app.add_middleware(BearerMiddleware)
     return app
 

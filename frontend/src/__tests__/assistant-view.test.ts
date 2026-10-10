@@ -58,6 +58,74 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 describe('assistant chat lifecycle', () => {
+  it('keeps a drafted message when the keyboard shortcut is used during a busy run', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async (url: string) =>
+          new Response(
+            JSON.stringify(
+              url.endsWith('/status')
+                ? { enabled: true, busy: true, active_run_id: null }
+                : /\/sessions\?/.test(url)
+                  ? page([{ id: SID, title: '测试', state: 'active' }])
+                  : url.includes('/messages')
+                    ? page([
+                        {
+                          id: MID,
+                          role: 'assistant',
+                          content: '旧回复',
+                          run_id: RID,
+                          status: 'completed',
+                        },
+                      ])
+                    : url.endsWith('/results')
+                      ? { items: [], truncated: false }
+                      : url.endsWith('/runs/' + RID)
+                        ? run({ status: 'completed', output: '旧回复' })
+                        : page([]),
+            ),
+          ),
+      ),
+    )
+    const wrapper = mount(AssistantView)
+    await flushPromises()
+    const textarea = wrapper.get('textarea')
+    await textarea.setValue('下一条消息')
+    await textarea.trigger('keydown', { key: 'Enter', ctrlKey: true })
+    await flushPromises()
+    expect((textarea.element as HTMLTextAreaElement).value).toBe('下一条消息')
+    wrapper.unmount()
+  })
+
+  it('discards the prior identity draft and reinitializes after changing accounts', async () => {
+    let statusReads = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.endsWith('/status')) statusReads++
+        return new Response(
+          JSON.stringify(
+            url.endsWith('/status')
+              ? { enabled: true, busy: false, active_run_id: null }
+              : page([]),
+          ),
+        )
+      }),
+    )
+    const wrapper = mount(AssistantView)
+    await flushPromises()
+    await wrapper.get('textarea').setValue('上一个账号的私密草稿')
+    authState.token = 'second-account-token'
+    authState.user = { id: 2, is_admin: true, username: 'second' } as any
+    await flushPromises()
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe(
+      '',
+    )
+    expect(statusReads).toBe(2)
+    wrapper.unmount()
+  })
+
   it('retains the newer terminal snapshot observed during reconnect history restore', async () => {
     const api = fakeApi()
     const scope = effectScope()

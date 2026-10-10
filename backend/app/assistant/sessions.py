@@ -115,9 +115,17 @@ def proves_exit(value):
             and value.get("interrupted") is False
         )
     if status == "cancelled":
-        return (
-            value.get("last_event") == "run.cancelled"
-            and value.get("turn_exit_reason") == "interrupted_during_api_call"
+        # Pinned _execute_run publishes these reasons only after its executor
+        # future returned; bare task cancellation/shutdown has no such proof.
+        reason = value.get("turn_exit_reason")
+        return value.get("last_event") == "run.cancelled" and (
+            reason == "interrupted_during_api_call"
+            or (
+                reason == "interrupted_by_user"
+                and value.get("interrupted") is True
+                and value.get("partial") is False
+                and value.get("completed") is False
+            )
         )
     if status == "failed":
         return value.get("last_event") == "run.failed"

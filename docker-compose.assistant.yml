@@ -1,0 +1,114 @@
+# Optional addon. Prepare masks/profiles and verify all gates before enabling.
+services:
+  backend:
+    image: ${HE_ASSISTANT_BACKEND_IMAGE:-he-manager-backend:latest}
+    environment:
+      HE_ASSISTANT_ENABLED: "${HE_ASSISTANT_ENABLED:-0}"
+      HE_ASSISTANT_DATA_DIR: /data/assistant
+      HE_ASSISTANT_TEMPLATE_DIR: /srv/deploy/hermes
+      HE_HERMES_URL: http://hermes-agent:8642
+    networks:
+      default: {}
+      assistant_internal: {}
+
+  assistant-tools:
+    user: "1000:1000"
+    image: ${HE_ASSISTANT_BACKEND_IMAGE:-he-manager-backend:latest}
+    restart: unless-stopped
+    command: [sh, -c, "umask 077; exec uvicorn app.assistant.internal_app:app --host 0.0.0.0 --port 8021 --no-access-log"]
+    environment:
+      HE_DATABASE_URL: sqlite:////data/library.db
+      HE_ASSISTANT_ENABLED: "${HE_ASSISTANT_ENABLED:-0}"
+      HE_AI_CONFIG_PATH: /data/deepseek.json
+      HF_HOME: /data/huggingface
+      SENTENCE_TRANSFORMERS_HOME: /data/huggingface
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    networks:
+      assistant_internal:
+        aliases: [he-tools]
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cpus: 1.0
+    mem_limit: 1024m
+    pids_limit: 128
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    volumes:
+      - {type: bind, source: ./data, target: /data, bind: {create_host_path: false}}
+      - {type: bind, source: ./deploy/hermes/empty-dir, target: /data/hermes, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: ./deploy/hermes/empty-dir, target: /data/assistant, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: ./deploy/hermes/empty-dir, target: /data/backups, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: ./data/huggingface, target: /data/huggingface, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: ./deploy/hermes/empty-file, target: /data/deepseek.json, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: ./deploy/hermes/empty-file, target: /data/external_config.json, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: ./deploy/hermes/empty-file, target: /data/external_config.json.before-clash-bridge-20260712-0945, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: ./deploy/hermes/empty-file, target: /data/pawchive_stream.key, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: ./deploy/hermes/empty-file, target: /data/he-manager.db, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: ./deploy/hermes/empty-file, target: /data/media.db, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: ./deploy/hermes/empty-file, target: /data/library.db.backup-pre-5ee4ac3, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: ./deploy/hermes/empty-file, target: /data/library.db.before-remount-fix-20260622124619, read_only: true, bind: {create_host_path: false}}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8021/healthz',timeout=3).read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging: {driver: json-file, options: {max-size: 10m, max-file: "3"}}
+
+  assistant-mcp:
+    build: {context: ., dockerfile: integrations/he_mcp/Dockerfile}
+    image: he-manager-mcp:hermes-2.0.0
+    restart: unless-stopped
+    environment: {HE_TOOLS_URL: "http://he-tools:8021"}
+    networks:
+      assistant_internal:
+        aliases: [he-mcp]
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cpus: 0.25
+    mem_limit: 128m
+    pids_limit: 64
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m"]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8020/healthz',timeout=3).read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging: {driver: json-file, options: {max-size: 10m, max-file: "3"}}
+
+  hermes-agent:
+    image: nousresearch/hermes-agent@sha256:ffa4fbb471c2bc8c85fbcfc629347585cc1586c86d2e6db465d01203ce696d95
+    restart: unless-stopped
+    command: [gateway, run]
+    environment:
+      HERMES_HOME: /opt/data
+      HERMES_UID: "1000"
+      HERMES_GID: "1000"
+    # Root init remaps /etc/passwd and drops gateway to 1000:1000; image needs
+    # a writable rootfs for bootstrap. Runtime install tree remains root-owned.
+    networks:
+      assistant_internal: {}
+      assistant_egress: {}
+    security_opt: [no-new-privileges:true]
+    cap_drop: [NET_RAW]
+    cpus: 1.0
+    mem_limit: 768m
+    pids_limit: 256
+    stop_grace_period: 30s
+    volumes:
+      - {type: bind, source: ./data/hermes, target: /opt/data, bind: {create_host_path: false}}
+    healthcheck:
+      test: [CMD, /opt/hermes/.venv/bin/python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8642/health',timeout=3).read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    logging: {driver: json-file, options: {max-size: 10m, max-file: "3"}}
+
+networks:
+  assistant_internal: {internal: true}
+  assistant_egress: {}

@@ -73,6 +73,16 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
         self.failures = 0
         self.barrier = None
 
+    async def test_internal_health_is_readonly_and_does_not_require_a_tool_token(self):
+        app = self.server.create_app()
+        async with serving(app) as base:
+            async with httpx2.AsyncClient(trust_env=False) as http:
+                response = await http.get(base + "/healthz")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json(), {"status": "ok", "tools": 9})
+                denied = await http.post(base + "/mcp", json={})
+                self.assertEqual(denied.status_code, 401)
+
     async def handler(self, request):
         body = await request.json()
         name = request.path_params["name"]

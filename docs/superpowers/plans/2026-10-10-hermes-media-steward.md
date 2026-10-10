@@ -10,7 +10,7 @@
 
 **Spec:** [已确认设计](../specs/2026-10-10-hermes-media-steward-design.md)
 
-日期：2026-10-10。状态：H01～H07 已验收并完成阶段提交；H08 待实施。H07 前端全量 93 项、后端全量 340 项通过，临时目录生产构建与四种宽度浏览器检查通过；聊天尚未部署。开发、构建、测试和部署均通过 SSH 在 /opt/stacks/he-manager 完成，按依赖顺序逐阶段验收和 commit。
+日期：2026-10-10。状态：H01～H08 实现及隔离验收已完成；生产启用留作最终独立审查后的门禁。后端349项、前端95项、MCP11项通过，临时目录生产构建通过；实际原生工具链、提案拒绝、停止和 nginx 流已验收。开发、构建、测试与部署均在服务器 /opt/stacks/he-manager 完成，LAN SSH 192.168.0.101:2222。
 
 ## Global Constraints
 
@@ -280,7 +280,7 @@ expect(requestHeaders.Authorization).toBe('Bearer user-token')
 - [x] Step 5：建议卡从 HE proposals endpoint 获取完整预览，展示目标、before/after、期限和确认/拒绝；确认等待期间禁用按钮，409 要求重新生成建议。消息和标题纯文本渲染，不用 v-html；媒体打开复用现有详情 UI（用户主动打开后才更新观看记录）。扫描卡显示 job ID 的实际状态；停止聊天不宣称停止已确认扫描。
 - [x] Step 6：运行 Step 2 和 npm run build，预期 PASS；浏览器检查 320/390/768/1440px、键盘弹出、PWA safe area、焦点/按键和长文本，无横向溢出；提交 feat: add media steward chat interface。
 
-H07 验收：目标 28 PASS；前端全量 93 PASS；后端全量 340 PASS；构建到 /tmp/he-hermes-h07-dist。320/390/768/1440px 均无横向溢出；显式确认、普通用户隐藏和纯文本长标题检查通过。PWA/键盘为 Chromium 视口模拟，焦点输入框保持可见；真实 iOS 设备验收待 H08。HTTP 内网 UUID 回退和重连最新终态回归均 RED→GREEN。
+H07 验收：目标 28 PASS；前端全量 93 PASS；后端全量 340 PASS；构建到 /tmp/he-hermes-h07-dist。320/390/768/1440px 均无横向溢出；显式确认、普通用户隐藏和纯文本长标题检查通过。PWA/键盘为 Chromium 视口模拟，焦点输入框保持可见；Chromium/PWA 模拟通过，真实 iOS 设备未验收。HTTP 内网 UUID 回退和重连最新终态回归均 RED→GREEN。
 
 ## Task 8: H08 — 可选 Compose 集成、端到端验收与运维
 
@@ -288,13 +288,18 @@ H07 验收：目标 28 PASS；前端全量 93 PASS；后端全量 340 PASS；构
 
 **Interfaces:** 基础 compose + assistant override 启动 backend/frontend、assistant-tools、assistant-mcp、hermes-agent。assistant-tools 复用 backend 镜像运行内部 app；HE 镜像增加 /srv/deploy/hermes 模板与准备脚本，HE_ASSISTANT_TEMPLATE_DIR 支持覆盖路径，不能假设镜像有完整仓库布局；Hermes digest 与 profile root 取 H01 产物，MCP 单独 Python 3.12 轻量镜像。
 
-- [ ] Step 1：用临时 SQLite/profile 和 fake Hermes 完成离线端到端用例：登录→搜索→建议→拒绝/确认→重复确认→扫描 job→断流/恢复→清除会话。验收测试断言无确认没有写入、tool token 不能调用主 app、两管理员无串话、重启不重放 job。
-- [ ] Step 2：实现 Compose override；backend 对助手不设置硬健康依赖，助手失败不阻止媒体库启动。assistant-tools 无宿主机端口、无媒体盘。先从远端配置解析真实 SQLite 文件与所有敏感文件位置；共享 SQLite 必须让 db/WAL/SHM 位于同一可写父目录，不仅挂单个 .db 文件。若沿用 ./data:/data，必须以更具体的空只读挂载遮蔽 /data/hermes、/data/assistant、实际 DeepSeek 配置文件、备份及其它非必要目录；挂载源占位文件先创建，避免 Compose 把不存在的文件变成目录。不得继承主应用模型密钥环境变量，不授予 docker.sock。用同 worker UID 实测 DB 查询/建议写入可用，以及 profile/.env、API-key 文件、模型配置和备份不可读；遮蔽或权限验证失败不得部署。工具进程不迁移、不调用 create_all，只检查 H02 schema；主应用先迁移成功，schema 未就绪时工具 readiness 为 false，不接入主应用鉴权/调度 lifespan；MCP 不挂数据卷；Hermes 仅挂 ./data/hermes:/opt/data；HE profile/API-key 配置为 ./data/assistant/，示例及 runtime-lock 放 deploy/hermes/。工具链走专用内部网络，只有 Hermes 获得外部模型出口，助手专用网络设 internal:true（backend 保留原 Compose 网络，避免破坏现有外部源功能），并仅为 Hermes 增加明确 egress 网络；MCP 只在内部网络。按 H01 设置 CPU/内存/PID 限额、no-new-privileges，验证镜像所需可写目录；禁止 docker.sock/host network/privileged；仅在 backend 复用现有媒体卷做已确认扫描；运行 docker compose -f docker-compose.yml -f docker-compose.assistant.yml config --quiet 只验证配置，避免普通 config 输出展开密钥。
-- [ ] Step 3：为 /assistant/ 独立配置 Nginx location ^~ /assistant/，proxy_buffering off、proxy_cache off、gzip off、600 秒读取超时、X-Accel-Buffering:no 和 no-store；保持正常 Bearer headers。HE 的 180 秒停止 deadline、停止最终落定与 10 秒左右上游 keepalive 均实测，重启 nginx 后确认多 chunk 到达浏览器而非结束时一次返回。
-- [ ] Step 4：在隔离测试环境运行 H02～H07 的目标测试、相关 auth/scan/job/storage 回归、前端 tests 和生产 build；通过后运行 python scripts/run_assistant_acceptance.py --config <受保护验收配置路径>，预期 PASS。只用临时媒体目录验证真实扫描；真实库仅作只读搜索比对，不能用生产媒体跑修改/删除验收。
-- [ ] Step 5：记录磁盘和内存基线、数据库在线备份、frontend/dist 备份、HE 当前镜像 digest、Hermes profile 一致性快照（profile 短暂停止或受支持快照）。用真实漫画推荐冷启动测量既有 MiniLM 的额外内存和峰值，核对 H01 资源阈值；新增表不破坏旧镜像，回滚禁用助手并恢复旧镜像/前端，禁止直接用旧数据库覆盖上线后的媒体改动。
+- [x] Step 1：用临时 SQLite/profile 和 fake Hermes 完成离线端到端用例：登录→搜索→建议→拒绝/确认→重复确认→扫描 job→断流/恢复→清除会话。验收测试断言无确认没有写入、tool token 不能调用主 app、两管理员无串话、重启不重放 job。
+- [x] Step 2：实现 Compose override；backend 对助手不设置硬健康依赖，助手失败不阻止媒体库启动。assistant-tools 无宿主机端口、无媒体盘。先从远端配置解析真实 SQLite 文件与所有敏感文件位置；共享 SQLite 必须让 db/WAL/SHM 位于同一可写父目录，不仅挂单个 .db 文件。若沿用 ./data:/data，必须以更具体的空只读挂载遮蔽 /data/hermes、/data/assistant、实际 DeepSeek 配置文件、备份及其它非必要目录；挂载源占位文件先创建，避免 Compose 把不存在的文件变成目录。不得继承主应用模型密钥环境变量，不授予 docker.sock。用同 worker UID 实测 DB 查询/建议写入可用，以及 profile/.env、API-key 文件、模型配置和备份不可读；遮蔽或权限验证失败不得部署。工具进程不迁移、不调用 create_all，只检查 H02 schema；主应用先迁移成功，schema 未就绪时工具 readiness 为 false，不接入主应用鉴权/调度 lifespan；MCP 不挂数据卷；Hermes 仅挂 ./data/hermes:/opt/data；HE profile/API-key 配置为 ./data/assistant/，示例及 runtime-lock 放 deploy/hermes/。工具链走专用内部网络，只有 Hermes 获得外部模型出口，助手专用网络设 internal:true（backend 保留原 Compose 网络，避免破坏现有外部源功能），并仅为 Hermes 增加明确 egress 网络；MCP 只在内部网络。按 H01 设置 CPU/内存/PID 限额、no-new-privileges，验证镜像所需可写目录；禁止 docker.sock/host network/privileged；仅在 backend 复用现有媒体卷做已确认扫描；运行 docker compose -f docker-compose.yml -f docker-compose.assistant.yml config --quiet 只验证配置，避免普通 config 输出展开密钥。
+- [x] Step 3：为 /assistant/ 独立配置 Nginx location ^~ /assistant/，proxy_buffering off、proxy_cache off、gzip off、600 秒读取超时、X-Accel-Buffering:no 和 no-store；保持正常 Bearer headers。HE 的 180 秒停止 deadline、停止最终落定与 10 秒左右上游 keepalive 均实测，重启 nginx 后确认多 chunk 到达浏览器而非结束时一次返回。
+- [x] Step 4：在隔离测试环境运行 H02～H07 的目标测试、相关 auth/scan/job/storage 回归、前端 tests 和生产 build；通过后运行 python scripts/run_assistant_acceptance.py --config <受保护验收配置路径>，预期 PASS。只用临时媒体目录验证真实扫描；真实库仅作只读搜索比对，不能用生产媒体跑修改/删除验收。
+- [x] Step 5：记录磁盘和内存基线、数据库在线备份、frontend/dist 备份、HE 当前镜像 digest、Hermes profile 一致性快照（profile 短暂停止或受支持快照）。用真实漫画推荐冷启动测量既有 MiniLM 的额外内存和峰值，核对 H01 资源阈值；新增表不破坏旧镜像，回滚禁用助手并恢复旧镜像/前端，禁止直接用旧数据库覆盖上线后的媒体改动。
 - [ ] Step 6：按已获授权的实施范围进行最终部署；上线前完成全部验收并展示结果，部署授权尚未涵盖时留此步骤待批准。开启 HE_ASSISTANT_ENABLED 后检查健康、内网端口、无密钥前端、会话和只读真实查询；记录 provider/model/image 版本、实测预算与功能限制。任何一项未通过，保持开关关闭。记录 disabled → migrated → profiles_ready → services_ready → verified → enabled 的启用顺序；表迁移、profile 准备、健康检查和验收任一步失败均不翻开关。只生成了能力清单或 health=ok 不算 verified。
-- [ ] Step 7：完成操作文档：profile 初始化/停用与管理员降权后的访问关闭、模型密钥快照/轮换（API key 轮换先排空/核实该 profile 的 run）、升级锁版本、日志脱敏/轮转与 profile 磁盘监控、会话与长期记忆清理区别、数据备份、rollback 和常见故障；提交未知/停止不落定时，仅在确认对应 Hermes profile 没有执行或网关已停止后解除占槽，不能只删除数据库中的 running 记录。在本计划逐步记录 H01～H08 证据，PLAN.md 只保留入口和整体进度，不复制一套任务状态，在 staged diff 复核后提交 chore: ship optional Hermes media steward。
+- [x] Step 7：完成操作文档：profile 初始化/停用与管理员降权后的访问关闭、模型密钥快照/轮换（API key 轮换先排空/核实该 profile 的 run）、升级锁版本、日志脱敏/轮转与 profile 磁盘监控、会话与长期记忆清理区别、数据备份、rollback 和常见故障；提交未知/停止不落定时，仅在确认对应 Hermes profile 没有执行或网关已停止后解除占槽，不能只删除数据库中的 running 记录。在本计划逐步记录 H01～H08 证据，PLAN.md 只保留入口和整体进度，不复制一套任务状态，在 staged diff 复核后提交 chore: ship optional Hermes media steward。
+
+
+H08 实测：349项后端、95项前端、11项MCP测试通过；离线 CLI PASS，两管理员真实 DeepSeek 搜索 PASS，search→recommend→propose→reject PASS，评分未改。Nginx 121 chunks（首0.034s/末5.806s）、静默 keepalive10.006s；原生 between-tool stop 的 interrupted_by_user 完整终态适配经 RED→GREEN 后，0.281s 释放占槽。裸取消/未知理由/shutdown 保持占槽。附加 cgroup 峰值保守和781328384B，各无 OOM；实际 worker1000有效cap为0。
+
+真实库只读 immutable 在线备份2654条，冷推荐1.027s、峰值123019264B，当前MiniLM未缓存/未加载；未来装载权重需另做模型成功加载的冷峰值门禁，不声称此次测量覆盖了向量模型。H01真实180s预算与H05独立 watchdog/restart回归复用，H08验证部署代理和原生停止。手机为Chromium/PWA模拟，真实iOS未验收。上线前热备 integrity ok，前端/.env/私有模型快照及旧镜像已保存；生产启用顺序最终 verified/enabled 等待整分支审查，开关保持0。运维、初始化权限、轮换和保留当前DB的回滚见 [运维指南](../../hermes-operations.md)。
 
 ## 完成与审查规则
 

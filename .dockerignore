@@ -8,7 +8,8 @@
 # Not part of the backend-only image.
 frontend/
 android-app/
-scripts/
+scripts/*
+!scripts/prepare_hermes.py
 he.ps1
 he-server.ps1
 *.bat
@@ -30,3 +31,7 @@ volumes/
 # Local envs.
 .venv/
 venv/
+
+# Assistant runtime credentials and plan scratch never enter build context.
+.env*
+.superpowers/

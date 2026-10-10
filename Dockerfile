@@ -27,6 +27,8 @@ RUN pip install --no-cache-dir \
 
 # App package only — DB and media live on mounted volumes, never in the image.
 COPY backend/app ./app
+COPY deploy/hermes ./deploy/hermes
+COPY scripts/prepare_hermes.py ./scripts/prepare_hermes.py
 
 # Pre-create the mount targets so first boot works even before a bind exists.
 # The app derives these from cwd=/srv: .thumbnails -> /srv/.thumbnails, and

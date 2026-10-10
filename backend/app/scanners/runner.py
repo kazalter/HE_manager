@@ -227,7 +227,7 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
             # --- REGULAR FILE LOGIC ---
             for file in files:
                 ext = os.path.splitext(file)[1].lower()
-                target_type = media_type_for_extension(ext, folder.scan_mode)
+                target_type = media_type_for_extension(folder.scan_mode, ext)
                 if not target_type:
                     continue
 
