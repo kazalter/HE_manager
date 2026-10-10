@@ -81,9 +81,12 @@ def open_project(db, folder_id, relative, *, directory=False):
 
 def redact_text(text):
     text=re.sub(r"(?im)^.*(?:password|passwd|secret|token|api[_-]?key|authorization|cookie)[\x22\x27\t ]*[:=].*$","[已隐藏含凭据的行]",text)
-    text=re.sub(r"(?i)(https?://)[^/\s:@]+:[^/\s@]+@",r"\1[已隐藏凭据]@",text)
-    text=re.sub(r"(?i)([?&](?:token|key|api_key|auth|password|signature)=)[^&\s]+",r"\1[已隐藏]",text)
-    text=re.sub(r"-----BEGIN [^-]*PRIVATE KEY-----.*?-----END [^-]*PRIVATE KEY-----","[已隐藏私钥]",text,flags=re.S)
+    def url_text(match):
+        value=match.group(0)
+        try:s.MediaPatch(source_url=value)
+        except ValueError:return "[已隐藏含凭据或无效的连接地址]"
+        return value
+    text=re.sub(r"https?://[^\s<>\x22\x27]+",url_text,text,flags=re.I)
     return text
 
 def media_location(db, media_id):
@@ -163,13 +166,15 @@ def execute_file_read(db,principal,context,name,args):
             result=page(items,len(entries),q)
     elif name=="read_text":
         with open_project(db,q.folder_id,q.relative_path) as fd:
-            prefix=os.read(fd,65536)
-            if b"PRIVATE KEY-----" in prefix:
+            full=os.read(fd,8*1024*1024+1)
+            if len(full)>8*1024*1024:raise HTTPException(413,"assistant_content_too_large")
+            if b"PRIVATE KEY-----" in full or b"\x00" in full:raise HTTPException(403,"assistant_path_outside_root")
+            try:whole=full.decode("utf-8")
+            except UnicodeDecodeError:raise HTTPException(422,"assistant_invalid_text") from None
+            if re.search(r"(?im)^[^\n]*(?:password|passwd|secret|token|api[_-]?key|authorization|cookie)[\x22\x27\t ]*[:=][ \t]*(?:[|>][+-]?|[\x22\x27]?)?[ \t]*$",whole):
                 raise HTTPException(403,"assistant_path_outside_root")
-            if q.offset_bytes:
-                os.lseek(fd,q.offset_bytes-1,os.SEEK_SET)
-                if os.read(fd,1) != b"\n":raise HTTPException(422,"assistant_invalid_tool_args")
-            os.lseek(fd,q.offset_bytes,os.SEEK_SET);raw=os.read(fd,32769)
+            if q.offset_bytes and (q.offset_bytes>len(full) or full[q.offset_bytes-1:q.offset_bytes]!=b"\n"):raise HTTPException(422,"assistant_invalid_tool_args")
+            raw=full[q.offset_bytes:q.offset_bytes+32769]
         if b"\x00" in raw:raise HTTPException(422,"assistant_invalid_text")
         chunk=raw
         if len(raw)>32768:

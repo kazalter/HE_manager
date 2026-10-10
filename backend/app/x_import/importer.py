@@ -353,51 +353,51 @@ def _process_post(job: ImportJob, post_id: int, db: Session, folder: models.Fold
     db.commit()
 
 
-@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def _run(job: ImportJob) -> None:
     db = database.SessionLocal()
     try:
-        job.status = "preparing"
-        job.message = "准备中"
-        job.started_at = datetime.utcnow().isoformat()
+        with __import__("app.services.media_operation_guard",fromlist=["project_mutation"]).project_mutation():
+            job.status = "preparing"
+            job.message = "准备中"
+            job.started_at = datetime.utcnow().isoformat()
 
-        folder = storage.ensure_folder_for_x(job.download_root, db)
-        job.total_posts = len(job._post_ids)
+            folder = storage.ensure_folder_for_x(job.download_root, db)
+            job.total_posts = len(job._post_ids)
 
-        if not job._post_ids:
-            job.status = "completed"
-            job.message = "没有需要处理的内容"
-            job.finished_at = datetime.utcnow().isoformat()
-            return
+            if not job._post_ids:
+                job.status = "completed"
+                job.message = "没有需要处理的内容"
+                job.finished_at = datetime.utcnow().isoformat()
+                return
 
-        job.status = "running"
-        job.message = f"开始处理 {job.total_posts} 个 Post"
+            job.status = "running"
+            job.message = f"开始处理 {job.total_posts} 个 Post"
 
-        for post_id in job._post_ids:
+            for post_id in job._post_ids:
+                if job.cancel_requested:
+                    break
+                _wait_if_paused(job)
+                if job.cancel_requested:
+                    break
+                try:
+                    _process_post(job, post_id, db, folder)
+                except Exception as exc:
+                    job.failed_posts += 1
+                    job.log_error(str(post_id), f"未处理异常：{exc}")
+                    db.rollback()
+                time.sleep(TWEET_DELAY_SEC)
+
             if job.cancel_requested:
-                break
-            _wait_if_paused(job)
-            if job.cancel_requested:
-                break
-            try:
-                _process_post(job, post_id, db, folder)
-            except Exception as exc:
-                job.failed_posts += 1
-                job.log_error(str(post_id), f"未处理异常：{exc}")
-                db.rollback()
-            time.sleep(TWEET_DELAY_SEC)
+                job.status = "canceled"
+                job.message = "已取消"
+            else:
+                job.status = "completed"
+                job.message = "导入完成"
 
-        if job.cancel_requested:
-            job.status = "canceled"
-            job.message = "已取消"
-        else:
-            job.status = "completed"
-            job.message = "导入完成"
-
-        source = db.query(models.XImportSource).filter(models.XImportSource.id == job.source_id).first()
-        if source:
-            source.last_sync_at = datetime.utcnow()
-            db.commit()
+            source = db.query(models.XImportSource).filter(models.XImportSource.id == job.source_id).first()
+            if source:
+                source.last_sync_at = datetime.utcnow()
+                db.commit()
     except Exception as exc:
         job.status = "failed"
         job.message = f"任务失败：{exc}"

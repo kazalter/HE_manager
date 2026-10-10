@@ -198,6 +198,7 @@ def find_local_media_for_external_items(
     return resolved
 
 
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def find_local_media_for_external_item(item: models.ExternalFavoriteItem, db: Session) -> Optional[models.Media]:
     expected_media_type = "audio" if (item.source_type or "") == "asmr" else "manga"
     is_manga = expected_media_type == "manga"

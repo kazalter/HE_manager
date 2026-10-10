@@ -112,6 +112,7 @@ def page(items, total, args):
         "total": total,
         "offset": args.offset,
         "has_more": args.offset + len(items) < total,
+        "next_offset": args.offset + len(items) if args.offset + len(items) < total else None,
     }
 
 

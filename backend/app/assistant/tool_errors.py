@@ -1,6 +1,7 @@
 """Safe public errors; never forward exception text or credential-bearing bodies."""
 from .schemas import ToolErrorDTO
 MESSAGES = {
+    "assistant_invalid_tool_result": "读取结果暂不可用，请稍后重试。",
     "assistant_file_needs_recovery": "文件操作状态需要恢复，请先核对源路径、目标路径和媒体资料；相关写入已暂停。",
     "assistant_tag_exists": "目标标签已存在，请改用标签合并。",
     "assistant_invalid_tool_args": "工具参数不正确，请按工具 schema 修正。",

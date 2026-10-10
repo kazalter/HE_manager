@@ -367,11 +367,14 @@ class CreatorDetailDTO(MediaPageDTO):
     key: str
     name: str
 class TaskDTO(DTO):
+    total_count: Count | None = None
+    completed_count: Count | None = None
+    failed_count: Count | None = None
     task_id: str
     kind: str
     status: str
     progress: float | None = None
-    created_at: datetime
+    created_at: datetime | None = None
     finished_at: datetime | None = None
     summary: str
 class TaskPageDTO(DTO):
@@ -401,8 +404,18 @@ class FolderSettingDTO(DTO):
     scan_mode: str
     thumbnail_enabled: bool
     thumbnail_interval: Count
+class SourceSettingDTO(DTO):
+    kind: Literal['source'] = 'source'
+    id: PositiveID
+    name: str
+    source_type: str
+    download_root_path: str | None = None
+    auto_sync_enabled: bool
+    auto_sync_interval_hours: Count
+    next_run_at: datetime | None = None
+
 class ProjectSettingsDTO(DTO):
-    folders: list[FolderSettingDTO] = Field(max_length=50)
+    items: list[FolderSettingDTO | SourceSettingDTO] = Field(max_length=50)
     total: Count
     offset: Count
     has_more: bool
@@ -456,6 +469,9 @@ class LogQuery(DTO):
     cursor: str | None = Field(default=None,max_length=200)
     limit: Annotated[int,Field(ge=1,le=200,strict=True)] = 50
 class LogEventDTO(DTO):
+    progress_count: Count | None = None
+    total_count: Count | None = None
+    status: str | None = None
     timestamp: str
     service: str
     level: str

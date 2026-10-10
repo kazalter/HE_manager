@@ -69,7 +69,7 @@ def confirm_proposal(db, user_id, proposal_id, payload_hash, *, enqueue=None):
                 payload = json.loads(proposal.payload_json)
                 if proposal.kind == "media_update":
                     media = (
-                        visible(local)
+                        local.query(models.Media)
                         .options(selectinload(models.Media.tags))
                         .filter(models.Media.id == proposal.target_id)
                         .first()

@@ -75,7 +75,7 @@ def media_snapshot(media, patch):
     # Compare exact values, including the complete tag relationship. Only hashes
     # of credential-bearing values are saved outside the existing media record.
     value = {
-        k: getattr(media, k) for k in patch if k in ("rating", "favorite", "source_url")
+        k: getattr(media, k) for k in patch if k in ("rating", "favorite", "source_url", "title", "artist", "view_status")
     }
     value["tags"] = full_tags(media)
     return value
@@ -127,7 +127,7 @@ def proposal_dto(row):
     return schemas.ProposalDTO(
         **ack(row).model_dump(),
         session_id=row.session_id,
-        targets=json.loads(row.targets_json or "[]"),
+        targets=json.loads(row.targets_json or "[]")[:50],
         before=json.loads(row.before_json),
         after=json.loads(row.after_json),
         payload_hash=row.normalized_payload_hash,
@@ -190,7 +190,7 @@ def create_proposal(db, principal, context, kind, payload):
             return ack(existing)
         if kind == "media_update":
             row = (
-                visible(local)
+                local.query(models.Media)
                 .options(selectinload(models.Media.tags))
                 .filter(models.Media.id == target_id)
                 .first()

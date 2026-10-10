@@ -106,7 +106,7 @@ def execute_and_record(db, token, body, name):
         try:
             result=execute_project_read(db,principal,body.context,name,body.args)
         except ValidationError:
-            raise HTTPException(422,"assistant_invalid_tool_args") from None
+            raise HTTPException(502,"assistant_invalid_tool_result") from None
     elif name in PROPOSAL_TOOLS:
         result = create_proposal(
             db, principal, body.context, PROPOSAL_TOOLS[name], body.args

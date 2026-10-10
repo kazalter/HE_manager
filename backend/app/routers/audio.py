@@ -14,6 +14,7 @@ from ..services.range_response import get_ranged_file_response
 router = APIRouter()
 
 
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def _get_audio_media_or_404(media_id: int, db: Session) -> models.Media:
     media = get_media_or_404(media_id, db)
     if media.media_type != "audio":
@@ -90,6 +91,7 @@ def _audio_lyrics_rel(track: dict, media: models.Media) -> Optional[str]:
 
 
 @router.get("/audio/{media_id}/tracks")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def get_audio_tracks(media_id: int, db: Session = Depends(get_db)):
     media = _get_audio_media_or_404(media_id, db)
     tracks = _resolve_audio_tracks(media)
@@ -108,6 +110,7 @@ def get_audio_tracks(media_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/audio/{media_id}/track/{index}")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def stream_audio_track(media_id: int, index: int, request: Request, db: Session = Depends(get_db)):
     media = _get_audio_media_or_404(media_id, db)
     tracks = _resolve_audio_tracks(media)

@@ -54,6 +54,7 @@ export interface JobDTO {
   finished_at: string | null
 }
 export interface ActionResultDTO {
+  items?: Record<string, unknown>[]
   proposal_id: string
   state: string
   media_id?: number | null

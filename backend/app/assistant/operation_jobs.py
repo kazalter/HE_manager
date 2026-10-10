@@ -33,6 +33,7 @@ def reserve_operation_job(local,proposal):
         else:query=query.filter(models.Media.id.in_(payload.get('media_ids',[])))
         execution['media_ids']=[x[0] for x in query.with_entities(models.Media.id)]
         execution['all_media']=False
+    if proposal.kind=='maintenance' and payload.get('action')=='recheck_duplicates':execution['allowed_media_ids']=[x['id'] for x in json.loads(proposal.targets_json)]
     job=s.JobDTO(job_id=job_id_for(proposal.id),kind=proposal.kind,folder_id=None,status='queued',progress=0,message='已批准，等待执行；失败时不自动重放。',created_at=utcnow())
     local.add(models.BackgroundJob(job_id=job.job_id,kind='assistant_operation',status='queued',payload_json=canonical_json({'job':job.model_dump(mode='json'),'execution':execution}),created_at=utcnow(),updated_at=utcnow()))
     return s.ActionResultDTO(proposal_id=proposal.id,state='queued',job_id=job.job_id,job=job)
@@ -46,7 +47,7 @@ def update_job(proposal_id,status,message,progress=None,items=None):
             terminal=status in ('completed','failed','interrupted','needs_recovery')
             job=job.model_copy(update=dict(status=status,message=message[:500],progress=progress,finished_at=utcnow() if terminal else None))
             payload['job']=job.model_dump(mode='json');row.status=status;row.payload_json=canonical_json(payload);row.updated_at=utcnow();row.finished_at=job.finished_at
-            result=s.ActionResultDTO(proposal_id=proposal_id,state=status,job_id=job.job_id,job=job,items=items or [])
+            result=s.ActionResultDTO(proposal_id=proposal_id,state=status,job_id=job.job_id,job=job,items=items if items is not None else json.loads(proposal.result_json or '{}').get('items',[]))
             proposal.result_json=result.model_dump_json()
             audit=local.query(AssistantAudit).filter_by(proposal_id=proposal_id).first()
             if audit:audit.result_json=proposal.result_json
@@ -84,7 +85,7 @@ def execute_maintenance(proposal_id,execution):
                 from .file_reads import media_location
                 media_location(db,media_id)
                 from ..dedup.worker import _process_one
-                _process_one(media_id)
+                _process_one(media_id,allowed_media_ids=execution.get('allowed_media_ids'))
                 db.expire_all();state=db.get(models.Media,media_id).duplicate_status
                 if state=='dedup_error':raise HTTPException(503,'assistant_tool_unavailable')
                 results.append(dict(media_id=media_id,status=state))

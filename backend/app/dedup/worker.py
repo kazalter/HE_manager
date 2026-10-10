@@ -125,7 +125,7 @@ def _mark_processing_error(media_id: int, exc: Exception) -> None:
 
 
 @__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
-def _process_one(media_id: int) -> None:
+def _process_one(media_id: int, *, allowed_media_ids: Optional[List[int]] = None) -> None:
     db = database.SessionLocal()
     try:
         media = db.query(models.Media).filter(models.Media.id == media_id).first()
@@ -144,6 +144,8 @@ def _process_one(media_id: int) -> None:
             return
 
         candidates = _candidates_for(db, media, new_fp)
+        allowed=set(allowed_media_ids) if allowed_media_ids is not None else None
+        if allowed is not None:candidates=[x for x in candidates if x.id in allowed]
         new_lite = _lite_from_record(media, new_fp)
         matched_pair_ids: set[int] = set()
         affected_ids = {media.id}
@@ -176,6 +178,7 @@ def _process_one(media_id: int) -> None:
             or_(models.DuplicateCandidate.existing_media_id == media.id,
                 models.DuplicateCandidate.candidate_media_id == media.id),
         ).all():
+            if allowed is not None and (pair.existing_media_id not in allowed or pair.candidate_media_id not in allowed):continue
             if pair.id not in matched_pair_ids:
                 db.query(models.DuplicateCandidate).filter(
                     models.DuplicateCandidate.id == pair.id,

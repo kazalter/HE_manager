@@ -41,28 +41,12 @@ def capabilities(db,user_id):
 
 def proposal_targets(db,user_id,proposal_id,limit,offset):
     row=owned(db,user_id,proposal_id)
-    if row.kind in ('tag_rename','tag_merge'):
-        payload=json.loads(row.payload_json);ids=[payload['tag_id']] if row.kind=='tag_rename' else [payload['source_tag_id'],payload['target_tag_id']]
-        query=db.query(models.Media.id,models.Media.title).join(models.media_tags,models.media_tags.c.media_id==models.Media.id).filter(models.media_tags.c.tag_id.in_(ids)).distinct().order_by(models.Media.id)
-        total=query.count();items=[dict(id=x.id,label=x.title or '媒体',type='media') for x in query.offset(offset).limit(limit)]
-    elif row.kind=='maintenance':
-        from .operation_registry import preview_operation
-        preview=preview_operation(db,row.kind,json.loads(row.payload_json));payload=json.loads(row.payload_json)
-        query=db.query(models.Media).order_by(models.Media.id)
-        if payload['action']=='backup':query=query.filter(models.Media.id<0)
-        elif payload.get('all_media'):
-            if payload['action']=='recheck_missing':query=query.filter(models.Media.is_missing==True)
-            if payload['action']=='regenerate_thumbnail':query=query.filter(models.Media.media_type=='video')
-        else:query=query.filter(models.Media.id.in_(payload.get('media_ids',[])))
-        total=query.count();items=[dict(id=x.id,label=x.title or '媒体',type='media') for x in query.offset(offset).limit(limit)]
-        if preview.fingerprint!=row.target_fingerprint:raise HTTPException(409,'assistant_proposal_stale')
-    elif row.kind=='file_move':
-        from .operation_registry import preview_operation
-        from .file_actions import move_details
-        payload=json.loads(row.payload_json)
-        if preview_operation(db,row.kind,payload).fingerprint!=row.target_fingerprint:raise HTTPException(409,'assistant_proposal_stale')
-        changes=move_details(db,payload['media_id'],payload['destination_folder_id'],payload['destination_relative_path'])[4]
-        total=len(changes);items=[dict(id=x['id'],type=x['model'],label=f"{x['model']} #{x['id']}",before=x['before'],after=x['after']) for x in changes[offset:offset+limit]]
-    else:
-        all_items=json.loads(row.targets_json or '[]');total=len(all_items);items=all_items[offset:offset+limit]
+    all_items=json.loads(row.targets_json or '[]')
+    if row.kind=='file_move':
+        from .models import AssistantFileOperation
+        journal=db.get(AssistantFileOperation,row.id)
+        if journal:
+            changes=json.loads(journal.relationships_json)
+            all_items=[dict(id=x['id'],type=x['model'],label=f"{x['model']} #{x['id']}",before=x['before'],after=x['after']) for x in changes]
+    total=len(all_items);items=all_items[offset:offset+limit]
     return dict(items=items,total=total,offset=offset,has_more=offset+len(items)<total)

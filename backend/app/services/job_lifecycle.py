@@ -61,6 +61,10 @@ def record_job(kind: str, job: Any, *, finished: bool = False) -> None:
         return
     now = datetime.utcnow()
     status = str(payload.get("status") or "queued")
+    from .assistant_runtime_logs import emit_event
+    service='import' if kind.startswith('x_') else 'assistant' if kind.startswith('assistant_') else 'download'
+    code='operation_completed' if status=='completed' else 'operation_failed' if status in ('failed','interrupted','canceled') else 'operation_started'
+    emit_event(service,'ERROR' if status=='failed' else 'INFO',code,job_id,{'status':status,'progress_count':payload.get('completed',payload.get('completed_posts')),'total_count':payload.get('total',payload.get('total_posts'))})
     db = database.SessionLocal()
     persisted = False
     try:

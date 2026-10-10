@@ -81,7 +81,7 @@ const actionable = computed(
 const stateLabels: Record<string, string> = {
   pending: '待确认',
   applied: '已执行',
-  queued: '已安排扫描',
+  queued: '已安排任务',
   rejected: '已拒绝',
   expired: '已过期',
   stale: '资料已变化',
@@ -91,6 +91,7 @@ const status = computed(() =>
     ? '已过期'
     : stateLabels[state.value] || '建议不可用',
 )
+const resultItems = computed(() => props.proposal.result?.items || [])
 const jobLabels: Record<string, string> = {
   queued: '等待执行',
   running: '正在执行',
@@ -101,6 +102,7 @@ const jobLabels: Record<string, string> = {
 }
 const labels: Record<string, string> = {
   title: '标题', artist: '作者', view_status: '阅读 / 观看状态', items: '变更清单', media_id: '媒体编号', source_path: '源路径', destination_path: '目标路径', file_count: '文件项数', path_changes: '关联路径变更', fields: '资料', affected_media_count: '影响媒体数', affected_media_ids: '媒体编号', affected_list_truncated: '清单已截断', changes_truncated: '清单已截断', source_tag: '原标签', target_tag: '目标标签', namespace: '分类', name: '名称', media_count: '媒体数', media_ids: '媒体编号', list_truncated: '清单已截断',
+  requested_media_ids: '本次复查媒体', requested_count: '复查数量', backup_name: '备份名称', size_bytes: '大小',
   rating: '评分',
   favorite: '收藏',
   source_url: '来源链接',
@@ -209,7 +211,7 @@ async function pollJob(id: string) {
     job.value = value
     error.value = ''
   } catch {
-    if (alive) error.value = '扫描状态暂不可用，稍后重试；不会重复启动扫描。'
+    if (alive) error.value = '任务状态暂不可用，稍后重试；不会重复启动任务。'
   }
   if (
     alive &&
@@ -319,6 +321,7 @@ onBeforeUnmount(() => {
         job.message
       }}</span>
     </p>
+    <details v-if="resultItems.length" class="rounded-xl border border-line p-3"><summary class="min-h-11 cursor-pointer text-sm text-muted focus-ring">逐项执行结果 · {{ resultItems.length }} 项</summary><p v-for="(item,index) in resultItems" :key="index" class="mb-2 text-sm text-ink [overflow-wrap:anywhere]">{{ preview(item) }}</p></details>
     <p v-if="error" role="alert" class="text-sm text-danger">{{ error }}</p>
   </UiCard>
 </template>

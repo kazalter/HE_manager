@@ -11,11 +11,17 @@ from uuid import uuid4
 from ..assistant.schemas import LogPageDTO
 
 _LOCK=threading.Lock()
-LABELS={"runtime_error":"运行错误", "runtime_warning":"运行提醒", "runtime_info":"运行事件", "file_missing":"文件不存在", "permission_denied":"目录或文件权限不足", "storage_unavailable":"存储不可用", "operation_started":"审批任务开始", "operation_completed":"审批任务完成", "operation_failed":"审批任务失败", "operation_recovery":"文件操作需要恢复", "tool_rejected":"工具调用未成功", "scan_started":"目录扫描开始", "scan_completed":"目录扫描结束", "scan_failed":"目录扫描失败"}
+LABELS={"runtime_error":"运行错误", "runtime_warning":"运行提醒", "runtime_info":"运行事件", "file_missing":"文件不存在", "permission_denied":"目录或文件权限不足", "storage_unavailable":"存储不可用", "operation_started":"任务开始", "operation_completed":"任务完成", "operation_failed":"任务失败", "operation_recovery":"文件操作需要恢复", "tool_rejected":"工具调用未成功", "scan_started":"目录扫描开始", "scan_completed":"目录扫描结束", "scan_failed":"目录扫描失败", "auto_sync_success":"自动同步成功", "auto_sync_failed":"自动同步失败", "auto_sync_partial":"自动同步部分完成"}
 SOURCES={"assistant","scan","download","auto_sync","import","runtime"}
 
 def log_dir():
     return Path(os.getenv("HE_ASSISTANT_LOG_DIR","/data/assistant-logs" if os.name!="nt" else "data/assistant-logs"))
+
+def event_summary(event):
+    value=LABELS.get(event.get('code'),'运行事件')
+    done=event.get('progress_count');total=event.get('total_count')
+    if type(done) is int and type(total) is int and 0<=done<=10**12 and 0<=total<=10**12:value+=f'；已处理 {done}/{total}'
+    return value
 
 def emit_event(service,level,code,object_id=None,summary_fields=None):
     if service not in SOURCES or code not in LABELS:return
@@ -25,6 +31,11 @@ def emit_event(service,level,code,object_id=None,summary_fields=None):
     rid=str(fields.get("request_id", ""))
     if not re.fullmatch(r"[0-9a-f-]{36}",rid):rid=None
     event=dict(timestamp=datetime.now(timezone.utc).isoformat(),service=service,level=level if level in ("INFO","WARNING","ERROR") else "INFO",code=code,object_id=safe_id,summary=LABELS[code],request_id=rid,cursor=datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")+"-"+uuid4().hex)
+    for key in ('progress_count','total_count'):
+        value=fields.get(key)
+        if type(value) is int and 0<=value<=10**12:event[key]=value
+    if fields.get('status') in ('queued','preparing','running','completed','failed','canceled','interrupted','needs_recovery','success','partial'):event['status']=fields['status']
+    event['summary']=event_summary(event)
     try:
         with _LOCK:
             root=log_dir();root.mkdir(parents=True,exist_ok=True,mode=0o700);file=root/'events.jsonl'
@@ -69,7 +80,7 @@ def read_events(source,cursor,limit):
                         if item.get('service') not in SOURCES or item.get('code') not in LABELS:continue
                         if source!='all' and item['service']!=source:continue
                         if cursor and item['cursor']>=cursor:continue
-                        item['summary']=LABELS[item['code']]
+                        item['summary']=event_summary(item)
                         events.append(item)
                     except (ValueError,KeyError,TypeError):continue
         except OSError:pass

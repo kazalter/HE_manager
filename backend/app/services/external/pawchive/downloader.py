@@ -396,7 +396,6 @@ def _download_one(row_id: int, job_id: str, stop: threading.Event, root: Path, d
     return result
 
 
-@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def run_download_job(job_id: str) -> None:
     job = DOWNLOAD_JOBS.get(job_id)
     if not job:
@@ -405,36 +404,37 @@ def run_download_job(job_id: str) -> None:
     db = database.SessionLocal()
     try:
         try:
-            root = download_root()
-            job["status"] = "running"
-            job["message"] = "下载中"
-            job_lifecycle.record_job(JOB_KIND, job)
-            for row_id in job["attachment_ids"]:
-                with _TRANSFER_LIMIT:
-                    result = _download_one(row_id, job_id, stop, root, db)
-                job["attachments"].append(result)
-                job["completed"] = sum(a["status"] == "completed" for a in job["attachments"])
-                job["failed"] = sum(a["status"] == "failed" for a in job["attachments"])
-                job["canceled"] = sum(a["status"] == "canceled" for a in job["attachments"])
+            with __import__("app.services.media_operation_guard",fromlist=["project_mutation"]).project_mutation():
+                root = download_root()
+                job["status"] = "running"
+                job["message"] = "下载中"
                 job_lifecycle.record_job(JOB_KIND, job)
-                if stop.is_set() or result.get("error_code") in {"RATE_LIMITED", "ACCESS_RESTRICTED"}:
-                    if result.get("error_code") == "RATE_LIMITED":
-                        job["message"] = "来源请求过快；已停止后续附件，请稍后重试"
-                        job["retry_after"] = result.get("retry_after")
-                    elif result.get("error_code") == "ACCESS_RESTRICTED":
-                        job["message"] = "来源限制访问；已停止后续附件"
-                    break
-            for row_id in job["attachment_ids"][len(job["attachments"]):]:
-                row = db.get(models.PawchiveAttachment, row_id)
-                if row and row.job_id == job_id and row.status == "queued":
-                    row.status = "canceled" if stop.is_set() else "interrupted"
-                    row.error = "用户已取消" if stop.is_set() else "任务已中断"
-                    job["attachments"].append({"attachment_id": row_id, **_serialize_attachment(row)})
-            db.commit()
-            job["canceled"] = sum(a["status"] == "canceled" for a in job["attachments"])
-            job["status"] = "canceled" if stop.is_set() else "completed" if job["completed"] == job["total"] else "failed"
-            if not job.get("retry_after") and not job["message"].startswith("来源"):
-                job["message"] = f"完成 {job['completed']} / 失败 {job['failed']} / 取消 {job['canceled']}"
+                for row_id in job["attachment_ids"]:
+                    with _TRANSFER_LIMIT:
+                        result = _download_one(row_id, job_id, stop, root, db)
+                    job["attachments"].append(result)
+                    job["completed"] = sum(a["status"] == "completed" for a in job["attachments"])
+                    job["failed"] = sum(a["status"] == "failed" for a in job["attachments"])
+                    job["canceled"] = sum(a["status"] == "canceled" for a in job["attachments"])
+                    job_lifecycle.record_job(JOB_KIND, job)
+                    if stop.is_set() or result.get("error_code") in {"RATE_LIMITED", "ACCESS_RESTRICTED"}:
+                        if result.get("error_code") == "RATE_LIMITED":
+                            job["message"] = "来源请求过快；已停止后续附件，请稍后重试"
+                            job["retry_after"] = result.get("retry_after")
+                        elif result.get("error_code") == "ACCESS_RESTRICTED":
+                            job["message"] = "来源限制访问；已停止后续附件"
+                        break
+                for row_id in job["attachment_ids"][len(job["attachments"]):]:
+                    row = db.get(models.PawchiveAttachment, row_id)
+                    if row and row.job_id == job_id and row.status == "queued":
+                        row.status = "canceled" if stop.is_set() else "interrupted"
+                        row.error = "用户已取消" if stop.is_set() else "任务已中断"
+                        job["attachments"].append({"attachment_id": row_id, **_serialize_attachment(row)})
+                db.commit()
+                job["canceled"] = sum(a["status"] == "canceled" for a in job["attachments"])
+                job["status"] = "canceled" if stop.is_set() else "completed" if job["completed"] == job["total"] else "failed"
+                if not job.get("retry_after") and not job["message"].startswith("来源"):
+                    job["message"] = f"完成 {job['completed']} / 失败 {job['failed']} / 取消 {job['canceled']}"
         except Exception as exc:
             logger.exception("Pawchive job %s aborted: %s", job_id, type(exc).__name__)
             db.rollback()

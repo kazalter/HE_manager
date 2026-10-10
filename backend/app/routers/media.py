@@ -270,6 +270,7 @@ def get_mobile_thumbnail(filename: str, _: models.User = Depends(auth.get_curren
 
 
 @router.get("/media/{media_id}", response_model=schemas.Media)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def get_media(media_id: int, db: Session = Depends(get_db)):
     media = get_media_or_404(media_id, db)
 
@@ -506,6 +507,7 @@ def remove_media_tag(media_id: int, tag_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/stream/{media_id}")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def stream_media(request: Request, media_id: int, db: Session = Depends(get_db)):
     media = get_media_or_404(media_id, db)
 
@@ -524,6 +526,7 @@ def stream_media(request: Request, media_id: int, db: Session = Depends(get_db))
 
 
 @router.get("/mobile/stream/{media_id}")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def stream_mobile_media(
     request: Request,
     media_id: int,
@@ -581,6 +584,7 @@ def get_mobile_manga_pages_count(
 
 
 @router.get("/manga/{media_id}/page/{page_index}")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def get_manga_page(
     media_id: int,
     page_index: int,

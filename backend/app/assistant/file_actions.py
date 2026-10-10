@@ -69,6 +69,14 @@ def move_details(db,media_id,destination_folder_id,destination_relative_path):
     if target.exists():raise HTTPException(409,'assistant_file_destination_exists')
     if not target.parent.is_dir():raise HTTPException(404,'assistant_file_unavailable')
     if source.stat().st_dev!=target.parent.stat().st_dev:raise HTTPException(409,'assistant_cross_device_move')
+    if source.is_dir() and media.media_type!='manga':raise HTTPException(409,'assistant_file_relationship_unsupported')
+    if source.is_file():
+        siblings=[source.with_suffix(ext) for ext in ('.lrc','.vtt','.srt','.ass','.ssa')]
+        siblings += [source.parent/('.'+source.name+'.json'),source.parent/'tracks.json']
+        # Audio parent work manifests/derived layouts cannot be rewritten by this single-file operation.
+        parents=db.query(models.Media).filter(models.Media.media_type=='audio',models.Media.id!=media.id).all()
+        if any(x.absolute_path and source.is_relative_to(Path(x.absolute_path)) for x in parents):raise HTTPException(409,'assistant_file_relationship_unsupported')
+        if any(x.exists() for x in siblings):raise HTTPException(409,'assistant_file_relationship_unsupported')
     changes=relationships(db,source,target,destination_folder_id)
     data=manifest(source);parent=target.parent.stat()
     return media,source,target,data,changes,dict(device=parent.st_dev,inode=parent.st_ino,mtime=parent.st_mtime_ns)
@@ -76,7 +84,7 @@ def move_details(db,media_id,destination_folder_id,destination_relative_path):
 def preview_file_move(db,media_id,destination_folder_id,destination_relative_path):
     media,source,target,data,changes,parent=move_details(db,media_id,destination_folder_id,destination_relative_path)
     fingerprint=input_hash(dict(source=str(source),destination=str(target),manifest=data,relationships=changes,parent=parent))
-    return s.OperationPreviewDTO(kind='file_move',target_id=media.id,label=media.title or source.name,targets=[dict(type='media',id=media.id,label=media.title or source.name)],before=dict(source_path=str(source),file_count=len(data),path_changes=[dict(model=x['model'],id=x['id'],fields=x['before']) for x in changes[:50]],changes_truncated=len(changes)>50),after=dict(destination_path=str(target),path_changes=[dict(model=x['model'],id=x['id'],fields=x['after']) for x in changes[:50]],changes_truncated=len(changes)>50,notice='同盘移动，不覆盖；同步关联媒体路径。'),fingerprint=fingerprint,impact_count=len(changes),reversibility='可以提出反向移动，需重新审批')
+    return s.OperationPreviewDTO(kind='file_move',target_id=media.id,label=media.title or source.name,targets=[dict(type=x['model'],id=x['id'],label=f"{x['model']} #{x['id']}",before=x['before'],after=x['after']) for x in changes],before=dict(source_path=str(source),file_count=len(data),path_changes=[dict(model=x['model'],id=x['id'],fields=x['before']) for x in changes[:50]],changes_truncated=len(changes)>50),after=dict(destination_path=str(target),path_changes=[dict(model=x['model'],id=x['id'],fields=x['after']) for x in changes[:50]],changes_truncated=len(changes)>50,notice='同盘移动，不覆盖；同步关联媒体路径。'),fingerprint=fingerprint,impact_count=len(changes),reversibility='可以提出反向移动，需重新审批')
 
 def rename_no_replace(source,target):
     if os.name=='nt':os.rename(source,target);return

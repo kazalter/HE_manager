@@ -52,7 +52,7 @@ def preview_operation(db,kind,payload):
         if any(t is None for t in tags):raise HTTPException(404,'assistant_not_found')
         relations={str(t.id):sorted(x[0] for x in db.query(models.media_tags.c.media_id).filter(models.media_tags.c.tag_id==t.id)) for t in tags}
         raw={'tags':[dict(id=t.id,name=t.name,namespace=t.namespace or 'general') for t in tags],'relations':relations}
-        target_id=ids[0];targets=[dict(type='tag',id=t.id,label=t.name) for t in tags];affected=sorted({x for values in relations.values() for x in values})
+        target_id=ids[0];affected=sorted({x for values in relations.values() for x in values});targets=[dict(type='media',id=x.id,label=x.title or '媒体') for x in db.query(models.Media).filter(models.Media.id.in_(affected)).order_by(models.Media.id)]
         before={'tags':raw['tags'],'affected_media_count':len(affected),'affected_media_ids':affected[:50],'affected_list_truncated':len(affected)>50}
         if kind=='tag_rename':
             name=q.name.strip();namespace=(q.namespace or tags[0].namespace or 'general').strip()
@@ -81,8 +81,14 @@ def preview_operation(db,kind,payload):
             if len(media)>10000:raise HTTPException(413,'assistant_content_too_large')
             if q.action=='regenerate_thumbnail' and any(x.media_type!='video' for x in media):raise HTTPException(422,'assistant_invalid_proposal')
             raw={'action':q.action,'media':[dict(id=x.id,path=x.absolute_path,missing=bool(x.is_missing),duplicate=x.duplicate_status,cover=x.cover_path) for x in media]}
+            requested_ids=[x.id for x in media]
+            if q.action=='recheck_duplicates':
+                media=db.query(models.Media).order_by(models.Media.id).all()
+                if len(media)>10000:raise HTTPException(413,'assistant_content_too_large')
+                pairs=db.query(models.DuplicateCandidate).filter((models.DuplicateCandidate.existing_media_id.in_(requested_ids)) | (models.DuplicateCandidate.candidate_media_id.in_(requested_ids))).order_by(models.DuplicateCandidate.id).all()
+                raw={'action':q.action,'media':[dict(id=x.id,title=x.title,path=x.absolute_path,missing=bool(x.is_missing),duplicate=x.duplicate_status,cover=x.cover_path) for x in media],'pairs':[dict(id=x.id,left=x.existing_media_id,right=x.candidate_media_id,status=x.status,level=x.level) for x in pairs]}
             before={'action':q.action,'media_count':len(media),'media_ids':[x.id for x in media[:50]],'list_truncated':len(media)>50}
-            after={**before,'notice':'任务可能逐项处理；失败时可能已有部分结果，不自动重放。'};targets=[dict(type='media',id=x.id,label=x.title or '媒体') for x in media[:50]];label={'recheck_missing':'复查缺失文件','recheck_duplicates':'复查重复媒体','regenerate_thumbnail':'重建视频缩略图'}[q.action]
+            after={**before,'requested_media_ids':requested_ids[:50],'requested_count':len(requested_ids),'notice':'重复复查可能更新对比媒体与重复关系，全部潜在影响对象见完整清单；任务失败可能已有部分结果，不自动重放。' if q.action=='recheck_duplicates' else '任务可能逐项处理；失败时可能已有部分结果，不自动重放。'};targets=[dict(type='media',id=x.id,label=x.title or '媒体') for x in media];label={'recheck_missing':'复查缺失文件','recheck_duplicates':'复查重复媒体','regenerate_thumbnail':'重建视频缩略图'}[q.action]
             reversibility='任务结果不可自动撤回'
     else:
         from .file_actions import preview_file_move
@@ -105,6 +111,12 @@ def create_operation_proposal(db,principal,context,kind,args):
         preview=preview_operation(local,kind,payload)
         row=insert_operation(local,principal.user_id,str(context.session_id),str(context.run_id),kind,payload,preview,utcnow()+timedelta(seconds=300))
         return ack(row)
+
+def revalidate_preview(db,row,payload):
+    try:return preview_operation(db,row.kind,payload)
+    except HTTPException as exc:
+        if exc.status_code in (404,409,403,422):return None
+        raise
 
 def ensure_approvable(local,row):
     session=require_owned_session(local,row.user_id,row.session_id);run=require_owned_run(local,row.user_id,row.run_id)
@@ -146,8 +158,8 @@ def confirm_operation(db,user_id,proposal_id,payload_hash):
         if row.normalized_payload_hash!=payload_hash:raise HTTPException(409,'assistant_proposal_hash_mismatch')
         if row.state in ('applied','queued'):return s.ActionResultDTO.model_validate_json(row.result_json)
         ensure_approvable(local,row)
-        payload=json.loads(row.payload_json);preview=preview_operation(local,row.kind,payload)
-        if preview.fingerprint!=row.target_fingerprint:
+        payload=json.loads(row.payload_json);preview=revalidate_preview(local,row,payload)
+        if preview is None or preview.fingerprint!=row.target_fingerprint:
             row.state='stale';row.consumed_at=utcnow();stale=True
         else:
             if OPERATION_REGISTRY[row.kind].async_job:

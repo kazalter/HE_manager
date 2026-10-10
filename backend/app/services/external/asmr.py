@@ -159,118 +159,118 @@ def cleanup_incomplete_asmr_download(item_dir: str, expected_files: int):
     shutil.rmtree(item_dir, ignore_errors=True)
 
 
-@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def run_asmr_download_job(job_id: str, item_ids: List[int], download_root_path: str):
     db = database.SessionLocal()
     job = DOWNLOAD_JOBS[job_id]
     try:
-        planned_downloads = []
-        job["status"] = "preparing"
-        job["message"] = "正在准备下载"
+        with __import__("app.services.media_operation_guard",fromlist=["project_mutation"]).project_mutation():
+            planned_downloads = []
+            job["status"] = "preparing"
+            job["message"] = "正在准备下载"
 
-        for item_id in item_ids:
-            if is_cancel_requested(job):
-                raise DownloadCancelled()
+            for item_id in item_ids:
+                if is_cancel_requested(job):
+                    raise DownloadCancelled()
 
-            task = find_task(job, item_id)
-            item = db.query(models.ExternalFavoriteItem).filter(models.ExternalFavoriteItem.id == item_id).first()
-            if not item:
-                job["failed"] += 1
+                task = find_task(job, item_id)
+                item = db.query(models.ExternalFavoriteItem).filter(models.ExternalFavoriteItem.id == item_id).first()
+                if not item:
+                    job["failed"] += 1
+                    if task is not None:
+                        task["status"] = "failed"
+                        task["error"] = "条目不存在"
+                    job["results"].append({"item_id": item_id, "status": "failed", "error": "条目不存在"})
+                    continue
                 if task is not None:
-                    task["status"] = "failed"
-                    task["error"] = "条目不存在"
-                job["results"].append({"item_id": item_id, "status": "failed", "error": "条目不存在"})
-                continue
-            if task is not None:
-                task["title"] = item.title
-            source = get_source_or_404(item.source_id, db)
-            if (source.source_type or "") != "asmr":
-                job["failed"] += 1
-                if task is not None:
-                    task["status"] = "failed"
-                    task["error"] = "不是 ASMR 条目"
-                job["results"].append({"item_id": item_id, "title": item.title, "status": "failed", "error": "不是 ASMR 条目"})
-                continue
-            if source.download_root_path != download_root_path:
-                source.download_root_path = download_root_path
-                db.commit()
-            local_media = find_local_media_for_external_item(item, db)
-            if local_media:
-                job["completed"] += 1
-                if task is not None:
-                    task["status"] = "success"
-                job["results"].append({
-                    "item_id": item.id,
-                    "title": item.title,
-                    "status": "completed",
-                    "local_media_id": local_media.id,
-                    "skipped": True,
-                })
-                continue
-            ensure_external_audio_library(source, download_root_path, db)
-            try:
-                job["message"] = f"正在准备：{item.title}"
-                plan = prepare_asmr_download_plan_for_item(item, source, download_root_path)
-                job["pages_total"] += len(plan["files"])
-                if task is not None:
-                    task["total_pages"] = len(plan["files"])
-                planned_downloads.append((item, source, plan))
-            except Exception as exc:
-                job["failed"] += 1
-                if task is not None:
-                    task["status"] = "failed"
-                    task["error"] = str(exc)
-                job["results"].append({"item_id": item.id, "title": item.title, "status": "failed", "error": str(exc)})
+                    task["title"] = item.title
+                source = get_source_or_404(item.source_id, db)
+                if (source.source_type or "") != "asmr":
+                    job["failed"] += 1
+                    if task is not None:
+                        task["status"] = "failed"
+                        task["error"] = "不是 ASMR 条目"
+                    job["results"].append({"item_id": item_id, "title": item.title, "status": "failed", "error": "不是 ASMR 条目"})
+                    continue
+                if source.download_root_path != download_root_path:
+                    source.download_root_path = download_root_path
+                    db.commit()
+                local_media = find_local_media_for_external_item(item, db)
+                if local_media:
+                    job["completed"] += 1
+                    if task is not None:
+                        task["status"] = "success"
+                    job["results"].append({
+                        "item_id": item.id,
+                        "title": item.title,
+                        "status": "completed",
+                        "local_media_id": local_media.id,
+                        "skipped": True,
+                    })
+                    continue
+                ensure_external_audio_library(source, download_root_path, db)
+                try:
+                    job["message"] = f"正在准备：{item.title}"
+                    plan = prepare_asmr_download_plan_for_item(item, source, download_root_path)
+                    job["pages_total"] += len(plan["files"])
+                    if task is not None:
+                        task["total_pages"] = len(plan["files"])
+                    planned_downloads.append((item, source, plan))
+                except Exception as exc:
+                    job["failed"] += 1
+                    if task is not None:
+                        task["status"] = "failed"
+                        task["error"] = str(exc)
+                    job["results"].append({"item_id": item.id, "title": item.title, "status": "failed", "error": str(exc)})
 
-        job["bytes_total_known"] = False
-        job["status"] = "running"
-        for item, source, plan in planned_downloads:
-            if is_cancel_requested(job):
-                raise DownloadCancelled()
+            job["bytes_total_known"] = False
+            job["status"] = "running"
+            for item, source, plan in planned_downloads:
+                if is_cancel_requested(job):
+                    raise DownloadCancelled()
 
-            task = find_task(job, item.id)
-            try:
-                job["message"] = f"正在下载：{item.title}"
-                job["current_book_title"] = item.title
-                job["current_book_total_pages"] = len(plan["files"])
-                job["current_book_downloaded_pages"] = 0
-                if task is not None:
-                    task["status"] = "downloading"
-                result = download_asmr_item(item, source, plan, job)
-                local_media = upsert_external_downloaded_audio_media(
-                    item,
-                    source,
-                    result["path"],
-                    download_root_path,
-                    db,
-                    track_count=result["audio_track_count"],
-                    total_bytes=result["total_bytes"],
-                )
-                result["local_media_id"] = local_media.id
-                job["completed"] += 1
-                if task is not None:
-                    task["status"] = "success"
-                job["results"].append(result)
-            except DownloadCancelled as exc:
-                cleanup_incomplete_asmr_download(exc.item_dir or plan["item_dir"], len(plan["files"]))
-                if task is not None:
-                    task["status"] = "failed"
-                    task["error"] = "已取消"
-                job["results"].append({"item_id": item.id, "title": item.title, "status": "canceled", "path": plan["item_dir"]})
-                raise
-            except Exception as exc:
-                job["failed"] += 1
-                if task is not None:
-                    task["status"] = "failed"
-                    task["error"] = str(exc)
-                job["results"].append({"item_id": item.id, "title": item.title, "status": "failed", "error": str(exc)})
+                task = find_task(job, item.id)
+                try:
+                    job["message"] = f"正在下载：{item.title}"
+                    job["current_book_title"] = item.title
+                    job["current_book_total_pages"] = len(plan["files"])
+                    job["current_book_downloaded_pages"] = 0
+                    if task is not None:
+                        task["status"] = "downloading"
+                    result = download_asmr_item(item, source, plan, job)
+                    local_media = upsert_external_downloaded_audio_media(
+                        item,
+                        source,
+                        result["path"],
+                        download_root_path,
+                        db,
+                        track_count=result["audio_track_count"],
+                        total_bytes=result["total_bytes"],
+                    )
+                    result["local_media_id"] = local_media.id
+                    job["completed"] += 1
+                    if task is not None:
+                        task["status"] = "success"
+                    job["results"].append(result)
+                except DownloadCancelled as exc:
+                    cleanup_incomplete_asmr_download(exc.item_dir or plan["item_dir"], len(plan["files"]))
+                    if task is not None:
+                        task["status"] = "failed"
+                        task["error"] = "已取消"
+                    job["results"].append({"item_id": item.id, "title": item.title, "status": "canceled", "path": plan["item_dir"]})
+                    raise
+                except Exception as exc:
+                    job["failed"] += 1
+                    if task is not None:
+                        task["status"] = "failed"
+                        task["error"] = str(exc)
+                    job["results"].append({"item_id": item.id, "title": item.title, "status": "failed", "error": str(exc)})
 
-        job["current_book_title"] = ""
-        job["current_book_total_pages"] = 0
-        job["current_book_downloaded_pages"] = 0
+            job["current_book_title"] = ""
+            job["current_book_total_pages"] = 0
+            job["current_book_downloaded_pages"] = 0
 
-        job["status"] = "completed"
-        job["message"] = "下载完成"
+            job["status"] = "completed"
+            job["message"] = "下载完成"
     except DownloadCancelled:
         job["status"] = "canceled"
         job["message"] = "下载已取消，未完成的作品已清理"
