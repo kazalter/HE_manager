@@ -90,15 +90,10 @@ def confirm_proposal(db, user_id, proposal_id, payload_hash, *, enqueue=None):
                 else:
                     if proposal.kind == "media_update":
                         patch = payload["patch"]
-                        for name in ("rating", "favorite", "source_url", "title", "artist", "view_status"):
-                            if name in patch:
-                                setattr(media, name, patch[name])
-                        remove = set(patch.get("remove_tag_ids", []))
-                        media.tags = [t for t in media.tags if t.id not in remove]
-                        for tag in patch.get("add_tags", []):
-                            tagging.attach_tag(
-                                local, media, tag["name"], tag["namespace"]
-                            )
+                        from .operation_registry import apply_media_patch
+                        apply_media_patch(local, media, patch)
+                        from ..creators import clear_creator_cache
+                        clear_creator_cache()
                         result = schemas.ActionResultDTO(
                             proposal_id=proposal.id, state="applied", media_id=media.id
                         )

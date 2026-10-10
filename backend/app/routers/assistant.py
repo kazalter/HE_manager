@@ -39,6 +39,9 @@ def reject(proposal_id: str, user=Depends(auth.require_admin), db=Depends(get_db
 
 @router.get("/jobs/{job_id}", response_model=schemas.JobDTO)
 def job(job_id: str, user=Depends(auth.require_admin), db=Depends(get_db)):
+    if job_id.startswith("assistant-operation-"):
+        from ..assistant.operation_jobs import get_owned_operation_job
+        return get_owned_operation_job(db,user.id,job_id)
     return scan_jobs.get_owned_scan_job(db, user.id, job_id)
 
 

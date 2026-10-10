@@ -311,8 +311,10 @@ class ProposalAckDTO(DTO):
 
 
 class JobDTO(DTO):
+    kind: str = "scan"
+    progress: float | None = None
     job_id: str
-    folder_id: PositiveID
+    folder_id: PositiveID | None = None
     status: str
     message: str | None = None
     created_at: datetime

@@ -31,6 +31,7 @@ def backup_database(
     db_path: str,
     backup_dir: Optional[str] = None,
     keep_count: int = DEFAULT_BACKUP_KEEP,
+    *, rotate: bool = True,
 ) -> Dict[str, Any]:
     """
     Performs a live, transaction-consistent SQLite hot backup using SQLite's
@@ -72,7 +73,7 @@ def backup_database(
     size_bytes = os.path.getsize(dest_path) if os.path.exists(dest_path) else 0
 
     # Rotate old backups
-    cleanup_result = rotate_backups(target_backup_dir, keep_count=keep_count)
+    cleanup_result = rotate_backups(target_backup_dir, keep_count=keep_count) if rotate else {"removed_count":0,"kept_count":len(list_backups(target_backup_dir))}
 
     logger.info(
         "Backup completed: %s (%.2f MB). Rotated %d old backups.",

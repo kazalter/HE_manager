@@ -118,6 +118,8 @@ def recover_interrupted_jobs(now: datetime | None = None) -> int:
     try:
         rows = db.query(models.BackgroundJob).filter(models.BackgroundJob.status.in_(ACTIVE_STATUSES)).all()
         for row in rows:
+            if row.kind == "assistant_operation":
+                continue  # Dedicated recovery keeps job/audit envelopes consistent.
             try:
                 payload = json.loads(row.payload_json or "{}")
             except (TypeError, json.JSONDecodeError):

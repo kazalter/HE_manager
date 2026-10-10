@@ -119,7 +119,8 @@ def folder_label(row):
 
 
 def ack(row):
-    return schemas.ProposalAckDTO.model_validate(row)
+    result = schemas.ProposalAckDTO.model_validate(row)
+    return result.model_copy(update={"target_id": None}) if result.target_id == 0 else result
 
 
 def proposal_dto(row):
