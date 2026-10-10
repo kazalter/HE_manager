@@ -1,0 +1,19 @@
+{
+  "tool_call": {
+    "http": 200,
+    "requested_model": "deepseek-flash",
+    "served_model": "deepseek-flash",
+    "tool_name": "mcp__he__search_media",
+    "arguments": {
+      "query": "fixture"
+    },
+    "usage_available": true
+  },
+  "stream": {
+    "chunks": 8,
+    "done_marker": true,
+    "finish_reason": "stop",
+    "usage_available": true,
+    "synthetic_reply": "H01 STREAM OK."
+  }
+}

@@ -70,3 +70,5 @@ H01 测量范围是锁定 gateway、假 MCP、模型调用与隔离脚本。最�
 ## 模型切换记录（2026-10-10）
 
 用户要求切换 `DeepSeek-V4.1-Flash`，直接工具调用认证返回401；未激活该凭据，继续保留已验证的独立 `minimax-m3` 配置。收到有效凭据后重跑直接工具/流式检查及完整 Hermes→假MCP 调用链，更新锁定记录；不能把旧模型的成功当作新模型验收。检查配置 `expected_model` 必须与外部实测记录一致。
+
+用户更正：该密钥属于 DeepSeek 官方，先前401来自错误使用原中转地址。现在配置 `https://api.deepseek.com/v1` / `deepseek-flash`（官方对应DeepSeek-V4.1-Flash），直接工具调用、SSE `[DONE]`/stop/usage 和完整Hermes→假MCP搜索→最终回答已通过，约6.96秒。采用 thinking.type=disabled 配合2048输出预算；此前MiniMax记录保留为历史兼容性证据。模型/API名称依据 [DeepSeek官方文档](https://api-docs.deepseek.com/)。

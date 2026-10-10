@@ -1,17 +1,19 @@
 # Copy into each HE-owned Hermes profile; profile .env is generated as 0600.
 # Runtime: Hermes0.21.6/818c13be. Secret values never belong in this file.
 model:
-  default: minimax-m3
+  default: deepseek-flash
   provider: custom:he-model
   context_length: 65536
 providers:
   he-model:
-    base_url: https://api.feedmob.it.com/v1
+    base_url: https://api.deepseek.com/v1
     key_env: HE_ASSISTANT_MODEL_KEY
-    default_model: minimax-m3
+    default_model: deepseek-flash
     transport: chat_completions
     extra_body:
       max_tokens: 2048
+      thinking:
+        type: disabled
 agent:
   max_turns: 8
   run_budget_seconds: 180

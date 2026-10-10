@@ -154,7 +154,7 @@ UTC 持久化并以服务器时间校验有效期；过期/拒绝/停止 run 后
 
 - 锁定版本/SDK/资源及各项协议：`deploy/hermes/runtime-lock.json`、`backend/tests/fixtures/hermes/h01-evidence.json`。隔离三profile实时复查门禁PASS。
 - 最终后端回归：228项通过（45.41秒），包含21项checker与5项假服务测试；只用临时数据库和容器。
-- 当前真实模型 `minimax-m3` 完整调用链通过；用户请求的 `DeepSeek-V4.1-Flash` 新凭据返回401，待有效凭据重新验收，未切换。
+- 已按用户更正切换到 DeepSeek 官方 `deepseek-flash`（DeepSeek-V4.1-Flash）：直接工具调用/流式和完整Hermes→假MCP→回答通过，usage可用。原401来自错误沿用中转地址。
 
 ## Task 2: H02 — 建立身份、会话与持久化契约
 

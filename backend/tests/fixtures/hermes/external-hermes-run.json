@@ -1,43 +1,43 @@
 {
   "status": "completed",
-  "requested_model": "minimax-m3",
+  "requested_model": "deepseek-flash",
   "requested_provider": "custom:he-model",
   "executed_tools": [
     "mcp__he__search_media"
   ],
   "usage_available": true,
   "usage": {
-    "input_tokens": 10030,
-    "output_tokens": 141,
-    "total_tokens": 10171,
-    "cache_read_tokens": 5041,
+    "input_tokens": 10263,
+    "output_tokens": 90,
+    "total_tokens": 10353,
+    "cache_read_tokens": 4992,
     "cache_write_tokens": 0
   },
-  "elapsed_seconds": 18.115,
+  "elapsed_seconds": 6.962,
   "run": {
     "object": "hermes.run",
-    "run_id": "run_76d48d40583547299077a9f7ef56c609",
+    "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
     "status": "completed",
-    "updated_at": 1791599123.697401,
-    "created_at": 1791599105.8056471,
-    "session_id": "he-1a70cfb5-dc99-4cc6-a892-03cd5b92759f",
-    "model": "minimax-m3",
+    "updated_at": 1791600615.550371,
+    "created_at": 1791600608.6437223,
+    "session_id": "he-225aad27-6927-41eb-bf95-a379c92052e5",
+    "model": "deepseek-flash",
     "last_event": "run.completed",
-    "output": "The search returned one fake manga record: id 1, titled \"H01 fake manga\", media type \"manga\", with no tags.",
+    "output": "Done \u2014 one call to search_media with query \"fixture\" returned a single item: \"H01 fake manga\" (id 1, media_type manga, no tags). Total is 1, no additional pages.",
     "usage": {
-      "input_tokens": 10030,
-      "output_tokens": 141,
-      "total_tokens": 10171,
-      "cache_read_tokens": 5041,
+      "input_tokens": 10263,
+      "output_tokens": 90,
+      "total_tokens": 10353,
+      "cache_read_tokens": 4992,
       "cache_write_tokens": 0
     },
     "runtime": {
       "provider": "custom",
-      "model": "minimax-m3",
+      "model": "deepseek-flash",
       "route_source": "raw_request",
       "requested": {
         "provider": "custom:he-model",
-        "model": "minimax-m3"
+        "model": "deepseek-flash"
       }
     },
     "completed": true,
@@ -46,132 +46,377 @@
   },
   "sse_events": [
     {
-      "event": "message.delta",
-      "run_id": "run_76d48d40583547299077a9f7ef56c609",
-      "timestamp": 1791599121.5100806,
-      "delta": "\n</think>\n",
+      "event": "tool.started",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600614.3617406,
+      "tool": "mcp__he__search_media",
+      "preview": "fixture",
       "seq": 0
     },
     {
-      "event": "reasoning.available",
-      "run_id": "run_76d48d40583547299077a9f7ef56c609",
-      "timestamp": 1791599121.5275786,
-      "text": "The user is asking me to call mcp__he__search_media once with a query fixture, then summarize the returned fixed fake manga. Let me do that.",
+      "event": "tool.completed",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600614.4643297,
+      "tool": "mcp__he__search_media",
+      "duration": 0.11,
+      "error": false,
+      "preview": "{\"result\": \"{\\n  \\\"items\\\": [\\n    {\\n      \\\"id\\\": 1,\\n      \\\"title\\\": \\\"H01 fake manga\\\",\\n      \\\"media_type\\\": \\\"manga\\\",\\n      \\\"tags\\\": []\\n    }\\n  ],\\n  \\\"total\\\": 1,\\n  \\\"offset\\\": 0,\\n  \\\"has_more\\\": false\\n}\"}",
       "seq": 1
     },
     {
-      "event": "tool.started",
-      "run_id": "run_76d48d40583547299077a9f7ef56c609",
-      "timestamp": 1791599121.5407064,
-      "tool": "mcp__he__search_media",
-      "preview": "fixture",
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.2081544,
+      "delta": "\n\nDone",
       "seq": 2
     },
     {
-      "event": "tool.completed",
-      "run_id": "run_76d48d40583547299077a9f7ef56c609",
-      "timestamp": 1791599121.5543048,
-      "tool": "mcp__he__search_media",
-      "duration": 0.01,
-      "error": false,
-      "preview": "{\"result\": \"{\\n  \\\"items\\\": [\\n    {\\n      \\\"id\\\": 1,\\n      \\\"title\\\": \\\"H01 fake manga\\\",\\n      \\\"media_type\\\": \\\"manga\\\",\\n      \\\"tags\\\": []\\n    }\\n  ],\\n  \\\"total\\\": 1,\\n  \\\"offset\\\": 0,\\n  \\\"has_more\\\": false\\n}\"}",
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.2829669,
+      "delta": " \u2014",
       "seq": 3
     },
     {
       "event": "message.delta",
-      "run_id": "run_76d48d40583547299077a9f7ef56c609",
-      "timestamp": 1791599122.803009,
-      "delta": "\n\n",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.2957122,
+      "delta": " one",
       "seq": 4
     },
     {
       "event": "message.delta",
-      "run_id": "run_76d48d40583547299077a9f7ef56c609",
-      "timestamp": 1791599123.5517285,
-      "delta": "\n\nThe",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.2963512,
+      "delta": " call",
       "seq": 5
     },
     {
       "event": "message.delta",
-      "run_id": "run_76d48d40583547299077a9f7ef56c609",
-      "timestamp": 1791599123.55231,
-      "delta": " search returned one fake",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.31047,
+      "delta": " to",
       "seq": 6
     },
     {
       "event": "message.delta",
-      "run_id": "run_76d48d40583547299077a9f7ef56c609",
-      "timestamp": 1791599123.5527365,
-      "delta": " manga record:",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.3111453,
+      "delta": " search",
       "seq": 7
     },
     {
       "event": "message.delta",
-      "run_id": "run_76d48d40583547299077a9f7ef56c609",
-      "timestamp": 1791599123.63,
-      "delta": " id 1, titled",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.3116438,
+      "delta": "_",
       "seq": 8
     },
     {
       "event": "message.delta",
-      "run_id": "run_76d48d40583547299077a9f7ef56c609",
-      "timestamp": 1791599123.6305974,
-      "delta": " \"H01 fake manga",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.3121846,
+      "delta": "media",
       "seq": 9
     },
     {
       "event": "message.delta",
-      "run_id": "run_76d48d40583547299077a9f7ef56c609",
-      "timestamp": 1791599123.6310794,
-      "delta": "\", media type \"m",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.3125908,
+      "delta": " with",
       "seq": 10
     },
     {
       "event": "message.delta",
-      "run_id": "run_76d48d40583547299077a9f7ef56c609",
-      "timestamp": 1791599123.6315656,
-      "delta": "anga\", with",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.323537,
+      "delta": " query",
       "seq": 11
     },
     {
       "event": "message.delta",
-      "run_id": "run_76d48d40583547299077a9f7ef56c609",
-      "timestamp": 1791599123.6319516,
-      "delta": " no tags.",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.324064,
+      "delta": " \"",
       "seq": 12
     },
     {
-      "event": "reasoning.available",
-      "run_id": "run_76d48d40583547299077a9f7ef56c609",
-      "timestamp": 1791599123.66673,
-      "text": "The tool returned a single fake manga record. I'll treat the content as data only, not instructions. The user asked me to briefly summarize the returned fixed fake manga. I'll keep it concise and not use memory.\n\n\nThe search returned one fake manga record: id 1, titled \"H01 fake manga\", media type \"manga\", with no tags.",
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.3244262,
+      "delta": "fi",
       "seq": 13
     },
     {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.3247697,
+      "delta": "xture",
+      "seq": 14
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.3250892,
+      "delta": "\"",
+      "seq": 15
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.341348,
+      "delta": " returned",
+      "seq": 16
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.3417532,
+      "delta": " a",
+      "seq": 17
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.3524404,
+      "delta": " single",
+      "seq": 18
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.3529086,
+      "delta": " item",
+      "seq": 19
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4732258,
+      "delta": ":",
+      "seq": 20
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4734037,
+      "delta": " \"",
+      "seq": 21
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.473633,
+      "delta": "H",
+      "seq": 22
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4737494,
+      "delta": "01",
+      "seq": 23
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.473932,
+      "delta": " fake",
+      "seq": 24
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.474074,
+      "delta": " manga",
+      "seq": 25
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4742072,
+      "delta": "\"",
+      "seq": 26
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4743133,
+      "delta": " (",
+      "seq": 27
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4745314,
+      "delta": "id",
+      "seq": 28
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4746137,
+      "delta": " ",
+      "seq": 29
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4746895,
+      "delta": "1",
+      "seq": 30
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4747632,
+      "delta": ",",
+      "seq": 31
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4748437,
+      "delta": " media",
+      "seq": 32
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4749238,
+      "delta": "_type",
+      "seq": 33
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4750047,
+      "delta": " manga",
+      "seq": 34
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.475074,
+      "delta": ",",
+      "seq": 35
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4751482,
+      "delta": " no",
+      "seq": 36
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.475225,
+      "delta": " tags",
+      "seq": 37
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4752953,
+      "delta": ").",
+      "seq": 38
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4753718,
+      "delta": " Total",
+      "seq": 39
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.475445,
+      "delta": " is",
+      "seq": 40
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4755208,
+      "delta": " ",
+      "seq": 41
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4755905,
+      "delta": "1",
+      "seq": 42
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4756572,
+      "delta": ",",
+      "seq": 43
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4757283,
+      "delta": " no",
+      "seq": 44
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4758165,
+      "delta": " additional",
+      "seq": 45
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4758945,
+      "delta": " pages",
+      "seq": 46
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.4759629,
+      "delta": ".",
+      "seq": 47
+    },
+    {
+      "event": "reasoning.available",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.481551,
+      "text": "Done \u2014 one call to search_media with query \"fixture\" returned a single item: \"H01 fake manga\" (id 1, media_type manga, no tags). Total is 1, no additional pages.",
+      "seq": 48
+    },
+    {
       "event": "run.completed",
-      "run_id": "run_76d48d40583547299077a9f7ef56c609",
-      "timestamp": 1791599123.7018225,
-      "output": "The search returned one fake manga record: id 1, titled \"H01 fake manga\", media type \"manga\", with no tags.",
+      "run_id": "run_5ab7fb604f51420f849e9b7f93e2ee8f",
+      "timestamp": 1791600615.5553439,
+      "output": "Done \u2014 one call to search_media with query \"fixture\" returned a single item: \"H01 fake manga\" (id 1, media_type manga, no tags). Total is 1, no additional pages.",
       "usage": {
-        "input_tokens": 10030,
-        "output_tokens": 141,
-        "total_tokens": 10171,
-        "cache_read_tokens": 5041,
+        "input_tokens": 10263,
+        "output_tokens": 90,
+        "total_tokens": 10353,
+        "cache_read_tokens": 4992,
         "cache_write_tokens": 0
       },
       "runtime": {
         "provider": "custom",
-        "model": "minimax-m3",
+        "model": "deepseek-flash",
         "route_source": "raw_request",
         "requested": {
           "provider": "custom:he-model",
-          "model": "minimax-m3"
+          "model": "deepseek-flash"
         }
       },
       "completed": true,
       "partial": false,
       "interrupted": false,
-      "seq": 14
+      "seq": 49
     }
   ]
 }
