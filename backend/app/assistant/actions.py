@@ -17,6 +17,7 @@ from .store import (
 )
 
 
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def confirm_proposal(db, user_id, proposal_id, payload_hash, *, enqueue=None):
     config.require_enabled()
     initial_kind=owned(db,user_id,proposal_id).kind

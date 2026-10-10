@@ -42,6 +42,7 @@ from .video import (
 logger = logging.getLogger(__name__)
 
 
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
     """Scan one folder, rejecting concurrent work for the same folder id."""
     if reservation is None:

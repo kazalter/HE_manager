@@ -396,6 +396,7 @@ def _download_one(row_id: int, job_id: str, stop: threading.Event, root: Path, d
     return result
 
 
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def run_download_job(job_id: str) -> None:
     job = DOWNLOAD_JOBS.get(job_id)
     if not job:

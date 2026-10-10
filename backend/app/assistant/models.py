@@ -131,3 +131,17 @@ class AssistantToolEvent(Base):
     error_code = Column(String(100), nullable=False)
     request_id = Column(String(36), nullable=False)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+
+class AssistantFileOperation(Base):
+    __tablename__="assistant_file_operations"
+    proposal_id=Column(String(36),ForeignKey("assistant_proposals.id"),primary_key=True)
+    user_id=Column(Integer,ForeignKey("users.id"),nullable=False)
+    state=Column(String(30),nullable=False,default="intended")
+    source_path=Column(Text,nullable=False)
+    destination_path=Column(Text,nullable=False)
+    manifest_json=Column(Text,nullable=False)
+    relationships_json=Column(Text,nullable=False)
+    created_at=Column(DateTime,nullable=False,default=datetime.utcnow)
+    updated_at=Column(DateTime,nullable=False,default=datetime.utcnow)
+    error_code=Column(String(100),nullable=True)

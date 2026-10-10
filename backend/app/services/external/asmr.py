@@ -57,6 +57,7 @@ def prepare_asmr_download_plan_for_item(item: models.ExternalFavoriteItem, sourc
     }
 
 
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def download_asmr_item(item: models.ExternalFavoriteItem, source: models.ExternalFavoriteSource, plan: dict, job: Optional[dict] = None):
     """Stream every file in `plan["files"]` to disk under `plan["item_dir"]`,
     updating job counters as bytes come in.
@@ -158,6 +159,7 @@ def cleanup_incomplete_asmr_download(item_dir: str, expected_files: int):
     shutil.rmtree(item_dir, ignore_errors=True)
 
 
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def run_asmr_download_job(job_id: str, item_ids: List[int], download_root_path: str):
     db = database.SessionLocal()
     job = DOWNLOAD_JOBS[job_id]

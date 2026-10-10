@@ -128,6 +128,7 @@ def list_folders(db: Session = Depends(get_db)):
 
 
 @router.delete("/folders/{folder_id}")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def delete_folder(folder_id: int, db: Session = Depends(get_db)):
     db_folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()
     if not db_folder:
@@ -284,6 +285,7 @@ def get_media(media_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/media/{media_id}", response_model=schemas.Media)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def update_media(media_id: int, payload: schemas.MediaUpdate, db: Session = Depends(get_db)):
     media = get_media_or_404(media_id, db)
     data = payload.dict(exclude_unset=True)
@@ -317,6 +319,7 @@ def update_media(media_id: int, payload: schemas.MediaUpdate, db: Session = Depe
 
 
 @router.delete("/media/{media_id}")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def delete_media(media_id: int, db: Session = Depends(get_db)):
     media = get_media_or_404(media_id, db)
     remove_cover_thumbnails(media.cover_path)
@@ -330,6 +333,7 @@ def delete_media(media_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/media/{media_id}/recheck", response_model=schemas.Media)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def recheck_media(media_id: int, db: Session = Depends(get_db)):
     media = get_media_or_404(media_id, db)
 
@@ -354,6 +358,7 @@ def recheck_media(media_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/system/recheck-missing")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def recheck_all_missing(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     missing_items = db.query(models.Media).filter(models.Media.is_missing == True).all()
     recovered_count = 0
@@ -395,6 +400,7 @@ def list_tags(db: Session = Depends(get_db)):
 
 
 @router.patch("/tags/{tag_id}", response_model=schemas.Tag)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def update_tag(tag_id: int, payload: schemas.TagUpdate, db: Session = Depends(get_db)):
     tag = db.query(models.Tag).filter(models.Tag.id == tag_id).first()
     if not tag:
@@ -429,6 +435,7 @@ def update_tag(tag_id: int, payload: schemas.TagUpdate, db: Session = Depends(ge
 
 
 @router.post("/tags/{tag_id}/merge")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def merge_tag(tag_id: int, payload: schemas.TagMergeRequest, db: Session = Depends(get_db)):
     if tag_id == payload.target_id:
         raise HTTPException(status_code=400, detail="Cannot merge a tag into itself")
@@ -453,6 +460,7 @@ def merge_tag(tag_id: int, payload: schemas.TagMergeRequest, db: Session = Depen
 
 
 @router.delete("/tags/{tag_id}")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def delete_tag(tag_id: int, db: Session = Depends(get_db)):
     tag = db.query(models.Tag).filter(models.Tag.id == tag_id).first()
     if not tag:
@@ -468,6 +476,7 @@ def delete_tag(tag_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/media/{media_id}/tags", response_model=schemas.Media)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def add_media_tag(media_id: int, payload: schemas.TagCreate, db: Session = Depends(get_db)):
     media = get_media_or_404(media_id, db)
     tag_name = payload.name.strip()
@@ -482,6 +491,7 @@ def add_media_tag(media_id: int, payload: schemas.TagCreate, db: Session = Depen
 
 
 @router.delete("/media/{media_id}/tags/{tag_id}", response_model=schemas.Media)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def remove_media_tag(media_id: int, tag_id: int, db: Session = Depends(get_db)):
     media = get_media_or_404(media_id, db)
     tag = db.query(models.Tag).filter(models.Tag.id == tag_id).first()
@@ -664,6 +674,7 @@ def regenerate_thumbnail(media_id: int, background_tasks: BackgroundTasks, db: S
     return {"message": "Thumbnail regeneration task started"}
 
 
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def do_regenerate_thumbnail(media_id: int):
     db = database.SessionLocal()
     try:

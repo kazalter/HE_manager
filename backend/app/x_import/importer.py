@@ -353,6 +353,7 @@ def _process_post(job: ImportJob, post_id: int, db: Session, folder: models.Fold
     db.commit()
 
 
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def _run(job: ImportJob) -> None:
     db = database.SessionLocal()
     try:

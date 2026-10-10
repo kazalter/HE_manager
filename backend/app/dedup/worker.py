@@ -124,6 +124,7 @@ def _mark_processing_error(media_id: int, exc: Exception) -> None:
         db.close()
 
 
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def _process_one(media_id: int) -> None:
     db = database.SessionLocal()
     try:

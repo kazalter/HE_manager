@@ -249,6 +249,7 @@ def prepare_wnacg_download_plan(item: models.ExternalFavoriteItem, source: model
     }
 
 
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def download_wnacg_item(item: models.ExternalFavoriteItem, source: models.ExternalFavoriteSource, plan: dict, job: Optional[dict] = None):
     item_dir = plan["item_dir"]
     image_urls = plan["image_urls"]
@@ -293,6 +294,7 @@ def download_wnacg_item(item: models.ExternalFavoriteItem, source: models.Extern
     }
 
 
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def run_wnacg_download_job(job_id: str, item_ids: List[int], download_root_path: str):
     db = database.SessionLocal()
     job = DOWNLOAD_JOBS[job_id]

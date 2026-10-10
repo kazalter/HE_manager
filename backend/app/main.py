@@ -60,6 +60,8 @@ async def lifespan(app: FastAPI):
     # Startup tasks
     from .assistant.operation_jobs import recover_operation_jobs
     recover_operation_jobs()
+    from .assistant.file_actions import recover_file_operations
+    recover_file_operations()
     assistant_routes.scan_jobs.recover_scan_jobs()
     job_lifecycle.recover_interrupted_jobs()
     pawchive_downloader.recover_interrupted_attachments()

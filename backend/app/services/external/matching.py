@@ -64,6 +64,7 @@ def ensure_external_audio_library(source: models.ExternalFavoriteSource, downloa
     return folder
 
 
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def upsert_external_downloaded_audio_media(
     item: models.ExternalFavoriteItem,
     source: models.ExternalFavoriteSource,
@@ -312,6 +313,7 @@ def serialize_external_favorite_items(
     ]
 
 
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def upsert_external_downloaded_media(
     item: models.ExternalFavoriteItem,
     source: models.ExternalFavoriteSource,
