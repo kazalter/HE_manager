@@ -37,6 +37,7 @@ services:
     pids_limit: 128
     tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
     volumes:
+      - {type: bind, source: ./data/assistant-logs, target: /data/assistant-logs, read_only: true, bind: {create_host_path: false}}
       - {type: bind, source: /mnt/hdd, target: /mnt/hdd, read_only: true, bind: {create_host_path: false}}
       - {type: bind, source: ./data, target: /data, bind: {create_host_path: false}}
       - {type: bind, source: ./deploy/hermes/empty-dir, target: /data/hermes, read_only: true, bind: {create_host_path: false}}

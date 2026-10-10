@@ -36,6 +36,7 @@ ToolName = Literal[
     "list_directory",
     "read_text",
     "get_media_preview",
+    "read_logs",
     "propose_scan",
 ]
 
@@ -434,6 +435,27 @@ class PreviewDTO(DTO):
     notice: str = "可在网页查看预览；当前模型未分析文件内容。"
 
 
+class LogQuery(DTO):
+    source: Literal["all", "assistant", "scan", "download", "auto_sync", "import", "runtime"] = "all"
+    cursor: str | None = Field(default=None,max_length=200)
+    limit: Annotated[int,Field(ge=1,le=200,strict=True)] = 50
+class LogEventDTO(DTO):
+    timestamp: str
+    service: str
+    level: str
+    code: str
+    object_id: str | None = None
+    summary: str
+    request_id: str | None = None
+    cursor: str
+class LogPageDTO(DTO):
+    items: list[LogEventDTO] = Field(max_length=200)
+    cursor: str | None = None
+    next_cursor: str | None = None
+    has_more: bool
+    truncated: bool = False
+
+
 RESULT_TYPES = {
     "search_media": MediaPageDTO,
     "get_media_detail": MediaDetailDTO,
@@ -452,6 +474,7 @@ RESULT_TYPES = {
     "list_directory": DirectoryPageDTO,
     "read_text": TextChunkDTO,
     "get_media_preview": PreviewDTO,
+    "read_logs": LogPageDTO,
     "propose_scan": ProposalAckDTO,
 }
 
@@ -477,6 +500,7 @@ class ToolResultDTO(DTO):
         | DirectoryPageDTO
         | TextChunkDTO
         | PreviewDTO
+        | LogPageDTO
         | TruncatedDTO
     )
 

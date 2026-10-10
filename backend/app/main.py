@@ -39,6 +39,8 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
+from .services.assistant_runtime_logs import install_collector
+install_collector()
 logger = logging.getLogger(__name__)
 
 

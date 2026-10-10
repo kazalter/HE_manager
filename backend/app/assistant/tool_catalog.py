@@ -41,5 +41,6 @@ register("get_project_settings", s.PageQuery, "分页读取目录扫描与缩略
 register("list_directory", s.DirectoryQuery, "分页列出 HE 登记目录的文件和子目录；相对路径不能越界。")
 register("read_text", s.TextQuery, "读取 HE 目录内 UTF-8 文本，最多 32 KiB；按 next_offset_bytes 继续。")
 register("get_media_preview", s.PreviewQuery, "获取媒体/漫画页的网页预览；当前模型未分析文件内容。")
+register("read_logs", s.LogQuery, "读取脱敏 HE 运行日志/工具错误，不返回原始异常或凭据；按 next_cursor 继续。")
 READ_TOOLS = frozenset(k for k,v in TOOL_CATALOG.items() if v.mode == "read")
 PROPOSAL_TOOLS = frozenset(k for k,v in TOOL_CATALOG.items() if v.mode == "proposal")
