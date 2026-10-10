@@ -49,6 +49,11 @@ def confirm_proposal(db, user_id, proposal_id, payload_hash, *, enqueue=None):
                 session.state != "active"
                 or run.stop_requested_at is not None
                 or run.status not in ("submitting", "running", "completed")
+                or (
+                    run.status != "completed"
+                    and run.deadline_at is not None
+                    and run.deadline_at <= utcnow()
+                )
             ):
                 raise HTTPException(409, "assistant_proposal_unavailable")
             if proposal.expires_at <= utcnow():

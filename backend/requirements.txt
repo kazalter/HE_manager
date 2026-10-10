@@ -14,3 +14,4 @@ python-multipart==0.0.27
 jieba==0.42.1
 sentence-transformers==5.4.1
 
+httpx==0.28.1

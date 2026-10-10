@@ -167,21 +167,24 @@ def reserve_run(
         return row
 
 
-def mark_run_stopping(db, user_id, run_id):
+def stop_run_row(local, row):
     from .models import AssistantProposal
 
+    now = utcnow()
+    if row.stop_requested_at is None:
+        row.stop_requested_at = now
+    if row.executor_exited_at is None:
+        row.status = "stopping"
+    row.updated_at = now
+    local.query(AssistantProposal).filter(
+        AssistantProposal.run_id == row.id, AssistantProposal.state == "pending"
+    ).update({"state": "rejected", "consumed_at": now}, synchronize_session=False)
+    return row
+
+
+def mark_run_stopping(db, user_id, run_id):
     with write_transaction(db) as local:
-        row = require_owned_run(local, user_id, run_id)
-        now = utcnow()
-        if row.stop_requested_at is None:
-            row.stop_requested_at = now
-        if row.executor_exited_at is None:
-            row.status = "stopping"
-        row.updated_at = now
-        local.query(AssistantProposal).filter(
-            AssistantProposal.run_id == row.id, AssistantProposal.state == "pending"
-        ).update({"state": "rejected", "consumed_at": now}, synchronize_session=False)
-        return row
+        return stop_run_row(local, require_owned_run(local, user_id, run_id))
 
 
 def mark_session_deleting(db, user_id, session_id):

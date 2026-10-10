@@ -369,3 +369,15 @@ class AssistantActionTests(unittest.TestCase):
             self.assertEqual(confirmed.status_code, 200, confirmed.text)
         self.f.db.expire_all()
         self.assertEqual(self.f.db.get(models.Media, 1).rating, 5)
+
+    def test_running_run_past_deadline_cannot_confirm_before_watchdog_commit(self):
+        p = self.create()
+        self.f.db.get(AssistantRun, self.f.rid).deadline_at = (
+            datetime.utcnow() - timedelta(seconds=1)
+        )
+        self.f.db.commit()
+        with self.assertRaises(HTTPException) as caught:
+            self.confirm(p)
+        self.assertEqual(caught.exception.status_code, 409)
+        self.f.db.expire_all()
+        self.assertEqual(self.f.db.get(models.Media, 1).rating, 4)

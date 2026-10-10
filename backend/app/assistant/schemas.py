@@ -364,3 +364,39 @@ class EventDTO(DTO):
     run_id: UUID
     message_id: UUID | None = None
     data: dict
+
+
+class HistoryMessageDTO(DTO):
+    id: UUID
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=65536)
+    run_id: UUID
+    status: str
+
+
+class HistoryPageDTO(DTO):
+    items: list[HistoryMessageDTO] = Field(max_length=100)
+    total: Count
+    offset: Count = 0
+    has_more: bool = False
+
+
+class SessionPageDTO(DTO):
+    items: list[SessionDTO] = Field(max_length=100)
+    total: Count
+    offset: Count = 0
+    has_more: bool = False
+
+
+class ProposalPageDTO(DTO):
+    items: list[ProposalDTO] = Field(max_length=50)
+    total: Count
+    offset: Count = 0
+    has_more: bool = False
+
+
+class AvailabilityDTO(DTO):
+    enabled: bool
+    busy: bool
+    active_run_id: UUID | None = None
+    error_code: str | None = None

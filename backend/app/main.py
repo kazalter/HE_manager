@@ -64,9 +64,11 @@ async def lifespan(app: FastAPI):
     dedup_worker.recover_checking_jobs()
     auto_sync_routes.init_scheduler()
     cleanup_orphaned_thumbnails()
+    assistant_routes.sessions.start_background()
     try:
         yield
     finally:
+        await assistant_routes.sessions.stop_background()
         auto_sync_routes.stop_scheduler()
 
 _docs_enabled = os.getenv("HE_ENABLE_DOCS", "").lower() in {"1", "true", "yes", "on"}
