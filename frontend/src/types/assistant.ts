@@ -8,6 +8,8 @@ export interface SessionDTO {
   id: string
   title: string
   state: string
+  created_at?: string
+  updated_at?: string
   error_code?: string | null
 }
 export interface RunDTO {

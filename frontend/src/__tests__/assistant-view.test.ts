@@ -58,6 +58,49 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 describe('assistant chat lifecycle', () => {
+  it('shows history as a selectable list and restores the chosen conversation', async () => {
+    const second = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+    const fetcher = vi.fn(async (url: string) => new Response(JSON.stringify(
+      url.endsWith('/status')
+        ? { enabled: true, busy: false, active_run_id: null }
+        : url.includes('/sessions?')
+          ? page([
+              { id: SID, title: '推荐温馨漫画', state: 'active', updated_at: new Date().toISOString() },
+              { id: second, title: '整理收藏', state: 'active', updated_at: '2026-01-01T00:00:00+08:00' },
+            ])
+          : url.includes(second + '/messages')
+            ? page([{ id: MID, role: 'user', content: '以前的整理请求', run_id: RID, status: 'completed' }])
+            : page([]),
+    )))
+    vi.stubGlobal('fetch', fetcher)
+    const wrapper = mount(AssistantView)
+    await flushPromises()
+    expect(wrapper.find('select').exists()).toBe(false)
+    expect(wrapper.get('nav[aria-label="历史对话"]').text()).toContain('推荐温馨漫画')
+    await wrapper.get('button[title="整理收藏"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('button[title="整理收藏"]').attributes('aria-current')).toBe('page')
+    expect(wrapper.text()).toContain('以前的整理请求')
+    wrapper.unmount()
+  })
+
+  it('refreshes the generated title after an accepted first message', async () => {
+    const api = fakeApi()
+    api.listSessions.mockResolvedValueOnce(page([{ id: SID, title: '新对话', state: 'active' }]))
+    api.listSessions.mockResolvedValue(page([{ id: SID, title: '推荐温馨漫画', state: 'active' }]))
+    const scope = effectScope()
+    const chat = scope.run(() => useAssistantChat(api as any))!
+    try {
+      await chat.initialize()
+      await chat.send('推荐一些温馨漫画')
+      await flushPromises()
+      expect(chat.session.value?.title).toBe('推荐温馨漫画')
+      expect(chat.sessions.value[0]?.title).toBe('推荐温馨漫画')
+      expect(api.sendMessage).toHaveBeenCalledTimes(1)
+    } finally { scope.stop() }
+  })
+
+
   it('restores saved results and proposals when same-ID retry is already completed', async () => {
     const api = fakeApi()
     api.sendMessage.mockRejectedValueOnce(new Error('accepted response lost'))

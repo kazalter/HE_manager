@@ -67,12 +67,12 @@ def list_sessions(
         AssistantSession.user_id == user.id, AssistantSession.state != "cleared"
     )
     total = rows.count()
-    items = [
-        schemas.SessionDTO.model_validate(r)
-        for r in rows.order_by(AssistantSession.created_at.desc(), AssistantSession.id)
-        .offset(offset)
-        .limit(limit)
-    ]
+    items = store.session_dtos(
+        db,
+        rows.order_by(
+            AssistantSession.updated_at.desc(), AssistantSession.id
+        ).offset(offset).limit(limit).all(),
+    )
     return schemas.SessionPageDTO(
         items=items, total=total, offset=offset, has_more=offset + len(items) < total
     )

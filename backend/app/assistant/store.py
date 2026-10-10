@@ -6,12 +6,12 @@ import hashlib
 import json
 from uuid import UUID, uuid4
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from ..models import User
 from . import config
 from .models import AssistantRun, AssistantSession
-from .schemas import SessionRequest, SubmissionEnvelope
+from .schemas import SessionDTO, SessionRequest, SubmissionEnvelope
 
 
 def utcnow():
@@ -92,6 +92,51 @@ def require_owned_run(db, user_id, run_id):
     return row
 
 
+
+DEFAULT_SESSION_TITLES = {"新对话", "恢复的对话"}
+
+
+def title_from_input(text):
+    """A local first-question preview: no extra model call or private-data export."""
+    clean = " ".join(text.split()) if isinstance(text, str) else ""
+    return (clean[:36].rstrip() + "…") if len(clean) > 36 else (clean or "新对话")
+
+
+def title_from_envelope(raw):
+    try:
+        return title_from_input(json.loads(raw)["input"])
+    except (ValueError, TypeError, KeyError):
+        return "新对话"
+
+
+def session_dtos(db, rows):
+    """Name legacy untitled chats from their first input without writes on GET."""
+    untitled = [row.id for row in rows if row.title in DEFAULT_SESSION_TITLES]
+    titles = {}
+    if untitled:
+        first_runs = select(
+            AssistantRun.session_id,
+            AssistantRun.submission_envelope_json,
+            func.row_number().over(
+                partition_by=AssistantRun.session_id,
+                order_by=(AssistantRun.created_at, AssistantRun.id),
+            ).label("position"),
+        ).where(AssistantRun.session_id.in_(untitled)).subquery()
+        titles = {
+            sid: title_from_envelope(raw)
+            for sid, raw in db.execute(
+                select(first_runs.c.session_id, first_runs.c.submission_envelope_json)
+                .where(first_runs.c.position == 1)
+            )
+        }
+    return [
+        SessionDTO.model_validate(row).model_copy(
+            update={"title": titles.get(row.id, row.title)}
+        )
+        for row in rows
+    ]
+
+
 def create_session(db, user_id, title="新对话"):
     config.require_enabled()
     title = SessionRequest(title=title).title
@@ -149,6 +194,18 @@ def reserve_run(
         if len(raw.encode("utf-8")) > 65536:
             raise HTTPException(422, "assistant_request_too_large")
         now = utcnow()
+        if session.title in DEFAULT_SESSION_TITLES:
+            first_input = local.execute(
+                select(AssistantRun.submission_envelope_json)
+                .where(AssistantRun.session_id == sid)
+                .order_by(AssistantRun.created_at, AssistantRun.id)
+                .limit(1)
+            ).scalar_one_or_none()
+            session.title = (
+                title_from_envelope(first_input)
+                if first_input else title_from_input(envelope.input)
+            )
+        session.updated_at = now
         row = AssistantRun(
             id=uuid_text(envelope.idempotency_key),
             user_id=user_id,

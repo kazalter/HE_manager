@@ -322,6 +322,19 @@ export function useAssistantChat(api: Api = defaultApi) {
       if (valid(e)) loading.value = false
     }
   }
+  async function refreshSessionDetails(e: number) {
+    try {
+      const page = await api.listSessions(options())
+      if (!valid(e)) return
+      const merged = new Map(sessions.value.map((item) => [item.id, item]))
+      for (const item of page.items) merged.set(item.id, item)
+      sessions.value = [...merged.values()]
+      if (session.value) session.value = merged.get(session.value.id) ?? session.value
+      if (sessions.value.length <= page.items.length) moreSessions.value = page.has_more
+    } catch {
+      // A metadata refresh must not interrupt the accepted reply or its stream.
+    }
+  }
   function performSend() {
     if (sendPromise) return sendPromise
     if (!pending.value) return Promise.resolve()
@@ -370,6 +383,7 @@ export function useAssistantChat(api: Api = defaultApi) {
           moreProposals.value = cards.has_more
           availability.value = status
         } else attach()
+        void refreshSessionDetails(e)
       })
       .catch((c) => {
         if (valid(e)) fail(c)
@@ -484,7 +498,8 @@ export function useAssistantChat(api: Api = defaultApi) {
       offset: sessions.value.length,
     })
     if (valid(e)) {
-      sessions.value.push(...page.items)
+      const existing = new Set(sessions.value.map((item) => item.id))
+      sessions.value.push(...page.items.filter((item) => !existing.has(item.id)))
       moreSessions.value = page.has_more
     }
   }

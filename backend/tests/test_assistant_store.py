@@ -87,6 +87,54 @@ class AssistantStoreTests(unittest.TestCase):
             envelope or self.envelope(session),
         )
 
+    def test_first_question_names_session_and_retry_keeps_title(self):
+        session = self.session()
+        session.title = "新对话"
+        self.db.commit()
+        request = str(uuid4())
+        first = self.reserve(
+            session, request,
+            envelope=self.envelope(session, "找一些  温馨的\n短篇漫画"),
+        )
+        self.db.expire_all()
+        saved = self.db.get(self.models.AssistantSession, session.id)
+        self.assertEqual(saved.title, "找一些 温馨的 短篇漫画")
+        self.assertGreaterEqual(saved.updated_at, first.created_at)
+        repeated = self.reserve(session, request, envelope=self.envelope(session, "别的内容"))
+        self.assertEqual(repeated.id, first.id)
+        self.db.expire_all()
+        self.assertEqual(self.db.get(self.models.AssistantSession, session.id).title, saved.title)
+
+    def test_followup_preserves_first_question_and_limits_title_length(self):
+        session = self.session()
+        session.title = "新对话"
+        self.db.commit()
+        first = self.reserve(session, envelope=self.envelope(session, "推荐科幻漫画"))
+        self.db.expire_all()
+        saved_run = self.db.get(self.models.AssistantRun, first.id)
+        saved_run.executor_exited_at = datetime.utcnow()
+        self.db.commit()
+        self.reserve(session, envelope=self.envelope(session, "还有别的吗"))
+        self.db.expire_all()
+        self.assertEqual(self.db.get(self.models.AssistantSession, session.id).title, "推荐科幻漫画")
+        self.assertEqual(self.store.title_from_input("文" * 100), "文" * 36 + "…")
+
+    def test_legacy_title_preview_is_read_only_and_preserves_custom_names(self):
+        session = self.session()
+        self.reserve(session, envelope=self.envelope(session, "帮我找未看过的漫画"))
+        self.db.expire_all()
+        session = self.db.get(self.models.AssistantSession, session.id)
+        session.title = "新对话"
+        self.db.commit()
+        preview = self.store.session_dtos(self.db, [session])[0]
+        self.assertEqual(preview.title, "帮我找未看过的漫画")
+        self.db.expire_all()
+        self.assertEqual(self.db.get(self.models.AssistantSession, session.id).title, "新对话")
+        session.title = "我的收藏"
+        self.db.commit()
+        self.assertEqual(self.store.session_dtos(self.db, [session])[0].title, "我的收藏")
+        self.assertEqual(self.store.title_from_envelope("invalid"), "新对话")
+
     def test_other_admin_cannot_read_session(self):
         session = self.session()
         with self.assertRaises(HTTPException) as caught:

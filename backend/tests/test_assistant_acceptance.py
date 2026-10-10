@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from app import auth, models, scanner
 from app.assistant import identity, internal_app, sessions, scan_jobs
-from app.assistant.models import AssistantRun, AssistantAudit
+from app.assistant.models import AssistantRun, AssistantAudit, AssistantSession
 from app.routers import assistant, auth as auth_router
 from tests.assistant_fixtures import assistant_fixture, business_snapshot
 from tests.test_assistant_sse import StreamFake
@@ -129,6 +129,20 @@ class AssistantHTTPAcceptanceTests(unittest.TestCase):
             headers=self.headers(),
             json={"payload_hash": preview["payload_hash"]},
         )
+
+    def test_history_names_legacy_default_titles_without_writing_on_get(self):
+        row = self.f.db.get(AssistantSession, self.sid)
+        row.title = "新对话"
+        self.f.db.commit()
+        response = self.public.get("/assistant/sessions", headers=self.headers())
+        self.assertEqual(response.status_code, 200, response.text)
+        item = next(item for item in response.json()["items"] if item["id"] == self.sid)
+        self.assertEqual(item["title"], "搜索并提出建议")
+        self.assertIn("updated_at", item)
+        self.f.db.expire_all()
+        self.assertEqual(self.f.db.get(AssistantSession, self.sid).title, "新对话")
+        other = self.public.get("/assistant/sessions", headers=self.headers(2))
+        self.assertNotIn(self.sid, [item["id"] for item in other.json()["items"]])
 
     def test_login_search_propose_reject_confirm_repeat_stream_restore_clear(self):
         before = business_snapshot(self.f.engine)

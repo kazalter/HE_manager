@@ -346,6 +346,7 @@ class SessionDTO(DTO):
     title: str
     state: str
     created_at: datetime
+    updated_at: datetime
 
 
 class RunDTO(DTO):
