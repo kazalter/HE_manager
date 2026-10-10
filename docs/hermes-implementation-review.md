@@ -30,7 +30,7 @@ Both Important findings reproduced before implementation, then fixed in one auth
 - Completed same-ID retry restores saved cards, truncation flag and availability; stale identity response discarded: RED→GREEN; view 19 PASS.
 - Whole backend 353 PASS (132.46s), frontend 97 PASS (11.31s), MCP 11 PASS (8.06s), production frontend build PASS (2.10s).
 - Actual lab all-process cold restart removes and recreates SQLite WAL/SHM; owner1000/mode0600 and worker read/write rollback PASS.
-- H08 native search/recommend/propose/reject and actual streaming/stop/keepalive gates passed. Production activation and read-only repeat gate remain the final operation.
+- H08 native search/recommend/propose/reject and actual streaming/stop/keepalive gates passed. Production enabled after fix commit61ebaae; read-only search and completed same-ID repeat gate PASS.
 
 ## Rulings I made (full ledger extraction, chronological)
 
@@ -117,3 +117,13 @@ Both Important findings reproduced before implementation, then fixed in one auth
 ## Deferred minors
 
 - Final: minor (deferred): docs/hermes-operations.md first paragraph incorrectly advertises modifying view status; actual write scope is rating/favorite/source URL/tags.
+
+## Final production receipt
+
+- 2026-10-10: flag1 persisted; five production services healthy, no private HostPorts or OOM, gateway UID1000/CapEff0. Addon memory limits2013265920 B.
+- HE image manifest `sha256:9882860c2e9253fbc8dde4dc45483a2aaf4d95803205abed4d15c10afc546942`; running source SHA matches fix. Hermes remains pinned to runtime-lock, MCP2.0.0.
+- Official DeepSeek deepseek-flash (requested DeepSeek-V4.1-Flash), thinking disabled; native production readonly search1/stream89 chunks/4.345s/usage available. Same original request ID returns same completed run/results; no new proposal, mutation or scan. Session cleared and ephemeral login token revoked.
+- All8 business tables and2654 media identical to predeploy online backup; unresolved runs0. Protected predeploy DB/frontend/config/old image and consistent prepared profile snapshots retained.
+- Actual root backend before UID1000 tool cold start recreates WAL/SHM with owner1000/0600, read/write rollback PASS. All65 new online assets match build bytes;101 retained/updated static assets scanned against7 actual private credentials with zero matches.
+- Actual iOS device and a loaded MiniLM cold memory peak remain unverified; keyword fallback and Chromium simulation are the disclosed current coverage.
+- Working branch main retained under user's existing per-stage commit authorization; no push requested. Own isolated test containers/networks and plan scratch are removed after this public receipt is committed.

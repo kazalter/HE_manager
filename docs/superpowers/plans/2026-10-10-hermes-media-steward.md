@@ -10,7 +10,7 @@
 
 **Spec:** [已确认设计](../specs/2026-10-10-hermes-media-steward-design.md)
 
-日期：2026-10-10。状态：H01～H08 实现及隔离验收已完成；生产启用留作最终独立审查后的门禁。最终修复后后端353项、前端97项、MCP11项通过，临时目录生产构建通过；实际原生工具链、提案拒绝、停止和 nginx 流已验收。开发、构建、测试与部署均在服务器 /opt/stacks/he-manager 完成，LAN SSH 192.168.0.101:2222。
+日期：2026-10-10。状态：H01～H08 已逐阶段提交，独立审查的两项重要问题已修复；生产已启用并通过真实只读门禁。最终修复后后端353项、前端97项、MCP11项通过，临时目录生产构建通过；实际原生工具链、提案拒绝、停止和 nginx 流已验收。开发、构建、测试与部署均在服务器 /opt/stacks/he-manager 完成，LAN SSH 192.168.0.101:2222。
 
 ## Global Constraints
 
@@ -293,21 +293,21 @@ H07 验收：目标 28 PASS；前端全量 93 PASS；后端全量 340 PASS；构
 - [x] Step 3：为 /assistant/ 独立配置 Nginx location ^~ /assistant/，proxy_buffering off、proxy_cache off、gzip off、600 秒读取超时、X-Accel-Buffering:no 和 no-store；保持正常 Bearer headers。HE 的 180 秒停止 deadline、停止最终落定与 10 秒左右上游 keepalive 均实测，重启 nginx 后确认多 chunk 到达浏览器而非结束时一次返回。
 - [x] Step 4：在隔离测试环境运行 H02～H07 的目标测试、相关 auth/scan/job/storage 回归、前端 tests 和生产 build；通过后运行 python scripts/run_assistant_acceptance.py --config <受保护验收配置路径>，预期 PASS。只用临时媒体目录验证真实扫描；真实库仅作只读搜索比对，不能用生产媒体跑修改/删除验收。
 - [x] Step 5：记录磁盘和内存基线、数据库在线备份、frontend/dist 备份、HE 当前镜像 digest、Hermes profile 一致性快照（profile 短暂停止或受支持快照）。用真实漫画推荐冷启动测量既有 MiniLM 的额外内存和峰值，核对 H01 资源阈值；新增表不破坏旧镜像，回滚禁用助手并恢复旧镜像/前端，禁止直接用旧数据库覆盖上线后的媒体改动。
-- [ ] Step 6：按已获授权的实施范围进行最终部署；上线前完成全部验收并展示结果，部署授权尚未涵盖时留此步骤待批准。开启 HE_ASSISTANT_ENABLED 后检查健康、内网端口、无密钥前端、会话和只读真实查询；记录 provider/model/image 版本、实测预算与功能限制。任何一项未通过，保持开关关闭。记录 disabled → migrated → profiles_ready → services_ready → verified → enabled 的启用顺序；表迁移、profile 准备、健康检查和验收任一步失败均不翻开关。只生成了能力清单或 health=ok 不算 verified。
+- [x] Step 6：按已获授权的实施范围进行最终部署；上线前完成全部验收并展示结果，部署授权尚未涵盖时留此步骤待批准。开启 HE_ASSISTANT_ENABLED 后检查健康、内网端口、无密钥前端、会话和只读真实查询；记录 provider/model/image 版本、实测预算与功能限制。任何一项未通过，保持开关关闭。记录 disabled → migrated → profiles_ready → services_ready → verified → enabled 的启用顺序；表迁移、profile 准备、健康检查和验收任一步失败均不翻开关。只生成了能力清单或 health=ok 不算 verified。
 - [x] Step 7：完成操作文档：profile 初始化/停用与管理员降权后的访问关闭、模型密钥快照/轮换（API key 轮换先排空/核实该 profile 的 run）、升级锁版本、日志脱敏/轮转与 profile 磁盘监控、会话与长期记忆清理区别、数据备份、rollback 和常见故障；提交未知/停止不落定时，仅在确认对应 Hermes profile 没有执行或网关已停止后解除占槽，不能只删除数据库中的 running 记录。在本计划逐步记录 H01～H08 证据，PLAN.md 只保留入口和整体进度，不复制一套任务状态，在 staged diff 复核后提交 chore: ship optional Hermes media steward。
 
 
 H08 实测：349项后端、95项前端、11项MCP测试通过；离线 CLI PASS，两管理员真实 DeepSeek 搜索 PASS，search→recommend→propose→reject PASS，评分未改。Nginx 121 chunks（首0.034s/末5.806s）、静默 keepalive10.006s；原生 between-tool stop 的 interrupted_by_user 完整终态适配经 RED→GREEN 后，0.281s 释放占槽。裸取消/未知理由/shutdown 保持占槽。附加 cgroup 峰值保守和781328384B，各无 OOM；实际 worker1000有效cap为0。
 
-真实库只读 immutable 在线备份2654条，冷推荐1.027s、峰值123019264B，当前MiniLM未缓存/未加载；未来装载权重需另做模型成功加载的冷峰值门禁，不声称此次测量覆盖了向量模型。H01真实180s预算与H05独立 watchdog/restart回归复用，H08验证部署代理和原生停止。手机为Chromium/PWA模拟，真实iOS未验收。上线前热备 integrity ok，前端/.env/私有模型快照及旧镜像已保存；生产启用顺序最终 verified/enabled 等待整分支审查，开关保持0。运维、初始化权限、轮换和保留当前DB的回滚见 [运维指南](../../hermes-operations.md)。
+真实库只读 immutable 在线备份2654条，冷推荐1.027s、峰值123019264B，当前MiniLM未缓存/未加载；未来装载权重需另做模型成功加载的冷峰值门禁，不声称此次测量覆盖了向量模型。H01真实180s预算与H05独立 watchdog/restart回归复用，H08验证部署代理和原生停止。手机为Chromium/PWA模拟，真实iOS未验收。上线前热备 integrity ok，前端/.env/私有模型快照及旧镜像已保存；生产按 disabled → migrated → profiles_ready → services_ready → verified → enabled 完成启用，开关为1；整分支审查的重要问题修复后才启用。运维、初始化权限、轮换和保留当前DB的回滚见 [运维指南](../../hermes-operations.md)。
 
 ## 完成与审查规则
 
 每项先完成本项测试/验收，再标记已完成并提交；下一项只能使用已稳定的接口。禁止同时实施删除/下载/自动定时任务或另做无关重构。每次提交按 AGENTS.md 检查 status 和 staged diff；测试/构建使用隔离环境，不连接生产库。所有验证失败都保留未完成状态及原因。
 
-最终检查覆盖设计各章：目标/范围→H03、H04、H07；架构/身份→H01、H02、H06、H08；会话/流→H05、H07；无副作用工具→H03；权限/确认→H02、H04；失败/资源→H01、H04、H05、H08；上线验收→H08。上游兼容性和资源预算当前属于待实施验证项，文档审查不能替代 H01 的运行证据。
+最终检查覆盖设计各章：目标/范围→H03、H04、H07；架构/身份→H01、H02、H06、H08；会话/流→H05、H07；无副作用工具→H03；权限/确认→H02、H04；失败/资源→H01、H04、H05、H08；上线验收→H08。上游兼容性和资源预算已取得锁定版本的 H01/H08 实测证据，文档审查不替代运行门禁。
 
-## 第二轮文档审查结论
+## 第二轮文档审查结论（实施前历史记录）
 
 本轮结论：架构与 H01～H08 依赖划分合格；原本地版本仍有八项实施约束缺口，本草案已按对应任务补齐。它作为后续实施的文档基线，不能当作运行兼容性或生产部署已通过的证据。本轮依据为本地设计/计划快照、官方 API/profile/Docker 文档和官方 main 源码；审查期间 SSH 曾被关闭，现已恢复并核对远端 AGENTS、当前提交 0b16fbd、工作区及阶段 ledger。审查开始时 H01 仅有运行时检查器/测试的未提交工作；现已取得运行时门禁 PASS，后端228项通过并提交H01，H02 身份/持久化已验收并提交；H03～H08 未开始。
 
@@ -327,3 +327,11 @@ H08 实测：349项后端、95项前端、11项MCP测试通过；离线 CLI PASS
 ## 最终独立审查与修复
 
 完整分支审查发现两项重要恢复问题，均在一次修复中经 RED→GREEN 验证：迟到的原始/恢复提交不得覆盖已落定终态或错误；已完成的同请求重试从 HE 恢复可信结果/建议卡，并丢弃换账号后的迟到响应。后端353项、前端97项、MCP11项及生产构建通过。审查意见、逐项修复、全部实施取舍和待改小问题见 [完整审查记录](../../hermes-implementation-review.md)。
+
+## 最终生产验收（2026-10-10）
+
+修复提交 `61ebaae` 后重建并部署，HE 镜像 `sha256:9882860c2e9253fbc8dde4dc45483a2aaf4d95803205abed4d15c10afc546942`。主 backend/tools、MCP、Hermes、frontend 共5服务 healthy。现有管理员5已准备，未新增生产管理员；DeepSeek 官方 `deepseek-flash`，关闭 thinking，8轮/2048输出token/180秒。
+
+真实只读搜索：1次工具调用、89个 nginx stream chunks、4.345秒，usage 可用；已完成同请求重试保持同run和可信结果，不再执行新run；测试会话清除、临时 auth token 撤销，无建议/媒体写入/扫描。8张媒体相关表和2654条媒体与上线前一致性热备完全相同，未落定run为0。UID1000/cap0、SQLite冷重启及物理读写回滚通过；65个在线新产物与构建字节相同，保留旧哈希资源后的101个静态文件对7项实际私有凭据扫描零命中。附加服务没有宿主机端口，内存限额总和2013265920 B。
+
+后端最终353项（132.46秒）、前端97项（11.31秒）、MCP11项通过；生产构建已通过。保护的热备、旧镜像和一致性profile快照保留，回滚保留当前数据库。真实iOS与实际加载向量模型的冷峰值不在本次已验证范围，运维文档首段观看状态写权限误述作为小问题单独记录。

@@ -93,11 +93,12 @@ Pawchive 外部源模块（关联设计：`docs/pawchive-api-contract.md` 与用
 
 ## Hermes 媒体库管家（2026-10-10）
 
-设计已确认；H01～H08 实现及隔离验收完成，逐阶段提交。生产以开关关闭准备，最后启用等待整分支独立审查及只读线上门禁。详细阶段证据只维护在实施计划。
+H01～H08 已逐阶段提交；整分支独立审查的重要问题经回归修复，生产已启用，真实只读搜索/重试/流与清理通过。后端353项、前端97项、MCP11项通过；详细阶段证据维护在实施计划。
 
 - [设计文档](docs/superpowers/specs/2026-10-10-hermes-media-steward-design.md)
 - [实施任务与验收清单](docs/superpowers/plans/2026-10-10-hermes-media-steward.md)
 - [初始化、验收、轮换与回滚](docs/hermes-operations.md)
+- [独立审查、修复与实施取舍](docs/hermes-implementation-review.md)
 
 ## 长期可选项
 
