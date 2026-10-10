@@ -110,6 +110,26 @@ def media_dto(row):
     ).model_dump()
 
 
+MAX_CARD_IDS = 60
+
+
+def media_cards(db, ids):
+    """Admin UI rows for result cards (covers etc.); never returned to the model."""
+    wanted = list(dict.fromkeys(i for i in ids if isinstance(i, int) and i > 0))
+    if len(wanted) > MAX_CARD_IDS:
+        raise HTTPException(422, "assistant_invalid_tool_args")
+    if not wanted:
+        return []
+    rows = (
+        db.query(models.Media)
+        .options(selectinload(models.Media.tags))
+        .filter(models.Media.id.in_(wanted))
+        .all()
+    )
+    by_id = {row.id: row for row in rows}
+    return [by_id[i] for i in wanted if i in by_id]
+
+
 def page(items, total, args):
     return {
         "items": items,

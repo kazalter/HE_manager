@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import axios from 'axios'
 import {
   MessageSquare,
@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Check,
   ShieldCheck,
+  Loader2,
 } from 'lucide-vue-next'
 import { authState } from '../auth'
 import { API_BASE_URL } from '../config'
@@ -161,6 +162,11 @@ async function send() {
   if (!canSend.value) return
   await chat.send(draft.value)
   if (run.value && !hasRetry.value) draft.value = ''
+}
+async function useSuggestion(text: string) {
+  draft.value = text
+  await nextTick()
+  input.value?.focus()
 }
 function key(event: KeyboardEvent) {
   if (
@@ -352,8 +358,11 @@ onBeforeUnmount(() => {
               >更早的消息</UiButton
             >
             <details class="rounded-xl border border-line bg-surface/70 px-3 text-sm text-muted"><summary class="flex min-h-11 cursor-pointer items-center gap-2 focus-ring"><ShieldCheck :size="15" aria-hidden="true" />可读取 HE 项目 · 修改需要你批准</summary><div class="space-y-2 pb-3 leading-relaxed"><template v-if="capabilities"><p>查询媒体资料、作者、文件目录、任务、日志和存储状态。</p><p>文件读取范围：{{ readableRoots || '暂无可读目录' }}</p><p>可提出资料修改、标签整理、维护任务与文件改名 / 移动。每次批准只执行审批卡中列出的操作。</p><p v-if="!capabilities.image_analysis_supported">可查看媒体预览；当前模型未分析图片、音视频内容。</p></template><p v-else>能力信息暂不可用，请稍后重新连接。</p></div></details>
-            <ChatMessages :messages="messages" />
-            <p v-if="toolStatus" class="text-sm text-muted">{{ toolStatus }}</p>
+            <ChatMessages :messages="messages" :disabled="!availability.enabled || sending" @suggest="useSuggestion" />
+            <p v-if="toolStatus" role="status" class="inline-flex max-w-full items-center gap-2 rounded-full border border-line bg-surface/70 px-3 py-1.5 text-sm text-muted">
+              <Loader2 v-if="active" :size="14" class="shrink-0 animate-spin text-accent motion-reduce:animate-none" aria-hidden="true" />
+              <span class="min-w-0 truncate">{{ toolStatus }}</span>
+            </p>
             <MediaResults :results="results" @open="openMedia" />
             <ProjectResultCard :results="results" />
             <p v-if="truncated" class="text-sm text-muted">
@@ -400,14 +409,10 @@ onBeforeUnmount(() => {
               >
             </div>
             <form
-              class="assistant-composer min-w-0 rounded-2xl border border-line bg-surface p-3 sm:p-4"
+              class="assistant-composer min-w-0 rounded-2xl border border-line bg-surface p-2 transition-colors duration-150 focus-within:border-accent/50 sm:p-2.5 motion-reduce:transition-none"
               @submit.prevent="send"
             >
-              <label
-                for="assistant-input"
-                class="mb-2 block text-sm font-medium text-ink"
-                >发送消息</label
-              >
+              <label for="assistant-input" class="sr-only">发送消息</label>
               <textarea
                 ref="input"
                 @focus="keepComposerVisible"
@@ -421,14 +426,14 @@ onBeforeUnmount(() => {
                   session?.state === 'deleting'
                 "
                 aria-describedby="assistant-input-hint"
-                class="w-full min-w-0 resize-y rounded-xl border border-line bg-surface-2 p-3 text-base leading-relaxed text-ink focus-ring"
-                placeholder="例如：找一些温馨、还没看过的短篇漫画"
+                class="block max-h-[40vh] min-h-[4.5rem] w-full min-w-0 resize-y rounded-xl bg-transparent px-3 py-2.5 text-base leading-relaxed text-ink outline-none placeholder:text-subtle"
+                placeholder="告诉管家你想找什么，例如：找一些温馨、还没看过的短篇漫画"
                 @keydown="key"
               />
               <div
-                class="mt-3 flex flex-wrap items-center justify-between gap-3"
+                class="flex flex-wrap items-center justify-between gap-3 border-t border-line px-2 pt-2"
               >
-                <p id="assistant-input-hint" class="text-sm text-muted">
+                <p id="assistant-input-hint" class="text-xs text-subtle tabular-nums">
                   {{ draft.length }}/8000 · Ctrl/⌘ + Enter 发送
                 </p>
                 <UiButton

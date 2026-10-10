@@ -1,5 +1,6 @@
 import { authState, expireAuth } from '../auth'
 import { API_BASE_URL } from '../config'
+import type { Media } from '../types'
 import type {
   ActionResultDTO,
   AssistantEvent,
@@ -328,6 +329,8 @@ export const listApprovals = (tab: 'pending' | 'history', opts: RequestOptions =
 export const getCapabilities = (opts: RequestOptions = {}) => json<CapabilitiesDTO>('/capabilities', 'GET', undefined, opts)
 export const selectProposalTargets = (id: string, ids: number[], opts: RequestOptions = {}) => json<ProposalDTO>('/proposals/' + pathId(id) + '/selection', 'POST', { selected_target_ids: ids }, opts)
 export const getProposalTargets = (id: string, opts: RequestOptions = {}) => json<Page<Record<string, unknown>>>('/proposals/' + pathId(id) + '/targets' + query(opts, 50), 'GET', undefined, opts)
+export const getMediaCards = (ids: number[], opts: RequestOptions = {}) =>
+  json<Media[]>('/media?' + ids.slice(0, 60).map((id) => 'ids=' + id).join('&'), 'GET', undefined, opts)
 export function notifyApprovalChanged() { window.dispatchEvent(new Event('he-assistant-approval-changed')) }
 export async function fetchPreview(path: string, signal: AbortSignal) {
   if (!/^\/assistant\/media\/\d+\/preview(?:\?page_index=\d+)?$/.test(path)) throw new AssistantApiError(400)

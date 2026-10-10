@@ -140,3 +140,19 @@ class AssistantReadonlyTests(unittest.TestCase):
         ]:
             with self.assertRaises(HTTPException):
                 self.execute(name, args)
+
+    def test_media_cards_keep_result_order_and_cover_for_the_admin_ui(self):
+        for media_id, extension in ((1, ".cbz"), (2, ".mp3")):
+            row = self.f.db.get(models.Media, media_id)
+            row.extension, row.file_size = extension, 1024
+        self.f.db.get(models.Media, 1).cover_path = "cover_1.jpg"
+        self.f.db.commit()
+        rows = self.readonly.media_cards(self.f.db, [2, 999, 1, 2, 0])
+        self.assertEqual([row.id for row in rows], [2, 1])
+        from app import schemas
+        cards = [schemas.Media.model_validate(row).model_dump() for row in rows]
+        self.assertEqual(cards[1]["cover_path"], "cover_1.jpg")
+        self.assertEqual(self.readonly.media_cards(self.f.db, []), [])
+        with self.assertRaises(HTTPException) as caught:
+            self.readonly.media_cards(self.f.db, list(range(1, 62)))
+        self.assertEqual(caught.exception.status_code, 422)

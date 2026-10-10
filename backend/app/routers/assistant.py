@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import Field
 from .. import auth
+from .. import schemas as app_schemas
 from ..database import get_db
 from ..assistant import actions, proposals, scan_jobs, schemas, sessions, store, config
 from ..assistant.models import AssistantRun, AssistantSession, AssistantProposal
@@ -216,6 +217,13 @@ def internal_project_state(body: ProjectStateRequest, authorization: str = Heade
     principal=authenticate_tool_token(db,authorization[7:])
     require_tool_context(db,principal,body.context)
     return project_status(db)
+
+
+@router.get("/media", response_model=list[app_schemas.Media])
+def media_cards(ids: list[int] = Query(default=[]), user=Depends(auth.require_admin), db=Depends(get_db)):
+    from ..assistant.readonly import media_cards as load_cards
+    store.require_admin(db,user.id)
+    return load_cards(db,ids)
 
 
 @router.get("/media/{media_id}/preview")
