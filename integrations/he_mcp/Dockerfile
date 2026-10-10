@@ -4,6 +4,7 @@ COPY integrations/he_mcp/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 # Shared pure Pydantic DTOs only; the bridge has no HE database/runtime package.
 COPY backend/app/assistant/schemas.py ./app/assistant/schemas.py
+COPY backend/app/assistant/tool_catalog.py backend/app/assistant/tool_errors.py ./app/assistant/
 COPY integrations/he_mcp/__init__.py integrations/he_mcp/client.py integrations/he_mcp/server.py ./integrations/he_mcp/
 ENV PYTHONPATH=/bridge PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 USER 1000:1000

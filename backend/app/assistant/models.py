@@ -116,3 +116,14 @@ class AssistantAudit(Base):
     changes_json = Column(Text, nullable=False)
     result_json = Column(Text, nullable=False)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class AssistantToolEvent(Base):
+    __tablename__ = "assistant_tool_events"
+    id = Column(String(36), primary_key=True, default=new_id)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    run_id = Column(String(36), ForeignKey("assistant_runs.id"), nullable=False)
+    tool_name = Column(String(80), nullable=False)
+    error_code = Column(String(100), nullable=False)
+    request_id = Column(String(36), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)

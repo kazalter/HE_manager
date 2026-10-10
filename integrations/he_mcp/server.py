@@ -12,41 +12,9 @@ from app.assistant import schemas
 from .client import HeToolClient, READ_TOOLS, valid_token, ToolError
 
 
-class DetailArgs(schemas.DTO):
-    media_id: schemas.PositiveID
-
-
-class UpdateArgs(schemas.DTO):
-    media_id: schemas.PositiveID
-    patch: schemas.MediaPatch
-
-
-class ScanArgs(schemas.DTO):
-    folder_id: schemas.PositiveID
-
-
-ARGS = {
-    "search_media": schemas.MediaQuery,
-    "get_media_detail": DetailArgs,
-    "get_library_stats": schemas.DTO,
-    "recommend_media": schemas.RecommendationQuery,
-    "list_duplicate_candidates": schemas.PageQuery,
-    "list_tags": schemas.PageQuery,
-    "list_folders": schemas.PageQuery,
-    "propose_media_update": UpdateArgs,
-    "propose_scan": ScanArgs,
-}
-DESCRIPTIONS = {
-    "search_media": "Search visible HE metadata with bounded pagination. Never reads media files.",
-    "get_media_detail": "Read visible HE metadata by ID without changing viewing history.",
-    "get_library_stats": "Count visible HE media by type, favorites and viewing state.",
-    "recommend_media": "Recommend from existing HE metadata/index; explain the returned basis.",
-    "list_duplicate_candidates": "List existing duplicate candidates. Never merges or deletes.",
-    "list_tags": "List HE tags and visible-media counts.",
-    "list_folders": "List configured folder IDs and safe labels. No paths or file access.",
-    "propose_media_update": "Create a pending metadata/tag preview. HE administrator must confirm it in the webpage before any write.",
-    "propose_scan": "Create a pending scan preview for a configured folder ID. Does not start scanning; HE administrator must confirm.",
-}
+from app.assistant.tool_catalog import TOOL_CATALOG
+ARGS = {name: spec.args_type for name, spec in TOOL_CATALOG.items()}
+DESCRIPTIONS = {name: spec.description for name, spec in TOOL_CATALOG.items()}
 
 
 class BearerMiddleware:

@@ -35,6 +35,12 @@ class DTO(BaseModel):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
 
+class ToolErrorDTO(DTO):
+    code: str
+    message: str
+    request_id: str
+
+
 class ToolContext(DTO):
     session_id: UUID
     run_id: UUID
@@ -200,6 +206,7 @@ class MediaPageDTO(DTO):
     total: Count
     offset: Count = 0
     has_more: bool = False
+    next_offset: Count | None = None
     truncated: bool = False
 
 
@@ -230,6 +237,7 @@ class DuplicatePageDTO(DTO):
     total: Count
     offset: Count = 0
     has_more: bool = False
+    next_offset: Count | None = None
     truncated: bool = False
 
 
@@ -238,6 +246,7 @@ class TagPageDTO(DTO):
     total: Count
     offset: Count = 0
     has_more: bool = False
+    next_offset: Count | None = None
 
 
 class FolderDTO(DTO):
@@ -251,6 +260,7 @@ class FolderPageDTO(DTO):
     total: Count
     offset: Count = 0
     has_more: bool = False
+    next_offset: Count | None = None
 
 
 class ProposalAckDTO(DTO):
@@ -380,6 +390,7 @@ class HistoryPageDTO(DTO):
     total: Count
     offset: Count = 0
     has_more: bool = False
+    next_offset: Count | None = None
 
 
 class SessionPageDTO(DTO):
@@ -387,6 +398,7 @@ class SessionPageDTO(DTO):
     total: Count
     offset: Count = 0
     has_more: bool = False
+    next_offset: Count | None = None
 
 
 class ProposalPageDTO(DTO):
@@ -394,6 +406,7 @@ class ProposalPageDTO(DTO):
     total: Count
     offset: Count = 0
     has_more: bool = False
+    next_offset: Count | None = None
 
 
 class AvailabilityDTO(DTO):

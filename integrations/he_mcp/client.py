@@ -9,8 +9,9 @@ import httpx2
 from pydantic import ValidationError
 from app.assistant import schemas
 
-NAMES = frozenset(schemas.RESULT_TYPES)
-READ_TOOLS = NAMES - {"propose_media_update", "propose_scan"}
+from app.assistant.tool_catalog import TOOL_CATALOG, READ_TOOLS
+from app.assistant.tool_errors import MESSAGES
+NAMES = frozenset(TOOL_CATALOG)
 
 
 class ToolError(Exception):
@@ -95,7 +96,18 @@ class HeToolClient:
                                 continue
                             raise ToolError("he_tool_unavailable")
                         if response.status_code != 200:
-                            raise ToolError("he_tool_rejected")
+                            raw_error = bytearray()
+                            async for chunk in response.aiter_raw(4096):
+                                if len(raw_error) + len(chunk) > 8192:
+                                    raise ToolError("he_tool_rejected")
+                                raw_error.extend(chunk)
+                            try:
+                                error = schemas.ToolErrorDTO.model_validate_json(raw_error)
+                                if error.code not in MESSAGES:
+                                    raise ValueError
+                            except (ValueError, ValidationError):
+                                raise ToolError("he_tool_rejected") from None
+                            raise ToolError(error.code + ": " + MESSAGES[error.code] + " [" + error.request_id[:36] + "]")
                         if response.headers.get("content-encoding", "identity") not in (
                             "",
                             "identity",

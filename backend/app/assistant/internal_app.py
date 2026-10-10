@@ -3,6 +3,12 @@
 import json
 from uuid import uuid4
 from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
+import logging
+from .tool_catalog import TOOL_CATALOG
+from .tool_errors import safe_tool_error
+from .models import AssistantToolEvent
+from .store import utcnow
 from pydantic import ValidationError
 from sqlalchemy import inspect
 from starlette.concurrency import run_in_threadpool
@@ -14,7 +20,14 @@ from .proposals import create_proposal, PROPOSAL_TOOLS
 from .store import canonical_json, write_transaction
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
-MAX_RESULTS = 65536
+MAX_RESULTS = 1024 * 1024
+logger = logging.getLogger(__name__)
+
+@app.exception_handler(HTTPException)
+async def safe_http_error(request, exc):
+    error = safe_tool_error(exc.status_code, exc.detail if isinstance(exc.detail, str) else "", str(uuid4()))
+    logger.warning("HE tool error code=%s request_id=%s status=%s", error.code, error.request_id, exc.status_code)
+    return JSONResponse(error.model_dump(), status_code=exc.status_code)
 
 
 class ToolRequest(schemas.DTO):
@@ -22,8 +35,24 @@ class ToolRequest(schemas.DTO):
     args: dict
 
 
+def bounded_result(name, result):
+    result = schemas.RESULT_TYPES[name].model_validate(result).model_dump(mode="json")
+    while len(canonical_json(result).encode("utf-8")) > 48 * 1024:
+        if isinstance(result.get("items"), list) and result["items"]:
+            result["items"].pop()
+            result["has_more"] = True
+            if "offset" in result:
+                result["next_offset"] = result["offset"] + len(result["items"])
+            elif "next_cursor" in result:
+                result["next_cursor"] = result["items"][-1]["cursor"] if result["items"] else result.get("cursor")
+        else:
+            raise HTTPException(413, "assistant_content_too_large")
+    return result
+
+
 def record_tool_result(db, principal, context, name, result):
     try:
+        result = bounded_result(name, result)
         validated = schemas.ToolResultDTO(
             tool_call_id=uuid4(), tool_name=name, result=result
         ).model_dump(mode="json")
@@ -80,7 +109,7 @@ def health(db=Depends(get_db)):
 
 @app.post("/tools/{name}")
 async def tool(name: str, request: Request, db=Depends(get_db)):
-    if name not in READ_TOOLS and name not in PROPOSAL_TOOLS:
+    if name not in TOOL_CATALOG:
         raise HTTPException(404, "assistant_unknown_tool")
     header = request.headers.get("authorization", "")
     if not header.startswith("Bearer ") or not 32 <= len(header[7:]) <= 1000:
@@ -94,4 +123,18 @@ async def tool(name: str, request: Request, db=Depends(get_db)):
         body = ToolRequest.model_validate_json(payload)
     except (ValidationError, ValueError):
         raise HTTPException(422, "assistant_invalid_tool_args") from None
-    return await run_in_threadpool(execute_and_record, db, header[7:], body, name)
+    try:
+        return await run_in_threadpool(execute_and_record, db, header[7:], body, name)
+    except HTTPException as exc:
+        error = safe_tool_error(exc.status_code, str(exc.detail), str(uuid4()))
+        try:
+            db.rollback()
+            principal = authenticate_tool_token(db, header[7:])
+            require_tool_context(db, principal, body.context)
+            with write_transaction(db) as local:
+                local.add(AssistantToolEvent(user_id=principal.user_id, run_id=str(body.context.run_id), tool_name=name, error_code=error.code, request_id=error.request_id))
+                cutoff = utcnow() - __import__('datetime').timedelta(days=7)
+                local.query(AssistantToolEvent).filter(AssistantToolEvent.created_at < cutoff).delete(synchronize_session=False)
+        except Exception:
+            db.rollback()
+        return JSONResponse(error.model_dump(), status_code=exc.status_code)

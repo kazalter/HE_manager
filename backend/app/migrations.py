@@ -187,7 +187,7 @@ def ensure_pawchive_tables():
 def ensure_assistant_tables(bind=None):
     """Only the main HE process creates assistant tables."""
     from .assistant import models as assistant_models
-    for name in ("AssistantToolIdentity", "AssistantSession", "AssistantRun", "AssistantProposal", "AssistantAudit"):
+    for name in ("AssistantToolIdentity", "AssistantSession", "AssistantRun", "AssistantProposal", "AssistantAudit", "AssistantToolEvent"):
         getattr(assistant_models, name).__table__.create(bind=bind or engine, checkfirst=True)
     target = bind or engine
     columns = {c["name"] for c in inspect(target).get_columns("assistant_runs")}
