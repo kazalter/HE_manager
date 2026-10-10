@@ -112,6 +112,103 @@ class AssistantProxyTests(unittest.IsolatedAsyncioTestCase):
             client=self.fake,
         )
 
+    async def _late_submission_after_background_completion(
+        self, timeout, recovery=False
+    ):
+        import asyncio
+
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        class Delayed(FakeHermes):
+            async def start_run(inner, profile, envelope):
+                if recovery and not inner.calls:
+                    inner.timeout = True
+                result = await super().start_run(profile, envelope)
+                if len([c for c in inner.calls if c[0] == "start_run"]) == (
+                    2 if recovery else 1
+                ):
+                    entered.set()
+                    await release.wait()
+                    if timeout:
+                        raise httpx.ReadTimeout("synthetic delayed accepted response")
+                return result
+
+        fake = Delayed()
+        fake.state.update(
+            status="completed",
+            last_event="run.completed",
+            completed=True,
+            partial=False,
+            interrupted=False,
+            output="background canonical final",
+            usage={"total_tokens": 5},
+        )
+        request_id = uuid4()
+        if recovery:
+            first = await self.service.submit_run(
+                self.f.db,
+                1,
+                self.f.sid,
+                RunRequest(input="late response", client_request_id=request_id),
+                client=fake,
+            )
+            self.assertEqual(first.status, "submission_unknown")
+            original = asyncio.create_task(
+                self.service.reconcile_run(self.f.db, 1, first.id, client=fake)
+            )
+        else:
+            original = asyncio.create_task(
+                self.service.submit_run(
+                    self.f.db,
+                    1,
+                    self.f.sid,
+                    RunRequest(input="late response", client_request_id=request_id),
+                    client=fake,
+                )
+            )
+        try:
+            await asyncio.wait_for(entered.wait(), 2)
+            await self.service.background_tick(client=fake)
+            with self.f.factory() as fresh:
+                saved = (
+                    fresh.query(AssistantRun)
+                    .filter(AssistantRun.client_request_id == str(request_id))
+                    .one()
+                )
+                self.assertEqual(saved.status, "completed")
+                self.assertIsNotNone(saved.executor_exited_at)
+            release.set()
+            result = await asyncio.wait_for(original, 2)
+            self.assertEqual(result.status, "completed")
+            self.assertEqual(result.output, "background canonical final")
+            self.assertIsNone(result.error_code)
+            self.f.db.expire_all()
+            saved = self.f.db.get(AssistantRun, str(result.id))
+            self.assertEqual(saved.status, "completed")
+            self.assertIsNotNone(saved.executor_exited_at)
+            repeated = await self.service.reconcile_run(
+                self.f.db, 1, result.id, client=fake
+            )
+            self.assertEqual(repeated.status, "completed")
+            bodies = [c[2] for c in fake.calls if c[0] == "start_run"]
+            self.assertEqual(len(bodies), 3 if recovery else 2)
+            self.assertEqual(len(set(bodies)), 1)
+        finally:
+            release.set()
+            await asyncio.gather(original, return_exceptions=True)
+
+    async def test_late_submission_success_preserves_background_terminal(self):
+        await self._late_submission_after_background_completion(False)
+
+    async def test_late_submission_timeout_preserves_background_terminal(self):
+        await self._late_submission_after_background_completion(True)
+
+    async def test_late_recovery_success_preserves_background_terminal(self):
+        await self._late_submission_after_background_completion(False, recovery=True)
+
+    async def test_late_recovery_timeout_preserves_background_terminal_and_error(self):
+        await self._late_submission_after_background_completion(True, recovery=True)
+
     async def test_same_client_request_keeps_he_run_upstream_id_and_frozen_body(self):
         request_id = uuid4()
         first = await self.submit(request_id=request_id)

@@ -10,7 +10,7 @@
 
 **Spec:** [已确认设计](../specs/2026-10-10-hermes-media-steward-design.md)
 
-日期：2026-10-10。状态：H01～H08 实现及隔离验收已完成；生产启用留作最终独立审查后的门禁。后端349项、前端95项、MCP11项通过，临时目录生产构建通过；实际原生工具链、提案拒绝、停止和 nginx 流已验收。开发、构建、测试与部署均在服务器 /opt/stacks/he-manager 完成，LAN SSH 192.168.0.101:2222。
+日期：2026-10-10。状态：H01～H08 实现及隔离验收已完成；生产启用留作最终独立审查后的门禁。最终修复后后端353项、前端97项、MCP11项通过，临时目录生产构建通过；实际原生工具链、提案拒绝、停止和 nginx 流已验收。开发、构建、测试与部署均在服务器 /opt/stacks/he-manager 完成，LAN SSH 192.168.0.101:2222。
 
 ## Global Constraints
 
@@ -323,3 +323,7 @@ H08 实测：349项后端、95项前端、11项MCP测试通过；离线 CLI PASS
 - [Hermes MCP：外部工具及过滤](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/mcp.md)
 - [MCP Python 官方 SDK](https://github.com/modelcontextprotocol/python-sdk)
 - [Hermes API 官方源代码：指定 session ID 的创建与查询行为](https://github.com/NousResearch/hermes-agent/blob/main/gateway/platforms/api_server.py)，H01 仍须在锁定 digest 上实测。
+
+## 最终独立审查与修复
+
+完整分支审查发现两项重要恢复问题，均在一次修复中经 RED→GREEN 验证：迟到的原始/恢复提交不得覆盖已落定终态或错误；已完成的同请求重试从 HE 恢复可信结果/建议卡，并丢弃换账号后的迟到响应。后端353项、前端97项、MCP11项及生产构建通过。审查意见、逐项修复、全部实施取舍和待改小问题见 [完整审查记录](../../hermes-implementation-review.md)。

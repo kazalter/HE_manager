@@ -58,6 +58,57 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 describe('assistant chat lifecycle', () => {
+  it('restores saved results and proposals when same-ID retry is already completed', async () => {
+    const api = fakeApi()
+    api.sendMessage.mockRejectedValueOnce(new Error('accepted response lost'))
+    api.sendMessage.mockResolvedValue(run({ status: 'completed', output: 'canonical final' }))
+    const result = { tool_call_id: 'new-result', tool_name: 'search_media', result: { items: [{ id: 7, title: 'saved match' }] } }
+    const card = { id: 'saved-proposal', kind: 'media_update', state: 'pending' }
+    api.getResults.mockResolvedValue({ items: [result], truncated: true })
+    const scope = effectScope()
+    const chat = scope.run(() => useAssistantChat(api as any))!
+    try {
+      await chat.initialize()
+      await chat.send('search and propose')
+      expect(chat.hasRetry.value).toBe(true)
+      chat.results.value = [{ tool_call_id: 'old-result', tool_name: 'search_media', result: {} }] as any
+      api.getProposals.mockResolvedValue(page([card]))
+      await chat.retrySend()
+      expect(api.sendMessage).toHaveBeenCalledTimes(2)
+      expect(api.sendMessage.mock.calls[0]).toEqual(api.sendMessage.mock.calls[1])
+      expect(chat.run.value?.status).toBe('completed')
+      expect(chat.results.value).toEqual([result])
+      expect(chat.proposals.value).toEqual([card])
+      expect(chat.truncated.value).toBe(true)
+      expect(chat.hasRetry.value).toBe(false)
+      expect(api.getAvailability).toHaveBeenCalledTimes(2)
+      expect(api.subscribeRun).not.toHaveBeenCalled()
+    } finally { scope.stop() }
+  })
+
+  it('discards terminal submission result restoration after identity changes', async () => {
+    const api = fakeApi()
+    api.sendMessage.mockResolvedValue(run({ status: 'completed', output: 'private final' }))
+    let resolveResults!: (value: any) => void
+    api.getResults.mockImplementation(() => new Promise(resolve => { resolveResults = resolve }))
+    const scope = effectScope()
+    const chat = scope.run(() => useAssistantChat(api as any))!
+    try {
+      await chat.initialize()
+      const sending = chat.send('private request')
+      await flushPromises()
+      expect(api.getResults).toHaveBeenCalledTimes(1)
+      authState.token = 'second-token'
+      authState.user = { id: 2, is_admin: true, username: 'second' } as any
+      await flushPromises()
+      resolveResults({ items: [{ tool_call_id: 'private-result', tool_name: 'search_media', result: {} }], truncated: false })
+      await sending
+      expect(chat.results.value).toEqual([])
+      expect(chat.proposals.value).toEqual([])
+      expect(chat.run.value).toBeNull()
+    } finally { scope.stop() }
+  })
+
   it('keeps a drafted message when the keyboard shortcut is used during a busy run', async () => {
     vi.stubGlobal(
       'fetch',

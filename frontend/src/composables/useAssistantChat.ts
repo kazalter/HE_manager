@@ -331,7 +331,7 @@ export function useAssistantChat(api: Api = defaultApi) {
     error.value = ''
     sendPromise = api
       .sendMessage(request.sid, request.text, request.cid, options())
-      .then((value) => {
+      .then(async (value) => {
         if (!valid(e)) return
         pending.value = null
         const inputId = 'input:' + request.cid
@@ -343,13 +343,33 @@ export function useAssistantChat(api: Api = defaultApi) {
             run_id: value.id,
             status: value.status,
           })
+        const changedRun = run.value?.id !== value.id
         setRun(value)
+        if (changedRun) {
+          results.value = []
+          truncated.value = false
+          toolStatus.value = ''
+        }
         availability.value = {
           ...availability.value,
           busy: !terminal(value.status),
           active_run_id: !terminal(value.status) ? value.id : null,
         }
-        attach()
+        if (terminal(value.status)) {
+          // A same-ID retry may arrive after completion, when there is no
+          // live stream to deliver the trusted cards. Restore HE snapshots.
+          const [saved, cards, status] = await Promise.all([
+            api.getResults(value.id, options()),
+            api.getProposals(request.sid, options()),
+            api.getAvailability(options()),
+          ])
+          if (!valid(e) || run.value?.id !== value.id || session.value?.id !== request.sid) return
+          results.value = saved.items
+          truncated.value = saved.truncated
+          proposals.value = cards.items
+          moreProposals.value = cards.has_more
+          availability.value = status
+        } else attach()
       })
       .catch((c) => {
         if (valid(e)) fail(c)

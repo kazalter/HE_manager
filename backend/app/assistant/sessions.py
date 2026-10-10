@@ -74,6 +74,8 @@ def get_status(db, user_id, run_id):
 def fault(db, user_id, rid, code):
     with store.write_transaction(db) as local:
         row = run_row(local, user_id, rid, True)
+        if row.executor_exited_at is not None:
+            return run_dto(row)
         row.error_code = code
         row.updated_at = store.utcnow()
         return run_dto(row)
@@ -255,6 +257,8 @@ async def submit_run(db, user_id, session_id, request, *, client=None):
         upstream = await (client or get_client()).start_run(profile, envelope)
         with store.write_transaction(db) as local:
             current = run_row(local, user_id, row.id, True)
+            if current.executor_exited_at is not None:
+                return run_dto(current)
             current.upstream_run_id = upstream
             if current.stop_requested_at is None:
                 current.status = "running"
@@ -262,6 +266,8 @@ async def submit_run(db, user_id, session_id, request, *, client=None):
     except (UpstreamError, httpx.HTTPError, TimeoutError) as exc:
         with store.write_transaction(db) as local:
             current = run_row(local, user_id, row.id, True)
+            if current.executor_exited_at is not None:
+                return run_dto(current)
             if current.stop_requested_at is None:
                 current.status = "submission_unknown"
             current.error_code = (
@@ -306,6 +312,8 @@ async def reconcile_run(
             upstream = await transport.start_run(profile, envelope)
             with store.write_transaction(db) as local:
                 current = run_row(local, user_id, row.id, True)
+                if current.executor_exited_at is not None:
+                    return run_dto(current)
                 current.upstream_run_id = upstream
                 if not current.stop_requested_at:
                     current.status = "running"
