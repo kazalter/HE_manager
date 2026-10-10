@@ -42,7 +42,10 @@ def bounded_result(name, result):
     while len(canonical_json(result).encode("utf-8")) > 48 * 1024:
         if isinstance(result.get("items"), list) and result["items"]:
             result["items"].pop()
-            result["has_more"] = True
+            if "has_more" in result:
+                result["has_more"] = True
+            else:
+                result["truncated"] = True
             if "offset" in result:
                 result["next_offset"] = result["offset"] + len(result["items"])
             elif "next_cursor" in result:

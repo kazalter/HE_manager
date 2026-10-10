@@ -35,6 +35,7 @@ def list_x_sources(db: Session = Depends(get_db)):
 
 
 @router.patch("/x/sources/{source_id}", response_model=schemas.XImportSource)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def update_x_source(source_id: int, payload: schemas.XImportSourceUpdate, db: Session = Depends(get_db)):
     source = get_x_source_or_404(source_id, db)
     data = payload.dict(exclude_unset=True)
@@ -88,6 +89,7 @@ def list_x_posts(
 
 
 @router.post("/x/sources/{source_id}/archive", response_model=schemas.XImportArchiveUploadResponse)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def upload_x_archive(
     source_id: int,
     file: UploadFile = File(...),
@@ -159,6 +161,7 @@ def upload_x_archive(
 
 
 @router.post("/x/imports", response_model=schemas.XImportJob)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def start_x_import(payload: schemas.XImportStartRequest, db: Session = Depends(get_db)):
     source = get_x_source_or_404(payload.source_id, db)
     if not source.download_root_path:

@@ -21,7 +21,7 @@ agent:
   agent_cache:
     max_size: 2
     protect_recent: 0
-# Explicitly disable tool-search bridge; verify the actual outbound ten schemas.
+# Explicitly disable tool-search bridge; 24 HE schemas plus profile memory.
 tools:
   tool_search:
     enabled: "off"
@@ -50,6 +50,21 @@ mcp_servers:
         - list_folders
         - propose_media_update
         - propose_scan
+        - list_creators
+        - get_creator_detail
+        - list_tasks
+        - get_task_detail
+        - get_project_status
+        - get_project_settings
+        - list_directory
+        - read_text
+        - get_media_preview
+        - read_logs
+        - propose_media_batch_update
+        - propose_tag_rename
+        - propose_tag_merge
+        - propose_maintenance
+        - propose_file_move
       resources: false
       prompts: false
 memory:

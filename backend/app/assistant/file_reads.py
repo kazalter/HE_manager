@@ -111,7 +111,7 @@ def preview_payload(db, media_id, page_index=0):
     if media.media_type in ("audio","video") and path.is_file():
         with open_project(db,media.folder_id,relative) as fd:
             input_path="/proc/self/fd/"+str(fd) if os.name != "nt" else str(path)
-            args=["ffmpeg","-nostdin","-v","error","-i",input_path,"-t","10"]
+            args=["ffmpeg","-nostdin","-v","error","-protocol_whitelist","file,pipe","-format_whitelist","mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,mp3,wav,flac,ogg,aac,avi,asf,mpeg,mpegts","-i",input_path,"-t","10"]
             if media.media_type=="video":args += ["-vf","scale=640:-2","-an","-c:v","libx264","-preset","ultrafast","-movflags","frag_keyframe+empty_moov","-f","mp4"]
             else:args += ["-vn","-c:a","libmp3lame","-f","mp3"]
             args += ["-fs","8M","pipe:1"]
@@ -166,21 +166,22 @@ def execute_file_read(db,principal,context,name,args):
             prefix=os.read(fd,65536)
             if b"PRIVATE KEY-----" in prefix:
                 raise HTTPException(403,"assistant_path_outside_root")
-            os.lseek(fd,q.offset_bytes,os.SEEK_SET);raw=os.read(fd,32772)
+            if q.offset_bytes:
+                os.lseek(fd,q.offset_bytes-1,os.SEEK_SET)
+                if os.read(fd,1) != b"\n":raise HTTPException(422,"assistant_invalid_tool_args")
+            os.lseek(fd,q.offset_bytes,os.SEEK_SET);raw=os.read(fd,32769)
         if b"\x00" in raw:raise HTTPException(422,"assistant_invalid_text")
-        chunk=raw[:32768]
-        try:text=chunk.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            if exc.reason=="unexpected end of data" and exc.start>=len(chunk)-3:
-                chunk=chunk[:exc.start];text=chunk.decode("utf-8")
-            else:raise HTTPException(422,"assistant_invalid_text") from None
-        text=redact_text(text)
-        # Bound JSON expansion while preserving a continuation into the source.
+        chunk=raw
+        if len(raw)>32768:
+            end=raw.rfind(b"\n",0,32768)
+            if end<0:raise HTTPException(413,"assistant_content_too_large")
+            chunk=raw[:end+1]
+        try:text=redact_text(chunk.decode("utf-8"))
+        except UnicodeDecodeError:raise HTTPException(422,"assistant_invalid_text") from None
         while len(__import__("json").dumps(text,ensure_ascii=False).encode())>45000:
-            chunk=chunk[:len(chunk)//2]
-            try: text=redact_text(chunk.decode("utf-8"))
-            except UnicodeDecodeError as exc:
-                chunk=chunk[:exc.start];text=redact_text(chunk.decode("utf-8"))
+            end=chunk.rfind(b"\n",0,len(chunk)//2)
+            if end<0:raise HTTPException(413,"assistant_content_too_large")
+            chunk=chunk[:end+1];text=redact_text(chunk.decode("utf-8"))
         more=len(raw)>len(chunk)
         result=dict(folder_id=q.folder_id,relative_path=q.relative_path,text=text,offset_bytes=q.offset_bytes,next_offset_bytes=q.offset_bytes+len(chunk) if more else None,truncated=more)
     else:

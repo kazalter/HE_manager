@@ -62,6 +62,7 @@ def search_folder(name: str):
 
 
 @router.post("/folders", response_model=schemas.Folder)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def create_folder(folder: schemas.FolderCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     if not os.path.exists(folder.path):
         raise HTTPException(status_code=400, detail="指定的文件夹路径不存在，请检查路径是否正确。")

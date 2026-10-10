@@ -53,6 +53,7 @@ def list_external_sources(db: Session = Depends(get_db)):
 
 
 @router.patch("/external/sources/{source_id}", response_model=schemas.ExternalFavoriteSource)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def update_external_source(source_id: int, payload: schemas.ExternalFavoriteSourceUpdate, db: Session = Depends(get_db)):
     source = get_source_or_404(source_id, db)
     data = payload.dict(exclude_unset=True)
@@ -117,6 +118,7 @@ def list_external_favorites(
 
 
 @router.post("/external/favorites/reconcile")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def reconcile_external_favorites(
     source_id: Optional[int] = None,
     db: Session = Depends(get_db),

@@ -23,6 +23,7 @@ router = APIRouter()
 
 
 @router.post("/external/wnacg/sync", response_model=schemas.ExternalFavoriteSyncResponse)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def sync_wnacg_favorites(payload: schemas.ExternalFavoriteSyncRequest, db: Session = Depends(get_db)):
     if payload.source_id:
         source = get_source_or_404(payload.source_id, db)
@@ -166,6 +167,7 @@ def sync_wnacg_favorites(payload: schemas.ExternalFavoriteSyncRequest, db: Sessi
 
 
 @router.post("/external/wnacg/downloads", response_model=schemas.ExternalDownloadJob)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def create_wnacg_download_job(
     payload: schemas.ExternalDownloadRequest,
     background_tasks: BackgroundTasks,

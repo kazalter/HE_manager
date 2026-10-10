@@ -122,6 +122,7 @@ def dedup_summary(db: Session = Depends(get_db)):
 
 
 @router.post("/dedup/recheck")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def recheck_library_dedup(db: Session = Depends(get_db)):
     media = db.query(models.Media).filter(
         models.Media.is_missing == False,  # noqa: E712
@@ -223,6 +224,7 @@ _DEDUP_ACTIONS = {
 
 
 @router.post("/dedup/candidates/{pair_id}/resolve", response_model=schemas.DuplicateCandidatePair)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def resolve_duplicate_candidate(
     pair_id: int,
     payload: schemas.DedupActionRequest,
@@ -248,6 +250,7 @@ def resolve_duplicate_candidate(
 
 
 @router.post("/dedup/candidates-batch-resolve", response_model=schemas.DedupBatchActionResponse)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def batch_resolve_duplicate_candidates(
     payload: schemas.DedupBatchActionRequest,
     db: Session = Depends(get_db),
@@ -282,6 +285,7 @@ def batch_resolve_duplicate_candidates(
 
 
 @router.post("/dedup/media/{media_id}/recheck")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def recheck_media_dedup(media_id: int, db: Session = Depends(get_db)):
     media = db.query(models.Media).filter(models.Media.id == media_id).first()
     if not media:
@@ -301,6 +305,7 @@ def recheck_media_dedup(media_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/dedup/media/{media_id}/file")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def delete_media_file(
     media_id: int,
     payload: schemas.DedupDeleteFileRequest,

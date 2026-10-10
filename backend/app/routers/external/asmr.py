@@ -47,6 +47,7 @@ def asmr_ping_mirrors(payload: dict = None):
 
 
 @router.post("/external/asmr/recheck-covers")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def asmr_recheck_covers(db: Session = Depends(get_db)):
     """Backfill cover thumbnails for audio Media rows downloaded before the
     cover step existed in the pipeline.
@@ -115,6 +116,7 @@ def asmr_recheck_covers(db: Session = Depends(get_db)):
 
 
 @router.post("/external/asmr/sync", response_model=schemas.ExternalFavoriteSyncResponse)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def sync_asmr_favorites(payload: schemas.AsmrSyncRequest, db: Session = Depends(get_db)):
     if payload.source_id:
         source = get_source_or_404(payload.source_id, db)
@@ -275,6 +277,7 @@ def sync_asmr_favorites(payload: schemas.AsmrSyncRequest, db: Session = Depends(
 
 
 @router.post("/external/asmr/downloads", response_model=schemas.ExternalDownloadJob)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def create_asmr_download_job(
     payload: schemas.ExternalDownloadRequest,
     background_tasks: BackgroundTasks,

@@ -49,7 +49,8 @@ def proposal_targets(db,user_id,proposal_id,limit,offset):
         from .operation_registry import preview_operation
         preview=preview_operation(db,row.kind,json.loads(row.payload_json));payload=json.loads(row.payload_json)
         query=db.query(models.Media).order_by(models.Media.id)
-        if payload.get('all_media'):
+        if payload['action']=='backup':query=query.filter(models.Media.id<0)
+        elif payload.get('all_media'):
             if payload['action']=='recheck_missing':query=query.filter(models.Media.is_missing==True)
             if payload['action']=='regenerate_thumbnail':query=query.filter(models.Media.media_type=='video')
         else:query=query.filter(models.Media.id.in_(payload.get('media_ids',[])))

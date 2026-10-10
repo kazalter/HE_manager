@@ -49,6 +49,14 @@ def validate_compose(root, config):
     for target, view in views.items():
         if target == "/data":
             continue
+        if target in ("/mnt/hdd", "/data/assistant-logs"):
+            expected = Path("/mnt/hdd") if target == "/mnt/hdd" else Path(data["source"]) / "assistant-logs"
+            source = Path(view["source"])
+            if view["type"] != "bind" or not view.get("read_only") or source.is_symlink() or not source.is_dir() or source.resolve() != expected.resolve():
+                raise ValueError("assistant_project_view_invalid")
+            if target.startswith("/data/"):
+                masked.add(target.removeprefix("/data/"))
+            continue
         if (
             not target.startswith("/data/")
             or target.count("/") != 2

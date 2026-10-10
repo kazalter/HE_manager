@@ -2,9 +2,11 @@
 
 ## 入口、范围与版本
 
-管理员登录 HE 网页后进入“媒体管家”。可以查找、推荐和读取媒体资料；修改评分、收藏、来源链接、观看状态和标签，或者启动扫描，都要在 HE 建议卡明确确认。建议有效期 5 分钟；目标在此期间被改动则返回 409，需要重新生成。删除、合并重复项、下载和自动定时整理不在一期范围。
+管理员登录 HE 网页后进入“媒体管家”。可读取整个 HE 项目：所有状态的媒体资料、作者、登记媒体目录、UTF-8 文本、预览、后台任务、脱敏运行日志、存储与备份清单。文件限登记媒体目录且位于 `/mnt/hdd`，不读取账号凭据、原始数据库和备份内容。
 
-每位管理员独立命名 profile `he-user-<用户ID>`，API 密钥和工具令牌彼此独立。MCP 仅有 9 个 HE 工具；原生 memory 只保存该 profile 的偏好。媒体文件、系统提示、原始工具历史和模型思考不会传给浏览器；外部模型接收用户请求和检索所需的结构化媒体资料。
+所有业务写入先生成不可变提案，由当前管理员在聊天卡或右侧审批抽屉逐项批准。支持标题、作者、评分、收藏、来源、观看状态和标签；最多 50 项批量资料修改；标签改名/合并；扫描、缺失/重复复查、视频缩略图重建、备份；单媒体文件或漫画目录在同一文件系统内改名/移动。目标存在时拒绝覆盖，不支持永久删除、跨磁盘移动、任意终端或部署。建议有效期 5 分钟；目标变化需要重新生成，批量选择改变需重新预览。已批准任务通过审批历史及任务查询查看进度。
+
+每位管理员独立 profile `he-user-<用户ID>`，API 密钥和工具令牌彼此独立。MCP 有 24 个 HE 工具，名单由 `assistant/tool_catalog.py` 统一维护；原生 memory 保存该 profile 的简短偏好。外部模型接收请求与工具结构化结果（含允许读取的脱敏文本），不会收到原始媒体二进制。当前模型不分析图片、音视频内容，网页可按需打开受鉴权的预览；音视频预览限前 10 秒。读取列表最多 50 项、文本每次 32 KiB 且按完整行继续、日志最多 200 条，截断显式返回继续位置。
 
 锁定 Hermes 0.21.6 / 818c13be，镜像及协议见 [runtime-lock](../deploy/hermes/runtime-lock.json)。MCP 使用 Python 3.12 / MCP 2.0.0 / httpx2 2.7.0。独立模型为 DeepSeek 官方 `https://api.deepseek.com/v1` 的 `deepseek-flash`（DeepSeek-V4.1-Flash），关闭 thinking；每轮上限 8 次迭代、2048 输出 token、180 秒。全局一个运行槽，profile agent cache 最多 2。模型账单以实际 usage 和供应商账单为准。
 
@@ -41,7 +43,7 @@ docker compose -f docker-compose.yml -f docker-compose.assistant.yml config --qu
    docker compose -f docker-compose.yml -f docker-compose.assistant.yml up -d --no-build --wait assistant-tools assistant-mcp hermes-agent
    ```
 
-   当前数据库为 `/data/library.db`，DB/WAL/SHM 和父目录均需属于 1000:1000。检查器校验共享可写父目录、挂载遮蔽、实际敏感文件清单及 owner。新增 data 文件或更换 DB 路径后重新检查；未知文件拒绝部署，先增加具体遮蔽和测试。工具只挂 data 父目录，不能挂媒体盘；备份、旧 DB、模型配置、profile 和密钥均被更具体的公开只读挂载遮蔽。MCP 没有数据卷。Hermes 仅挂自己 home，不挂 docker.sock。
+   当前数据库为 `/data/library.db`，DB/WAL/SHM 和父目录均需属于 1000:1000。检查器校验共享可写父目录、挂载遮蔽、实际敏感文件清单及 owner。新增 data 文件或更换 DB 路径后重新检查；未知文件拒绝部署，先增加具体遮蔽和测试。工具以只读方式挂 `/mnt/hdd` 和 `data/assistant-logs`，共享 SQLite data 父目录用于记录工具结果/提案；备份、旧 DB、模型配置、profile 和密钥均被更具体的公开只读挂载遮蔽。MCP 没有数据卷。Hermes 仅挂自己 home，不挂 docker.sock。
 5. 在隔离环境完成离线、原生链路、SSE、停止、权限、扫描和回滚门禁后，才可以把开关设为 1。仅 health 或工具清单不算验收。工具与主应用都需要重新创建以应用环境开关：
 
    ```sh

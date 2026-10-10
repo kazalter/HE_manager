@@ -63,7 +63,7 @@ def execute_project_read(db, principal, context, name, args):
                 cursor=e.created_at.strftime("%Y%m%d%H%M%S%f")+'-'+e.id.replace('-','')
                 if q.cursor and cursor>=q.cursor:continue
                 result['items'].append(dict(timestamp=e.created_at.isoformat()+'Z',service="assistant",level="WARNING",code=e.error_code,object_id=e.tool_name,summary=MESSAGES.get(e.error_code,"工具调用未成功"),request_id=e.request_id,cursor=cursor))
-            result['items'].sort(key=lambda x:x['timestamp'],reverse=True)
+            result['items'].sort(key=lambda x:x['cursor'],reverse=True)
             result['has_more']=result['has_more'] or len(result['items'])>q.limit
             result['items']=result['items'][:q.limit]
             result['next_cursor']=result['items'][-1]['cursor'] if result['items'] else None

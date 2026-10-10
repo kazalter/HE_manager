@@ -25,6 +25,11 @@ RUN pip install --no-cache-dir \
         -i https://pypi.org/simple \
         -r requirements.txt
 
+# Short audio/video previews require the fixed ffmpeg encoder. Keep this after
+# Python deps to reuse the existing CPU torch cache during this upgrade.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 # App package only — DB and media live on mounted volumes, never in the image.
 COPY backend/app ./app
 COPY deploy/hermes ./deploy/hermes

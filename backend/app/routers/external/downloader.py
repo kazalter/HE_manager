@@ -81,6 +81,7 @@ def _push_external_items(payload, db: Session, build):
 
 
 @router.post("/external/downloader/callback")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def downloader_callback(
     payload: dict,
     item_id: int,

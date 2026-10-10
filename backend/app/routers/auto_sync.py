@@ -71,6 +71,7 @@ def get_auto_sync_status(db: Session = Depends(get_db)):
 
 
 @router.patch("/auto-sync/wnacg/{source_id}", response_model=schemas.ExternalFavoriteSource)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def update_wnacg_auto_sync(
     source_id: int,
     payload: schemas.AutoSyncConfigUpdate,
@@ -98,6 +99,7 @@ def update_wnacg_auto_sync(
 
 
 @router.patch("/auto-sync/x/{source_id}", response_model=schemas.XImportSource)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def update_x_auto_sync(
     source_id: int,
     payload: schemas.AutoSyncConfigUpdate,
