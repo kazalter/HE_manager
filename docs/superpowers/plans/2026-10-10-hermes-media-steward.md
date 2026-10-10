@@ -203,11 +203,11 @@ assert audio_recommendation.method == "metadata_filter"
 
 ## Task 4: H04 — 实现变更预览、原子确认和扫描 job
 
-**Files:** 创建 backend/app/assistant/{proposals,actions,scan_jobs}.py；创建 backend/app/routers/assistant.py 的 proposal/job 路由；修改 assistant/internal_app.py 注册两种建议工具、main.py 路由和恢复注册；测试 backend/tests/test_assistant_actions.py、test_assistant_scan_jobs.py。依赖：H02、H03。
+**Files:** 创建 backend/app/assistant/{proposals,actions,scan_jobs}.py；创建 backend/app/routers/assistant.py 的 proposal/job 路由；修改 assistant/internal_app.py 注册两种建议工具、assistant/store.py 停止/清除事务标记、assistant/schemas.py 的 ActionResultDTO.job 终态快照、main.py 路由和恢复注册；测试 backend/tests/test_assistant_actions.py、test_assistant_scan_jobs.py。依赖：H02、H03。
 
 **Interfaces:** create_proposal(db, principal, context, kind, payload) -> ProposalAckDTO；confirm_proposal(db, user_id, proposal_id, payload_hash) -> ActionResultDTO；reject_proposal(db, user_id, proposal_id) -> ProposalDTO；run_scan_job(job_id: str, folder_id: int, reservation: object) -> None；get_owned_scan_job(db, user_id, job_id) -> JobDTO。
 
-- [ ] Step 1：先写真实临时 SQLite 并发测试，包含拒绝/过期/目标消失/用户降权/旧值变化/两次同时确认。明确新增 test_same_patch_different_targets_creates_distinct_proposals、test_stop_commit_before_confirm_blocks_write、test_confirm_commit_before_stop_preserves_result、test_clear_commit_before_late_proposal_blocks_creation、test_completed_run_pending_proposal_can_confirm；使用两个独立连接及同步屏障控制提交顺序，不依赖 sleep 猜并发。
+- [x] Step 1：先写真实临时 SQLite 并发测试，包含拒绝/过期/目标消失/用户降权/旧值变化/两次同时确认。明确新增 test_same_patch_different_targets_creates_distinct_proposals、test_stop_commit_before_confirm_blocks_write、test_confirm_commit_before_stop_preserves_result、test_clear_commit_before_late_proposal_blocks_creation、test_completed_run_pending_proposal_can_confirm；使用两个独立连接及同步屏障控制提交顺序，不依赖 sleep 猜并发。
 ~~~python
 assert proposal.state == "pending" and media.rating == original_rating
 assert confirm_after_manual_edit.status_code == 409
@@ -215,11 +215,11 @@ assert count_applied_audits(proposal.id) == 1
 assert count_started_scans(proposal.id) == 1
 assert restarted_scan.status == "interrupted"
 ~~~
-- [ ] Step 2：运行 cd backend && python -m pytest tests/test_assistant_actions.py tests/test_assistant_scan_jobs.py -q，预期新建议/确认功能失败。
-- [ ] Step 3：只接受前述 MediaPatch 字段或现有 folder_id，生成完整 before/after 与规范 JSON hash、300 秒 expires_at，并在 H02 唯一约束下幂等创建。normalized_payload_hash 必须包含版本、user_id/session_id/run_id、kind、target_id 和规范化 patch；before 快照与 expires_at 在首次插入时固定，重试不刷新。两个 media_id 使用相同 patch 不得冲突。只比较将修改的字段及完整标签关系，扫描另记录 folder 配置指纹（含路径但只在服务端保存）。MCP 只返回 ProposalAckDTO，HE 用户预览不含内部路径；若旧 source_url 含凭据，预览/审计显示脱敏值，旧值核验仅保存不可逆指纹。新增/移除标签各最多 20 个，拒绝空变更和互相冲突操作。预览无媒体写入；确认接口仅接收 proposal_id/hash，不能从浏览器重新指定 payload。
-- [ ] Step 4：实现 metadata 确认：使用独立、干净的数据库连接开启 BEGIN IMMEDIATE 短写事务，再读 pending、重查权限、session active、run 未被用户停止/清除及旧值（正常 completed 可确认）、条件消费、修改目标标签/字段并写 audit；不得沿用已预读旧值的 ORM 事务。事务内不调用网络、不等待后台线程；不调用会自行 commit 的现有路由。停止/清除在自身短写事务中先设 stopping/deleting 并作废 pending，提交后再发网络 stop/delete；建议创建和确认也在同一写事务内复查状态，禁止“检查后提交”的竞态。成功 state=applied；重复确认返回同一结果；失败回滚；旧值/标签或 folder 配置指纹变化时仅提交 stale 状态而不修改媒体，然后返回 409，需重新生成建议。拒绝 state=rejected，过期 state=expired，不能复活。
-- [ ] Step 5：实现扫描包装器：在主应用进程复用 reserve_folder_scan，确认前检查 storage_guard，先按现有 job_lifecycle 的容量规则准入，并在短写事务中确认没有其它未结束 assistant_scan；事务内消费建议为 queued，直接用本事务的 Session 插入 BackgroundJob(kind=assistant_scan) 和 audit，提交成功后再排队。现有 services/job_lifecycle.record_job 会打开独立 Session 并 commit，不能在此事务中调用，不能用其 best-effort 异常吞掉机制作为权威状态。管家生命周期用显式短事务更新 BackgroundJob/Proposal.result，数据库忙仅重试状态持久化、不重跑 scan；保存失败报告 job_status_unavailable，复用现有恢复/TTL/容量规则。scan_folder 返回 bool，包装器负责 running/completed/failed，并将限长终态快照写入 Proposal.result 供 job 历史清理后仍能查询归属和结果；事务失败/队列失败/任务 finally 均释放 reservation；reserve_folder_scan 为进程内锁，主后端维持现有单 uvicorn worker，不在内网工具进程启动扫描。排队失败记录 failed，启动恢复未结束任务为 interrupted，并同步对应建议结果；扫描不能回滚已经完成的逐项媒体更新，界面明确说明可能有部分结果，不自动重放。旧 /folders 扫描响应不变；一期只扫描一个已配置目录，不接受文件路径。
-- [ ] Step 6：运行 Step 2 与既有 tests/test_scan_and_range.py、test_job_recovery.py、test_backup_and_storage.py，预期 PASS；提交 feat: require confirmed assistant actions。
+- [x] Step 2：运行 cd backend && python -m pytest tests/test_assistant_actions.py tests/test_assistant_scan_jobs.py -q，预期新建议/确认功能失败。
+- [x] Step 3：只接受前述 MediaPatch 字段或现有 folder_id，生成完整 before/after 与规范 JSON hash、300 秒 expires_at，并在 H02 唯一约束下幂等创建。normalized_payload_hash 必须包含版本、user_id/session_id/run_id、kind、target_id 和规范化 patch；before 快照与 expires_at 在首次插入时固定，重试不刷新。两个 media_id 使用相同 patch 不得冲突。只比较将修改的字段及完整标签关系，扫描另记录 folder 配置指纹（含路径但只在服务端保存）。MCP 只返回 ProposalAckDTO，HE 用户预览不含内部路径；若旧 source_url 含凭据，预览/审计显示脱敏值，旧值核验仅保存不可逆指纹。新增/移除标签各最多 20 个，拒绝空变更和互相冲突操作。预览无媒体写入；确认接口仅接收 proposal_id/hash，不能从浏览器重新指定 payload。
+- [x] Step 4：实现 metadata 确认：使用独立、干净的数据库连接开启 BEGIN IMMEDIATE 短写事务，再读 pending、重查权限、session active、run 未被用户停止/清除及旧值（正常 completed 可确认）、条件消费、修改目标标签/字段并写 audit；不得沿用已预读旧值的 ORM 事务。事务内不调用网络、不等待后台线程；不调用会自行 commit 的现有路由。停止/清除在自身短写事务中先设 stopping/deleting 并作废 pending，提交后再发网络 stop/delete；建议创建和确认也在同一写事务内复查状态，禁止“检查后提交”的竞态。成功 state=applied；重复确认返回同一结果；失败回滚；旧值/标签或 folder 配置指纹变化时仅提交 stale 状态而不修改媒体，然后返回 409，需重新生成建议。拒绝 state=rejected，过期 state=expired，不能复活。
+- [x] Step 5：实现扫描包装器：在主应用进程复用 reserve_folder_scan，确认前检查 storage_guard，存储检查在事务外完成；随后在短写事务内复查建议状态，按现有 job_lifecycle 的 TTL/容量规则准入并获取非阻塞目录 reservation，确认没有其它未结束 assistant_scan；事务内消费建议为 queued，直接用本事务的 Session 插入 BackgroundJob(kind=assistant_scan) 和 audit，提交成功后再排队。现有 services/job_lifecycle.record_job 会打开独立 Session 并 commit，不能在此事务中调用，不能用其 best-effort 异常吞掉机制作为权威状态。管家生命周期用显式短事务更新 BackgroundJob/Proposal.result，数据库忙仅重试状态持久化、不重跑 scan；保存失败报告 job_status_unavailable，复用现有恢复/TTL/容量规则。scan_folder 返回 bool，包装器负责 running/completed/failed，并将限长终态快照写入 Proposal.result 供 job 历史清理后仍能查询归属和结果；事务失败/队列失败/任务 finally 均释放 reservation；reserve_folder_scan 为进程内锁，主后端维持现有单 uvicorn worker，不在内网工具进程启动扫描。排队失败记录 failed，启动恢复未结束任务为 interrupted，并同步对应建议结果；扫描不能回滚已经完成的逐项媒体更新，界面明确说明可能有部分结果，不自动重放。旧 /folders 扫描响应不变；一期只扫描一个已配置目录，不接受文件路径。
+- [x] Step 6：运行 Step 2 与既有 tests/test_scan_and_range.py、test_job_recovery.py、test_backup_and_storage.py，预期 PASS；提交 feat: require confirmed assistant actions。
 
 ## Task 5: H05 — 实现 Hermes 会话、run 和 SSE 代理
 

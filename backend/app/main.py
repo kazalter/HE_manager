@@ -14,6 +14,7 @@ from . import (
 )
 from .database import engine
 from .assistant import models as assistant_models
+from .routers import assistant as assistant_routes
 from .routers import auth as auth_routes
 from .routers import audio as audio_routes
 from .routers import auto_sync as auto_sync_routes
@@ -55,6 +56,7 @@ async def lifespan(app: FastAPI):
         db.close()
 
     # Startup tasks
+    assistant_routes.scan_jobs.recover_scan_jobs()
     job_lifecycle.recover_interrupted_jobs()
     pawchive_downloader.recover_interrupted_attachments()
     pawchive_media_cache.reset_for_startup()
@@ -93,6 +95,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(assistant_routes.router)
 app.include_router(stats_routes.router)
 app.include_router(creators_routes.router)
 app.include_router(dedup_routes.router)

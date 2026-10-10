@@ -10,6 +10,7 @@ from ..database import get_db
 from . import schemas
 from .identity import authenticate_tool_token, require_tool_context
 from .readonly import execute_read_tool, READ_TOOLS
+from .proposals import create_proposal, PROPOSAL_TOOLS
 from .store import canonical_json, write_transaction
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -49,7 +50,12 @@ def record_tool_result(db, principal, context, name, result):
 
 def execute_and_record(db, token, body, name):
     principal = authenticate_tool_token(db, token)
-    result = execute_read_tool(db, principal, body.context, name, body.args)
+    if name in PROPOSAL_TOOLS:
+        result = create_proposal(
+            db, principal, body.context, PROPOSAL_TOOLS[name], body.args
+        ).model_dump(mode="json")
+    else:
+        result = execute_read_tool(db, principal, body.context, name, body.args)
     return record_tool_result(db, principal, body.context, name, result)
 
 
@@ -74,7 +80,7 @@ def health(db=Depends(get_db)):
 
 @app.post("/tools/{name}")
 async def tool(name: str, request: Request, db=Depends(get_db)):
-    if name not in READ_TOOLS:
+    if name not in READ_TOOLS and name not in PROPOSAL_TOOLS:
         raise HTTPException(404, "assistant_unknown_tool")
     header = request.headers.get("authorization", "")
     if not header.startswith("Bearer ") or not 32 <= len(header[7:]) <= 1000:

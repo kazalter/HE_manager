@@ -262,11 +262,21 @@ class ProposalAckDTO(DTO):
     expires_at: datetime
 
 
+class JobDTO(DTO):
+    job_id: str
+    folder_id: PositiveID
+    status: str
+    message: str | None = None
+    created_at: datetime
+    finished_at: datetime | None = None
+
+
 class ActionResultDTO(DTO):
     proposal_id: UUID
     state: str
     media_id: PositiveID | None = None
     job_id: str | None = None
+    job: JobDTO | None = None
 
 
 class ProposalDTO(ProposalAckDTO):
@@ -354,12 +364,3 @@ class EventDTO(DTO):
     run_id: UUID
     message_id: UUID | None = None
     data: dict
-
-
-class JobDTO(DTO):
-    job_id: str
-    folder_id: PositiveID
-    status: str
-    message: str | None = None
-    created_at: datetime
-    finished_at: datetime | None = None

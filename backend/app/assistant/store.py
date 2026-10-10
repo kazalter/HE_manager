@@ -165,3 +165,43 @@ def reserve_run(
         local.add(row)
         local.flush()
         return row
+
+
+def mark_run_stopping(db, user_id, run_id):
+    from .models import AssistantProposal
+
+    with write_transaction(db) as local:
+        row = require_owned_run(local, user_id, run_id)
+        now = utcnow()
+        if row.stop_requested_at is None:
+            row.stop_requested_at = now
+        if row.executor_exited_at is None:
+            row.status = "stopping"
+        row.updated_at = now
+        local.query(AssistantProposal).filter(
+            AssistantProposal.run_id == row.id, AssistantProposal.state == "pending"
+        ).update({"state": "rejected", "consumed_at": now}, synchronize_session=False)
+        return row
+
+
+def mark_session_deleting(db, user_id, session_id):
+    from .models import AssistantProposal
+
+    with write_transaction(db) as local:
+        session = require_owned_session(local, user_id, session_id)
+        now = utcnow()
+        session.state = "deleting"
+        session.updated_at = now
+        for row in local.query(AssistantRun).filter(
+            AssistantRun.session_id == session.id
+        ):
+            if row.stop_requested_at is None:
+                row.stop_requested_at = now
+            if row.executor_exited_at is None:
+                row.status = "stopping"
+            row.updated_at = now
+        local.query(AssistantProposal).filter(
+            AssistantProposal.session_id == session.id,
+            AssistantProposal.state == "pending",
+        ).update({"state": "rejected", "consumed_at": now}, synchronize_session=False)
+        return session
