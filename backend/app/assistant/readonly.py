@@ -2,7 +2,7 @@
 
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import case, func
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import selectinload
 from .. import models, recommendations
 from .identity import require_tool_context
@@ -22,19 +22,32 @@ READ_TOOLS = frozenset(
 HIDDEN = ("checking", "strong_duplicate", "suspected_duplicate", "dedup_excluded")
 
 
-class DetailQuery(schemas.DTO):
+class DetailQuery(schemas.ScopeQuery):
     media_id: schemas.PositiveID
 
 
 ARGS = {
     "search_media": schemas.MediaQuery,
     "get_media_detail": DetailQuery,
-    "get_library_stats": schemas.DTO,
+    "get_library_stats": schemas.ScopeQuery,
     "recommend_media": schemas.RecommendationQuery,
     "list_duplicate_candidates": schemas.PageQuery,
     "list_tags": schemas.PageQuery,
     "list_folders": schemas.PageQuery,
 }
+
+
+def scoped(db, scope="normal"):
+    rows = db.query(models.Media).filter(models.Media.media_type.in_(("manga", "video", "image", "audio")))
+    if scope == "all":
+        return rows
+    if scope == "missing":
+        return rows.filter(models.Media.is_missing == True)
+    if scope == "duplicate":
+        return rows.filter(models.Media.duplicate_status.in_(("strong_duplicate", "suspected_duplicate", "dedup_excluded", "weak_suspected")))
+    if scope == "checking":
+        return rows.filter(models.Media.duplicate_status.in_(("checking", "dedup_pending")))
+    return visible(db)
 
 
 def visible(db):
@@ -54,6 +67,14 @@ def tag_dto(tag, count=0):
     ).model_dump()
 
 
+def safe_source_url(value):
+    try:
+        schemas.MediaPatch(source_url=value)
+        return value
+    except ValueError:
+        return None
+
+
 def media_dto(row):
     tags = sorted(row.tags, key=lambda t: t.id)
     site = row.source_site
@@ -71,6 +92,14 @@ def media_dto(row):
         duration=max(0, row.duration) if row.duration is not None else None,
         page_count=max(0, row.page_count) if row.page_count is not None else None,
         source_site=site[:100] if site else None,
+        folder_id=row.folder_id,
+        absolute_path=row.absolute_path,
+        relative_path=row.relative_path,
+        file_size=max(0, row.file_size) if row.file_size is not None else None,
+        progress=max(0, row.progress or 0),
+        is_missing=bool(row.is_missing),
+        duplicate_status=row.duplicate_status or "unique",
+        source_url=safe_source_url(row.source_url),
         truncated=len(tags) > 50
         or len(row.title or "") > 500
         or len(row.artist or "") > 500,
@@ -95,7 +124,7 @@ def execute_read_tool(db, principal, context, name, args):
     except ValidationError:
         raise HTTPException(422, "assistant_invalid_tool_args") from None
     if name == "search_media":
-        rows = visible(db).options(selectinload(models.Media.tags))
+        rows = scoped(db, query.scope).options(selectinload(models.Media.tags))
         if query.query:
             rows = rows.filter(
                 models.Media.title.icontains(query.query, autoescape=True)
@@ -111,14 +140,14 @@ def execute_read_tool(db, principal, context, name, args):
         total = rows.count()
         items = [
             media_dto(x)
-            for x in rows.order_by(models.Media.id.desc())
+            for x in rows.order_by(*((models.Media.title, models.Media.id) if query.sort == "title" else (models.Media.id.desc(),)))
             .offset(query.offset)
             .limit(query.limit)
         ]
         result = page(items, total, query)
     elif name == "get_media_detail":
         row = (
-            visible(db)
+            scoped(db, query.scope)
             .options(selectinload(models.Media.tags))
             .filter(models.Media.id == query.media_id)
             .first()
@@ -127,13 +156,14 @@ def execute_read_tool(db, principal, context, name, args):
             raise HTTPException(404, "assistant_media_not_found")
         result = media_dto(row)
     elif name == "get_library_stats":
-        rows = visible(db)
+        rows = scoped(db, query.scope)
         counts = dict(
             rows.with_entities(models.Media.media_type, func.count(models.Media.id))
             .group_by(models.Media.media_type)
             .all()
         )
         result = {
+            "scope": query.scope,
             "total": sum(counts.values()),
             "by_type": counts,
             "favorite_count": rows.filter(models.Media.favorite == True).count(),
@@ -227,6 +257,8 @@ def execute_read_tool(db, principal, context, name, args):
                     "id": row.id,
                     "display_name": label[:500],
                     "status": (row.status or "idle")[:80],
+                    "path": row.path,
+                    "readable": __import__("os").path.isdir(row.path or ""),
                 }
             )
         result = page(items, rows.count(), query)

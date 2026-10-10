@@ -27,6 +27,12 @@ ToolName = Literal[
     "list_tags",
     "list_folders",
     "propose_media_update",
+    "list_creators",
+    "get_creator_detail",
+    "list_tasks",
+    "get_task_detail",
+    "get_project_status",
+    "get_project_settings",
     "propose_scan",
 ]
 
@@ -88,7 +94,13 @@ class PageQuery(DTO):
     offset: Count = 0
 
 
+class ScopeQuery(DTO):
+    scope: Literal["normal", "all", "missing", "duplicate", "checking"] = "normal"
+
+
 class MediaQuery(PageQuery):
+    scope: Literal["normal", "all", "missing", "duplicate", "checking"] = "normal"
+    sort: Literal["id_desc", "title"] = "id_desc"
     query: str = Field(default="", max_length=4000)
     media_type: MediaType | None = None
     tag: str | None = Field(default=None, max_length=80)
@@ -198,6 +210,14 @@ class MediaDetailDTO(DTO):
     duration: Count | None = None
     page_count: Count | None = None
     source_site: str | None = Field(default=None, max_length=100)
+    folder_id: PositiveID | None = None
+    absolute_path: str | None = None
+    relative_path: str | None = None
+    file_size: Count | None = None
+    progress: Count = 0
+    is_missing: bool = False
+    duplicate_status: str = "unique"
+    source_url: str | None = None
     truncated: bool = False
 
 
@@ -218,6 +238,7 @@ class RecommendationDTO(DTO):
 
 
 class StatsDTO(DTO):
+    scope: str = "normal"
     total: Count
     by_type: dict[MediaType, Count]
     favorite_count: Count
@@ -250,6 +271,8 @@ class TagPageDTO(DTO):
 
 
 class FolderDTO(DTO):
+    path: str | None = None
+    readable: bool = False
     id: PositiveID
     display_name: str = Field(max_length=500)
     status: str = Field(max_length=80)
@@ -302,6 +325,70 @@ class TruncatedDTO(DTO):
     reason: Literal["tool_result_too_large"] = "tool_result_too_large"
 
 
+class CreatorQuery(PageQuery):
+    search: str = Field(default="", max_length=500)
+class CreatorDetailQuery(PageQuery):
+    key: str = Field(min_length=3, max_length=502)
+class TaskQuery(PageQuery):
+    kind: str | None = Field(default=None, max_length=80)
+class TaskDetailQuery(DTO):
+    task_id: str = Field(min_length=1, max_length=150)
+class CreatorDTO(DTO):
+    key: str
+    name: str
+    media_count: Count
+class CreatorPageDTO(DTO):
+    items: list[CreatorDTO] = Field(max_length=50)
+    total: Count
+    offset: Count
+    has_more: bool
+    next_offset: Count | None = None
+class CreatorDetailDTO(MediaPageDTO):
+    key: str
+    name: str
+class TaskDTO(DTO):
+    task_id: str
+    kind: str
+    status: str
+    progress: float | None = None
+    created_at: datetime
+    finished_at: datetime | None = None
+    summary: str
+class TaskPageDTO(DTO):
+    items: list[TaskDTO] = Field(max_length=50)
+    total: Count
+    offset: Count
+    has_more: bool
+    next_offset: Count | None = None
+class StorageDTO(DTO):
+    folder_id: PositiveID
+    path: str
+    available: bool
+    total_bytes: Count | None = None
+    free_bytes: Count | None = None
+class BackupEntryDTO(DTO):
+    name: str
+    size_bytes: Count
+    modified_at: str
+class ProjectStatusDTO(DTO):
+    health: Literal["ok"] = "ok"
+    storage: list[StorageDTO] = Field(max_length=50)
+    backup: list[BackupEntryDTO] = Field(max_length=50)
+    backup_count: Count
+    truncated: bool = False
+class FolderSettingDTO(DTO):
+    id: PositiveID
+    scan_mode: str
+    thumbnail_enabled: bool
+    thumbnail_interval: Count
+class ProjectSettingsDTO(DTO):
+    folders: list[FolderSettingDTO] = Field(max_length=50)
+    total: Count
+    offset: Count
+    has_more: bool
+    next_offset: Count | None = None
+
+
 RESULT_TYPES = {
     "search_media": MediaPageDTO,
     "get_media_detail": MediaDetailDTO,
@@ -311,6 +398,12 @@ RESULT_TYPES = {
     "list_tags": TagPageDTO,
     "list_folders": FolderPageDTO,
     "propose_media_update": ProposalAckDTO,
+    "list_creators": CreatorPageDTO,
+    "get_creator_detail": CreatorDetailDTO,
+    "list_tasks": TaskPageDTO,
+    "get_task_detail": TaskDTO,
+    "get_project_status": ProjectStatusDTO,
+    "get_project_settings": ProjectSettingsDTO,
     "propose_scan": ProposalAckDTO,
 }
 
@@ -327,6 +420,12 @@ class ToolResultDTO(DTO):
         | TagPageDTO
         | FolderPageDTO
         | ProposalAckDTO
+        | CreatorPageDTO
+        | CreatorDetailDTO
+        | TaskPageDTO
+        | TaskDTO
+        | ProjectStatusDTO
+        | ProjectSettingsDTO
         | TruncatedDTO
     )
 

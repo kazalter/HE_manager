@@ -199,3 +199,17 @@ async def events(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+class ProjectStateRequest(schemas.DTO):
+    context: schemas.ToolContext
+
+@router.post("/internal/project-state", response_model=schemas.ProjectStatusDTO, include_in_schema=False)
+def internal_project_state(body: ProjectStateRequest, authorization: str = Header(default=""), db=Depends(get_db)):
+    from ..assistant.identity import authenticate_tool_token, require_tool_context
+    from ..assistant.project_reads import project_status
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(401,"assistant_invalid_tool_token")
+    principal=authenticate_tool_token(db,authorization[7:])
+    require_tool_context(db,principal,body.context)
+    return project_status(db)

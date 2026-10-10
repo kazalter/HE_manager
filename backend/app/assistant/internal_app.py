@@ -6,6 +6,7 @@ from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 import logging
 from .tool_catalog import TOOL_CATALOG
+from .project_reads import PROJECT_TOOLS, execute_project_read
 from .tool_errors import safe_tool_error
 from .models import AssistantToolEvent
 from .store import utcnow
@@ -79,7 +80,28 @@ def record_tool_result(db, principal, context, name, result):
 
 def execute_and_record(db, token, body, name):
     principal = authenticate_tool_token(db, token)
-    if name in PROPOSAL_TOOLS:
+    require_tool_context(db, principal, body.context)
+    try:
+        TOOL_CATALOG[name].args_type.model_validate(body.args)
+    except ValidationError:
+        raise HTTPException(422, "assistant_invalid_tool_args") from None
+    if name == "get_project_status":
+        import urllib.request
+        request = urllib.request.Request("http://backend:8010/assistant/internal/project-state", data=canonical_json({"context": body.context.model_dump(mode="json")}).encode(), headers={"Authorization":"Bearer "+token, "Content-Type":"application/json"})
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                raw=response.read(131073)
+            if len(raw)>131072:
+                raise ValueError
+            result=json.loads(raw)
+        except Exception:
+            raise HTTPException(503,"assistant_tool_unavailable") from None
+    elif name in PROJECT_TOOLS:
+        try:
+            result=execute_project_read(db,principal,body.context,name,body.args)
+        except ValidationError:
+            raise HTTPException(422,"assistant_invalid_tool_args") from None
+    elif name in PROPOSAL_TOOLS:
         result = create_proposal(
             db, principal, body.context, PROPOSAL_TOOLS[name], body.args
         ).model_dump(mode="json")
