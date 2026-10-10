@@ -358,7 +358,7 @@ async def stop_run(db, user_id, run_id, *, client=None):
 def get_results(db, user_id, run_id):
     row = run_row(db, user_id, run_id)
     try:
-        if len(row.tool_results_json.encode()) > 65536:
+        if len(row.tool_results_json.encode()) > store.MAX_STORED_TOOL_RESULTS_BYTES:
             raise ValueError
         return schemas.ToolResultsDTO(
             items=json.loads(row.tool_results_json),
@@ -753,8 +753,17 @@ async def stream_events(db, user_id, run_id, *, last_event_id=None, client=None)
                 )
             # Only HE's validated invocation store supplies result cards. Never
             # infer a model call ID or publish the upstream preview/tool arguments.
-            results = get_results(db, user_id, row.id)
-            for result in results.items:
+            # Cards are a projection: an unreadable store must not cut the reply
+            # stream; the results endpoint reports that failure on its own.
+            try:
+                results = (
+                    get_results(db, user_id, row.id).items
+                    if kind in ("tool.completed", "run.completed", "run.failed", "run.cancelled", "run.interrupted")
+                    else ()
+                )
+            except HTTPException:
+                results = ()
+            for result in results:
                 if result.tool_call_id not in seen:
                     seen.add(result.tool_call_id)
                     yield event(

@@ -376,7 +376,18 @@ class AssistantActionTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         ack = response.json()["result"]
         self.assertEqual(
-            set(ack), {"id", "kind", "target_id", "target_label", "state", "expires_at"}
+            set(ack),
+            {
+                "id",
+                "kind",
+                "target_id",
+                "target_label",
+                "state",
+                "expires_at",
+                "reason",
+                "impact_count",
+                "reversibility",
+            },
         )
         p = self.proposals.get_owned_proposal(self.f.db, 1, ack["id"])
         with TestClient(public) as client:

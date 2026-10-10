@@ -187,7 +187,7 @@ describe('explicit assistant proposal confirmation', () => {
     }
     vi.stubGlobal('fetch', vi.fn())
     const wrapper = mount(ProposalCard, { props: { proposal: p as any } })
-    expect(wrapper.text()).toContain('扫描失败')
+    expect(wrapper.text()).toContain('执行失败')
     expect(wrapper.text()).toContain('部分')
     expect(wrapper.text()).toContain('assistant-scan-test')
     wrapper.unmount()

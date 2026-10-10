@@ -18,6 +18,12 @@ def utcnow():
     return datetime.utcnow()
 
 
+# Per-run tool result storage. Writes stop at 64 KiB; reads also accept rows
+# written while the write limit was briefly 1 MiB so those runs stay viewable.
+MAX_TOOL_RESULTS_BYTES = 65536
+MAX_STORED_TOOL_RESULTS_BYTES = 1024 * 1024
+
+
 def canonical_json(value):
     return json.dumps(
         value,

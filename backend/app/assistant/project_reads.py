@@ -9,7 +9,7 @@ from ..services import backup
 from . import schemas as s
 from .identity import require_tool_context
 from .models import AssistantProposal
-from .readonly import media_dto, page
+from .readonly import folder_label, media_dto, page
 from .tool_catalog import TOOL_CATALOG
 
 PROJECT_TOOLS = frozenset(("list_creators", "get_creator_detail", "list_tasks", "get_task_detail", "get_project_status", "get_project_settings", "read_logs"))
@@ -18,7 +18,7 @@ def project_status(db):
     storage = []
     roots = db.query(models.Folder).order_by(models.Folder.id).limit(50).all()
     for row in roots:
-        data = dict(folder_id=row.id, path=row.path or "", available=False)
+        data = dict(folder_id=row.id, display_name=folder_label(row.path, "目录 " + str(row.id)), available=False)
         try:
             usage = shutil.disk_usage(row.path)
             data.update(available=os.path.isdir(row.path), total_bytes=usage.total, free_bytes=usage.free)
@@ -83,7 +83,7 @@ def execute_project_read(db, principal, context, name, args):
     elif name == "get_project_settings":
         settings=[dict(id=x.id,scan_mode=x.scan_mode or 'auto',thumbnail_enabled=bool(x.thumbnail_enabled),thumbnail_interval=max(0,x.thumbnail_interval or 1)) for x in db.query(models.Folder).order_by(models.Folder.id)]
         for cls,typ in ((models.ExternalFavoriteSource,None),(models.XImportSource,'x')):
-            for x in db.query(cls).order_by(cls.id):settings.append(dict(kind='source',id=x.id,name=x.name or '数据源',source_type=typ or x.source_type or 'wnacg',download_root_path=x.download_root_path,auto_sync_enabled=bool(x.auto_sync_enabled),auto_sync_interval_hours=max(0,x.auto_sync_interval_hours or 24),next_run_at=x.auto_sync_next_run_at))
+            for x in db.query(cls).order_by(cls.id):settings.append(dict(kind='source',id=x.id,name=x.name or '数据源',source_type=typ or x.source_type or 'wnacg',download_root_name=folder_label(x.download_root_path, None),auto_sync_enabled=bool(x.auto_sync_enabled),auto_sync_interval_hours=max(0,x.auto_sync_interval_hours or 24),next_run_at=x.auto_sync_next_run_at))
         result=page(settings[q.offset:q.offset+q.limit],len(settings),q)
     elif name in ("list_tasks","get_task_detail"):
         from .task_reads import all_tasks

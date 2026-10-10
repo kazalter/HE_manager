@@ -34,8 +34,15 @@ const approvalOpen = ref(false), capabilities = ref<CapabilitiesDTO | null>(null
 let capabilityRequest = new AbortController()
 async function loadCapabilities() {
   capabilityRequest.abort(); capabilityRequest = new AbortController(); const request = capabilityRequest
-  try { const value = await getCapabilities({ signal: request.signal }); if (!request.signal.aborted) capabilities.value = value } catch { /* Capability unavailable is displayed explicitly. */ }
+  if (!authState.token || !authState.user?.is_admin) return
+  try {
+    const value = await getCapabilities({ signal: request.signal })
+    if (!request.signal.aborted && Array.isArray(value?.file_roots)) capabilities.value = value
+  } catch { /* Capability unavailable is displayed explicitly. */ }
 }
+const readableRoots = computed(() =>
+  (capabilities.value?.file_roots || []).filter(x => x.readable).map(x => x.display_name).join('、'),
+)
 function approvalChanged() { void chat.refreshProposals(); void approvals.refresh() }
 function jumpToProposal(proposal: ProposalDTO) {
   if (loading.value || sending.value) return
@@ -344,7 +351,7 @@ onBeforeUnmount(() => {
               @click="chat.loadOlder"
               >更早的消息</UiButton
             >
-            <details class="rounded-xl border border-line bg-surface/70 px-3 text-sm text-muted"><summary class="flex min-h-11 cursor-pointer items-center gap-2 focus-ring"><ShieldCheck :size="15" aria-hidden="true" />可读取 HE 项目 · 修改需要你批准</summary><div class="space-y-2 pb-3 leading-relaxed"><template v-if="capabilities"><p>查询媒体资料、作者、文件目录、任务、日志和存储状态。</p><p>文件读取范围：{{ capabilities.file_roots.filter(x => x.readable).map(x => x.display_name).join('、') || '暂无可读目录' }}</p><p>可提出资料修改、标签整理、维护任务与文件改名 / 移动。每次批准只执行审批卡中列出的操作。</p><p v-if="!capabilities.image_analysis_supported">可查看媒体预览；当前模型未分析图片、音视频内容。</p></template><p v-else>能力信息暂不可用，请稍后重新连接。</p></div></details>
+            <details class="rounded-xl border border-line bg-surface/70 px-3 text-sm text-muted"><summary class="flex min-h-11 cursor-pointer items-center gap-2 focus-ring"><ShieldCheck :size="15" aria-hidden="true" />可读取 HE 项目 · 修改需要你批准</summary><div class="space-y-2 pb-3 leading-relaxed"><template v-if="capabilities"><p>查询媒体资料、作者、文件目录、任务、日志和存储状态。</p><p>文件读取范围：{{ readableRoots || '暂无可读目录' }}</p><p>可提出资料修改、标签整理、维护任务与文件改名 / 移动。每次批准只执行审批卡中列出的操作。</p><p v-if="!capabilities.image_analysis_supported">可查看媒体预览；当前模型未分析图片、音视频内容。</p></template><p v-else>能力信息暂不可用，请稍后重新连接。</p></div></details>
             <ChatMessages :messages="messages" />
             <p v-if="toolStatus" class="text-sm text-muted">{{ toolStatus }}</p>
             <MediaResults :results="results" @open="openMedia" />

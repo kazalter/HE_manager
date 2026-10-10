@@ -11,6 +11,7 @@ from pydantic import (
     Field,
     SecretStr,
     field_validator,
+    model_serializer,
     model_validator,
 )
 
@@ -223,14 +224,20 @@ class MediaDetailDTO(DTO):
     page_count: Count | None = None
     source_site: str | None = Field(default=None, max_length=100)
     folder_id: PositiveID | None = None
-    absolute_path: str | None = None
-    relative_path: str | None = None
     file_size: Count | None = None
     progress: Count = 0
     is_missing: bool = False
     duplicate_status: str = "unique"
     source_url: str | None = None
     truncated: bool = False
+
+    @model_serializer(mode="wrap")
+    def _omit_unsafe_source_url(self, handler):
+        # Unsafe or missing source URLs are dropped, not sent to the model as null.
+        data = handler(self)
+        if data.get("source_url") is None:
+            data.pop("source_url", None)
+        return data
 
 
 class MediaPageDTO(DTO):
@@ -385,7 +392,7 @@ class TaskPageDTO(DTO):
     next_offset: Count | None = None
 class StorageDTO(DTO):
     folder_id: PositiveID
-    path: str
+    display_name: str = Field(max_length=500)
     available: bool
     total_bytes: Count | None = None
     free_bytes: Count | None = None
@@ -409,7 +416,7 @@ class SourceSettingDTO(DTO):
     id: PositiveID
     name: str
     source_type: str
-    download_root_path: str | None = None
+    download_root_name: str | None = Field(default=None, max_length=500)
     auto_sync_enabled: bool
     auto_sync_interval_hours: Count
     next_run_at: datetime | None = None

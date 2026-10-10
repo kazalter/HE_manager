@@ -51,7 +51,7 @@ def guarded_mutation(fn):
         if fn.__name__ == 'confirm_proposal' and args:
             from ..assistant.models import AssistantProposal
             proposal_id=args[2] if len(args)>2 else kwargs.get('proposal_id')
-            row=args[0].get(AssistantProposal,proposal_id)
+            row=args[0].get(AssistantProposal,str(proposal_id)) if proposal_id is not None else None
             if row and row.kind in ('file_move','maintenance','scan'):
                 return fn(*args,**kwargs)  # Enqueue first; executor owns the mutation lease.
         with project_mutation():return fn(*args,**kwargs)

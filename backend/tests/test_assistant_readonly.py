@@ -78,6 +78,7 @@ class AssistantReadonlyTests(unittest.TestCase):
         self.assertEqual(
             stats,
             {
+                "scope": "normal",
                 "total": 62,
                 "by_type": {"manga": 1, "audio": 1, "video": 60},
                 "favorite_count": 1,

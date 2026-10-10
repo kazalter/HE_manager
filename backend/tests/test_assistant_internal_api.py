@@ -118,6 +118,14 @@ class AssistantInternalAPITests(unittest.TestCase):
             "has_more": False,
         }
         with patch.object(self.module, "execute_read_tool", return_value=giant):
+            # A single oversize page is shortened and points at the next page.
+            paged = self.call()
+            self.assertEqual(paged.status_code, 200)
+            self.assertTrue(paged.json()["result"]["has_more"])
+            self.assertLess(len(paged.json()["result"]["items"]), 50)
+            self.f.db.expire_all()
+            previous = self.f.db.get(AssistantRun, self.f.rid).tool_results_json
+            # Results that no longer fit in the run store become a durable flag.
             response = self.call()
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["result"]["truncated"])

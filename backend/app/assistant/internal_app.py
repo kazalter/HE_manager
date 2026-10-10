@@ -19,10 +19,9 @@ from . import schemas
 from .identity import authenticate_tool_token, require_tool_context
 from .readonly import execute_read_tool, READ_TOOLS
 from .proposals import create_proposal, PROPOSAL_TOOLS
-from .store import canonical_json, write_transaction
+from .store import MAX_TOOL_RESULTS_BYTES, canonical_json, write_transaction
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
-MAX_RESULTS = 1024 * 1024
 logger = logging.getLogger(__name__)
 
 @app.exception_handler(HTTPException)
@@ -70,7 +69,7 @@ def record_tool_result(db, principal, context, name, result):
         except (ValueError, TypeError):
             raise HTTPException(503, "assistant_result_storage_invalid") from None
         raw = canonical_json(previous + [validated])
-        if len(raw.encode("utf-8")) > MAX_RESULTS:
+        if len(raw.encode("utf-8")) > MAX_TOOL_RESULTS_BYTES:
             run.tool_results_truncated = True
             validated = schemas.ToolResultDTO(
                 tool_call_id=validated["tool_call_id"],

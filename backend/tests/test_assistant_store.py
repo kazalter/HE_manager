@@ -339,7 +339,8 @@ class AssistantStoreTests(unittest.TestCase):
             {"source_url": "https://user:password@example.com"},
             {"source_url": "https://example.com?token=secret"},
             {"source_url": "https://example.com?X-Goog-Credential=secret"},
-            {"title": "unsupported"},
+            {"title": ""},
+            {"absolute_path": "/private"},
         ):
             with self.assertRaises(ValidationError):
                 self.schemas.MediaPatch(**payload)

@@ -75,6 +75,12 @@ def safe_source_url(value):
         return None
 
 
+def folder_label(path, fallback):
+    # Model-facing results name roots without exposing server absolute paths.
+    label = (path or "").replace("\\", "/").rstrip("/").split("/")[-1]
+    return label[:500] if label and not label.endswith(":") else fallback
+
+
 def media_dto(row):
     tags = sorted(row.tags, key=lambda t: t.id)
     site = row.source_site
@@ -93,8 +99,6 @@ def media_dto(row):
         page_count=max(0, row.page_count) if row.page_count is not None else None,
         source_site=site[:100] if site else None,
         folder_id=row.folder_id,
-        absolute_path=row.absolute_path,
-        relative_path=row.relative_path,
         file_size=max(0, row.file_size) if row.file_size is not None else None,
         progress=max(0, row.progress or 0),
         is_missing=bool(row.is_missing),
@@ -250,15 +254,11 @@ def execute_read_tool(db, principal, context, name, args):
         for row in (
             rows.order_by(models.Folder.id).offset(query.offset).limit(query.limit)
         ):
-            label = (row.path or "").replace("\\", "/").rstrip("/").split("/")[-1]
-            if not label or label.endswith(":"):
-                label = "目录 " + str(row.id)
             items.append(
                 {
                     "id": row.id,
-                    "display_name": label[:500],
+                    "display_name": folder_label(row.path, "目录 " + str(row.id)),
                     "status": (row.status or "idle")[:80],
-                    "path": row.path,
                     "readable": __import__("os").path.isdir(row.path or ""),
                 }
             )
