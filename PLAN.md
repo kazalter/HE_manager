@@ -94,7 +94,7 @@ Pawchive 外部源模块（关联设计：`docs/pawchive-api-contract.md` 与用
 ## Hermes 媒体库管家（2026-10-10）
 
 - [x] 已确认网页聊天、管理员入口、建议经确认才写入；设计与实施计划已按仓库代码及官方协议文档复核。
-- [ ] 按实施计划逐阶段验收和提交；H01 已验收并完成阶段提交（后端228项通过、运行时门禁PASS）；H02～H08 未开始。已切换并实测 DeepSeek-V4.1-Flash 官方接口完整工具链、profile 隔离、预算、停止/重启和 SSE 过期恢复。
+- [ ] 按实施计划逐阶段验收和提交；H01 已验收并完成阶段提交（后端228项通过、运行时门禁PASS）；H02 身份与持久化已验收（31项目标测试、259项全后端回归通过）；H03～H08 未开始。已切换并实测 DeepSeek-V4.1-Flash 官方接口完整工具链、profile 隔离、预算、停止/重启和 SSE 过期恢复。
 - [设计文档](docs/superpowers/specs/2026-10-10-hermes-media-steward-design.md)
 - [实施任务与验收清单](docs/superpowers/plans/2026-10-10-hermes-media-steward.md)
 

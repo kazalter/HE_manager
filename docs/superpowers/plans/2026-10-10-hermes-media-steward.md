@@ -10,7 +10,7 @@
 
 **Spec:** [已确认设计](../specs/2026-10-10-hermes-media-steward-design.md)
 
-日期：2026-10-10。状态：SSH 已恢复并核对远端 AGENTS、git status、提交与阶段记录；H01 已验收并完成阶段提交（后端228项通过、运行时门禁PASS），H02～H08 未开始。第二轮审查增量已合并且保留此前 H01 工作。开发、构建、测试和部署均通过 SSH 在 /opt/stacks/he-manager 完成，按依赖顺序逐阶段验收和 commit。
+日期：2026-10-10。状态：SSH 已恢复并核对远端 AGENTS、git status、提交与阶段记录；H01 已验收并完成阶段提交（后端228项通过、运行时门禁PASS），H02 身份/持久化已验收并提交；H03～H08 未开始。第二轮审查增量已合并且保留此前 H01 工作。开发、构建、测试和部署均通过 SSH 在 /opt/stacks/he-manager 完成，按依赖顺序逐阶段验收和 commit。
 
 ## Global Constraints
 
@@ -162,18 +162,24 @@ UTC 持久化并以服务器时间校验有效期；过期/拒绝/停止 run 后
 
 **Interfaces:** get_profile(user_id: int) -> ProfileBinding；authenticate_tool_token(db, token: str) -> ToolPrincipal；require_owned_session(db, user_id: int, session_id: UUID) -> AssistantSession；reserve_run(db, user_id, session_id, client_request_id, input_hash: str, submission_envelope: SubmissionEnvelope) -> AssistantRun。DTO 与上一节一致。
 
-- [ ] Step 1：先写失败测试，固定以下断言；包含缺失配置、内网工具仅有身份 hash 表而没有 API-key/模型配置仍能正确鉴权、失活/降权用户、token 轮换、开关关闭后的写入/工具拒绝、同 client_request_id 不同消息 409。
+- [x] Step 1：先写失败测试，固定以下断言；包含缺失配置、内网工具仅有身份 hash 表而没有 API-key/模型配置仍能正确鉴权、失活/降权用户、token 轮换、开关关闭后的写入/工具拒绝、同 client_request_id 不同消息 409。
 ~~~python
 assert lookup_session_as_other_admin.status_code == 404
 assert tool_token_on_public_confirm.status_code == 401
 assert repeated_request.run_id == first_request.run_id
 assert different_payload_same_request.status_code == 409
 ~~~
-- [ ] Step 2：在隔离 Python 3.12 环境运行 cd backend && python -m pytest tests/test_assistant_store.py tests/test_assistant_identity.py -q，确认新行为尚未实现而失败；数据库只用临时文件，不挂生产 /data。
-- [ ] Step 3：新增 AssistantToolIdentity(user_id, profile_name, tool_token_hash, credential_generation, enabled)、AssistantSession、AssistantRun、AssistantProposal、AssistantAudit 表，在主应用 create_all 前导入新 models，使用 checkfirst/幂等迁移；Run 的 (user_id, client_request_id)、Proposal 的 (run_id, kind, normalized_payload_hash) 和 Audit 的 proposal_id 唯一；包含 upstream ID、submission envelope、固定 API credential generation、deadline、结果和状态字段，并为 Run 增加 stop_requested_at（用户停止先提交时即便上游已 completed 也作废 pending）和 tool_results_json（总计最多 64 KiB）。工具身份表只有高熵 token 的 hash 与绑定元数据，不存 API key/模型密钥；authenticate_tool_token 仅查该表和用户/session/run，不依赖被遮蔽的 /data/assistant 私有配置。SubmissionEnvelope 为 H01 协议固定的 provider/model、input、可信 instructions/ToolContext、预算、upstream session ID、Idempotency-Key 和 API credential generation；它是服务端私有类型，不接受前端构造。输入摘要涵盖用户可传的全部创建参数；同一 client_request_id 返回原请求，不因默认模型变更重建 envelope。reserve_run 在数据库短写事务中原子检查全局/每用户活跃 run 再插入，不能只用内存锁。metadata 事务使用条件更新确保并发不能重复消费。
-- [ ] Step 4：实现 profile 绑定、功能开关、只读配置加载和工具 token 的 hash/常量时间校验；每次工具调用重查活跃管理员、ToolContext 归属和 run 是否仍允许工具调用；session 必须 active，run 只能是 submitting/running，停止后晚到调用 fail closed。未配置 profile 返回 assistant_unconfigured，永不回退 default profile。
-- [ ] Step 5：实现 prepare_hermes.py --user-id ID：仅初始化显式指定的管理员，生成 he-user-ID profile 及独立随机密钥。HE 只保存必要 API key/工具 token hash；原始工具 token 留在 profile .env；其 hash 和 profile 绑定写入 AssistantToolIdentity，只有准备成功且绑定一致时 enabled=true。未完成的配置不激活，重跑修复一致性，不能复制主应用 API key 配置给内网工具 app。按 H01 配置键导入用户明确提供的独立 Hermes 模型配置（data/assistant/hermes-model.json），缺失时才读取既有 DeepSeek 配置作为候选；密钥不回写既有 HE 配置，所有配置权限 0600/目录 0700，重复执行不覆盖现有密钥/偏好；Windows 对 chmod 作平台适配。先在 .gitignore 中加入 /data/hermes/ 与 /data/assistant/，再创建这些目录中的 profile/服务配置；用 git check-ignore 验证测试路径，检查输出不包含 secrets。目录权限同时匹配 H01 镜像 UID，不能因 chmod 造成容器不可读。
-- [ ] Step 6：运行 Step 2 测试并验证迁移重复执行、新旧库启动与两用户边界，预期 PASS；核对 staged diff 后提交 feat: add assistant identity and persistence。
+- [x] Step 2：在隔离 Python 3.12 环境运行 cd backend && python -m pytest tests/test_assistant_store.py tests/test_assistant_identity.py -q，确认新行为尚未实现而失败；数据库只用临时文件，不挂生产 /data。
+- [x] Step 3：新增 AssistantToolIdentity(user_id, profile_name, tool_token_hash, credential_generation, enabled)、AssistantSession、AssistantRun、AssistantProposal、AssistantAudit 表，在主应用 create_all 前导入新 models，使用 checkfirst/幂等迁移；Run 的 (user_id, client_request_id)、Proposal 的 (run_id, kind, normalized_payload_hash) 和 Audit 的 proposal_id 唯一；包含 upstream ID、submission envelope、固定 API credential generation、deadline、结果和状态字段，并为 Run 增加 stop_requested_at（用户停止先提交时即便上游已 completed 也作废 pending）和 tool_results_json（总计最多 64 KiB）。工具身份表只有高熵 token 的 hash 与绑定元数据，不存 API key/模型密钥；authenticate_tool_token 仅查该表和用户/session/run，不依赖被遮蔽的 /data/assistant 私有配置。HE 预分配 run UUID 并同时用作上游 Idempotency-Key，在 reserve_run 前可将同一 UUID 放进可信 ToolContext；该键仅由服务端生成。SubmissionEnvelope 为 H01 协议固定的 provider/model、input、可信 instructions/ToolContext、预算、upstream session ID、Idempotency-Key 和 API credential generation；它是服务端私有类型，不接受前端构造。输入摘要涵盖用户可传的全部创建参数；同一 client_request_id 返回原请求，不因默认模型变更重建 envelope。reserve_run 在数据库短写事务中原子检查全局/每用户活跃 run 再插入，不能只用内存锁。metadata 事务使用条件更新确保并发不能重复消费。
+- [x] Step 4：实现 profile 绑定、功能开关、只读配置加载和工具 token 的 hash/常量时间校验；每次工具调用重查活跃管理员、ToolContext 归属和 run 是否仍允许工具调用；session 必须 active，run 只能是 submitting/running，停止后晚到调用 fail closed。未配置 profile 返回 assistant_unconfigured，永不回退 default profile。
+- [x] Step 5：实现 prepare_hermes.py --user-id ID：仅初始化显式指定的管理员，生成 he-user-ID profile 及独立随机密钥。HE 只保存必要 API key/工具 token hash；原始工具 token 留在 profile .env；其 hash 和 profile 绑定写入 AssistantToolIdentity，只有准备成功且绑定一致时 enabled=true。未完成的配置不激活，重跑修复一致性，不能复制主应用 API key 配置给内网工具 app。按 H01 配置键导入用户明确提供的独立 Hermes 模型配置（data/assistant/hermes-model.json），缺失时才读取既有 DeepSeek 配置作为候选；密钥不回写既有 HE 配置，所有配置权限 0600/目录 0700，重复执行不覆盖现有密钥/偏好；Windows 对 chmod 作平台适配。先在 .gitignore 中加入 /data/hermes/ 与 /data/assistant/，再创建这些目录中的 profile/服务配置；用 git check-ignore 验证测试路径，检查输出不包含 secrets。目录权限同时匹配 H01 镜像 UID，不能因 chmod 造成容器不可读。
+- [x] Step 6：运行 Step 2 测试并验证迁移重复执行、新旧库启动与两用户边界，预期 PASS；核对 staged diff 后提交 feat: add assistant identity and persistence。
+
+### H02 验收证据
+
+- 31项身份/存储测试通过（32.48秒），包含真实临时SQLite的双管理员并发准入、跨用户404、轮换/降权/停止/期限、工具身份与用户token分离。
+- 全后端259项通过（81.13秒）；每次运行使用新的临时数据库。曾复用测试容器的数据库引起旧下载测试计数失败，已通过同测试的新库对照确认并消除验证环境污染。
+- 新/旧数据库重复迁移保持用户记录；准备脚本在仓库和镜像目录布局均通过，重复准备保持密钥和偏好，输出脱敏，配置0700/0600。仅Linux容器实测，生产库/容器未迁移或部署。
 
 ## Task 3: H03 — 实现无副作用的媒体工具应用
 
@@ -276,9 +282,9 @@ expect(requestHeaders.Authorization).toBe('Bearer user-token')
 
 ## Task 8: H08 — 可选 Compose 集成、端到端验收与运维
 
-**Files:** 创建 docker-compose.assistant.yml、scripts/run_assistant_acceptance.py、docs/hermes-operations.md；修改 frontend/nginx.conf、README.md、PLAN.md；测试 backend/tests/test_assistant_acceptance.py。依赖：H01～H07。
+**Files:** 创建 docker-compose.assistant.yml、scripts/run_assistant_acceptance.py、docs/hermes-operations.md；修改 Dockerfile、frontend/nginx.conf、README.md、PLAN.md；测试 backend/tests/test_assistant_acceptance.py。依赖：H01～H07。
 
-**Interfaces:** 基础 compose + assistant override 启动 backend/frontend、assistant-tools、assistant-mcp、hermes-agent。assistant-tools 复用 backend 镜像运行内部 app；Hermes digest 与 profile root 取 H01 产物，MCP 单独 Python 3.12 轻量镜像。
+**Interfaces:** 基础 compose + assistant override 启动 backend/frontend、assistant-tools、assistant-mcp、hermes-agent。assistant-tools 复用 backend 镜像运行内部 app；HE 镜像增加 /srv/deploy/hermes 模板与准备脚本，HE_ASSISTANT_TEMPLATE_DIR 支持覆盖路径，不能假设镜像有完整仓库布局；Hermes digest 与 profile root 取 H01 产物，MCP 单独 Python 3.12 轻量镜像。
 
 - [ ] Step 1：用临时 SQLite/profile 和 fake Hermes 完成离线端到端用例：登录→搜索→建议→拒绝/确认→重复确认→扫描 job→断流/恢复→清除会话。验收测试断言无确认没有写入、tool token 不能调用主 app、两管理员无串话、重启不重放 job。
 - [ ] Step 2：实现 Compose override；backend 对助手不设置硬健康依赖，助手失败不阻止媒体库启动。assistant-tools 无宿主机端口、无媒体盘。先从远端配置解析真实 SQLite 文件与所有敏感文件位置；共享 SQLite 必须让 db/WAL/SHM 位于同一可写父目录，不仅挂单个 .db 文件。若沿用 ./data:/data，必须以更具体的空只读挂载遮蔽 /data/hermes、/data/assistant、实际 DeepSeek 配置文件、备份及其它非必要目录；挂载源占位文件先创建，避免 Compose 把不存在的文件变成目录。不得继承主应用模型密钥环境变量，不授予 docker.sock。用同 worker UID 实测 DB 查询/建议写入可用，以及 profile/.env、API-key 文件、模型配置和备份不可读；遮蔽或权限验证失败不得部署。工具进程不迁移、不调用 create_all，只检查 H02 schema；主应用先迁移成功，schema 未就绪时工具 readiness 为 false，不接入主应用鉴权/调度 lifespan；MCP 不挂数据卷；Hermes 仅挂 ./data/hermes:/opt/data；HE profile/API-key 配置为 ./data/assistant/，示例及 runtime-lock 放 deploy/hermes/。工具链走专用内部网络，只有 Hermes 获得外部模型出口，助手专用网络设 internal:true（backend 保留原 Compose 网络，避免破坏现有外部源功能），并仅为 Hermes 增加明确 egress 网络；MCP 只在内部网络。按 H01 设置 CPU/内存/PID 限额、no-new-privileges，验证镜像所需可写目录；禁止 docker.sock/host network/privileged；仅在 backend 复用现有媒体卷做已确认扫描；运行 docker compose -f docker-compose.yml -f docker-compose.assistant.yml config --quiet 只验证配置，避免普通 config 输出展开密钥。
@@ -296,7 +302,7 @@ expect(requestHeaders.Authorization).toBe('Bearer user-token')
 
 ## 第二轮文档审查结论
 
-本轮结论：架构与 H01～H08 依赖划分合格；原本地版本仍有八项实施约束缺口，本草案已按对应任务补齐。它作为后续实施的文档基线，不能当作运行兼容性或生产部署已通过的证据。本轮依据为本地设计/计划快照、官方 API/profile/Docker 文档和官方 main 源码；审查期间 SSH 曾被关闭，现已恢复并核对远端 AGENTS、当前提交 0b16fbd、工作区及阶段 ledger。审查开始时 H01 仅有运行时检查器/测试的未提交工作；现已取得运行时门禁 PASS，后端228项通过并提交H01，H02～H08 未开始。
+本轮结论：架构与 H01～H08 依赖划分合格；原本地版本仍有八项实施约束缺口，本草案已按对应任务补齐。它作为后续实施的文档基线，不能当作运行兼容性或生产部署已通过的证据。本轮依据为本地设计/计划快照、官方 API/profile/Docker 文档和官方 main 源码；审查期间 SSH 曾被关闭，现已恢复并核对远端 AGENTS、当前提交 0b16fbd、工作区及阶段 ledger。审查开始时 H01 仅有运行时检查器/测试的未提交工作；现已取得运行时门禁 PASS，后端228项通过并提交H01，H02 身份/持久化已验收并提交；H03～H08 未开始。
 
 已核对远端文档只有 H01 状态/标题增量，合并时保留其进度；H01 已验证锁定镜像 digest/worker UID、真实 capabilities/endpoints、实际工具 schema、命名 profile、外部模型、停止/退出与资源预算。官方 main 只能提示检查点，不能代替所选镜像。H01 任一必需项失败或真实模型配置缺失，均保留未完成状态，不接入真实媒体库。
 

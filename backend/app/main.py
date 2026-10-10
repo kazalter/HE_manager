@@ -13,6 +13,7 @@ from . import (
     models,
 )
 from .database import engine
+from .assistant import models as assistant_models
 from .routers import auth as auth_routes
 from .routers import audio as audio_routes
 from .routers import auto_sync as auto_sync_routes

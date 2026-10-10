@@ -1,0 +1,167 @@
+"""Short SQLite write transactions serialize admission with stop/confirmation."""
+
+from contextlib import contextmanager
+from datetime import datetime, timedelta
+import hashlib
+import json
+from uuid import UUID, uuid4
+from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from ..models import User
+from . import config
+from .models import AssistantRun, AssistantSession
+from .schemas import SessionRequest, SubmissionEnvelope
+
+
+def utcnow():
+    return datetime.utcnow()
+
+
+def canonical_json(value):
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+
+
+def input_hash(value):
+    return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
+
+
+@contextmanager
+def write_transaction(db: Session):
+    """Always use a clean connection, never a caller's pre-read ORM snapshot."""
+    with db.get_bind().connect() as connection:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
+        local = Session(bind=connection, expire_on_commit=False)
+        try:
+            yield local
+            local.flush()
+            connection.commit()
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            local.close()
+
+
+def require_admin(db, user_id):
+    user = db.execute(
+        select(User).where(User.id == user_id).execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if user is None or not user.is_admin or not user.is_active:
+        raise HTTPException(403, "assistant_admin_required")
+    return user
+
+
+def uuid_text(value):
+    try:
+        return str(UUID(str(value)))
+    except (ValueError, TypeError, AttributeError):
+        raise HTTPException(404, "assistant_not_found") from None
+
+
+def require_owned_session(db, user_id, session_id):
+    require_admin(db, user_id)
+    row = db.execute(
+        select(AssistantSession)
+        .where(
+            AssistantSession.id == uuid_text(session_id),
+            AssistantSession.user_id == user_id,
+        )
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(404, "assistant_not_found")
+    return row
+
+
+def require_owned_run(db, user_id, run_id):
+    require_admin(db, user_id)
+    row = db.execute(
+        select(AssistantRun)
+        .where(AssistantRun.id == uuid_text(run_id), AssistantRun.user_id == user_id)
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(404, "assistant_not_found")
+    return row
+
+
+def create_session(db, user_id, title="新对话"):
+    config.require_enabled()
+    title = SessionRequest(title=title).title
+    with write_transaction(db) as local:
+        require_admin(local, user_id)
+        sid = str(uuid4())
+        row = AssistantSession(
+            id=sid,
+            user_id=user_id,
+            upstream_session_id="he-" + sid,
+            title=title,
+            state="creating",
+        )
+        local.add(row)
+        local.flush()
+        return row
+
+
+def reserve_run(
+    db,
+    user_id,
+    session_id,
+    client_request_id,
+    input_hash,
+    submission_envelope: SubmissionEnvelope,
+):
+    config.require_enabled()
+    sid = uuid_text(session_id)
+    request_id = uuid_text(client_request_id)
+    with write_transaction(db) as local:
+        require_admin(local, user_id)
+        existing = local.execute(
+            select(AssistantRun).where(
+                AssistantRun.user_id == user_id,
+                AssistantRun.client_request_id == request_id,
+            )
+        ).scalar_one_or_none()
+        if existing:
+            if existing.session_id != sid or existing.input_hash != input_hash:
+                raise HTTPException(409, "assistant_request_conflict")
+            return existing
+        session = require_owned_session(local, user_id, sid)
+        if session.state != "active":
+            raise HTTPException(409, "assistant_session_unavailable")
+        if local.execute(
+            select(AssistantRun.id)
+            .where(AssistantRun.executor_exited_at.is_(None))
+            .limit(1)
+        ).first():
+            raise HTTPException(409, "assistant_busy")
+        envelope = SubmissionEnvelope.model_validate(submission_envelope)
+        if envelope.session_id != session.upstream_session_id:
+            raise HTTPException(409, "assistant_context_mismatch")
+        raw = envelope.model_dump_json()
+        if len(raw.encode("utf-8")) > 65536:
+            raise HTTPException(422, "assistant_request_too_large")
+        now = utcnow()
+        row = AssistantRun(
+            id=uuid_text(envelope.idempotency_key),
+            user_id=user_id,
+            session_id=sid,
+            client_request_id=request_id,
+            input_hash=input_hash,
+            submission_envelope_json=raw,
+            api_key_generation=envelope.api_key_generation,
+            created_at=now,
+            updated_at=now,
+            deadline_at=now + timedelta(seconds=180),
+            status="submitting",
+        )
+        local.add(row)
+        local.flush()
+        return row

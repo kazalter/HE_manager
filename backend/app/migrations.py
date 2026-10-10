@@ -184,6 +184,13 @@ def ensure_pawchive_tables():
     models.PawchiveAccountSession.__table__.create(bind=engine, checkfirst=True)
 
 
+def ensure_assistant_tables(bind=None):
+    """Only the main HE process creates assistant tables."""
+    from .assistant import models as assistant_models
+    for name in ("AssistantToolIdentity", "AssistantSession", "AssistantRun", "AssistantProposal", "AssistantAudit"):
+        getattr(assistant_models, name).__table__.create(bind=bind or engine, checkfirst=True)
+
+
 def run_schema_migrations():
     """Runs all manual idempotent schema migrations."""
     ensure_folder_option_columns()
@@ -199,3 +206,4 @@ def run_schema_migrations():
     ensure_dedup_indexes()
     ensure_tag_columns()
     ensure_pawchive_tables()
+    ensure_assistant_tables()

@@ -88,3 +88,7 @@ logs/
 Thumbs.db
 *.tmp
 *.bak
+
+# Assistant credentials and Hermes profiles
+/data/hermes/
+/data/assistant/
