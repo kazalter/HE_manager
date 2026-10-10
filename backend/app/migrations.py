@@ -189,6 +189,11 @@ def ensure_assistant_tables(bind=None):
     from .assistant import models as assistant_models
     for name in ("AssistantToolIdentity", "AssistantSession", "AssistantRun", "AssistantProposal", "AssistantAudit"):
         getattr(assistant_models, name).__table__.create(bind=bind or engine, checkfirst=True)
+    target = bind or engine
+    columns = {c["name"] for c in inspect(target).get_columns("assistant_runs")}
+    if "tool_results_truncated" not in columns:
+        with target.begin() as conn:
+            conn.execute(text("ALTER TABLE assistant_runs ADD COLUMN tool_results_truncated BOOLEAN NOT NULL DEFAULT 0"))
 
 
 def run_schema_migrations():

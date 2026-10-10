@@ -183,11 +183,11 @@ assert different_payload_same_request.status_code == 409
 
 ## Task 3: H03 — 实现无副作用的媒体工具应用
 
-**Files:** 创建 backend/app/assistant/{readonly,internal_app}.py；修改 backend/app/recommendations.py；测试 backend/tests/test_assistant_readonly.py、test_assistant_internal_api.py、既有 test_recommendations.py。依赖：H02。
+**Files:** 创建 backend/app/assistant/{readonly,internal_app}.py；修改 backend/app/recommendations.py、assistant/models.py、assistant/schemas.py、app/migrations.py；测试 backend/tests/test_assistant_readonly.py、test_assistant_internal_api.py、既有 test_recommendations.py。依赖：H02。
 
 **Interfaces:** execute_read_tool(db, principal: ToolPrincipal, context: ToolContext, name: str, args: dict) -> dict；查询只返回前述 DTO。internal_app 只注册 /tools/* 和不含敏感信息的健康检查。
 
-- [ ] Step 1：写失败测试，使用真实临时 SQLite、恶意标题和隐藏重复项，固定以下断言；补齐分页上限、未知 tool、无 token、其它用户 context、URL/token 脱敏。
+- [x] Step 1：写失败测试，使用真实临时 SQLite、恶意标题和隐藏重复项，固定以下断言；补齐分页上限、未知 tool、无 token、其它用户 context、URL/token 脱敏。
 ~~~python
 assert media.last_opened_at == before.last_opened_at
 assert media.view_status == before.view_status
@@ -195,11 +195,11 @@ assert len(search_result.items) <= 50
 assert "absolute_path" not in detail
 assert audio_recommendation.method == "metadata_filter"
 ~~~
-- [ ] Step 2：运行 cd backend && python -m pytest tests/test_assistant_readonly.py tests/test_assistant_internal_api.py -q，预期新工具相关断言失败。
-- [ ] Step 3：实现只读 SQL/现有纯服务查询，保留现有隐藏重复状态默认过滤；不用 GET /media/{id}，不调用会改变播放历史的路由，不遍历媒体文件系统。
-- [ ] Step 4：为 recommendations.recommend_manga 增加 keyword-only allow_ai: bool=True，false 时使用既有 heuristic/retrieval/local_reason 并跳过偏好解析及 rerank 的内部 DeepSeek 调用；现有网页调用默认行为保留。管家调用 allow_ai=False，把 ORM 结果转成窄 DTO，由 Hermes 负责解释，避免单个 MCP 调用中叠加两次模型请求；其它类型按筛选条件、评分和 ID 做确定排序。返回 method/basis，信息不足时说明依据不足，不新建向量模型或下载权重，不声称分析过媒体内容。现有 MiniLM 缓存可在预算内复用，缺失时保留现有 BM25/元数据降级，并明确 method/basis；不触发媒体画像分析。统计/重复候选/标签列表限制返回规模，source URL 对模型默认省略。测试应断言管家推荐未调用 call_deepseek、旧推荐默认路径仍可调用 AI；工具进程不需要读取 DeepSeek key。
-- [ ] Step 5：实现独立 internal_app，通过受限 token 认证并验证 ToolContext；服务 key 只在该 app 有效，主应用不新增鉴权绕过分支。启动仅检查 H02 所需表，不启动扫描器、同步调度器或主应用 lifespan。 工具的业务查询保持只读；助手展示结果另存到 Run.tool_results_json，在返回工具结果前校验 DTO、用户/run 归属和 stop_requested_at/有效状态。该短事务允许写助手记录，展示记录总计超过 64 KiB 时返回明确 truncated，不保存未校验原文；只读查询可缩小范围后重试，已生成的建议沿用原幂等记录，不能重放副作用；为每次调用生成 HE tool_call_id，桥接只传递受限结构。测试分别断言业务表不变和助手展示记录正确，停止/清除提交后不接受迟到结果。
-- [ ] Step 6：运行 Step 2 测试，预期 PASS；通过临时数据库前后快照确认只读工具没有业务写入，拒绝超过 64 KiB 的工具响应并提示缩小查询，再运行既有 tests/test_recommendations.py，预期默认推荐行为通过，按规范提交 feat: expose read-only assistant tools。
+- [x] Step 2：运行 cd backend && python -m pytest tests/test_assistant_readonly.py tests/test_assistant_internal_api.py -q，预期新工具相关断言失败。
+- [x] Step 3：实现只读 SQL/现有纯服务查询，保留现有隐藏重复状态默认过滤；不用 GET /media/{id}，不调用会改变播放历史的路由，不遍历媒体文件系统。
+- [x] Step 4：为 recommendations.recommend_manga 增加 keyword-only allow_ai: bool=True，false 时使用既有 heuristic/retrieval/local_reason 并跳过偏好解析及 rerank 的内部 DeepSeek 调用；现有网页调用默认行为保留。管家调用 allow_ai=False，把 ORM 结果转成窄 DTO，由 Hermes 负责解释，避免单个 MCP 调用中叠加两次模型请求；其它类型按筛选条件、评分和 ID 做确定排序。返回 method/basis，信息不足时说明依据不足，不新建向量模型或下载权重，不声称分析过媒体内容。现有 MiniLM 缓存可在预算内复用，缺失时保留现有 BM25/元数据降级，并明确 method/basis；不触发媒体画像分析。统计/重复候选/标签列表限制返回规模，source URL 对模型默认省略。测试应断言管家推荐未调用 call_deepseek、旧推荐默认路径仍可调用 AI；工具进程不需要读取 DeepSeek key。
+- [x] Step 5：实现独立 internal_app，通过受限 token 认证并验证 ToolContext；服务 key 只在该 app 有效，主应用不新增鉴权绕过分支。启动仅检查 H02 所需表，不启动扫描器、同步调度器或主应用 lifespan。 工具的业务查询保持只读；助手展示结果另存到 Run.tool_results_json，在返回工具结果前校验 DTO、用户/run 归属和 stop_requested_at/有效状态。该短事务允许写助手记录，internal HTTP 返回 ToolResultDTO 包装；H06 仅将 result 业务 DTO 回传 MCP。H05 结果列表使用 ToolResultsDTO {items,truncated}。新增 tool_results_truncated 并按既有幂等 ALTER 迁移旧库。展示记录总计超过 64 KiB 时保留此前结果、持久化超限标记并返回明确 truncated，不保存未校验原文；只读查询可缩小范围后重试，已生成的建议沿用原幂等记录，不能重放副作用；为每次调用生成 HE tool_call_id，桥接只传递受限结构。测试分别断言业务表不变和助手展示记录正确，停止/清除提交后不接受迟到结果。
+- [x] Step 6：运行 Step 2 测试，预期 PASS；通过临时数据库前后快照确认只读工具没有业务写入，拒绝超过 64 KiB 的工具响应并提示缩小查询，再运行既有 tests/test_recommendations.py，预期默认推荐行为通过，按规范提交 feat: expose read-only assistant tools。
 
 ## Task 4: H04 — 实现变更预览、原子确认和扫描 job
 

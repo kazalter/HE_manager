@@ -69,6 +69,7 @@ class AssistantRun(Base):
     usage_json = Column(Text, nullable=True)
     error_code = Column(String(100), nullable=True)
     tool_results_json = Column(Text, nullable=False, default="[]")
+    tool_results_truncated = Column(Boolean, nullable=False, default=False)
 
 
 class AssistantProposal(Base):

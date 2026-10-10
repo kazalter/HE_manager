@@ -326,6 +326,11 @@ class ToolResultDTO(DTO):
         return value
 
 
+class ToolResultsDTO(DTO):
+    items: list[ToolResultDTO]
+    truncated: bool = False
+
+
 class SessionDTO(DTO):
     id: UUID
     title: str

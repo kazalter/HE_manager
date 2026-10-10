@@ -822,8 +822,13 @@ def recommend_manga(
     avoid_tags: Iterable[str],
     preferred_tags: Iterable[str],
     seed: Optional[int] = None,
+    *,
+    allow_ai: bool = True,
 ) -> dict:
-    preferences, ai_enabled, message = parse_preferences(query, avoid_tags, preferred_tags)
+    if allow_ai:
+        preferences, ai_enabled, message = parse_preferences(query, avoid_tags, preferred_tags)
+    else:
+        preferences, ai_enabled, message = _heuristic_preferences(query, avoid_tags, preferred_tags), False, None
     intent: str = preferences.get("intent") or "by_style"
 
     avoid_tokens = [t for t in _query_tokens(preferences, "avoid_terms") if _avoid_token_usable(t)]
@@ -853,7 +858,7 @@ def recommend_manga(
     scored.sort(key=lambda item: item["score"], reverse=True)
 
     # ---- LLM rerank + diversity + response ------------------------------
-    ai_reasons, ai_message = ai_rank_and_explain(query, scored, limit)
+    ai_reasons, ai_message = ai_rank_and_explain(query, scored, limit) if allow_ai else ({}, None)
     if ai_message and not message:
         message = ai_message
 
