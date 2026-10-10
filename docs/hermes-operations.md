@@ -115,7 +115,7 @@ SQLite 必须用 online backup API 获得一致性快照，不能只复制活跃
 
 ## HE 全项目读取与审批升级（2026-10-10）
 
-当前后端使用 `he-manager-backend:assistant-approval-20261010`。升级记录、备份和回退约束见 [发布记录](assistant-capabilities-approval-rollout.md)。实际 profile 配置已同步24个工具，原凭据保留。工具 `get_project_settings` 返回目录及来源的非敏感设置；任务查询覆盖扫描/下载/导入/自动同步/当前用户管家运行，业务日志不返回原始错误字符串。
+当前后端使用 `he-manager-backend:assistant-fix-20261010`（2026-10-11 修复发布）。升级记录、备份和回退约束见 [发布记录](assistant-capabilities-approval-rollout.md)。实际 profile 配置已同步24个工具，原凭据保留。工具 `get_project_settings` 返回目录及来源的非敏感设置；任务查询覆盖扫描/下载/导入/自动同步/当前用户管家运行，业务日志不返回原始错误字符串。
 
 - 文本文件整体识别上限8 MiB，每次返回32 KiB完整行；超过单行上限、私钥、多行凭据明确拒绝。
 - 单文件歌词、字幕、音频作品清单和 Pawchive侧车关联不能完整更新时拒绝移动；漫画目录内的相对文件随目录一起移动。

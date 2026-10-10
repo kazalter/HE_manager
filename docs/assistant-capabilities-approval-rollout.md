@@ -71,3 +71,28 @@
 ## 审查未动态判断的范围
 
 实际 profile 配置、发布排空、迁移兼容和健康由本次发布检查补充；浏览器只读查看验证抽屉/焦点。文件系统故障恢复、并发写入、移动写入、浏览器异步竞态与手机真机未作动态验证。
+
+## 修复发布（2026-10-11）
+
+提交 `54f450e`，修复 `1c604ac` 后 CI 失败及聊天中误报“连接暂不可用”。
+
+- 审批确认按字符串提案 ID 查询；此前 UUID 对象直接绑定 SQLite，确认/审批路径报错。
+- 模型可见结果不再包含服务器绝对路径、相对路径或完整目录路径：媒体只给根目录编号，目录、存储和来源设置只给末级目录名。不安全来源 URL 整个省略，不以 null 出现。上述设计表格同步修订。
+- 工具结果写入上限恢复 64 KiB；读取仍接受此前按 1 MiB 写入的记录。
+- SSE 中结果存储读取失败不再中断回复流，只在完成类事件读取结果卡片；这正是“提示连接不可用但回复仍到达”的来源。
+- 管家页面仅管理员请求能力信息；能力信息缺字段时不再导致模板报错。
+
+### 验证
+
+- 在 Linux 服务器隔离副本（Docker，user1）运行：后端 357 项、前端 99 项通过，Vite 生产构建成功。GitHub CI 运行 38066031148 三项全部通过。
+- 新镜像在无网络、无挂载容器内导入 `app.main` 成功，工具数 24。
+- 发布前活动管家运行、未退出执行器、后台任务、非 idle 目录、文件操作日志均为 0。
+- 只重建 backend 与 assistant-tools；MCP、Hermes、nginx 未变。5 个服务 healthy、重启次数 0，`/healthz` 200，在线 index.html/version.json 与 staging 一致，管家开关保持 1。
+- 未在线上发起真实对话；“连接暂不可用”是否消失需管理员实际使用确认。
+
+### 备份与回退
+
+- 新镜像：`he-manager-backend:assistant-fix-20261010`；旧镜像 `he-manager-backend:assistant-approval-20261010` 保留（`sha256:4b12fc15…`）。
+- SQLite 在线热备、前端产物、Compose env、旧镜像 ID：`/home/user1/he-manager-backups/assistant-fix-20261010/`，权限0600，目录0700；热备 integrity_check 为 ok，媒体2654条。
+- staging：`/home/user1/he-manager-builds/assistant-fix-20261010`。旧 hashed assets 保留。
+- 回退：`.env` 中 `HE_ASSISTANT_BACKEND_IMAGE` 改回旧标签，解压旧前端产物，再 `docker compose -f docker-compose.yml -f docker-compose.assistant.yml up -d --no-build --wait backend assistant-tools`。本次无数据库结构变化，回退不需要恢复数据库。
