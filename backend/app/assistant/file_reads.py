@@ -80,7 +80,7 @@ def open_project(db, folder_id, relative, *, directory=False):
         for fd in reversed(descriptors):os.close(fd)
 
 def redact_text(text):
-    text=re.sub(r'(?im)^.*(?:password|passwd|secret|token|api[_-]?key|authorization|cookie)["\\'\t ]*[:=].*$',"[已隐藏含凭据的行]",text)
+    text=re.sub(r"(?im)^.*(?:password|passwd|secret|token|api[_-]?key|authorization|cookie)[\x22\x27\t ]*[:=].*$","[已隐藏含凭据的行]",text)
     text=re.sub(r"(?i)(https?://)[^/\s:@]+:[^/\s@]+@",r"\1[已隐藏凭据]@",text)
     text=re.sub(r"(?i)([?&](?:token|key|api_key|auth|password|signature)=)[^&\s]+",r"\1[已隐藏]",text)
     text=re.sub(r"-----BEGIN [^-]*PRIVATE KEY-----.*?-----END [^-]*PRIVATE KEY-----","[已隐藏私钥]",text,flags=re.S)
