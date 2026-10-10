@@ -1,0 +1,382 @@
+{
+  "schema_version": 1,
+  "verification_status": "verified",
+  "image_digest": "sha256:ffa4fbb471c2bc8c85fbcfc629347585cc1586c86d2e6db465d01203ce696d95",
+  "image_repository": "nousresearch/hermes-agent",
+  "architecture": "amd64",
+  "hermes_version": "0.21.6",
+  "upstream_commit": "818c13be",
+  "python_runtime": "3.14.7",
+  "bridge_python": "3.12",
+  "mcp_sdk_version": "2.0.0",
+  "http_client": {
+    "package": "httpx2",
+    "version": "2.7.0"
+  },
+  "he_http_client": {
+    "package": "httpx",
+    "version": "0.28.1"
+  },
+  "data_mount": "/opt/data",
+  "uid_gid": {
+    "init": [
+      0,
+      0
+    ],
+    "gateway": [
+      1000,
+      1000
+    ]
+  },
+  "profile_routing": {
+    "prefix": "/p/he-user-{user_id}",
+    "default_fallback": false,
+    "key_isolation_http": 401,
+    "cross_profile_object_http": 404,
+    "multiplex": true
+  },
+  "capabilities": {
+    "features": [
+      "run_submission",
+      "run_status",
+      "run_events_sse",
+      "run_stop",
+      "session_resources"
+    ],
+    "endpoints": {
+      "health": {
+        "method": "GET",
+        "path": "/health"
+      },
+      "health_detailed": {
+        "method": "GET",
+        "path": "/health/detailed"
+      },
+      "models": {
+        "method": "GET",
+        "path": "/v1/models"
+      },
+      "model_options": {
+        "method": "GET",
+        "path": "/api/model/options"
+      },
+      "chat_completions": {
+        "method": "POST",
+        "path": "/v1/chat/completions"
+      },
+      "responses": {
+        "method": "POST",
+        "path": "/v1/responses"
+      },
+      "runs": {
+        "method": "POST",
+        "path": "/v1/runs"
+      },
+      "run_status": {
+        "method": "GET",
+        "path": "/v1/runs/{run_id}"
+      },
+      "run_events": {
+        "method": "GET",
+        "path": "/v1/runs/{run_id}/events"
+      },
+      "run_approval": {
+        "method": "POST",
+        "path": "/v1/runs/{run_id}/approval"
+      },
+      "run_steer": {
+        "method": "POST",
+        "path": "/v1/runs/{run_id}/steer"
+      },
+      "run_stop": {
+        "method": "POST",
+        "path": "/v1/runs/{run_id}/stop"
+      },
+      "skills": {
+        "method": "GET",
+        "path": "/v1/skills"
+      },
+      "toolsets": {
+        "method": "GET",
+        "path": "/v1/toolsets"
+      },
+      "sessions": {
+        "method": "GET",
+        "path": "/api/sessions"
+      },
+      "session_create": {
+        "method": "POST",
+        "path": "/api/sessions"
+      },
+      "session": {
+        "method": "GET",
+        "path": "/api/sessions/{session_id}"
+      },
+      "session_update": {
+        "method": "PATCH",
+        "path": "/api/sessions/{session_id}"
+      },
+      "session_delete": {
+        "method": "DELETE",
+        "path": "/api/sessions/{session_id}"
+      },
+      "session_messages": {
+        "method": "GET",
+        "path": "/api/sessions/{session_id}/messages"
+      },
+      "session_fork": {
+        "method": "POST",
+        "path": "/api/sessions/{session_id}/fork"
+      },
+      "session_chat": {
+        "method": "POST",
+        "path": "/api/sessions/{session_id}/chat"
+      },
+      "session_chat_stream": {
+        "method": "POST",
+        "path": "/api/sessions/{session_id}/chat/stream"
+      },
+      "session_model_lock": {
+        "method": "POST",
+        "path": "/api/sessions/{session_id}/model"
+      },
+      "browser_control_register": {
+        "method": "POST",
+        "path": "/v1/browser-control/register"
+      },
+      "browser_control_ws": {
+        "method": "GET",
+        "path": "/v1/browser-control/ws"
+      },
+      "artifact_upload": {
+        "method": "POST",
+        "path": "/v1/artifacts/upload"
+      },
+      "artifact_download": {
+        "method": "GET",
+        "path": "/v1/artifacts/download/{artifact_id}"
+      }
+    }
+  },
+  "runs": {
+    "submit": {
+      "method": "POST",
+      "path": "/v1/runs",
+      "http_status": 202
+    },
+    "status": {
+      "method": "GET",
+      "path": "/v1/runs/{run_id}"
+    },
+    "events": {
+      "method": "GET",
+      "path": "/v1/runs/{run_id}/events"
+    },
+    "stop": {
+      "method": "POST",
+      "path": "/v1/runs/{run_id}/stop",
+      "http_status": 200,
+      "ack_status": "stopping"
+    },
+    "idempotency_header": "Idempotency-Key",
+    "conflict_http": 409,
+    "retention_seconds": 86400,
+    "terminal_statuses": [
+      "completed",
+      "failed",
+      "cancelled",
+      "interrupted"
+    ],
+    "active_statuses": [
+      "queued",
+      "running",
+      "waiting_for_approval",
+      "stopping"
+    ]
+  },
+  "sessions": {
+    "id_fields": [
+      "id",
+      "session_id"
+    ],
+    "create_http": 201,
+    "duplicate_id_http": 409,
+    "duplicate_title_http": 400,
+    "delete_http": 200,
+    "missing_http": 404
+  },
+  "event_types": [
+    "tool.started",
+    "tool.completed",
+    "message.delta",
+    "reasoning.available",
+    "run.completed",
+    "run.cancelled",
+    "run.interrupted"
+  ],
+  "event_type_field": "event",
+  "event_sequence_field": "seq",
+  "sse_id_matches_seq": true,
+  "sse_buffer_seconds": 300,
+  "tool_results": {
+    "upstream_field": "preview",
+    "preview_chars": 500,
+    "full_structured_result_available": false,
+    "authoritative_source": "HE internal_app validated per-run result store",
+    "tool_call_id_source": "HE generated invocation UUID"
+  },
+  "toolset_config": {
+    "platform_toolsets": {
+      "api_server": [
+        "he",
+        "memory"
+      ]
+    },
+    "tools.tool_search.enabled": "off",
+    "model_tool_names": [
+      "mcp__he__search_media",
+      "mcp__he__get_media_detail",
+      "mcp__he__get_library_stats",
+      "mcp__he__recommend_media",
+      "mcp__he__list_duplicate_candidates",
+      "mcp__he__list_tags",
+      "mcp__he__list_folders",
+      "mcp__he__propose_media_update",
+      "mcp__he__propose_scan",
+      "memory"
+    ],
+    "native_catalog_includes_mcp": false,
+    "trust": "full",
+    "mcp_resources": false,
+    "mcp_prompts": false,
+    "structured_output": true,
+    "annotations_python_field": "read_only_hint"
+  },
+  "budget_config": {
+    "output_key": "providers.he-model.extra_body.max_tokens",
+    "output_tokens": 2048,
+    "iterations_key": "agent.max_turns",
+    "iterations": 8,
+    "native_budget_key": "agent.run_budget_seconds",
+    "native_budget_seconds": 180,
+    "he_submission_deadline_seconds": 180,
+    "he_watchdog_required": true,
+    "gateway.api_server.max_concurrent_runs": 1
+  },
+  "executor_exit_evidence": {
+    "normal_path": "_execute_run awaits _submit_api_worker; counted worker releases in own finally before terminal publication",
+    "normal_stop_status": "cancelled",
+    "normal_stop_exit_reason": "interrupted_during_api_call",
+    "shutdown_interrupted_proves_exit": false,
+    "health_active_runs_proves_exit": false,
+    "unknown_exit_policy": "retain HE admission fence until operator verifies old process gone; never expose docker.sock",
+    "sigterm": {
+      "mode": "term",
+      "old_pid": 3509885,
+      "new_pid": 3522938,
+      "old_process_gone": true,
+      "stop_seconds": 3.27,
+      "exit_code": 0,
+      "oom_killed": false,
+      "cold_ready_seconds": 34.879,
+      "status_code": 200,
+      "status": {
+        "created_at": 1791598640.5781734,
+        "model": "h01-model",
+        "object": "hermes.run",
+        "run_id": "run_b5b41da61ff04970982ce3835de89a50",
+        "session_id": "he-8d70635d-2e3d-48a6-b71a-e795b06bbbfc",
+        "shutdown_requested_at": 1791598642.6633227,
+        "status": "interrupted",
+        "updated_at": 1791598678.920864,
+        "error": "The gateway restarted before this run settled.",
+        "last_event": "run.interrupted"
+      },
+      "replay_status_code": 202,
+      "replay": {
+        "run_id": "run_b5b41da61ff04970982ce3835de89a50",
+        "status": "interrupted",
+        "replayed": true
+      }
+    },
+    "sigkill": {
+      "mode": "kill",
+      "old_pid": 3522938,
+      "new_pid": 3526083,
+      "old_process_gone": true,
+      "stop_seconds": 0.165,
+      "exit_code": 137,
+      "oom_killed": false,
+      "cold_ready_seconds": 42.86,
+      "status_code": 200,
+      "status": {
+        "created_at": 1791598751.610999,
+        "model": "h01-model",
+        "object": "hermes.run",
+        "run_id": "run_001f6160250c43f1a317c43cb63d3219",
+        "session_id": "he-ac51eac2-3c74-4b50-8863-38a2973f2936",
+        "status": "interrupted",
+        "updated_at": 1791598794.765349,
+        "error": "The gateway restarted before this run settled.",
+        "last_event": "run.interrupted"
+      },
+      "replay_status_code": 202,
+      "replay": {
+        "run_id": "run_001f6160250c43f1a317c43cb63d3219",
+        "status": "interrupted",
+        "replayed": true
+      }
+    }
+  },
+  "external_provider": {
+    "provider": "custom:he-model",
+    "model": "minimax-m3",
+    "base_url": "https://api.feedmob.it.com/v1",
+    "stream_done_marker": false,
+    "stream_finish_reason": "stop",
+    "usage_available": true,
+    "synthetic_end_to_end_status": "completed"
+  },
+  "resource_limits": {
+    "addon_peak_bytes": 518766592,
+    "peak_by_container": {
+      "he-hermes-h01": 439046144,
+      "he-hermes-h01-services": 79720448
+    },
+    "mem_available_bytes": 3483557888,
+    "root_free_bytes": 12987342848,
+    "image_unpacked_bytes": 4545736525,
+    "worker_uid": 1000,
+    "worker_gid": 1000,
+    "pid1_uid": 0,
+    "additional_services_reserved_bytes": 536870912,
+    "runtime_memory_limit_bytes": 2147483648,
+    "profile_total_bytes": 7318794,
+    "logs_bytes": 268210,
+    "skills_bytes": 2812635,
+    "wal_bytes": 2332016,
+    "db_bytes": 1351680,
+    "backup_bytes": 17267
+  },
+  "source_sha256": {
+    "mcp_tool_schema.py": "c36757d09134c7b8bb82f25676c790b611a4f8d1f4340a7e774a163d473eb4b0",
+    "hermes_cli_tools_config.py": "180a9a7b37e956a12dd405ed84a9c86ec7731029da167891c63b4ed17d2c8d5b",
+    "api_server_runs.py": "67315fb146f3f5d124675c4dd0e2c5fbe233618c94af2799c438175592dfba97",
+    "mcp_tool_config.py": "22e5b528f34d2d37f1488ab85420195423d9128a260c7b29982fa7d534c787f9",
+    "mcp_tool_registration.py": "b807a230a8fc565e698ebdf7a1424ba644a45c700741de9bd5055c719d23755a",
+    "hermes_cli_config.py": "d8118b064bb442e10ce6a90e8e23c7f347b6ff532781febab206d9c652f3c7dd",
+    "tools_mcp_tool.py": "f773d6ce6ce03e29e2ecc4365842f54bf8f206ce8136bb27c4c194b2978bd35d",
+    "config_defaults.py": "450d05e9a112d81c1d59f4cfc2eaae8c2b49b35216c4619d02b2fac9b4ab768c",
+    "runtime_provider_custom.py": "eebf063c777306996f4f0f088f51e46977b8d4dcb519bc7106f17665a28f58c1",
+    "gateway_config.py": "413d01c0ecca49c450e248cca64f89ab7ee0191905722104eef3a6b6c68c3cd8",
+    "api_server.py": "359c8be9d02e3bfb24272f829321dd5da3cefd31923cf7785d1bf36ea1f87420"
+  },
+  "evidence_fixture": "backend/tests/fixtures/hermes/h01-evidence.json",
+  "pending_model_change": {
+    "requested_model": "DeepSeek-V4.1-Flash",
+    "base_url": "https://api.feedmob.it.com/v1",
+    "status": "blocked_authentication",
+    "http_status": 401,
+    "active_model_changed": false
+  }
+}

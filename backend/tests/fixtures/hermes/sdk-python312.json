@@ -1,0 +1,30 @@
+{
+  "status": "PASS",
+  "python": "3.12.15",
+  "mcp": "2.0.0",
+  "httpx2": "2.7.0",
+  "tools": [
+    "get_library_stats",
+    "get_media_detail",
+    "list_duplicate_candidates",
+    "list_folders",
+    "list_tags",
+    "propose_media_update",
+    "propose_scan",
+    "recommend_media",
+    "search_media"
+  ],
+  "structured_result": {
+    "items": [
+      {
+        "id": 1,
+        "title": "H01 fake manga",
+        "media_type": "manga",
+        "tags": []
+      }
+    ],
+    "total": 1,
+    "offset": 0,
+    "has_more": false
+  }
+}

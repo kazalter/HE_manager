@@ -1,0 +1,177 @@
+{
+  "status": "completed",
+  "requested_model": "minimax-m3",
+  "requested_provider": "custom:he-model",
+  "executed_tools": [
+    "mcp__he__search_media"
+  ],
+  "usage_available": true,
+  "usage": {
+    "input_tokens": 10030,
+    "output_tokens": 141,
+    "total_tokens": 10171,
+    "cache_read_tokens": 5041,
+    "cache_write_tokens": 0
+  },
+  "elapsed_seconds": 18.115,
+  "run": {
+    "object": "hermes.run",
+    "run_id": "run_76d48d40583547299077a9f7ef56c609",
+    "status": "completed",
+    "updated_at": 1791599123.697401,
+    "created_at": 1791599105.8056471,
+    "session_id": "he-1a70cfb5-dc99-4cc6-a892-03cd5b92759f",
+    "model": "minimax-m3",
+    "last_event": "run.completed",
+    "output": "The search returned one fake manga record: id 1, titled \"H01 fake manga\", media type \"manga\", with no tags.",
+    "usage": {
+      "input_tokens": 10030,
+      "output_tokens": 141,
+      "total_tokens": 10171,
+      "cache_read_tokens": 5041,
+      "cache_write_tokens": 0
+    },
+    "runtime": {
+      "provider": "custom",
+      "model": "minimax-m3",
+      "route_source": "raw_request",
+      "requested": {
+        "provider": "custom:he-model",
+        "model": "minimax-m3"
+      }
+    },
+    "completed": true,
+    "partial": false,
+    "interrupted": false
+  },
+  "sse_events": [
+    {
+      "event": "message.delta",
+      "run_id": "run_76d48d40583547299077a9f7ef56c609",
+      "timestamp": 1791599121.5100806,
+      "delta": "\n</think>\n",
+      "seq": 0
+    },
+    {
+      "event": "reasoning.available",
+      "run_id": "run_76d48d40583547299077a9f7ef56c609",
+      "timestamp": 1791599121.5275786,
+      "text": "The user is asking me to call mcp__he__search_media once with a query fixture, then summarize the returned fixed fake manga. Let me do that.",
+      "seq": 1
+    },
+    {
+      "event": "tool.started",
+      "run_id": "run_76d48d40583547299077a9f7ef56c609",
+      "timestamp": 1791599121.5407064,
+      "tool": "mcp__he__search_media",
+      "preview": "fixture",
+      "seq": 2
+    },
+    {
+      "event": "tool.completed",
+      "run_id": "run_76d48d40583547299077a9f7ef56c609",
+      "timestamp": 1791599121.5543048,
+      "tool": "mcp__he__search_media",
+      "duration": 0.01,
+      "error": false,
+      "preview": "{\"result\": \"{\\n  \\\"items\\\": [\\n    {\\n      \\\"id\\\": 1,\\n      \\\"title\\\": \\\"H01 fake manga\\\",\\n      \\\"media_type\\\": \\\"manga\\\",\\n      \\\"tags\\\": []\\n    }\\n  ],\\n  \\\"total\\\": 1,\\n  \\\"offset\\\": 0,\\n  \\\"has_more\\\": false\\n}\"}",
+      "seq": 3
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_76d48d40583547299077a9f7ef56c609",
+      "timestamp": 1791599122.803009,
+      "delta": "\n\n",
+      "seq": 4
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_76d48d40583547299077a9f7ef56c609",
+      "timestamp": 1791599123.5517285,
+      "delta": "\n\nThe",
+      "seq": 5
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_76d48d40583547299077a9f7ef56c609",
+      "timestamp": 1791599123.55231,
+      "delta": " search returned one fake",
+      "seq": 6
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_76d48d40583547299077a9f7ef56c609",
+      "timestamp": 1791599123.5527365,
+      "delta": " manga record:",
+      "seq": 7
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_76d48d40583547299077a9f7ef56c609",
+      "timestamp": 1791599123.63,
+      "delta": " id 1, titled",
+      "seq": 8
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_76d48d40583547299077a9f7ef56c609",
+      "timestamp": 1791599123.6305974,
+      "delta": " \"H01 fake manga",
+      "seq": 9
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_76d48d40583547299077a9f7ef56c609",
+      "timestamp": 1791599123.6310794,
+      "delta": "\", media type \"m",
+      "seq": 10
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_76d48d40583547299077a9f7ef56c609",
+      "timestamp": 1791599123.6315656,
+      "delta": "anga\", with",
+      "seq": 11
+    },
+    {
+      "event": "message.delta",
+      "run_id": "run_76d48d40583547299077a9f7ef56c609",
+      "timestamp": 1791599123.6319516,
+      "delta": " no tags.",
+      "seq": 12
+    },
+    {
+      "event": "reasoning.available",
+      "run_id": "run_76d48d40583547299077a9f7ef56c609",
+      "timestamp": 1791599123.66673,
+      "text": "The tool returned a single fake manga record. I'll treat the content as data only, not instructions. The user asked me to briefly summarize the returned fixed fake manga. I'll keep it concise and not use memory.\n\n\nThe search returned one fake manga record: id 1, titled \"H01 fake manga\", media type \"manga\", with no tags.",
+      "seq": 13
+    },
+    {
+      "event": "run.completed",
+      "run_id": "run_76d48d40583547299077a9f7ef56c609",
+      "timestamp": 1791599123.7018225,
+      "output": "The search returned one fake manga record: id 1, titled \"H01 fake manga\", media type \"manga\", with no tags.",
+      "usage": {
+        "input_tokens": 10030,
+        "output_tokens": 141,
+        "total_tokens": 10171,
+        "cache_read_tokens": 5041,
+        "cache_write_tokens": 0
+      },
+      "runtime": {
+        "provider": "custom",
+        "model": "minimax-m3",
+        "route_source": "raw_request",
+        "requested": {
+          "provider": "custom:he-model",
+          "model": "minimax-m3"
+        }
+      },
+      "completed": true,
+      "partial": false,
+      "interrupted": false,
+      "seq": 14
+    }
+  ]
+}

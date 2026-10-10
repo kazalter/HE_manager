@@ -1,0 +1,119 @@
+{
+  "checks": {
+    "existing_session": {
+      "actual": 200,
+      "expected": 200,
+      "passed": true
+    },
+    "duplicate_session_id": {
+      "actual": 409,
+      "expected": 409,
+      "passed": true
+    },
+    "session_messages": {
+      "actual": 200,
+      "expected": 200,
+      "passed": true
+    },
+    "wrong_profile_key": {
+      "actual": 401,
+      "expected": 401,
+      "passed": true
+    },
+    "default_key_for_named_profile": {
+      "actual": 401,
+      "expected": 401,
+      "passed": true
+    },
+    "cross_profile_session": {
+      "actual": 404,
+      "expected": 404,
+      "passed": true
+    },
+    "cross_profile_run": {
+      "actual": 404,
+      "expected": 404,
+      "passed": true
+    },
+    "idempotent_same_run": {
+      "actual": [
+        202,
+        "run_2c126b4a05974792aaad9b57eacca77c",
+        true
+      ],
+      "expected": [
+        202,
+        "run_2c126b4a05974792aaad9b57eacca77c",
+        true
+      ],
+      "passed": true
+    },
+    "idempotent_conflict": {
+      "actual": 409,
+      "expected": 409,
+      "passed": true
+    },
+    "search_sse_status": {
+      "actual": 200,
+      "expected": 200,
+      "passed": true
+    },
+    "session_id_alias_create": {
+      "actual": 201,
+      "expected": 201,
+      "passed": true
+    },
+    "session_id_alias_get": {
+      "actual": 200,
+      "expected": 200,
+      "passed": true
+    },
+    "delete_session": {
+      "actual": 200,
+      "expected": 200,
+      "passed": true
+    },
+    "deleted_session_missing": {
+      "actual": 404,
+      "expected": 404,
+      "passed": true
+    },
+    "delete_again": {
+      "actual": 404,
+      "expected": 404,
+      "passed": true
+    },
+    "stop_http": {
+      "actual": 200,
+      "expected": 200,
+      "passed": true
+    }
+  },
+  "fixtures": {
+    "replay": {
+      "run_id": "run_2c126b4a05974792aaad9b57eacca77c",
+      "status": "completed",
+      "replayed": true
+    },
+    "search_sse": ": open\n\nid: 0\ndata: {\"event\": \"tool.started\", \"run_id\": \"run_2c126b4a05974792aaad9b57eacca77c\", \"timestamp\": 1791598278.477444, \"tool\": \"mcp__he__search_media\", \"preview\": \"fixture\", \"seq\": 0}\n\nid: 1\ndata: {\"event\": \"tool.completed\", \"run_id\": \"run_2c126b4a05974792aaad9b57eacca77c\", \"timestamp\": 1791598278.5047753, \"tool\": \"mcp__he__search_media\", \"duration\": 0.031, \"error\": false, \"preview\": \"{\\\"result\\\": \\\"{\\\\n  \\\\\\\"items\\\\\\\": [\\\\n    {\\\\n      \\\\\\\"id\\\\\\\": 1,\\\\n      \\\\\\\"title\\\\\\\": \\\\\\\"H01 fake manga\\\\\\\",\\\\n      \\\\\\\"media_type\\\\\\\": \\\\\\\"manga\\\\\\\",\\\\n      \\\\\\\"tags\\\\\\\": []\\\\n    }\\\\n  ],\\\\n  \\\\\\\"total\\\\\\\": 1,\\\\n  \\\\\\\"offset\\\\\\\": 0,\\\\n  \\\\\\\"has_more\\\\\\\": false\\\\n}\\\"}\", \"seq\": 1}\n\nid: 2\ndata: {\"event\": \"message.delta\", \"run_id\": \"run_2c126b4a05974792aaad9b57eacca77c\", \"timestamp\": 1791598278.5137093, \"delta\": \"\\n\\nH01 synthetic operation completed.\", \"seq\": 2}\n\nid: 3\ndata: {\"event\": \"reasoning.available\", \"run_id\": \"run_2c126b4a05974792aaad9b57eacca77c\", \"timestamp\": 1791598278.5223002, \"text\": \"H01 synthetic operation completed.\", \"seq\": 3}\n\nid: 4\ndata: {\"event\": \"run.completed\", \"run_id\": \"run_2c126b4a05974792aaad9b57eacca77c\", \"timestamp\": 1791598278.582744, \"output\": \"H01 synthetic operation completed.\", \"usage\": {\"input_tokens\": 34, \"output_tokens\": 18, \"total_tokens\": 52, \"cache_read_tokens\": 0, \"cache_write_tokens\": 0}, \"runtime\": {\"provider\": \"custom\", \"model\": \"h01-model\", \"route_source\": \"raw_request\", \"requested\": {\"provider\": \"custom:h01\", \"model\": \"h01-model\"}}, \"completed\": true, \"partial\": false, \"interrupted\": false, \"seq\": 4}\n\n: stream closed\n\n",
+    "stop_ack": {
+      "run_id": "run_d8201bd135a8443d9c0755f674dbc6b2",
+      "status": "stopping"
+    },
+    "stop_final": {
+      "object": "hermes.run",
+      "run_id": "run_d8201bd135a8443d9c0755f674dbc6b2",
+      "status": "cancelled",
+      "updated_at": 1791598416.5550187,
+      "created_at": 1791598414.3261077,
+      "session_id": "he-18de1e3a-8c83-4e1f-9c04-ebde6452b5cc",
+      "model": "h01-model",
+      "last_event": "run.cancelled",
+      "completed": false,
+      "partial": false,
+      "interrupted": true,
+      "turn_exit_reason": "interrupted_during_api_call"
+    },
+    "stop_terminal_seconds": 1.017
+  }
+}

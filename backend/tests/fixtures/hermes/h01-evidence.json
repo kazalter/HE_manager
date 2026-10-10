@@ -1,0 +1,886 @@
+{
+  "protocol": {
+    "checks": {
+      "existing_session": {
+        "actual": 200,
+        "expected": 200,
+        "passed": true
+      },
+      "duplicate_session_id": {
+        "actual": 409,
+        "expected": 409,
+        "passed": true
+      },
+      "session_messages": {
+        "actual": 200,
+        "expected": 200,
+        "passed": true
+      },
+      "wrong_profile_key": {
+        "actual": 401,
+        "expected": 401,
+        "passed": true
+      },
+      "default_key_for_named_profile": {
+        "actual": 401,
+        "expected": 401,
+        "passed": true
+      },
+      "cross_profile_session": {
+        "actual": 404,
+        "expected": 404,
+        "passed": true
+      },
+      "cross_profile_run": {
+        "actual": 404,
+        "expected": 404,
+        "passed": true
+      },
+      "idempotent_same_run": {
+        "actual": [
+          202,
+          "run_2c126b4a05974792aaad9b57eacca77c",
+          true
+        ],
+        "expected": [
+          202,
+          "run_2c126b4a05974792aaad9b57eacca77c",
+          true
+        ],
+        "passed": true
+      },
+      "idempotent_conflict": {
+        "actual": 409,
+        "expected": 409,
+        "passed": true
+      },
+      "search_sse_status": {
+        "actual": 200,
+        "expected": 200,
+        "passed": true
+      },
+      "session_id_alias_create": {
+        "actual": 201,
+        "expected": 201,
+        "passed": true
+      },
+      "session_id_alias_get": {
+        "actual": 200,
+        "expected": 200,
+        "passed": true
+      },
+      "delete_session": {
+        "actual": 200,
+        "expected": 200,
+        "passed": true
+      },
+      "deleted_session_missing": {
+        "actual": 404,
+        "expected": 404,
+        "passed": true
+      },
+      "delete_again": {
+        "actual": 404,
+        "expected": 404,
+        "passed": true
+      },
+      "stop_http": {
+        "actual": 200,
+        "expected": 200,
+        "passed": true
+      }
+    },
+    "fixtures": {
+      "replay": {
+        "run_id": "run_2c126b4a05974792aaad9b57eacca77c",
+        "status": "completed",
+        "replayed": true
+      },
+      "search_sse": ": open\n\nid: 0\ndata: {\"event\": \"tool.started\", \"run_id\": \"run_2c126b4a05974792aaad9b57eacca77c\", \"timestamp\": 1791598278.477444, \"tool\": \"mcp__he__search_media\", \"preview\": \"fixture\", \"seq\": 0}\n\nid: 1\ndata: {\"event\": \"tool.completed\", \"run_id\": \"run_2c126b4a05974792aaad9b57eacca77c\", \"timestamp\": 1791598278.5047753, \"tool\": \"mcp__he__search_media\", \"duration\": 0.031, \"error\": false, \"preview\": \"{\\\"result\\\": \\\"{\\\\n  \\\\\\\"items\\\\\\\": [\\\\n    {\\\\n      \\\\\\\"id\\\\\\\": 1,\\\\n      \\\\\\\"title\\\\\\\": \\\\\\\"H01 fake manga\\\\\\\",\\\\n      \\\\\\\"media_type\\\\\\\": \\\\\\\"manga\\\\\\\",\\\\n      \\\\\\\"tags\\\\\\\": []\\\\n    }\\\\n  ],\\\\n  \\\\\\\"total\\\\\\\": 1,\\\\n  \\\\\\\"offset\\\\\\\": 0,\\\\n  \\\\\\\"has_more\\\\\\\": false\\\\n}\\\"}\", \"seq\": 1}\n\nid: 2\ndata: {\"event\": \"message.delta\", \"run_id\": \"run_2c126b4a05974792aaad9b57eacca77c\", \"timestamp\": 1791598278.5137093, \"delta\": \"\\n\\nH01 synthetic operation completed.\", \"seq\": 2}\n\nid: 3\ndata: {\"event\": \"reasoning.available\", \"run_id\": \"run_2c126b4a05974792aaad9b57eacca77c\", \"timestamp\": 1791598278.5223002, \"text\": \"H01 synthetic operation completed.\", \"seq\": 3}\n\nid: 4\ndata: {\"event\": \"run.completed\", \"run_id\": \"run_2c126b4a05974792aaad9b57eacca77c\", \"timestamp\": 1791598278.582744, \"output\": \"H01 synthetic operation completed.\", \"usage\": {\"input_tokens\": 34, \"output_tokens\": 18, \"total_tokens\": 52, \"cache_read_tokens\": 0, \"cache_write_tokens\": 0}, \"runtime\": {\"provider\": \"custom\", \"model\": \"h01-model\", \"route_source\": \"raw_request\", \"requested\": {\"provider\": \"custom:h01\", \"model\": \"h01-model\"}}, \"completed\": true, \"partial\": false, \"interrupted\": false, \"seq\": 4}\n\n: stream closed\n\n",
+      "stop_ack": {
+        "run_id": "run_d8201bd135a8443d9c0755f674dbc6b2",
+        "status": "stopping"
+      },
+      "stop_final": {
+        "object": "hermes.run",
+        "run_id": "run_d8201bd135a8443d9c0755f674dbc6b2",
+        "status": "cancelled",
+        "updated_at": 1791598416.5550187,
+        "created_at": 1791598414.3261077,
+        "session_id": "he-18de1e3a-8c83-4e1f-9c04-ebde6452b5cc",
+        "model": "h01-model",
+        "last_event": "run.cancelled",
+        "completed": false,
+        "partial": false,
+        "interrupted": true,
+        "turn_exit_reason": "interrupted_during_api_call"
+      },
+      "stop_terminal_seconds": 1.017
+    }
+  },
+  "memory": {
+    "he-user-1001": {
+      "object": "hermes.run",
+      "run_id": "run_75d4ee479c5b4bbe85d1dea8fec7c012",
+      "status": "completed",
+      "updated_at": 1791598445.700707,
+      "created_at": 1791598445.5445569,
+      "session_id": "he-d8e873ae-ca3d-4584-9148-bf4ae57a4557",
+      "model": "h01-model",
+      "last_event": "run.completed",
+      "output": "H01 synthetic operation completed.",
+      "usage": {
+        "input_tokens": 34,
+        "output_tokens": 18,
+        "total_tokens": 52,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "runtime": {
+        "provider": "custom",
+        "model": "h01-model",
+        "route_source": "raw_request",
+        "requested": {
+          "provider": "custom:h01",
+          "model": "h01-model"
+        }
+      },
+      "completed": true,
+      "partial": false,
+      "interrupted": false,
+      "memory_markers": [
+        "H01_ADMIN_1001_LIKES_RED"
+      ]
+    },
+    "he-user-1002": {
+      "object": "hermes.run",
+      "run_id": "run_44423eb926fb40fe8e48c56f3e81c751",
+      "status": "completed",
+      "updated_at": 1791598446.7849808,
+      "created_at": 1791598446.6087787,
+      "session_id": "he-df59b630-f5a2-4108-aace-7c6d08a1af43",
+      "model": "h01-model",
+      "last_event": "run.completed",
+      "output": "H01 synthetic operation completed.",
+      "usage": {
+        "input_tokens": 34,
+        "output_tokens": 18,
+        "total_tokens": 52,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "runtime": {
+        "provider": "custom",
+        "model": "h01-model",
+        "route_source": "raw_request",
+        "requested": {
+          "provider": "custom:h01",
+          "model": "h01-model"
+        }
+      },
+      "completed": true,
+      "partial": false,
+      "interrupted": false,
+      "memory_markers": [
+        "H01_ADMIN_1002_LIKES_BLUE"
+      ]
+    }
+  },
+  "limits": {
+    "runs": {
+      "H01 PROPOSAL": {
+        "object": "hermes.run",
+        "run_id": "run_30eace06fd894196a74286d1f9599699",
+        "status": "completed",
+        "updated_at": 1791598575.334278,
+        "created_at": 1791598575.135808,
+        "session_id": "he-764cd15a-dee2-49d8-b966-e79ef6d047d5",
+        "model": "h01-model",
+        "last_event": "run.completed",
+        "output": "H01 synthetic operation completed.",
+        "usage": {
+          "input_tokens": 34,
+          "output_tokens": 18,
+          "total_tokens": 52,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0
+        },
+        "runtime": {
+          "provider": "custom",
+          "model": "h01-model",
+          "route_source": "raw_request",
+          "requested": {
+            "provider": "custom:h01",
+            "model": "h01-model"
+          }
+        },
+        "completed": true,
+        "partial": false,
+        "interrupted": false,
+        "elapsed_seconds": 1.03
+      },
+      "H01 LOOP": {
+        "object": "hermes.run",
+        "run_id": "run_a58de3605ac9483b96da0716706c4cab",
+        "status": "failed",
+        "updated_at": 1791598576.7077632,
+        "created_at": 1791598576.2006888,
+        "session_id": "he-2c83d32f-fc3d-4d24-adf7-d22cbc911dc6",
+        "model": "h01-model",
+        "last_event": "run.failed",
+        "output": "I reached the iteration limit and couldn't generate a summary.",
+        "usage": {
+          "input_tokens": 136,
+          "output_tokens": 72,
+          "total_tokens": 208,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0
+        },
+        "runtime": {
+          "provider": "custom",
+          "model": "h01-model",
+          "route_source": "raw_request",
+          "requested": {
+            "provider": "custom:h01",
+            "model": "h01-model"
+          }
+        },
+        "completed": false,
+        "partial": false,
+        "interrupted": false,
+        "turn_exit_reason": "max_iterations_reached(8/8)",
+        "elapsed_seconds": 1.04
+      },
+      "H01 CHECK": {
+        "object": "hermes.run",
+        "run_id": "run_ca1aab5276114808b093bb99a8b6fe11",
+        "status": "completed",
+        "updated_at": 1791598577.3836727,
+        "created_at": 1791598577.2555833,
+        "session_id": "he-eddb8ad7-e0fe-4e69-89ba-63498e12e957",
+        "model": "h01-model",
+        "last_event": "run.completed",
+        "output": "H01 synthetic operation completed.",
+        "usage": {
+          "input_tokens": 17,
+          "output_tokens": 9,
+          "total_tokens": 26,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0
+        },
+        "runtime": {
+          "provider": "custom",
+          "model": "h01-model",
+          "route_source": "raw_request",
+          "requested": {
+            "provider": "custom:h01",
+            "model": "h01-model"
+          }
+        },
+        "completed": true,
+        "partial": false,
+        "interrupted": false,
+        "elapsed_seconds": 1.03
+      }
+    },
+    "captures": [
+      {
+        "tool_names": [
+          "mcp__he__get_library_stats",
+          "mcp__he__get_media_detail",
+          "mcp__he__list_duplicate_candidates",
+          "mcp__he__list_folders",
+          "mcp__he__list_tags",
+          "mcp__he__propose_media_update",
+          "mcp__he__propose_scan",
+          "mcp__he__recommend_media",
+          "mcp__he__search_media",
+          "memory"
+        ],
+        "max_tokens": 2048,
+        "model": "h01-model",
+        "stream": true,
+        "memory_markers": [
+          "H01_ADMIN_1001_LIKES_RED"
+        ]
+      },
+      {
+        "tool_names": [
+          "mcp__he__get_library_stats",
+          "mcp__he__get_media_detail",
+          "mcp__he__list_duplicate_candidates",
+          "mcp__he__list_folders",
+          "mcp__he__list_tags",
+          "mcp__he__propose_media_update",
+          "mcp__he__propose_scan",
+          "mcp__he__recommend_media",
+          "mcp__he__search_media",
+          "memory"
+        ],
+        "max_tokens": 2048,
+        "model": "h01-model",
+        "stream": true,
+        "memory_markers": [
+          "H01_ADMIN_1001_LIKES_RED"
+        ]
+      },
+      {
+        "tool_names": [],
+        "max_tokens": 2048,
+        "model": "h01-model",
+        "stream": false,
+        "memory_markers": []
+      },
+      {
+        "tool_names": [
+          "mcp__he__get_library_stats",
+          "mcp__he__get_media_detail",
+          "mcp__he__list_duplicate_candidates",
+          "mcp__he__list_folders",
+          "mcp__he__list_tags",
+          "mcp__he__propose_media_update",
+          "mcp__he__propose_scan",
+          "mcp__he__recommend_media",
+          "mcp__he__search_media",
+          "memory"
+        ],
+        "max_tokens": 2048,
+        "model": "h01-model",
+        "stream": true,
+        "memory_markers": [
+          "H01_ADMIN_1001_LIKES_RED"
+        ]
+      },
+      {
+        "tool_names": [
+          "mcp__he__get_library_stats",
+          "mcp__he__get_media_detail",
+          "mcp__he__list_duplicate_candidates",
+          "mcp__he__list_folders",
+          "mcp__he__list_tags",
+          "mcp__he__propose_media_update",
+          "mcp__he__propose_scan",
+          "mcp__he__recommend_media",
+          "mcp__he__search_media",
+          "memory"
+        ],
+        "max_tokens": 2048,
+        "model": "h01-model",
+        "stream": true,
+        "memory_markers": [
+          "H01_ADMIN_1001_LIKES_RED"
+        ]
+      },
+      {
+        "tool_names": [
+          "mcp__he__get_library_stats",
+          "mcp__he__get_media_detail",
+          "mcp__he__list_duplicate_candidates",
+          "mcp__he__list_folders",
+          "mcp__he__list_tags",
+          "mcp__he__propose_media_update",
+          "mcp__he__propose_scan",
+          "mcp__he__recommend_media",
+          "mcp__he__search_media",
+          "memory"
+        ],
+        "max_tokens": 2048,
+        "model": "h01-model",
+        "stream": true,
+        "memory_markers": [
+          "H01_ADMIN_1001_LIKES_RED"
+        ]
+      },
+      {
+        "tool_names": [
+          "mcp__he__get_library_stats",
+          "mcp__he__get_media_detail",
+          "mcp__he__list_duplicate_candidates",
+          "mcp__he__list_folders",
+          "mcp__he__list_tags",
+          "mcp__he__propose_media_update",
+          "mcp__he__propose_scan",
+          "mcp__he__recommend_media",
+          "mcp__he__search_media",
+          "memory"
+        ],
+        "max_tokens": 2048,
+        "model": "h01-model",
+        "stream": true,
+        "memory_markers": [
+          "H01_ADMIN_1001_LIKES_RED"
+        ]
+      },
+      {
+        "tool_names": [
+          "mcp__he__get_library_stats",
+          "mcp__he__get_media_detail",
+          "mcp__he__list_duplicate_candidates",
+          "mcp__he__list_folders",
+          "mcp__he__list_tags",
+          "mcp__he__propose_media_update",
+          "mcp__he__propose_scan",
+          "mcp__he__recommend_media",
+          "mcp__he__search_media",
+          "memory"
+        ],
+        "max_tokens": 2048,
+        "model": "h01-model",
+        "stream": true,
+        "memory_markers": [
+          "H01_ADMIN_1001_LIKES_RED"
+        ]
+      },
+      {
+        "tool_names": [
+          "mcp__he__get_library_stats",
+          "mcp__he__get_media_detail",
+          "mcp__he__list_duplicate_candidates",
+          "mcp__he__list_folders",
+          "mcp__he__list_tags",
+          "mcp__he__propose_media_update",
+          "mcp__he__propose_scan",
+          "mcp__he__recommend_media",
+          "mcp__he__search_media",
+          "memory"
+        ],
+        "max_tokens": 2048,
+        "model": "h01-model",
+        "stream": true,
+        "memory_markers": [
+          "H01_ADMIN_1001_LIKES_RED"
+        ]
+      },
+      {
+        "tool_names": [
+          "mcp__he__get_library_stats",
+          "mcp__he__get_media_detail",
+          "mcp__he__list_duplicate_candidates",
+          "mcp__he__list_folders",
+          "mcp__he__list_tags",
+          "mcp__he__propose_media_update",
+          "mcp__he__propose_scan",
+          "mcp__he__recommend_media",
+          "mcp__he__search_media",
+          "memory"
+        ],
+        "max_tokens": 2048,
+        "model": "h01-model",
+        "stream": true,
+        "memory_markers": [
+          "H01_ADMIN_1001_LIKES_RED"
+        ]
+      },
+      {
+        "tool_names": [
+          "mcp__he__get_library_stats",
+          "mcp__he__get_media_detail",
+          "mcp__he__list_duplicate_candidates",
+          "mcp__he__list_folders",
+          "mcp__he__list_tags",
+          "mcp__he__propose_media_update",
+          "mcp__he__propose_scan",
+          "mcp__he__recommend_media",
+          "mcp__he__search_media",
+          "memory"
+        ],
+        "max_tokens": 2048,
+        "model": "h01-model",
+        "stream": true,
+        "memory_markers": [
+          "H01_ADMIN_1001_LIKES_RED"
+        ]
+      },
+      {
+        "tool_names": [
+          "mcp__he__get_library_stats",
+          "mcp__he__get_media_detail",
+          "mcp__he__list_duplicate_candidates",
+          "mcp__he__list_folders",
+          "mcp__he__list_tags",
+          "mcp__he__propose_media_update",
+          "mcp__he__propose_scan",
+          "mcp__he__recommend_media",
+          "mcp__he__search_media",
+          "memory"
+        ],
+        "max_tokens": 2048,
+        "model": "h01-model",
+        "stream": false,
+        "memory_markers": [
+          "H01_ADMIN_1001_LIKES_RED"
+        ]
+      },
+      {
+        "tool_names": [
+          "mcp__he__get_library_stats",
+          "mcp__he__get_media_detail",
+          "mcp__he__list_duplicate_candidates",
+          "mcp__he__list_folders",
+          "mcp__he__list_tags",
+          "mcp__he__propose_media_update",
+          "mcp__he__propose_scan",
+          "mcp__he__recommend_media",
+          "mcp__he__search_media",
+          "memory"
+        ],
+        "max_tokens": 2048,
+        "model": "h01-model",
+        "stream": false,
+        "memory_markers": [
+          "H01_ADMIN_1001_LIKES_RED"
+        ]
+      },
+      {
+        "tool_names": [],
+        "max_tokens": 2048,
+        "model": "h01-model",
+        "stream": false,
+        "memory_markers": []
+      },
+      {
+        "tool_names": [
+          "mcp__he__get_library_stats",
+          "mcp__he__get_media_detail",
+          "mcp__he__list_duplicate_candidates",
+          "mcp__he__list_folders",
+          "mcp__he__list_tags",
+          "mcp__he__propose_media_update",
+          "mcp__he__propose_scan",
+          "mcp__he__recommend_media",
+          "mcp__he__search_media",
+          "memory"
+        ],
+        "max_tokens": 2048,
+        "model": "h01-model",
+        "stream": true,
+        "memory_markers": [
+          "H01_ADMIN_1001_LIKES_RED"
+        ]
+      },
+      {
+        "tool_names": [],
+        "max_tokens": 2048,
+        "model": "h01-model",
+        "stream": false,
+        "memory_markers": []
+      }
+    ]
+  },
+  "restart_term": {
+    "mode": "term",
+    "old_pid": 3509885,
+    "new_pid": 3522938,
+    "old_process_gone": true,
+    "stop_seconds": 3.27,
+    "exit_code": 0,
+    "oom_killed": false,
+    "cold_ready_seconds": 34.879,
+    "status_code": 200,
+    "status": {
+      "created_at": 1791598640.5781734,
+      "model": "h01-model",
+      "object": "hermes.run",
+      "run_id": "run_b5b41da61ff04970982ce3835de89a50",
+      "session_id": "he-8d70635d-2e3d-48a6-b71a-e795b06bbbfc",
+      "shutdown_requested_at": 1791598642.6633227,
+      "status": "interrupted",
+      "updated_at": 1791598678.920864,
+      "error": "The gateway restarted before this run settled.",
+      "last_event": "run.interrupted"
+    },
+    "replay_status_code": 202,
+    "replay": {
+      "run_id": "run_b5b41da61ff04970982ce3835de89a50",
+      "status": "interrupted",
+      "replayed": true
+    }
+  },
+  "restart_kill": {
+    "mode": "kill",
+    "old_pid": 3522938,
+    "new_pid": 3526083,
+    "old_process_gone": true,
+    "stop_seconds": 0.165,
+    "exit_code": 137,
+    "oom_killed": false,
+    "cold_ready_seconds": 42.86,
+    "status_code": 200,
+    "status": {
+      "created_at": 1791598751.610999,
+      "model": "h01-model",
+      "object": "hermes.run",
+      "run_id": "run_001f6160250c43f1a317c43cb63d3219",
+      "session_id": "he-ac51eac2-3c74-4b50-8863-38a2973f2936",
+      "status": "interrupted",
+      "updated_at": 1791598794.765349,
+      "error": "The gateway restarted before this run settled.",
+      "last_event": "run.interrupted"
+    },
+    "replay_status_code": 202,
+    "replay": {
+      "run_id": "run_001f6160250c43f1a317c43cb63d3219",
+      "status": "interrupted",
+      "replayed": true
+    }
+  },
+  "sdk": {
+    "status": "PASS",
+    "python": "3.12.15",
+    "mcp": "2.0.0",
+    "httpx2": "2.7.0",
+    "tools": [
+      "get_library_stats",
+      "get_media_detail",
+      "list_duplicate_candidates",
+      "list_folders",
+      "list_tags",
+      "propose_media_update",
+      "propose_scan",
+      "recommend_media",
+      "search_media"
+    ],
+    "structured_result": {
+      "items": [
+        {
+          "id": 1,
+          "title": "H01 fake manga",
+          "media_type": "manga",
+          "tags": []
+        }
+      ],
+      "total": 1,
+      "offset": 0,
+      "has_more": false
+    }
+  },
+  "budget": {
+    "object": "hermes.run",
+    "run_id": "run_606c8045d635497d978f76b79e5250f3",
+    "status": "cancelled",
+    "updated_at": 1791599354.817938,
+    "created_at": 1791599174.0028293,
+    "session_id": "he-fc8dab6e-29ad-4a88-81a9-d71e35c42fd2",
+    "model": "h01-model",
+    "last_event": "run.cancelled",
+    "completed": false,
+    "partial": false,
+    "interrupted": true,
+    "turn_exit_reason": "interrupted_during_api_call",
+    "watchdog": {
+      "deadline_seconds": 180,
+      "stop_requested_age": 180.567,
+      "stop_ack": {
+        "run_id": "run_606c8045d635497d978f76b79e5250f3",
+        "status": "stopping"
+      }
+    },
+    "sse_subscribers": 0,
+    "measured_seconds": 181.579
+  },
+  "external": {
+    "status": "completed",
+    "requested_model": "minimax-m3",
+    "requested_provider": "custom:he-model",
+    "executed_tools": [
+      "mcp__he__search_media"
+    ],
+    "usage_available": true,
+    "usage": {
+      "input_tokens": 10030,
+      "output_tokens": 141,
+      "total_tokens": 10171,
+      "cache_read_tokens": 5041,
+      "cache_write_tokens": 0
+    },
+    "elapsed_seconds": 18.115,
+    "run": {
+      "object": "hermes.run",
+      "run_id": "run_76d48d40583547299077a9f7ef56c609",
+      "status": "completed",
+      "updated_at": 1791599123.697401,
+      "created_at": 1791599105.8056471,
+      "session_id": "he-1a70cfb5-dc99-4cc6-a892-03cd5b92759f",
+      "model": "minimax-m3",
+      "last_event": "run.completed",
+      "output": "The search returned one fake manga record: id 1, titled \"H01 fake manga\", media type \"manga\", with no tags.",
+      "usage": {
+        "input_tokens": 10030,
+        "output_tokens": 141,
+        "total_tokens": 10171,
+        "cache_read_tokens": 5041,
+        "cache_write_tokens": 0
+      },
+      "runtime": {
+        "provider": "custom",
+        "model": "minimax-m3",
+        "route_source": "raw_request",
+        "requested": {
+          "provider": "custom:he-model",
+          "model": "minimax-m3"
+        }
+      },
+      "completed": true,
+      "partial": false,
+      "interrupted": false
+    },
+    "sse_events": [
+      {
+        "event": "message.delta",
+        "run_id": "run_76d48d40583547299077a9f7ef56c609",
+        "timestamp": 1791599121.5100806,
+        "delta": "\n</think>\n",
+        "seq": 0
+      },
+      {
+        "event": "reasoning.available",
+        "run_id": "run_76d48d40583547299077a9f7ef56c609",
+        "timestamp": 1791599121.5275786,
+        "text": "The user is asking me to call mcp__he__search_media once with a query fixture, then summarize the returned fixed fake manga. Let me do that.",
+        "seq": 1
+      },
+      {
+        "event": "tool.started",
+        "run_id": "run_76d48d40583547299077a9f7ef56c609",
+        "timestamp": 1791599121.5407064,
+        "tool": "mcp__he__search_media",
+        "preview": "fixture",
+        "seq": 2
+      },
+      {
+        "event": "tool.completed",
+        "run_id": "run_76d48d40583547299077a9f7ef56c609",
+        "timestamp": 1791599121.5543048,
+        "tool": "mcp__he__search_media",
+        "duration": 0.01,
+        "error": false,
+        "preview": "{\"result\": \"{\\n  \\\"items\\\": [\\n    {\\n      \\\"id\\\": 1,\\n      \\\"title\\\": \\\"H01 fake manga\\\",\\n      \\\"media_type\\\": \\\"manga\\\",\\n      \\\"tags\\\": []\\n    }\\n  ],\\n  \\\"total\\\": 1,\\n  \\\"offset\\\": 0,\\n  \\\"has_more\\\": false\\n}\"}",
+        "seq": 3
+      },
+      {
+        "event": "message.delta",
+        "run_id": "run_76d48d40583547299077a9f7ef56c609",
+        "timestamp": 1791599122.803009,
+        "delta": "\n\n",
+        "seq": 4
+      },
+      {
+        "event": "message.delta",
+        "run_id": "run_76d48d40583547299077a9f7ef56c609",
+        "timestamp": 1791599123.5517285,
+        "delta": "\n\nThe",
+        "seq": 5
+      },
+      {
+        "event": "message.delta",
+        "run_id": "run_76d48d40583547299077a9f7ef56c609",
+        "timestamp": 1791599123.55231,
+        "delta": " search returned one fake",
+        "seq": 6
+      },
+      {
+        "event": "message.delta",
+        "run_id": "run_76d48d40583547299077a9f7ef56c609",
+        "timestamp": 1791599123.5527365,
+        "delta": " manga record:",
+        "seq": 7
+      },
+      {
+        "event": "message.delta",
+        "run_id": "run_76d48d40583547299077a9f7ef56c609",
+        "timestamp": 1791599123.63,
+        "delta": " id 1, titled",
+        "seq": 8
+      },
+      {
+        "event": "message.delta",
+        "run_id": "run_76d48d40583547299077a9f7ef56c609",
+        "timestamp": 1791599123.6305974,
+        "delta": " \"H01 fake manga",
+        "seq": 9
+      },
+      {
+        "event": "message.delta",
+        "run_id": "run_76d48d40583547299077a9f7ef56c609",
+        "timestamp": 1791599123.6310794,
+        "delta": "\", media type \"m",
+        "seq": 10
+      },
+      {
+        "event": "message.delta",
+        "run_id": "run_76d48d40583547299077a9f7ef56c609",
+        "timestamp": 1791599123.6315656,
+        "delta": "anga\", with",
+        "seq": 11
+      },
+      {
+        "event": "message.delta",
+        "run_id": "run_76d48d40583547299077a9f7ef56c609",
+        "timestamp": 1791599123.6319516,
+        "delta": " no tags.",
+        "seq": 12
+      },
+      {
+        "event": "reasoning.available",
+        "run_id": "run_76d48d40583547299077a9f7ef56c609",
+        "timestamp": 1791599123.66673,
+        "text": "The tool returned a single fake manga record. I'll treat the content as data only, not instructions. The user asked me to briefly summarize the returned fixed fake manga. I'll keep it concise and not use memory.\n\n\nThe search returned one fake manga record: id 1, titled \"H01 fake manga\", media type \"manga\", with no tags.",
+        "seq": 13
+      },
+      {
+        "event": "run.completed",
+        "run_id": "run_76d48d40583547299077a9f7ef56c609",
+        "timestamp": 1791599123.7018225,
+        "output": "The search returned one fake manga record: id 1, titled \"H01 fake manga\", media type \"manga\", with no tags.",
+        "usage": {
+          "input_tokens": 10030,
+          "output_tokens": 141,
+          "total_tokens": 10171,
+          "cache_read_tokens": 5041,
+          "cache_write_tokens": 0
+        },
+        "runtime": {
+          "provider": "custom",
+          "model": "minimax-m3",
+          "route_source": "raw_request",
+          "requested": {
+            "provider": "custom:he-model",
+            "model": "minimax-m3"
+          }
+        },
+        "completed": true,
+        "partial": false,
+        "interrupted": false,
+        "seq": 14
+      }
+    ]
+  },
+  "expired_sse": {
+    "age_seconds": 483.709,
+    "events_http": 404,
+    "status": "completed",
+    "same_gateway_instance": true,
+    "run_id": "run_75bdaeafd8e24d73b0b14b5894173da2"
+  },
+  "resources": {
+    "addon_peak_bytes": 518766592,
+    "peak_by_container": {
+      "he-hermes-h01": 439046144,
+      "he-hermes-h01-services": 79720448
+    },
+    "mem_available_bytes": 3483557888,
+    "root_free_bytes": 12987342848,
+    "image_unpacked_bytes": 4545736525,
+    "worker_uid": 1000,
+    "worker_gid": 1000,
+    "pid1_uid": 0,
+    "additional_services_reserved_bytes": 536870912,
+    "runtime_memory_limit_bytes": 2147483648,
+    "profile_total_bytes": 7318794,
+    "logs_bytes": 268210,
+    "skills_bytes": 2812635,
+    "wal_bytes": 2332016,
+    "db_bytes": 1351680,
+    "backup_bytes": 17267
+  }
+}
