@@ -448,9 +448,9 @@ watch(favoritesError, message => {
 
     <template v-else-if="items.length > 0">
       <div class="poster-grid pt-2">
-        <div v-for="item in pagedItems" :key="item.id" class="relative min-w-0">
+        <div v-for="item in pagedItems" :key="item.id" class="he-media-actions relative min-w-0">
           <ExternalItemCard :title="item.title" :cover="item.cover_url ? coverSrc(item) : null" :meta="item.category_name || 'WNACG'" :downloaded="!!item.local_media_id" :discarded="item.status === 'discarded'" :placeholder-icon="BookOpen" @click="openExternalItem(item)" />
-          <button v-if="item.status !== 'discarded'" type="button" class="absolute right-2 top-2 z-10 grid size-11 place-items-center rounded-xl bg-black/75 text-white/85 hover:bg-danger hover:text-white focus-ring" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'external', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
+          <button v-if="item.status !== 'discarded'" type="button" class="he-media-delete absolute right-2 top-2 z-10 grid size-11 place-items-center rounded-xl bg-black/75 text-white/85 hover:bg-danger hover:text-white focus-ring" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'external', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
         </div>
       </div>
 

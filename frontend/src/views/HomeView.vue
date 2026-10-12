@@ -871,15 +871,15 @@ onMounted(async () => {
 
         <div v-else-if="mediaList.length > 0" class="flex flex-col gap-10">
           <div v-if="viewMode === 'poster'" :class="posterGridClass">
-            <div v-for="(item, index) in mediaList" :key="item.id" class="relative min-w-0">
+            <div v-for="(item, index) in mediaList" :key="item.id" class="he-media-actions relative min-w-0">
               <MediaCard :media="item" :index="index" :shape="cardShape" :show-type="!mediaType" @click="openMedia(item)" />
-              <button v-if="authState.user?.is_admin" type="button" class="absolute right-2 top-2 z-10 grid size-11 place-items-center rounded-xl bg-black/75 text-white/85 transition-colors hover:bg-danger hover:text-white focus-ring" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
+              <button v-if="authState.user?.is_admin" type="button" class="he-media-delete absolute right-2 top-2 z-10 grid size-11 place-items-center rounded-xl bg-black/75 text-white/85 transition-colors hover:bg-danger hover:text-white focus-ring" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
             </div>
           </div>
           <div v-else :class="viewMode === 'masonry' ? 'masonry-grid' : viewMode === 'wide' ? 'grid grid-cols-1 gap-x-5 gap-y-7 md:grid-cols-2 xl:grid-cols-3' : 'flex flex-col gap-2'">
-            <div v-for="item in mediaList" :key="item.id" class="relative min-w-0" :class="viewMode === 'masonry' ? 'masonry-grid-item' : viewMode === 'list' ? 'flex items-center gap-2' : ''">
+            <div v-for="item in mediaList" :key="item.id" class="he-media-actions relative min-w-0" :class="viewMode === 'masonry' ? 'masonry-grid-item' : viewMode === 'list' ? 'flex items-center gap-2' : ''">
               <MediaViewCard :media="item" :mode="viewMode" :class="viewMode === 'list' ? 'min-w-0 flex-1' : ''" @click="openMedia(item)" />
-              <button v-if="authState.user?.is_admin" type="button" class="grid size-11 shrink-0 place-items-center rounded-xl transition-colors hover:bg-danger hover:text-white focus-ring" :class="viewMode === 'list' ? 'bg-surface text-subtle' : 'absolute right-2 top-2 z-10 bg-black/75 text-white/85'" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
+              <button v-if="authState.user?.is_admin" type="button" class="he-media-delete grid size-11 shrink-0 place-items-center rounded-xl transition-colors hover:bg-danger hover:text-white focus-ring" :class="viewMode === 'list' ? 'bg-surface text-subtle' : 'absolute right-2 top-2 z-10 bg-black/75 text-white/85'" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
             </div>
           </div>
 

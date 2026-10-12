@@ -470,6 +470,22 @@ html.he-standalone, .he-standalone body, .he-standalone #app { height: var(--he-
   .masonry-grid { column-gap: 12px; }
   .masonry-grid-item { margin-bottom: 12px; }
 }
+/* Cover actions stay available on touch devices and reveal on keyboard focus. */
+.he-media-delete {
+  transition: opacity 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .he-media-actions .he-media-delete {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .he-media-actions:hover .he-media-delete,
+  .he-media-actions:focus-within .he-media-delete {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
