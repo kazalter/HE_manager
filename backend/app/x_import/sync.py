@@ -181,7 +181,7 @@ def _run(job: SyncJob, cookie: str) -> None:
                     author_screen_name=t.author_screen_name,
                     full_text=t.full_text,
                     archive_name="(direct-sync)",
-                    status="pending",
+                    status="discarded" if __import__("app.services.media_discard", fromlist=["has_identity"]).has_identity(db, f"x:{t.tweet_id}:*") else "pending",
                 )
                 db.add(post)
                 page_new += 1

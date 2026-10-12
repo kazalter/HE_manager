@@ -1,5 +1,4 @@
 import os
-import shutil
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -305,7 +304,6 @@ def recheck_media_dedup(media_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/dedup/media/{media_id}/file")
-@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def delete_media_file(
     media_id: int,
     payload: schemas.DedupDeleteFileRequest,
@@ -313,44 +311,9 @@ def delete_media_file(
 ):
     if not payload.confirm:
         raise HTTPException(status_code=400, detail="请通过 confirm=true 二次确认")
-    media = db.query(models.Media).filter(models.Media.id == media_id).first()
-    if not media:
-        raise HTTPException(status_code=404, detail="Media not found")
-
-    if not media.folder or not media.folder.path:
-        raise HTTPException(status_code=409, detail="媒体条目没有可验证的媒体库根目录")
-
-    raw_value = (media.absolute_path or "").strip()
-    if not raw_value or not os.path.isabs(raw_value):
-        raise HTTPException(status_code=409, detail="拒绝删除无效或非绝对媒体路径")
-    raw_target = os.path.abspath(raw_value)
-    root_path = os.path.realpath(os.path.abspath(media.folder.path))
-    target_path = os.path.realpath(raw_target)
-    try:
-        is_inside_root = os.path.commonpath([root_path, target_path]) == root_path
-    except ValueError:
-        is_inside_root = False
-    if not raw_target or not is_inside_root or target_path == root_path:
-        raise HTTPException(status_code=409, detail="拒绝删除媒体库范围外或媒体库根目录本身")
-    if os.path.islink(raw_target):
-        raise HTTPException(status_code=409, detail="拒绝删除符号链接，请手动确认目标")
-
-    file_deleted = False
-    if target_path and os.path.exists(target_path):
-        try:
-            if os.path.isdir(target_path):
-                shutil.rmtree(target_path)
-            else:
-                os.remove(target_path)
-            file_deleted = True
-        except OSError as exc:
-            raise HTTPException(status_code=500, detail=f"文件删除失败：{exc}")
-
-    media_cleanup.detach_media_references(db, [media.id])
-
-    fp = db.query(models.MediaFingerprint).filter(models.MediaFingerprint.media_id == media.id).first()
-    if fp:
-        db.delete(fp)
-    db.delete(media)
-    db.commit()
-    return {"file_deleted": file_deleted, "media_id": media_id}
+    from ..services import media_discard
+    plan = media_discard.build_plan(db, "media", media_id)
+    result = media_discard.discard(db, "media", media_id, plan["preview_hash"])
+    return {"file_deleted": result["cleanup_status"] == "completed" and any(p["exists"] for p in plan["targets"]),
+            "media_id": media_id, "discarded": True, "cleanup_status": result["cleanup_status"],
+            "cleanup_error": result["cleanup_error"]}

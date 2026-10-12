@@ -11,6 +11,7 @@ withDefaults(defineProps<{
   url: string
   checked: boolean
   downloaded?: boolean
+  discarded?: boolean
   /** Thumb aspect: manga 2:3 covers, audio squares. */
   square?: boolean
   placeholderIcon: Component
@@ -27,12 +28,12 @@ const emit = defineEmits<{ toggle: [] }>()
 <template>
   <label
     class="flex min-h-14 items-center gap-3 px-4 py-3 transition-colors"
-    :class="downloaded ? 'cursor-default' : 'cursor-pointer hover:bg-surface-2'"
+    :class="downloaded || discarded ? 'cursor-default' : 'cursor-pointer hover:bg-surface-2'"
   >
     <input
       type="checkbox"
-      :checked="checked && !downloaded"
-      :disabled="downloaded"
+      :checked="checked && !downloaded && !discarded"
+      :disabled="downloaded || discarded"
       class="size-4 shrink-0 rounded-sm accent-accent disabled:opacity-40"
       @change="emit('toggle')"
     />
@@ -45,7 +46,8 @@ const emit = defineEmits<{ toggle: [] }>()
     <div class="min-w-0 flex-1" :class="downloaded ? 'opacity-70' : ''">
       <p class="line-clamp-2 text-body font-medium leading-snug text-ink">{{ title }}</p>
       <div class="mt-0.5 flex min-w-0 items-center gap-2">
-        <UiBadge v-if="downloaded" tone="success">已下载</UiBadge>
+        <UiBadge v-if="discarded" tone="neutral">丢弃</UiBadge>
+        <UiBadge v-else-if="downloaded" tone="success">已下载</UiBadge>
         <span class="truncate text-meta text-subtle">{{ meta }}</span>
       </div>
     </div>

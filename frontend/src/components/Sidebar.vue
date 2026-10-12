@@ -2,6 +2,7 @@
 import { computed, type Component } from 'vue'
 import { useRoute, type RouteLocationRaw } from 'vue-router'
 import {
+  ArchiveX,
   BarChart3,
   Book,
   Box,
@@ -79,6 +80,7 @@ const sections = computed(() => ([
     items: [
       { to: '/bd2-spine', label: 'BD2 动态', icon: Box },
       { to: '/stats', label: '统计看板', icon: BarChart3 },
+      { to: '/discarded', label: '丢弃记录', icon: ArchiveX, admin: true },
       { to: '/dedup', label: '重复管理', icon: CopyMinus, admin: true },
     ],
   },

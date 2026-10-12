@@ -11,6 +11,7 @@ withDefaults(defineProps<{
   /** Overlay badge text when not downloaded, e.g. an RJ code. */
   code?: string
   downloaded?: boolean
+  discarded?: boolean
   aspect?: string
   placeholderIcon: Component
 }>(), {
@@ -41,7 +42,11 @@ withDefaults(defineProps<{
       </div>
       <div class="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/8 transition-colors duration-200 group-hover:ring-white/20"></div>
       <span
-        v-if="downloaded"
+        v-if="discarded"
+        class="absolute left-2 top-2 inline-flex h-6 items-center rounded-md bg-surface-3 px-2 text-caption font-medium text-ink"
+      >丢弃</span>
+      <span
+        v-else-if="downloaded"
         class="absolute left-2 top-2 inline-flex h-6 items-center gap-1 rounded-md bg-success px-1.5 text-caption font-medium text-black/85"
       >
         <Check :size="12" aria-hidden="true" />已下载

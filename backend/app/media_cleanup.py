@@ -17,6 +17,8 @@ def detach_media_references(db: Session, media_ids: Iterable[int]) -> list[int]:
     db.query(models.XMediaItem).filter(
         models.XMediaItem.library_media_id.in_(ids)
     ).update({models.XMediaItem.library_media_id: None}, synchronize_session=False)
+    db.query(models.PawchiveAttachment).filter(models.PawchiveAttachment.media_id.in_(ids)).update(
+        {models.PawchiveAttachment.media_id: None}, synchronize_session=False)
     db.query(models.DuplicateCandidate).filter(
         or_(
             models.DuplicateCandidate.existing_media_id.in_(ids),

@@ -218,3 +218,5 @@ def run_schema_migrations():
     ensure_tag_columns()
     ensure_pawchive_tables()
     ensure_assistant_tables()
+    models.DiscardedContent.__table__.create(bind=engine, checkfirst=True)
+    models.DiscardedIdentity.__table__.create(bind=engine, checkfirst=True)

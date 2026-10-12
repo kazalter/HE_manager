@@ -222,6 +222,8 @@ def log_wnacg_download_failure(download_root_path: str, title: str, url: str, er
 
 
 def prepare_wnacg_download_plan(item: models.ExternalFavoriteItem, source: models.ExternalFavoriteSource, download_root_path: str):
+    from ..media_discard import ensure_external_download_allowed
+    ensure_external_download_allowed(item)
     item_dir = external_item_download_dir(item, source, download_root_path)
 
     item_api_url = urljoin(item.url, f"/photos-item-aid-{item.external_id}.html")
@@ -251,6 +253,8 @@ def prepare_wnacg_download_plan(item: models.ExternalFavoriteItem, source: model
 
 @__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def download_wnacg_item(item: models.ExternalFavoriteItem, source: models.ExternalFavoriteSource, plan: dict, job: Optional[dict] = None):
+    from ..media_discard import ensure_external_download_allowed
+    ensure_external_download_allowed(item)
     item_dir = plan["item_dir"]
     image_urls = plan["image_urls"]
     os.makedirs(item_dir, exist_ok=True)
@@ -318,6 +322,13 @@ def run_wnacg_download_job(job_id: str, item_ids: List[int], download_root_path:
                     continue
                 if task is not None:
                     task["title"] = item.title
+                from ..media_discard import external_discarded_ids
+                if item.id in external_discarded_ids([item], db):
+                    job["completed"] += 1
+                    if task is not None:
+                        task["status"] = "discarded"
+                    job["results"].append({"item_id": item_id, "status": "discarded"})
+                    continue
                 source = get_source_or_404(item.source_id, db)
                 if source.source_type != "wnacg":
                     job["failed"] += 1

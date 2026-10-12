@@ -2,11 +2,13 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import { ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, LayoutGrid, List, Rows3, Search, SlidersHorizontal, Star, Tag as TagIcon, TriangleAlert, X } from 'lucide-vue-next'
+import { ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, LayoutGrid, List, Rows3, Search, SlidersHorizontal, Star, Tag as TagIcon, TriangleAlert, Trash2, X } from 'lucide-vue-next'
 import { API_BASE_URL, thumbnailUrl } from '../config'
 import { authState } from '../auth'
 import mediaPlaceholderUrl from '../assets/media-placeholder.svg?no-inline'
 import type { Media, Tag } from '../types'
+import DiscardContentDialog from '../components/DiscardContentDialog.vue'
+import type { DiscardTarget, DiscardRecord } from '../utils/discardApi'
 import MediaCard from '../components/MediaCard.vue'
 import MediaViewCard from '../components/MediaViewCard.vue'
 import { AsyncMediaDetail as MediaDetail } from '../components/asyncComponents'
@@ -28,6 +30,12 @@ const continueMedia = ref<Media[]>([])
 const tags = ref<Tag[]>([])
 const loading = ref(true)
 const mediaError = ref('')
+const discardTarget = ref<DiscardTarget | null>(null)
+const discardNotice = ref('')
+const afterDiscard = async (record: DiscardRecord) => {
+  discardNotice.value = record.cleanup_error || '内容已删除并标记为丢弃，后续扫描和同步会跳过。'
+  closeMedia(); await fetchMedia(); await fetchContinueMedia()
+}
 const selectedMedia = ref<Media | null>(null)
 const searchQuery = ref(typeof route.query.search === 'string' ? route.query.search : '')
 const validSort = (value: unknown): 'date' | 'title' | 'rating' | 'opened' => value === 'title' || value === 'rating' || value === 'opened' ? value : 'date'
@@ -579,6 +587,7 @@ onMounted(async () => {
 <template>
   <div class="relative z-10 min-h-full">
     <PageHeader sticky :title="pageTitle" :count="loading && !totalItems ? undefined : `${totalItems.toLocaleString()} 项`">
+      <p v-if="discardNotice" role="status" class="w-full text-meta text-muted">{{ discardNotice }} <router-link to="/discarded" class="text-accent underline">查看丢弃记录</router-link></p>
       <div class="flex flex-wrap items-center gap-2">
         <div class="he-home-search flex min-w-0 items-center gap-2" :class="compact ? 'w-full' : ''">
           <UiInput
@@ -862,25 +871,16 @@ onMounted(async () => {
 
         <div v-else-if="mediaList.length > 0" class="flex flex-col gap-10">
           <div v-if="viewMode === 'poster'" :class="posterGridClass">
-            <MediaCard
-              v-for="(item, index) in mediaList"
-              :key="item.id"
-              :media="item"
-              :index="index"
-              :shape="cardShape"
-              :show-type="!mediaType"
-              @click="openMedia(item)"
-            />
+            <div v-for="(item, index) in mediaList" :key="item.id" class="relative min-w-0">
+              <MediaCard :media="item" :index="index" :shape="cardShape" :show-type="!mediaType" @click="openMedia(item)" />
+              <button v-if="authState.user?.is_admin" type="button" class="absolute right-2 top-2 z-10 grid size-11 place-items-center rounded-xl bg-black/75 text-white/85 transition-colors hover:bg-danger hover:text-white focus-ring" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
+            </div>
           </div>
           <div v-else :class="viewMode === 'masonry' ? 'masonry-grid' : viewMode === 'wide' ? 'grid grid-cols-1 gap-x-5 gap-y-7 md:grid-cols-2 xl:grid-cols-3' : 'flex flex-col gap-2'">
-            <MediaViewCard
-              v-for="item in mediaList"
-              :key="item.id"
-              :media="item"
-              :mode="viewMode"
-              :class="viewMode === 'masonry' ? 'masonry-grid-item' : ''"
-              @click="openMedia(item)"
-            />
+            <div v-for="item in mediaList" :key="item.id" class="relative min-w-0" :class="viewMode === 'masonry' ? 'masonry-grid-item' : viewMode === 'list' ? 'flex items-center gap-2' : ''">
+              <MediaViewCard :media="item" :mode="viewMode" :class="viewMode === 'list' ? 'min-w-0 flex-1' : ''" @click="openMedia(item)" />
+              <button v-if="authState.user?.is_admin" type="button" class="grid size-11 shrink-0 place-items-center rounded-xl transition-colors hover:bg-danger hover:text-white focus-ring" :class="viewMode === 'list' ? 'bg-surface text-subtle' : 'absolute right-2 top-2 z-10 bg-black/75 text-white/85'" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
+            </div>
           </div>
 
           <PaginationControl
@@ -901,6 +901,7 @@ onMounted(async () => {
       </div>
     </div>
 
+    <DiscardContentDialog v-model:target="discardTarget" @discarded="afterDiscard" />
     <MediaDetail
       v-if="selectedMedia"
       :initial-media="selectedMedia"
@@ -908,6 +909,7 @@ onMounted(async () => {
       :has-adjacent-media-page="hasAdjacentViewerPage"
       :load-adjacent-media-page="loadAdjacentViewerPage"
       @close="closeMedia"
+      @discarded="afterDiscard"
       @updated="updateMediaInList"
       @navigate="openMedia($event, true)"
     />

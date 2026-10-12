@@ -94,6 +94,26 @@ class Media(Base):
         cascade="all, delete-orphan",
     )
 
+class DiscardedContent(Base):
+    __tablename__ = "discarded_content"
+    id = Column(String(36), primary_key=True)
+    title = Column(String, nullable=False)
+    source_type = Column(String, nullable=False)
+    discarded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    media_count = Column(Integer, default=0, nullable=False)
+    file_size = Column(Integer, default=0, nullable=False)
+    targets_json = Column(Text, nullable=False)
+    media_ids_json = Column(Text, nullable=False, default="[]")
+    cleanup_status = Column(String, default="pending", nullable=False)
+    cleanup_error = Column(Text, nullable=True)
+
+
+class DiscardedIdentity(Base):
+    __tablename__ = "discarded_identities"
+    key = Column(String(512), primary_key=True)
+    discard_id = Column(String(36), ForeignKey("discarded_content.id", ondelete="CASCADE"), nullable=False, index=True)
+
+
 class Tag(Base):
     __tablename__ = "tags"
     __table_args__ = (

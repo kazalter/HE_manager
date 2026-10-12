@@ -140,7 +140,7 @@ def upload_x_archive(
             author_screen_name=like.author_screen_name,
             full_text=like.full_text,
             archive_name=file.filename or saved_name,
-            status="pending",
+            status="discarded" if __import__("app.services.media_discard", fromlist=["has_identity"]).has_identity(db, f"x:{like.tweet_id}:*") else "pending",
         )
         db.add(post)
         new_count += 1

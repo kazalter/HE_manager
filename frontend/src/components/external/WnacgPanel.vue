@@ -8,6 +8,7 @@ import {
   RefreshCw,
   Search,
   ShieldCheck,
+  Trash2,
   Square,
   X,
 } from 'lucide-vue-next'
@@ -21,6 +22,8 @@ import { externalDownloadStore } from '../../stores/externalDownloadStore'
 import { useExternalFavoritesPage } from '../../composables/useExternalFavoritesPage'
 import { EmptyState, UiButton, UiIconButton, UiInput, UiModal, UiSkeleton, controlClass, fieldHintClass, fieldLabelClass, type Tone } from '../ui'
 import ExternalSourceLayout from './ExternalSourceLayout.vue'
+import DiscardContentDialog from '../DiscardContentDialog.vue'
+import type { DiscardRecord, DiscardTarget } from '../../utils/discardApi'
 import ExternalItemCard from './ExternalItemCard.vue'
 import ExternalPickRow from './ExternalPickRow.vue'
 
@@ -31,6 +34,12 @@ const pageLimit = ref(30)
 const searchQuery = ref('')
 const syncing = ref(false)
 const errorMessage = ref('')
+const discardTarget = ref<DiscardTarget | null>(null)
+const discardNotice = ref('')
+const afterDiscard = async (record: DiscardRecord) => {
+  selectedDownloadIds.value = new Set(); discardNotice.value = record.cleanup_error || '内容已删除并丢弃，之后不会重复下载。'
+  closeLocalMedia(); await fetchItems(); await fetchLocalMangaList()
+}
 const sources = ref<ExternalFavoriteSource[]>([])
 const activeSourceId = ref<number | null>(null)
 const sourcesLoaded = ref(false)
@@ -65,9 +74,9 @@ const activeSource = computed(() => {
 
 const filteredItems = computed(() => items.value)
 const pagedItems = computed(() => items.value)
-const downloadableFilteredItems = computed(() => items.value.filter(item => !item.local_media_id))
+const downloadableFilteredItems = computed(() => items.value.filter(item => !item.local_media_id && item.status !== 'discarded'))
 const selectedDownloadItems = computed(() => {
-  return items.value.filter(item => selectedDownloadIds.value.has(item.id) && !item.local_media_id)
+  return items.value.filter(item => selectedDownloadIds.value.has(item.id) && !item.local_media_id && item.status !== 'discarded')
 })
 const allFilteredSelected = computed(() => {
   return downloadableFilteredItems.value.length > 0 && downloadableFilteredItems.value.every(item => selectedDownloadIds.value.has(item.id))
@@ -151,7 +160,7 @@ const goToPage = (page: number) => {
 }
 
 const toggleDownloadSelection = (item: ExternalFavoriteItem) => {
-  if (item.local_media_id) return
+  if (item.local_media_id || item.status === 'discarded') return
   const next = new Set(selectedDownloadIds.value)
   if (next.has(item.id)) {
     next.delete(item.id)
@@ -189,7 +198,7 @@ const exportSelectedLinks = () => {
 
 const startWnacgDownload = async () => {
   if (selectedDownloadItems.value.length === 0 || downloadInProgress.value) return
-  const pendingItems = selectedDownloadItems.value.filter(item => !item.local_media_id)
+  const pendingItems = selectedDownloadItems.value.filter(item => !item.local_media_id && item.status !== 'discarded')
   if (pendingItems.length === 0) return
   const trimmedDownloadRootPath = downloadRootPath.value.trim()
   if (!trimmedDownloadRootPath) {
@@ -439,16 +448,10 @@ watch(favoritesError, message => {
 
     <template v-else-if="items.length > 0">
       <div class="poster-grid pt-2">
-        <ExternalItemCard
-          v-for="item in pagedItems"
-          :key="item.id"
-          :title="item.title"
-          :cover="item.cover_url ? coverSrc(item) : null"
-          :meta="item.category_name || 'WNACG'"
-          :downloaded="!!item.local_media_id"
-          :placeholder-icon="BookOpen"
-          @click="openExternalItem(item)"
-        />
+        <div v-for="item in pagedItems" :key="item.id" class="relative min-w-0">
+          <ExternalItemCard :title="item.title" :cover="item.cover_url ? coverSrc(item) : null" :meta="item.category_name || 'WNACG'" :downloaded="!!item.local_media_id" :discarded="item.status === 'discarded'" :placeholder-icon="BookOpen" @click="openExternalItem(item)" />
+          <button v-if="item.status !== 'discarded'" type="button" class="absolute right-2 top-2 z-10 grid size-11 place-items-center rounded-xl bg-black/75 text-white/85 hover:bg-danger hover:text-white focus-ring" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'external', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
+        </div>
       </div>
 
       <div class="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
@@ -534,6 +537,7 @@ watch(favoritesError, message => {
             :url="item.url"
             :checked="selectedDownloadIds.has(item.id)"
             :downloaded="!!item.local_media_id"
+            :discarded="item.status === 'discarded'"
             :placeholder-icon="BookOpen"
             @toggle="toggleDownloadSelection(item)"
           />
@@ -557,11 +561,14 @@ watch(favoritesError, message => {
       </template>
     </UiModal>
 
+    <DiscardContentDialog v-model:target="discardTarget" @discarded="afterDiscard" />
+    <p v-if="discardNotice" role="status" class="text-meta text-muted">{{ discardNotice }} <router-link to="/discarded" class="text-accent underline">查看丢弃记录</router-link></p>
     <MediaDetail
       v-if="selectedLocalMedia"
       :initial-media="selectedLocalMedia"
       :all-media="localMangaList"
       @close="closeLocalMedia"
+      @discarded="afterDiscard"
       @updated="updateLocalMediaInList"
       @navigate="selectedLocalMedia = $event"
     />

@@ -88,6 +88,10 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                 for media in db.query(models.Media).filter(models.Media.folder_id == folder.id).all()
             }
 
+            from ..services.media_discard import discarded_paths, path_is_discarded, discarded_source_files
+            discard_paths = discarded_paths(db)
+            discard_identities = {row[0] for row in db.query(models.DiscardedIdentity.key).all()}
+
             library_title_index: set[str] = set()
             for row in (
                 db.query(models.Media.normalized_title)
@@ -111,7 +115,16 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
             for root, dirs, files in os.walk(folder.path):
                 dirs[:] = [name for name in dirs if name.lower() not in SKIP_FOLDERS]
 
+                if path_is_discarded(root, discard_paths):
+                    dirs[:] = []
+                    continue
+
                 if should_skip_dir(root):
+                    continue
+
+                discarded_root, discarded_files = discarded_source_files(root, files, discard_identities)
+                if discarded_root:
+                    dirs[:] = []
                     continue
 
                 # --- MANGA FOLDER LOGIC ---
@@ -234,6 +247,8 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                         continue
 
                     file_path = os.path.join(root, file)
+                    if file in discarded_files or path_is_discarded(file_path, discard_paths):
+                        continue
                     scanned_paths.add(file_path)
 
                     existing = existing_media.get(file_path)

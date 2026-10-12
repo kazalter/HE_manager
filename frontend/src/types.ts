@@ -256,6 +256,7 @@ export interface ExternalFavoriteItem {
     sync_position: number | null;
     last_seen_at: string | null;
     local_media_id: number | null;
+    status?: "active" | "discarded";
 }
 
 export interface XImportSource {

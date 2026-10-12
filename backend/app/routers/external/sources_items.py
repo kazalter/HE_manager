@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import FileResponse
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from ... import models, schemas
@@ -88,9 +88,10 @@ def list_external_favorites(
     offset: int = 0,
     db: Session = Depends(get_db),
 ):
-    query = db.query(models.ExternalFavoriteItem).options(
-        joinedload(models.ExternalFavoriteItem.source)
-    )
+    query = db.query(models.ExternalFavoriteItem, models.DiscardedIdentity.key).outerjoin(
+        models.DiscardedIdentity,
+        models.DiscardedIdentity.key == (func.coalesce(models.ExternalFavoriteItem.source_type, "wnacg") + ":" + models.ExternalFavoriteItem.external_id),
+    ).options(joinedload(models.ExternalFavoriteItem.source))
     if source_type:
         query = query.filter(models.ExternalFavoriteItem.source_type == source_type)
     if source_id:
@@ -114,7 +115,8 @@ def list_external_favorites(
         .limit(max(1, min(limit, 200)))
         .all()
     )
-    return serialize_external_favorite_items(favorite_items, db)
+    return serialize_external_favorite_items([row[0] for row in favorite_items], db,
+        discarded_ids={row[0].id for row in favorite_items if row[1] is not None})
 
 
 @router.post("/external/favorites/reconcile")

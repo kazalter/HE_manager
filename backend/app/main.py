@@ -22,6 +22,7 @@ from .routers import bd2 as bd2_routes
 from .routers import creators as creators_routes
 from .routers import dedup as dedup_routes
 from .routers import external as external_routes
+from .routers import discard as discard_routes
 from .routers import media as media_routes
 from .routers import pawchive as pawchive_routes
 from .routers import recommend as recommend_routes
@@ -68,6 +69,8 @@ async def lifespan(app: FastAPI):
     pawchive_media_cache.reset_for_startup()
     job_lifecycle.cleanup_job_history()
     dedup_worker.recover_checking_jobs()
+    from .services.media_discard import recover_pending_cleanup
+    recover_pending_cleanup()
     auto_sync_routes.init_scheduler()
     cleanup_orphaned_thumbnails()
     assistant_routes.sessions.start_background()
@@ -113,6 +116,7 @@ app.include_router(auto_sync_routes.router)
 app.include_router(bd2_routes.router)
 app.include_router(auth_routes.router)
 app.include_router(media_routes.router)
+app.include_router(discard_routes.router)
 app.include_router(audio_routes.router)
 app.include_router(recommend_routes.router)
 app.include_router(system_routes.router)

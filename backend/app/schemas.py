@@ -247,6 +247,7 @@ class ExternalFavoriteItem(BaseModel):
     sync_position: Optional[int] = None
     last_seen_at: Optional[datetime] = None
     local_media_id: Optional[int] = None
+    status: str = "active"
 
     model_config = ConfigDict(from_attributes=True)
 

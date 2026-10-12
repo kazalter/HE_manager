@@ -147,7 +147,9 @@ def select_pending_post_ids(
         if include_failed:
             active_states.append("failed")
         query = query.filter(models.XPost.status.in_(active_states))
-    return [row[0] for row in query.order_by(models.XPost.discovered_at.asc(), models.XPost.id.asc()).all()]
+    rows = query.with_entities(models.XPost.id, models.XPost.tweet_id).order_by(models.XPost.discovered_at.asc(), models.XPost.id.asc()).all()
+    discarded = {r[0] for r in db.query(models.DiscardedIdentity.key).filter(models.DiscardedIdentity.key.in_([f'x:{r.tweet_id}:*' for r in rows])).all()}
+    return [r.id for r in rows if f'x:{r.tweet_id}:*' not in discarded]
 
 
 def _process_post(job: ImportJob, post_id: int, db: Session, folder: models.Folder) -> None:
@@ -155,7 +157,8 @@ def _process_post(job: ImportJob, post_id: int, db: Session, folder: models.Fold
     if not post:
         return
 
-    if post.status == "completed":
+    from ..services.media_discard import has_identity
+    if post.status in {"completed", "discarded"} or has_identity(db, f"x:{post.tweet_id}:*"):
         job.skipped_posts += 1
         return
 
@@ -228,6 +231,8 @@ def _process_post(job: ImportJob, post_id: int, db: Session, folder: models.Fold
             return
 
         record = existing_media.get(media.media_index)
+        if (record and record.status == "discarded") or has_identity(db, f'x:{post.tweet_id}:{media.media_index}'):
+            continue
         if record and record.status == "downloaded" and record.local_path and os.path.exists(record.local_path):
             if not (
                 record.library_media_id

@@ -19,6 +19,8 @@ from .matching import (
 
 
 def prepare_asmr_download_plan_for_item(item: models.ExternalFavoriteItem, source: models.ExternalFavoriteSource, download_root_path: str):
+    from ..media_discard import ensure_external_download_allowed
+    ensure_external_download_allowed(item)
     """Fetch the /api/tracks tree, apply the source's format + SE-version filters,
     and resolve each track + subtitle to a local destination under the work's folder.
     """
@@ -59,6 +61,8 @@ def prepare_asmr_download_plan_for_item(item: models.ExternalFavoriteItem, sourc
 
 @__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def download_asmr_item(item: models.ExternalFavoriteItem, source: models.ExternalFavoriteSource, plan: dict, job: Optional[dict] = None):
+    from ..media_discard import ensure_external_download_allowed
+    ensure_external_download_allowed(item)
     """Stream every file in `plan["files"]` to disk under `plan["item_dir"]`,
     updating job counters as bytes come in.
     """
@@ -183,6 +187,13 @@ def run_asmr_download_job(job_id: str, item_ids: List[int], download_root_path: 
                     continue
                 if task is not None:
                     task["title"] = item.title
+                from ..media_discard import external_discarded_ids
+                if item.id in external_discarded_ids([item], db):
+                    job["completed"] += 1
+                    if task is not None:
+                        task["status"] = "discarded"
+                    job["results"].append({"item_id": item_id, "status": "discarded"})
+                    continue
                 source = get_source_or_404(item.source_id, db)
                 if (source.source_type or "") != "asmr":
                     job["failed"] += 1

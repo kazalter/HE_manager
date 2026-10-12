@@ -615,8 +615,8 @@ onBeforeUnmount(() => {
 
     <UiModal
       v-model:open="deleteModalOpen"
-      title="永久删除右侧文件"
-      description="操作不可撤销。系统会先验证文件位于已配置的媒体库目录内，再从磁盘和媒体库中删除。"
+      title="删除并丢弃右侧内容"
+      description="删除右侧本地文件并保留丢弃记录，以后扫描和同步会跳过。文件无法恢复。"
       size="sm"
     >
       <div v-if="confirmDeletePair" class="rounded-lg border border-line bg-surface-2 p-3.5">

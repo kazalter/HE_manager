@@ -14,6 +14,7 @@ import {
 } from 'lucide-vue-next'
 import { xImportStore } from '../../stores/xImportStore'
 import { useXImportPanelData } from '../../composables/useXImportPanelData'
+import XPostList from './XPostList.vue'
 import AutoSyncSection from './AutoSyncSection.vue'
 import ExternalSourceLayout from './ExternalSourceLayout.vue'
 import { UiBadge, UiButton, UiCard, UiIconButton, UiInput, fieldHintClass, fieldLabelClass, iconButtonClass, type Tone } from '../ui'
@@ -479,6 +480,8 @@ const handleAutoSyncUpdate = updateAutoSync
         </li>
       </ul>
     </UiCard>
+
+    <XPostList v-if="source" :source-id="source.id" @changed="xImportStore.refreshStats(source.id)" />
 
     <UiCard v-if="job?.errors?.length" padding="none" class="overflow-hidden">
       <h3 class="px-4 py-3 text-body font-semibold text-ink sm:px-5">错误日志</h3>

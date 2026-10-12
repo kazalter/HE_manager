@@ -126,10 +126,11 @@ const recheckMedia = async (mediaId: number) => {
 
 const deleteMediaFile = async (mediaId: number) => {
   try {
-    await axios.delete(`${API_BASE_URL}/dedup/media/${mediaId}/file`, {
+    const response = await axios.delete(`${API_BASE_URL}/dedup/media/${mediaId}/file`, {
       data: { confirm: true },
     })
     await refresh()
+    if (response.data?.cleanup_error) state.errorMessage = response.data.cleanup_error + '；请到丢弃记录中重试清理'
   } catch (err: any) {
     state.errorMessage = err.response?.data?.detail || '删除文件失败'
     throw err

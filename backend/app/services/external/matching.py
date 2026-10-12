@@ -7,6 +7,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ... import models, scanner
+from ..media_discard import ensure_external_download_allowed, external_discarded_ids
 from ..thumbnails import THUMBNAIL_DIR
 from .covers import (
     ensure_asmr_cover_file,
@@ -74,6 +75,7 @@ def upsert_external_downloaded_audio_media(
     track_count: int,
     total_bytes: int,
 ) -> models.Media:
+    ensure_external_download_allowed(item)
     folder = ensure_external_audio_library(source, download_root_path, db)
     rel_path = os.path.relpath(item_dir, folder.path)
 
@@ -200,6 +202,8 @@ def find_local_media_for_external_items(
 
 @__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def find_local_media_for_external_item(item: models.ExternalFavoriteItem, db: Session) -> Optional[models.Media]:
+    if item.id in external_discarded_ids([item], db):
+        return None
     expected_media_type = "audio" if (item.source_type or "") == "asmr" else "manga"
     is_manga = expected_media_type == "manga"
 
@@ -283,6 +287,7 @@ def find_local_media_for_external_item(item: models.ExternalFavoriteItem, db: Se
 def serialize_external_favorite_item(
     item: models.ExternalFavoriteItem,
     local_media_id: Optional[int] = None,
+    status: str = "active",
 ) -> dict:
     return {
         "id": item.id,
@@ -297,18 +302,22 @@ def serialize_external_favorite_item(
         "sync_position": item.sync_position,
         "last_seen_at": item.last_seen_at,
         "local_media_id": local_media_id,
+        "status": status,
     }
 
 
 def serialize_external_favorite_items(
     items: List[models.ExternalFavoriteItem],
     db: Session,
+    discarded_ids: Optional[set[int]] = None,
 ) -> List[dict]:
     local_media = find_local_media_for_external_items(items, db)
+    discarded = external_discarded_ids(items, db) if discarded_ids is None else discarded_ids
     return [
         serialize_external_favorite_item(
             item,
-            local_media_id=local_media[item.id].id if item.id in local_media else None,
+            local_media_id=local_media[item.id].id if item.id in local_media and item.id not in discarded else None,
+            status="discarded" if item.id in discarded else "active",
         )
         for item in items
     ]
@@ -322,6 +331,7 @@ def upsert_external_downloaded_media(
     download_root_path: str,
     db: Session,
 ) -> models.Media:
+    ensure_external_download_allowed(item)
     folder = ensure_external_manga_library(source, download_root_path, db)
     page_count = scanner.count_manga_pages(item_dir, ".dir")
     rel_path = os.path.relpath(item_dir, folder.path)

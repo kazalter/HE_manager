@@ -100,6 +100,8 @@ def downloader_callback(
     if not item:
         raise HTTPException(status_code=404, detail="条目不存在")
 
+    from ...services.media_discard import ensure_external_download_allowed
+    ensure_external_download_allowed(item)
     source = get_source_or_404(item.source_id, db)
     job = (payload or {}).get("job") or {}
     item_dir = job.get("dir") or external_item_download_dir(item, source)

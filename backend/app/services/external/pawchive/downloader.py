@@ -139,6 +139,10 @@ def create_download(selections: list[dict], db: Session, background_tasks) -> di
         already = []
         active_job_id = None
         for detail, attachment in requested:
+            from ...media_discard import has_identity
+            key = f'pawchive:{detail["service"]}:{detail["creator_id"]}:{detail["post_id"]}:{attachment["attachment_key"]}'
+            if has_identity(db, key):
+                raise client.PawchiveError("INVALID_REQUEST", "此附件已丢弃，请先在丢弃记录中允许重新下载", 409)
             post = (db.query(models.PawchivePost).filter_by(
                 service=detail["service"], creator_id=detail["creator_id"], post_id=detail["post_id"]
             ).first())

@@ -148,7 +148,11 @@ def _run_wnacg(source_id: int) -> None:
         )
         download_root = source.download_root_path
         to_download = []
+        from ..media_discard import external_discarded_ids
+        discarded = external_discarded_ids(all_items, db)
         for fav_item in all_items:
+            if fav_item.id in discarded:
+                continue
             local_media = external_runtime.find_local_media_for_external_item(fav_item, db)
             if not local_media:
                 to_download.append(fav_item)

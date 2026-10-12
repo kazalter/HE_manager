@@ -3,6 +3,9 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import axios from 'axios'
 import { Maximize, Minimize, Trash2, X, FileQuestion, RefreshCw, PanelRightClose, PanelRightOpen, Pause, Play, Loader2 } from 'lucide-vue-next'
 import { API_BASE_URL, STREAM_URL, authUrl, thumbnailUrl } from '../config'
+import { authState } from '../auth'
+import DiscardContentDialog from './DiscardContentDialog.vue'
+import type { DiscardRecord, DiscardTarget } from '../utils/discardApi'
 import type { Media } from '../types'
 import { audioPlaybackStore } from '../stores/audioPlaybackStore'
 import { useCompactViewport } from '../composables/useCompactViewport'
@@ -28,6 +31,7 @@ const emit = defineEmits<{
   close: []
   updated: [media: Media]
   navigate: [media: Media]
+  discarded: [record: DiscardRecord]
 }>()
 
 const currentMedia = ref<Media>(props.initialMedia)
@@ -41,6 +45,8 @@ const toggleMetadataPanel = () => {
   nextTick(resizeVideoPlayer)
 }
 
+const discardTarget = ref<DiscardTarget | null>(null)
+const afterDiscard = (record: DiscardRecord) => { emit('discarded', record); emit('close') }
 const isRechecking = ref(false)
 const toastMessage = ref('')
 const showToast = (msg: string) => {
@@ -242,16 +248,7 @@ const recheckMedia = async () => {
   }
 }
 
-const removeMissingMedia = async () => {
-  if (!confirm('确定要从媒体库中移除该记录吗？此操作不可逆。')) return
-  try {
-    await axios.delete(`${API_BASE_URL}/media/${currentMedia.value.id}`)
-    emit('close')
-    window.location.reload()
-  } catch (err: any) {
-    alert('移除失败: ' + err.message)
-  }
-}
+const removeMissingMedia = () => { discardTarget.value = { kind: 'media', target_id: currentMedia.value.id } }
 
 const handleVideoSequenceEnded = () => {
   if (playMode.value === 'order' || playMode.value === 'shuffle') {
@@ -503,6 +500,7 @@ onUnmounted(() => {
 })
 
 const handleKeydown = (e: KeyboardEvent) => {
+  if (discardTarget.value) return
   const target = e.target as HTMLElement | null
   if (
     target &&
@@ -562,6 +560,7 @@ const handleKeydown = (e: KeyboardEvent) => {
 }
 
 const handleKeyup = (e: KeyboardEvent) => {
+  if (discardTarget.value) return
   const target = e.target as HTMLElement | null
   if (
     target &&
@@ -624,6 +623,7 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
           >
             <h2 class="min-w-0 flex-1 select-none truncate text-body font-medium text-white sm:text-heading sm:font-semibold">{{ currentMedia.title }}</h2>
             <div class="he-viewer-actions flex shrink-0 items-center gap-1 rounded-2xl bg-black/70 p-1 text-white">
+              <button v-if="authState.user?.is_admin" type="button" class="he-chrome-btn w-11 text-white/80 hover:bg-danger hover:text-white" aria-label="删除并丢弃此内容" title="删除并丢弃" @click="removeMissingMedia"><Trash2 :size="18" aria-hidden="true" /></button>
               <div
                 v-if="(isImage || isManga) && !currentMedia.is_missing"
                 role="group"
@@ -714,9 +714,9 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
                   <template #icon><RefreshCw :size="16" /></template>
                   重新检查
                 </UiButton>
-                <UiButton variant="danger" size="lg" @click="removeMissingMedia">
+                <UiButton v-if="authState.user?.is_admin" variant="danger" size="lg" @click="removeMissingMedia">
                   <template #icon><Trash2 :size="16" /></template>
-                  从媒体库移除
+                  删除并丢弃
                 </UiButton>
               </div>
             </div>
@@ -802,6 +802,7 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
       </div>
     </div>
   </Teleport>
+  <DiscardContentDialog v-model:target="discardTarget" @discarded="afterDiscard" />
 </template>
 
 <style scoped>
