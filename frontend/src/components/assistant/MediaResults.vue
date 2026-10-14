@@ -31,7 +31,7 @@ const media = computed(() => {
       call.tool_name === 'get_media_detail'
         ? [call.result]
         : ['search_media', 'recommend_media'].includes(call.tool_name) &&
-            Array.isArray(call.result.items)
+          Array.isArray(call.result.items)
           ? call.result.items
           : []
     for (const value of candidates) {
@@ -122,9 +122,8 @@ const shown = computed(() =>
   (expanded.value ? media.value : media.value.slice(0, PREVIEW_COUNT)).map((item) => ({
     media: cards.value.get(item.id) || fallback(item),
     loading: pending.value.has(item.id),
-  })),
+  }))
 )
-
 const stats = computed(() => props.results.filter((c) => c.tool_name === 'get_library_stats'))
 const lists = computed(() =>
   props.results.filter((c) =>
@@ -144,12 +143,12 @@ const folderStatus: Record<string, string> = { idle: '空闲', scanning: '扫描
     aria-label="媒体库查询结果"
     class="min-w-0 space-y-4"
   >
-    <div v-if="media.length || basis.length" class="min-w-0 space-y-3 rounded-2xl border border-line bg-surface/70 p-3 sm:p-4">
-      <div class="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+    <div v-if="media.length || basis.length" class="min-w-0 space-y-3.5 rounded-2xl border border-line/85 bg-surface/85 p-3.5 shadow-2xs backdrop-blur-sm sm:p-4">
+      <div class="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-line/60 pb-2.5">
         <h2 class="flex items-center gap-2 text-base font-semibold text-ink">
           <Library :size="17" class="text-accent" aria-hidden="true" />
           找到的作品
-          <span v-if="media.length" class="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-medium tabular-nums text-accent-glow">{{ media.length }}</span>
+          <span v-if="media.length" class="rounded-full bg-accent/15 px-2.5 py-0.5 text-xs font-medium tabular-nums text-accent-glow">{{ media.length }}</span>
         </h2>
         <p v-if="matched > media.length" class="text-xs text-subtle tabular-nums">
           共匹配 {{ matched }} 部，这里展示管家取回的 {{ media.length }} 部
@@ -158,7 +157,7 @@ const folderStatus: Record<string, string> = { idle: '空闲', scanning: '扫描
       <p
         v-for="(text, i) in basis"
         :key="i"
-        class="flex items-start gap-2 rounded-xl bg-surface-2 px-3 py-2 text-sm leading-relaxed text-muted"
+        class="flex items-start gap-2 rounded-xl border border-accent/20 bg-accent/6 px-3.5 py-2.5 text-sm leading-relaxed text-ink"
       >
         <Sparkles :size="15" class="mt-0.5 shrink-0 text-accent" aria-hidden="true" />
         <span>{{ text }}</span>
@@ -187,15 +186,13 @@ const folderStatus: Record<string, string> = { idle: '空闲', scanning: '扫描
         :aria-expanded="expanded"
         @click="expanded = !expanded"
       >
-        <template #icon><ChevronDown :size="16" class="transition-transform motion-reduce:transition-none" :class="{ 'rotate-180': expanded }" /></template>
-        {{ expanded ? '收起' : '显示全部 ' + media.length + ' 部' }}
+        <template #icon><ChevronDown :size="16" class="transition-transform motion-reduce:transition-none" :class="expanded ? 'rotate-180' : ''" /></template>{{ expanded ? '收起' : '显示全部 ' + media.length + ' 部' }}
       </UiButton>
     </div>
-
     <div
       v-for="call in stats"
       :key="call.tool_call_id"
-      class="grid grid-cols-3 gap-2 sm:gap-3"
+      class="grid grid-cols-3 gap-2.5 sm:gap-3.5"
       role="group"
       aria-label="媒体库统计"
     >
@@ -206,25 +203,25 @@ const folderStatus: Record<string, string> = { idle: '空闲', scanning: '扫描
           { label: '已看', value: call.result.watched_count },
         ]"
         :key="tile.label"
-        class="rounded-2xl border border-line bg-surface/70 px-3 py-3 sm:px-4"
+        class="rounded-2xl border border-line/85 bg-surface/85 px-3.5 py-3.5 shadow-2xs sm:px-4"
       >
-        <p class="text-xs text-muted">{{ tile.label }}</p>
-        <p class="mt-1 text-xl font-semibold tabular-nums text-ink sm:text-2xl">{{ tile.value ?? '—' }}</p>
+        <p class="text-xs font-medium text-muted">{{ tile.label }}</p>
+        <p class="mt-1.5 text-xl font-bold tabular-nums text-ink sm:text-2xl">{{ tile.value ?? '-' }}</p>
       </div>
     </div>
 
     <div
       v-for="call in lists"
       :key="call.tool_call_id"
-      class="min-w-0 rounded-2xl border border-line bg-surface/70 p-3 text-sm text-muted sm:p-4 [overflow-wrap:anywhere]"
+      class="min-w-0 rounded-2xl border border-line/85 bg-surface/85 p-3.5 text-sm text-muted shadow-2xs sm:p-4 [overflow-wrap:anywhere]"
     >
       <template v-if="call.tool_name === 'list_tags'">
-        <h3 class="mb-3 flex items-center gap-2 font-medium text-ink"><Tags :size="16" class="text-accent" aria-hidden="true" />标签</h3>
+        <h3 class="mb-3 flex items-center gap-2 font-semibold text-ink"><Tags :size="16" class="text-accent" aria-hidden="true" />标签清单</h3>
         <ul v-if="list(call).length" class="flex flex-wrap gap-2">
           <li
             v-for="tag in list(call)"
             :key="String(tag.id ?? tag.name)"
-            class="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-1 text-xs text-ink"
+            class="inline-flex items-center gap-1.5 rounded-full border border-line/80 bg-surface-2 px-3 py-1 text-xs font-medium text-ink transition-colors hover:border-accent/30"
           >
             {{ tag.name }}<span class="tabular-nums text-subtle">{{ tag.count }}</span>
           </li>
@@ -232,20 +229,20 @@ const folderStatus: Record<string, string> = { idle: '空闲', scanning: '扫描
         <p v-else>没有匹配标签</p>
       </template>
       <template v-else-if="call.tool_name === 'list_folders'">
-        <h3 class="mb-2 flex items-center gap-2 font-medium text-ink"><FolderOpen :size="16" class="text-accent" aria-hidden="true" />配置目录</h3>
-        <ul class="divide-y divide-line">
-          <li v-for="folder in list(call)" :key="String(folder.id)" class="flex items-center justify-between gap-3 py-2">
-            <span class="min-w-0 text-ink"><span class="text-subtle tabular-nums">#{{ folder.id }}</span> {{ folder.display_name }}</span>
-            <span class="shrink-0 text-xs">{{ folderStatus[String(folder.status)] || folder.status }}</span>
+        <h3 class="mb-2 flex items-center gap-2 font-semibold text-ink"><FolderOpen :size="16" class="text-accent" aria-hidden="true" />监控目录列表</h3>
+        <ul class="divide-y divide-line/60">
+          <li v-for="folder in list(call)" :key="String(folder.id)" class="flex items-center justify-between gap-3 py-2.5 text-sm">
+            <span class="min-w-0 text-ink"><span class="text-subtle tabular-nums">#{{ folder.id }} </span>{{ folder.display_name || folder.path }}</span>
+            <span class="shrink-0 rounded-full bg-surface-2 px-2.5 py-0.5 text-xs font-medium">{{ folderStatus[String(folder.status)] || folder.status }}</span>
           </li>
         </ul>
       </template>
       <template v-else>
-        <h3 class="mb-2 flex items-center gap-2 font-medium text-ink"><Copy :size="16" class="text-accent" aria-hidden="true" />重复候选</h3>
-        <ul v-if="list(call).length" class="divide-y divide-line">
-          <li v-for="candidate in list(call)" :key="String(candidate.id)" class="py-2">
-            <p class="text-ink">{{ Array.isArray(candidate.titles) ? candidate.titles.join(' / ') : '' }}</p>
-            <p class="mt-0.5 text-xs">{{ candidate.basis }}</p>
+        <h3 class="mb-2 flex items-center gap-2 font-semibold text-ink"><Copy :size="16" class="text-accent" aria-hidden="true" />重复媒体候选</h3>
+        <ul v-if="list(call).length" class="divide-y divide-line/60">
+          <li v-for="candidate in list(call)" :key="String(candidate.id)" class="py-2.5">
+            <p class="font-medium text-ink">{{ Array.isArray(candidate.titles) ? candidate.titles.join(' / ') : '' }}</p>
+            <p class="mt-0.5 text-xs text-subtle">{{ candidate.basis }}</p>
           </li>
         </ul>
         <p v-else>没有待处理候选</p>
@@ -256,10 +253,11 @@ const folderStatus: Record<string, string> = { idle: '空闲', scanning: '扫描
       role="status"
       class="text-sm text-muted"
     >
-      部分结果超过展示上限，请缩小查询范围。
+      部分结果超出展示上限，请缩小查询范围。
     </p>
   </section>
 </template>
+
 <style scoped>
 .assistant-media-grid {
   grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));

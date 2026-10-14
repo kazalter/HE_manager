@@ -46,9 +46,9 @@ const incomplete = computed(
 const batchItems = computed(() => props.proposal.kind === 'media_batch_update' && Array.isArray(props.proposal.before.items) ? props.proposal.before.items as { media_id: number; title?: string }[] : [])
 const selection = ref<number[]>(batchItems.value.map(x => x.media_id))
 const selectionDirty = computed(() => batchItems.value.length > 0 && (selection.value.length !== batchItems.value.length || batchItems.value.some(x => !selection.value.includes(x.media_id))))
-const affected = ref<Record<string, unknown>[]>([]), affectedMore = ref(false), affectedOpen = ref(false), affectedBusy = ref(false)
-const kindLabels: Record<string, string> = { media_update: '修改媒体资料', media_batch_update: '批量修改资料', tag_rename: '标签改名', tag_merge: '合并标签', scan: '扫描目录', maintenance: '维护任务', file_move: '文件改名 / 移动' }
-const confirmLabel = computed(() => ({ scan: '批准启动扫描', maintenance: '批准启动任务', file_move: '批准移动', tag_merge: '批准合并', tag_rename: '批准改名' })[props.proposal.kind as 'scan'] || '批准修改')
+const affected = ref<Record<string, unknown>[]>([]), affectedMore = ref(false), affectedOpen = ref(false), affectedBusy = ref(false), affectedLoaded = ref(false)
+const kindLabels: Record<string, string> = { media_update: '修改媒体资料', media_batch_update: '批量修改资料', tag_rename: '重命名标签', scan: '启动扫描任务', maintenance: '启动维护任务', file_move: '移动关联文件', tag_merge: '合并标签组' }
+const confirmLabel = computed(() => ({ scan: '批准启动扫描', maintenance: '批准启动任务', file_move: '批准移动', tag_merge: '批准合并', tag_rename: '批准改名' } as Record<string, string>)[props.proposal.kind] || '批准方案')
 async function saveSelection() {
   if (!selection.value.length || busy.value || expired.value || state.value !== 'pending') return
   busy.value = true; error.value = ''
@@ -65,7 +65,7 @@ async function loadAffected(append = false) {
   try {
     const page = await getProposalTargets(props.proposal.id, { offset: append ? affected.value.length : 0, signal: controller.signal })
     if (!alive) return
-    affected.value = append ? [...affected.value, ...page.items] : page.items; affectedMore.value = page.has_more
+    affected.value = append ? [...affected.value, ...page.items] : page.items; affectedMore.value = page.has_more; affectedLoaded.value = true
   } catch (e) { if (alive) error.value = assistantErrorText(e) }
   finally { if (alive) affectedBusy.value = false }
 }
@@ -91,6 +91,12 @@ const status = computed(() =>
     ? '已过期'
     : stateLabels[state.value] || '建议不可用',
 )
+const statusBadgeClass = computed(() => {
+  if (state.value === 'applied') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+  if (state.value === 'pending' && !expired.value) return 'border-accent/30 bg-accent/12 text-accent'
+  if (state.value === 'rejected') return 'border-danger/30 bg-danger/10 text-danger'
+  return 'border-line bg-surface-2 text-muted'
+})
 const resultItems = computed(() => props.proposal.result?.items || [])
 const jobLabels: Record<string, string> = {
   queued: '等待执行',
@@ -101,7 +107,22 @@ const jobLabels: Record<string, string> = {
   needs_recovery: '需要恢复',
 }
 const labels: Record<string, string> = {
-  title: '标题', artist: '作者', view_status: '阅读 / 观看状态', items: '变更清单', media_id: '媒体编号', source_path: '源路径', destination_path: '目标路径', file_count: '文件项数', path_changes: '关联路径变更', fields: '资料', affected_media_count: '影响媒体数', affected_media_ids: '媒体编号', affected_list_truncated: '清单已截断', changes_truncated: '清单已截断', source_tag: '原标签', target_tag: '目标标签', namespace: '分类', name: '名称', media_count: '媒体数', media_ids: '媒体编号', list_truncated: '清单已截断',
+  title: '标题', artist: '作者', view_status: '阅读 / 观看状态', items: '变更清单', media_id: '媒体编号', source_path: '源文件路径', target_dir: '目标目录', target_path: '目标路径', overwrite: '覆盖模式', add_tags: '新增标签', remove_tags: '移除标签', tag_names: '标签组', target_tag_name: '合并至标签', delete_source_tag: '合并后删除原标签',
+  destination_path: '目标路径',
+  file_count: '文件项数',
+  path_changes: '关联路径变更',
+  fields: '资料',
+  affected_media_count: '影响媒体数',
+  affected_media_ids: '媒体编号',
+  affected_list_truncated: '清单已截断',
+  changes_truncated: '清单已截断',
+  source_tag: '原标签',
+  target_tag: '目标标签',
+  namespace: '分类',
+  name: '名称',
+  media_count: '媒体数',
+  media_ids: '媒体编号',
+  list_truncated: '清单已截断',
   requested_media_ids: '本次复查媒体', requested_count: '复查数量', backup_name: '备份名称', size_bytes: '大小',
   rating: '评分',
   favorite: '收藏',
@@ -111,8 +132,6 @@ const labels: Record<string, string> = {
   status: '状态',
   mode: '扫描范围',
   partial_warning: '扫描说明',
-  add_tags: '新增标签',
-  remove_tags: '移除标签',
   tags_truncated: '标签预览',
   folder_id: '目录编号',
   scan_mode: '扫描范围',
@@ -120,8 +139,8 @@ const labels: Record<string, string> = {
   notice: '说明',
 }
 function formatValue(name: string, value: unknown): string {
-  if (name === 'view_status') return ({ unviewed: '未看', viewing: '正在看', viewed: '已看' } as Record<string, string>)[String(value)] || String(value)
-  if (name === 'action') return ({ recheck_missing: '复查缺失文件', recheck_duplicates: '复查重复媒体', regenerate_thumbnail: '重建缩略图', backup_database: '数据库备份' } as Record<string, string>)[String(value)] || String(value)
+  if (name === 'view_status') return ({ unviewed: '未看', viewing: '正在看', viewed: '已看' } as Record<string, string>)[value as string] || String(value)
+  if (name === 'action') return ({ recheck_missing: '复查缺失文件', recheck_duplicates: '复查重复媒体', regenerate_thumbnails: '重新生成缩略图', backup_database: '备份数据库', vacuum_database: '清理数据库空间', integrity_check: '完整性校验' } as Record<string, string>)[value as string] || String(value)
   if (name === 'tags_truncated')
     return value ? '仅展示前 50 个标签；本次增删见变更清单' : '完整'
   if (name === 'action' && value === 'scan') return '扫描'
@@ -189,7 +208,7 @@ async function act(confirm: boolean) {
     emit('changed')
   } catch (c) {
     if (alive) {
-      stale.value = c instanceof AssistantApiError && ['assistant_proposal_stale', 'assistant_proposal_expired', 'assistant_proposal_consumed', 'assistant_proposal_unavailable'].includes(c.code)
+      stale.value = c instanceof AssistantApiError && ['assistant_proposal_stale', 'assistant_proposal_expired', 'assistant_proposal_consumed', 'assistant_proposal_unavailable', 'assistant_proposal_payload_mismatch'].includes(c.code)
       error.value = stale.value
         ? '资料已变化或建议不可用，请重新生成建议。'
         : assistantErrorText(c)
@@ -227,7 +246,6 @@ watch(
   (p) => {
     state.value = p.state
     if (p.result?.job) job.value = p.result.job
-
   },
   { deep: true },
 )
@@ -241,64 +259,73 @@ onBeforeUnmount(() => {
 })
 </script>
 <template>
-  <UiCard class="min-w-0 space-y-3 [overflow-wrap:anywhere]" padding="sm">
-    <div class="flex flex-wrap items-center justify-between gap-2">
+  <UiCard class="min-w-0 space-y-3.5 border-line/85 shadow-2xs [overflow-wrap:anywhere]" padding="sm">
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-line/60 pb-2.5">
       <h3 class="font-semibold text-ink">
         {{ kindLabels[proposal.kind] || '操作审批' }}
       </h3>
-      <span class="rounded-full bg-surface-2 px-3 py-1 text-sm text-muted">{{
+      <span
+        class="rounded-full border px-2.5 py-0.5 text-xs font-medium"
+        :class="statusBadgeClass"
+      >{{
         job ? jobLabels[job.status] || status : status
       }}</span>
     </div>
-    <p class="font-medium text-ink">
-      {{ proposal.target_label }}
-      <span v-if="proposal.target_id" class="text-sm text-muted">#{{ proposal.target_id }}</span>
-    </p>
-    <p v-if="proposal.reason" class="text-sm leading-relaxed text-muted">{{ proposal.reason }}</p>
-    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-      <span>影响 {{ proposal.impact_count || 1 }} 个对象</span><span v-if="proposal.reversibility">{{ proposal.reversibility }}</span>
+    <div class="space-y-1.5">
+      <p class="font-medium text-ink">
+        {{ proposal.target_label }}
+        <span v-if="proposal.target_id" class="ml-1 rounded-md bg-surface-2 px-1.5 py-0.5 text-xs font-normal text-muted">#{{ proposal.target_id }}</span>
+      </p>
+      <p v-if="proposal.reason" class="text-sm leading-relaxed text-muted">{{ proposal.reason }}</p>
+      <div class="flex flex-wrap items-center gap-2 pt-0.5 text-xs text-muted">
+        <span class="rounded-md bg-surface-2 px-2 py-0.5">影响 {{ proposal.impact_count || 1 }} 个对象</span>
+        <span v-if="proposal.reversibility" class="rounded-md bg-surface-2 px-2 py-0.5">{{ proposal.reversibility }}</span>
+      </div>
     </div>
-    <details v-if="batchItems.length" class="rounded-xl border border-line p-3">
-      <summary class="min-h-11 cursor-pointer text-sm text-ink focus-ring">选择要修改的媒体 · {{ selection.length }}/{{ batchItems.length }}</summary>
-      <label v-for="item in batchItems" :key="item.media_id" class="flex min-h-11 cursor-pointer items-center gap-3 py-2 text-sm text-ink"><input v-model="selection" type="checkbox" :value="item.media_id" :disabled="busy || state !== 'pending' || expired || !enabled" class="h-5 w-5 accent-accent" /><span class="min-w-0 [overflow-wrap:anywhere]">{{ item.title || '媒体' }} #{{ item.media_id }}</span></label>
-      <UiButton v-if="selectionDirty" class="mt-2 min-h-11" :disabled="!selection.length || busy || expired || !enabled" :loading="busy" @click="saveSelection">为选中的 {{ selection.length }} 项重新生成审批</UiButton>
+    <details v-if="batchItems.length" class="rounded-xl border border-line/80 bg-surface-2/40 p-3">
+      <summary class="min-h-11 cursor-pointer text-sm font-medium text-ink focus-ring">选择要修改的媒体 · {{ selection.length }}/{{ batchItems.length }}</summary>
+      <div class="mt-2 max-h-56 space-y-1 overflow-y-auto pr-1">
+        <label v-for="item in batchItems" :key="item.media_id" class="flex min-h-10 cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1 text-sm hover:bg-surface-hover">
+          <input v-model="selection" type="checkbox" :value="item.media_id" :disabled="!actionable" class="rounded border-line focus-ring">
+          <span>{{ item.title || '媒体' }} #{{ item.media_id }}</span>
+        </label>
+      </div>
+      <UiButton v-if="selectionDirty" class="mt-2 min-h-11" :disabled="!selection.length || busy || expired || !actionable" @click="saveSelection">保存选中范围并重新核算</UiButton>
     </details>
     <div class="grid min-w-0 gap-3 sm:grid-cols-2">
-      <div class="min-w-0 rounded-xl bg-surface-2 p-3">
-        <h4 class="mb-2 text-sm font-medium text-muted">当前资料</h4>
+      <div class="min-w-0 rounded-xl border border-line/70 bg-surface-2/80 p-3.5">
+        <h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">当前资料</h4>
         <pre
           class="whitespace-pre-wrap font-sans text-sm leading-relaxed text-ink [overflow-wrap:anywhere]"
-          >{{ preview(proposal.before) }}</pre
-        >
+        >{{ preview(proposal.before) }}</pre>
       </div>
-      <div class="min-w-0 rounded-xl border border-accent/30 bg-accent/5 p-3">
-        <h4 class="mb-2 text-sm font-medium text-muted">拟议变更</h4>
+      <div class="min-w-0 rounded-xl border border-accent/35 bg-accent/8 p-3.5 shadow-2xs">
+        <h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-accent">拟议变更</h4>
         <pre
           class="whitespace-pre-wrap font-sans text-sm leading-relaxed text-ink [overflow-wrap:anywhere]"
-          >{{ preview(proposal.after) }}</pre
-        >
+        >{{ preview(proposal.after) }}</pre>
       </div>
     </div>
     <div v-if="(proposal.impact_count || 0) > 1 && proposal.kind !== 'media_batch_update'" class="space-y-2">
       <UiButton class="min-h-11" variant="ghost" :disabled="affectedBusy" @click="loadAffected()">查看完整影响清单</UiButton>
-      <div v-if="affectedOpen" class="max-h-64 overflow-y-auto rounded-xl bg-surface-2 p-3 text-sm text-muted">
-        <p v-for="item in affected" :key="String(item.type) + String(item.id)" class="mb-2 [overflow-wrap:anywhere]">{{ item.label }} #{{ item.id }}<span v-if="item.before"><br />{{ preview(item.before as Record<string, unknown>) }} → {{ preview(item.after as Record<string, unknown>) }}</span></p>
-        <UiButton v-if="affectedMore" class="min-h-11" :disabled="affectedBusy" @click="loadAffected(true)">继续查看</UiButton>
+      <div v-if="affectedOpen" class="max-h-64 overflow-y-auto rounded-xl border border-line/60 bg-surface-2 p-3 text-sm text-muted">
+        <p v-for="item in affected" :key="String(item.type) + String(item.id)" class="mb-2 [overflow-wrap:anywhere]">{{ item.label || item.name || item.title || item.id }}<span v-if="item.before"><br />{{ preview(item.before as Record<string, unknown>) }} → {{ preview(item.after as Record<string, unknown>) }}</span></p>
+        <UiButton v-if="affectedMore" class="min-h-11" :disabled="affectedBusy" @click="loadAffected(true)">继续加载清单</UiButton>
       </div>
     </div>
-    <p v-if="state === 'pending' && !expired" class="text-sm text-muted">
+    <p v-if="state === 'pending' && !expired" class="text-xs text-muted">
       有效期至
       {{
         new Date(utcTime(proposal.expires_at)).toLocaleTimeString()
-      }}。确认后才会执行。
+      }}，确认后才会执行
     </p>
     <p v-if="incomplete" role="alert" class="text-sm text-danger">
       旧建议的标签变更预览不完整，请重新生成建议。
     </p>
-    <p v-if="proposal.kind === 'scan'" class="text-sm text-muted">
+    <p v-if="proposal.kind === 'scan'" class="text-xs text-muted">
       扫描可能逐步处理文件；停止聊天不会停止已确认的扫描。
     </p>
-    <div class="flex flex-wrap gap-3">
+    <div class="flex flex-wrap items-center gap-3 border-t border-line/60 pt-3">
       <UiButton
         data-confirm
         class="min-h-11"
@@ -306,22 +333,25 @@ onBeforeUnmount(() => {
         :disabled="!actionable || selectionDirty"
         :loading="busy"
         @click="act(true)"
-        >{{ confirmLabel }}</UiButton
-      ><UiButton
+      >{{ confirmLabel }}</UiButton>
+      <UiButton
         data-reject
         class="min-h-11"
+        variant="ghost"
         :disabled="!actionable"
         @click="act(false)"
-        >拒绝</UiButton
-      >
+      >拒绝</UiButton>
     </div>
-    <p v-if="job" role="status" class="text-sm text-muted">
-      {{ jobLabels[job.status] || '任务状态待核实' }}<span v-if="job.progress != null"> · {{ job.progress }}%</span> · {{ job.job_id
-      }}<br v-if="job.message" /><span v-if="job.message">{{
-        job.message
-      }}</span>
+    <p v-if="job" role="status" class="rounded-xl bg-surface-2/80 px-3 py-2 text-sm text-muted">
+      {{ jobLabels[job.status] || '任务状态待核实' }}<span v-if="job.progress != null"> · {{ job.progress }}%</span>
+      <br v-if="job.message" /><span v-if="job.message">{{ job.message }}</span>
     </p>
-    <details v-if="resultItems.length" class="rounded-xl border border-line p-3"><summary class="min-h-11 cursor-pointer text-sm text-muted focus-ring">逐项执行结果 · {{ resultItems.length }} 项</summary><p v-for="(item,index) in resultItems" :key="index" class="mb-2 text-sm text-ink [overflow-wrap:anywhere]">{{ preview(item) }}</p></details>
+    <details v-if="resultItems.length" class="rounded-xl border border-line/80 bg-surface-2/30 p-3">
+      <summary class="min-h-11 cursor-pointer text-sm font-medium text-ink focus-ring">执行结果清单 · {{ resultItems.length }}</summary>
+      <div class="mt-2 max-h-64 space-y-2 overflow-y-auto text-sm text-muted">
+        <p v-for="(item, index) in resultItems" :key="index" class="[overflow-wrap:anywhere]">{{ preview(item) }}</p>
+      </div>
+    </details>
     <p v-if="error" role="alert" class="text-sm text-danger">{{ error }}</p>
   </UiCard>
 </template>
