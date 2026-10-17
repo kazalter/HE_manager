@@ -152,6 +152,7 @@ module.exports = async ({ window, player, config, output }) => {
     await wait(() => player.state.paused, 'Pause input failed');
     const before = player.native.state(player.owner);
     for (let index = 0; index < 3; index++) {
+      await wait(() => evaluate('!!document.querySelector(".desktop-video button[aria-label=\"全屏\"]")'), 'Fullscreen control did not return to its normal state');
       await click('.desktop-video button[aria-label="全屏"]');
       await wait(() => window._heFullscreen, 'Fullscreen event missing');
       await key('Escape');

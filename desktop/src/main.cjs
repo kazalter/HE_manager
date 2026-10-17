@@ -333,13 +333,29 @@ async function createWindow(test = false) {
   });
   diagnosticStage('window-created');
   const ownerWindow = window;
+  let adjustingMinimum = false;
+  function syncMinimumContent() {
+    if (adjustingMinimum || ownerWindow.isDestroyed() || ownerWindow.isFullScreen()
+      || ownerWindow._heFullscreen || ownerWindow.isMaximized() || ownerWindow.isMinimized()) return;
+    const outer = ownerWindow.getSize(), content = ownerWindow.getContentSize();
+    const minimum = [1024 + outer[0] - content[0], 640 + outer[1] - content[1]];
+    adjustingMinimum = true;
+    try {
+      if (ownerWindow.getMinimumSize().some((size, index) => size !== minimum[index])) ownerWindow.setMinimumSize(...minimum);
+      if (outer.some((size, index) => size < minimum[index])) ownerWindow.setSize(Math.max(outer[0], minimum[0]), Math.max(outer[1], minimum[1]));
+    } finally { adjustingMinimum = false; }
+  }
+  // Native menus can attach after the first load on Windows. Recompute from
+  // the current content area when the chrome or display metrics settle.
+  ownerWindow.on('resize', syncMinimumContent);
+  ownerWindow.once('ready-to-show', syncMinimumContent);
   ownerWindow._heGpuReady = app.getGPUInfo('basic').then((gpu) => {
     ownerWindow._heGpu = gpu.gpuDevice?.find((device) => device.active) || {};
   });
   void ownerWindow._heGpuReady.catch(() => {});
   window._heFullscreen = false;
   window.on('enter-full-screen', () => { ownerWindow._heFullscreen = true; });
-  window.on('leave-full-screen', () => { ownerWindow._heFullscreen = false; });
+  window.on('leave-full-screen', () => { ownerWindow._heFullscreen = false; syncMinimumContent(); });
   player.receiverReady = false;
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event, url) => {
@@ -375,11 +391,7 @@ async function createWindow(test = false) {
   });
   diagnosticStage('load-window');
   await ownerWindow.loadURL(test ? "he://app/__fullscreen-test" : "he://app/");
-  // Measure after native menus attach: getContentSize on Windows can include
-  // the menu strip, while the verified design minimum is the CSS viewport.
-  const viewport = await ownerWindow.webContents.executeJavaScript('({width:innerWidth,height:innerHeight})');
-  const [outerWidth, outerHeight] = ownerWindow.getSize();
-  ownerWindow.setMinimumSize(1024 + outerWidth - viewport.width, 640 + outerHeight - viewport.height);
+  syncMinimumContent();
   diagnosticStage('window-loaded');
   diagnosticStage('window-ready');
 }
