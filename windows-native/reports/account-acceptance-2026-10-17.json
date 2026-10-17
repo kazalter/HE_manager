@@ -1,0 +1,180 @@
+{
+  "date": "2026-10-17",
+  "scope": "WN-02 connection, authentication, native navigation/theme and playback integration",
+  "coreTests": [
+    "PASS server-address-and-prefix",
+    "PASS login-normal-close-and-server-isolation",
+    "PASS expired-login-clears-identity",
+    "PASS server-switch-cancellation-and-stale-401-isolation",
+    "PASS offline-logout-and-malformed-response",
+    "PASS current-user-DPAPI-and-server-bound-encryption"
+  ],
+  "accountTests": [
+    {
+      "directory": "acceptance-20261017-195036",
+      "checkpoints": [
+        "native-window-existing-server-ready",
+        "native-navigation-theme-switch-and-restore",
+        "real-server-login",
+        "normal-account-window-exit",
+        "restart-restores-same-account",
+        "clean-exit"
+      ],
+      "buildInfo": {
+        "builtAtUtc": "2026-10-17T11:50:33.7449886+00:00",
+        "msvc": "14.44.35207",
+        "windowsSdk": "10.0.26100.0\\",
+        "sources": {
+          "HEManager.Windows/AccountStorage.cs": "6da22abfc6b1c548825090ac113fa63a0562acff409103213f46a0d3fe9fb0cd",
+          "HEManager.Windows/app.manifest": "08ad33a1159f4663837cf6a593b3b13c1f70c7f9b8375d631bd75c7056c00812",
+          "HEManager.Windows/App.xaml": "ed4ff0b6d03fba2a4b227a990bb8b1f29eac9138594e5ad7c990bffa8d8019bf",
+          "HEManager.Windows/App.xaml.cs": "e0f85ba3982f57ea74f0a5eb9d3cbf8beb07137b7dfbe33b735e10a79daf5ad3",
+          "HEManager.Windows/HEManager.Windows.csproj": "3816372dc9c3c29f0854dd17630e010aee9d210141c6efec0a41e7e8236cf17b",
+          "HEManager.Windows/MainWindow.Account.cs": "17f2cd4c36b54aa0b2ed8be68c2934db120b5e65832a635f333125d0b5abbbdd",
+          "HEManager.Windows/MainWindow.xaml": "fe65aa484073ad893efde062ec2b682486b8b07463ebbb348d7147b341cba951",
+          "HEManager.Windows/MainWindow.xaml.cs": "7e68b9969629a800562bcd23440419ffef9c7cb15600504395bf4d022d392535",
+          "HEManager.Windows/packages.lock.json": "cfc1c3bd360373901cbaebf78b2f516ca89443b9dfb50f38273ccc85d645afa7",
+          "HEManager.Windows/ProbeRecorder.cs": "19627a87b16447deae6d4509d145229fc5707f446240ab23a6315b8f69d4ee7c",
+          "HEManager.Windows/WindowLifecycle.cs": "aa682f46ac32c2311a423a0c4d2160c2183838379fd10f2a3a2dde19abb82528",
+          "HEManager.Core/ConnectionSession.cs": "48f153fb3de6e6b7286adddd8ccdfc456c7434e1ee45b8aa0ac9bd456644a8fc",
+          "HEManager.Core/HeApiClient.cs": "b725a67a9da6a55c0260f8f77f230001739ec3adc7cb863edd899c2da8aec9ac",
+          "HEManager.Core/HEManager.Core.csproj": "5f27cc3117b11fb828a7877e49768ea62e5af11e8f8c28ef299eda07aad5b3e5",
+          "HEManager.Core/ServerAddress.cs": "ad2a688e786047cb00eeda68acd01b93526de3eac8fb0012365760b8d00b742a",
+          "HEManager.Media/HEManager.Media.csproj": "72d041fd6af13d59621fb6ba35510cc9891c969ee5e39336c29173e771353564",
+          "HEManager.Media/MpvSession.cs": "93bd28716ff351033b936a26a407e030ded995e0aa97e291813c505dbaad3364",
+          "HEManager.Graphics/Bridge.cpp": "a6670f86e6ec3540cf415cc4b8ddac7cdb1610ed4b2faf690be6ff9fb6a1b5b1",
+          "HEManager.Graphics/include/mpv/client.h": "3da9b8c61c3fb4e2d76bd248cebf72f3ee830331411b71a76adbd5e05660cc50",
+          "HEManager.Graphics/include/mpv/render.h": "f2550aa29b2e9b20988bd954b4383e9fa05fd9e40d1669fbc6edf2afac603f15",
+          "HEManager.Graphics/include/mpv/render_d3d11.h": "7b880453ee3c780b0d0f1c3f8ecaa1d23b289522f4c687e6857c8475f4a3f6fb"
+        },
+        "binaries": {
+          "HEManager.Windows.dll": "bc9e0c83ffa7147063b971e466220b9d36fe379de7fc23c25e9ffe052194e51a",
+          "HEManager.Core.dll": "c4a9ea0874695a3e5956e9f6da144c6ff0a4c80afb6e544676647848acc0ba31",
+          "HEManager.Media.dll": "784d8a7298921cd2b92bcc3edd3b52ed82fff02cb091006fde9d0dbe0219d7c6",
+          "HEManager.Graphics.dll": "de59023800428e2cfff3f6508c2249ab734dd89abbe59d247ea887560466d174",
+          "libmpv-2.dll": "3c7dedc13718d9c3f38d41f9f2a1aed01810850982020f34f03b67a13b0659e8"
+        }
+      },
+      "testBinarySha256": "3E7A61145F5B95EF2CC4F3D2F0330446199785546CC8064123E089F8B4912BEF",
+      "rawResultsSha256": "f6f19061a3c09fb93924df24589dbb3d3a30405cdc9674d03774e91e2198d048"
+    },
+    {
+      "directory": "acceptance-20261017-195605",
+      "checkpoints": [
+        "native-window-existing-server-ready",
+        "native-navigation-theme-switch-and-restore",
+        "existing-session-verified",
+        "same-window-local-playback-and-return",
+        "normal-account-window-exit",
+        "restart-restores-same-account",
+        "clean-exit"
+      ],
+      "buildInfo": {
+        "builtAtUtc": "2026-10-17T11:54:34.1042129+00:00",
+        "msvc": "14.44.35207",
+        "windowsSdk": "10.0.26100.0\\",
+        "sources": {
+          "HEManager.Windows/AccountStorage.cs": "6da22abfc6b1c548825090ac113fa63a0562acff409103213f46a0d3fe9fb0cd",
+          "HEManager.Windows/app.manifest": "08ad33a1159f4663837cf6a593b3b13c1f70c7f9b8375d631bd75c7056c00812",
+          "HEManager.Windows/App.xaml": "ed4ff0b6d03fba2a4b227a990bb8b1f29eac9138594e5ad7c990bffa8d8019bf",
+          "HEManager.Windows/App.xaml.cs": "e0f85ba3982f57ea74f0a5eb9d3cbf8beb07137b7dfbe33b735e10a79daf5ad3",
+          "HEManager.Windows/HEManager.Windows.csproj": "3816372dc9c3c29f0854dd17630e010aee9d210141c6efec0a41e7e8236cf17b",
+          "HEManager.Windows/MainWindow.Account.cs": "17f2cd4c36b54aa0b2ed8be68c2934db120b5e65832a635f333125d0b5abbbdd",
+          "HEManager.Windows/MainWindow.xaml": "1724c16fb2981e580a81ed93b4a40d7ee4830ca01baaf6302bb0feecf97a943c",
+          "HEManager.Windows/MainWindow.xaml.cs": "0b2ae3d5019b717b20a9c0f38dd3aec22daf31add0da4c43d0ef453b4dec52ba",
+          "HEManager.Windows/packages.lock.json": "cfc1c3bd360373901cbaebf78b2f516ca89443b9dfb50f38273ccc85d645afa7",
+          "HEManager.Windows/ProbeRecorder.cs": "19627a87b16447deae6d4509d145229fc5707f446240ab23a6315b8f69d4ee7c",
+          "HEManager.Windows/WindowLifecycle.cs": "aa682f46ac32c2311a423a0c4d2160c2183838379fd10f2a3a2dde19abb82528",
+          "HEManager.Core/ConnectionSession.cs": "48f153fb3de6e6b7286adddd8ccdfc456c7434e1ee45b8aa0ac9bd456644a8fc",
+          "HEManager.Core/HeApiClient.cs": "b725a67a9da6a55c0260f8f77f230001739ec3adc7cb863edd899c2da8aec9ac",
+          "HEManager.Core/HEManager.Core.csproj": "5f27cc3117b11fb828a7877e49768ea62e5af11e8f8c28ef299eda07aad5b3e5",
+          "HEManager.Core/ServerAddress.cs": "ad2a688e786047cb00eeda68acd01b93526de3eac8fb0012365760b8d00b742a",
+          "HEManager.Media/HEManager.Media.csproj": "72d041fd6af13d59621fb6ba35510cc9891c969ee5e39336c29173e771353564",
+          "HEManager.Media/MpvSession.cs": "93bd28716ff351033b936a26a407e030ded995e0aa97e291813c505dbaad3364",
+          "HEManager.Graphics/Bridge.cpp": "a6670f86e6ec3540cf415cc4b8ddac7cdb1610ed4b2faf690be6ff9fb6a1b5b1",
+          "HEManager.Graphics/include/mpv/client.h": "3da9b8c61c3fb4e2d76bd248cebf72f3ee830331411b71a76adbd5e05660cc50",
+          "HEManager.Graphics/include/mpv/render.h": "f2550aa29b2e9b20988bd954b4383e9fa05fd9e40d1669fbc6edf2afac603f15",
+          "HEManager.Graphics/include/mpv/render_d3d11.h": "7b880453ee3c780b0d0f1c3f8ecaa1d23b289522f4c687e6857c8475f4a3f6fb"
+        },
+        "binaries": {
+          "HEManager.Windows.dll": "4c47c9588e6d9ba573183ad1de21cec1b6a8e1e3056cdb034f22783ef6b06429",
+          "HEManager.Core.dll": "c4a9ea0874695a3e5956e9f6da144c6ff0a4c80afb6e544676647848acc0ba31",
+          "HEManager.Media.dll": "784d8a7298921cd2b92bcc3edd3b52ed82fff02cb091006fde9d0dbe0219d7c6",
+          "HEManager.Graphics.dll": "0bc6703e28342becedc68e58da25b18445baaf241767587b6be56909bffbc942",
+          "libmpv-2.dll": "3c7dedc13718d9c3f38d41f9f2a1aed01810850982020f34f03b67a13b0659e8"
+        }
+      },
+      "testBinarySha256": "EEF674E4A5200835E0CAA9739D3C7775F92D5CC751BAD82A683F6DB2E05199A6",
+      "rawResultsSha256": "b7662e49b2803e5f6d518791568ebb691eaf54cc90dc366e124720c937134be3"
+    },
+    {
+      "directory": "acceptance-20261017-200117",
+      "checkpoints": [
+        "native-window-existing-server-ready",
+        "native-navigation-theme-switch-and-restore",
+        "existing-session-verified",
+        "same-window-local-playback-and-return",
+        "normal-account-window-exit",
+        "restart-restores-same-account",
+        "clean-exit"
+      ],
+      "buildInfo": {
+        "builtAtUtc": "2026-10-17T12:01:14.6482597+00:00",
+        "msvc": "14.44.35207",
+        "windowsSdk": "10.0.26100.0\\",
+        "sources": {
+          "HEManager.Windows/AccountStorage.cs": "6da22abfc6b1c548825090ac113fa63a0562acff409103213f46a0d3fe9fb0cd",
+          "HEManager.Windows/app.manifest": "08ad33a1159f4663837cf6a593b3b13c1f70c7f9b8375d631bd75c7056c00812",
+          "HEManager.Windows/App.xaml": "ed4ff0b6d03fba2a4b227a990bb8b1f29eac9138594e5ad7c990bffa8d8019bf",
+          "HEManager.Windows/App.xaml.cs": "e0f85ba3982f57ea74f0a5eb9d3cbf8beb07137b7dfbe33b735e10a79daf5ad3",
+          "HEManager.Windows/HEManager.Windows.csproj": "3816372dc9c3c29f0854dd17630e010aee9d210141c6efec0a41e7e8236cf17b",
+          "HEManager.Windows/MainWindow.Account.cs": "17f2cd4c36b54aa0b2ed8be68c2934db120b5e65832a635f333125d0b5abbbdd",
+          "HEManager.Windows/MainWindow.xaml": "1724c16fb2981e580a81ed93b4a40d7ee4830ca01baaf6302bb0feecf97a943c",
+          "HEManager.Windows/MainWindow.xaml.cs": "0b2ae3d5019b717b20a9c0f38dd3aec22daf31add0da4c43d0ef453b4dec52ba",
+          "HEManager.Windows/packages.lock.json": "cfc1c3bd360373901cbaebf78b2f516ca89443b9dfb50f38273ccc85d645afa7",
+          "HEManager.Windows/ProbeRecorder.cs": "19627a87b16447deae6d4509d145229fc5707f446240ab23a6315b8f69d4ee7c",
+          "HEManager.Windows/WindowLifecycle.cs": "aa682f46ac32c2311a423a0c4d2160c2183838379fd10f2a3a2dde19abb82528",
+          "HEManager.Core/ConnectionSession.cs": "241e60a0b3848c1e1e24bf1afc7ab89a92c6da087824491a4a5b517fe172e73f",
+          "HEManager.Core/HeApiClient.cs": "b725a67a9da6a55c0260f8f77f230001739ec3adc7cb863edd899c2da8aec9ac",
+          "HEManager.Core/HEManager.Core.csproj": "5f27cc3117b11fb828a7877e49768ea62e5af11e8f8c28ef299eda07aad5b3e5",
+          "HEManager.Core/ServerAddress.cs": "ad2a688e786047cb00eeda68acd01b93526de3eac8fb0012365760b8d00b742a",
+          "HEManager.Media/HEManager.Media.csproj": "72d041fd6af13d59621fb6ba35510cc9891c969ee5e39336c29173e771353564",
+          "HEManager.Media/MpvSession.cs": "93bd28716ff351033b936a26a407e030ded995e0aa97e291813c505dbaad3364",
+          "HEManager.Graphics/Bridge.cpp": "a6670f86e6ec3540cf415cc4b8ddac7cdb1610ed4b2faf690be6ff9fb6a1b5b1",
+          "HEManager.Graphics/include/mpv/client.h": "3da9b8c61c3fb4e2d76bd248cebf72f3ee830331411b71a76adbd5e05660cc50",
+          "HEManager.Graphics/include/mpv/render.h": "f2550aa29b2e9b20988bd954b4383e9fa05fd9e40d1669fbc6edf2afac603f15",
+          "HEManager.Graphics/include/mpv/render_d3d11.h": "7b880453ee3c780b0d0f1c3f8ecaa1d23b289522f4c687e6857c8475f4a3f6fb"
+        },
+        "binaries": {
+          "HEManager.Windows.dll": "cec7e852c4a7f9a2e8f3edb90b7ec2a77cb2b6e10657348ff873ab64de9fa507",
+          "HEManager.Core.dll": "6a468ba7f9b79da6332bdcf5f2df1c518c51b585d59d52b522f088fbecb630b7",
+          "HEManager.Media.dll": "784d8a7298921cd2b92bcc3edd3b52ed82fff02cb091006fde9d0dbe0219d7c6",
+          "HEManager.Graphics.dll": "6603660d129375a33b2c4d42e0e70890412e615c7326edac6106dd25f6188200",
+          "libmpv-2.dll": "3c7dedc13718d9c3f38d41f9f2a1aed01810850982020f34f03b67a13b0659e8"
+        }
+      },
+      "testBinarySha256": "382FAAB70B13F1E6A4B10768274673C267CDC6BEB4859599DB05F93C000ADF97",
+      "rawResultsSha256": "b7662e49b2803e5f6d518791568ebb691eaf54cc90dc366e124720c937134be3"
+    }
+  ],
+  "playbackSmoke": {
+    "presetNames": [
+      "efficiency",
+      "off",
+      "quality"
+    ],
+    "maxFrames": 588,
+    "allGraphicsErrorZero": true,
+    "oneSession": true,
+    "gpuPixelSpreadMax": 255,
+    "rawSha256": "6548d6d01fa153291cf4af0eb3df76f5db611d07c19ba0283743de109210a80e",
+    "coldShaderTimingWarnings": 0,
+    "fullscreenCycles": 20,
+    "cleanShutdown": true,
+    "renderAndWindowSourcesMatchedFinalProduct": true,
+    "laterSourceChanges": [
+      "HEManager.Core/ConnectionSession.cs"
+    ],
+    "laterValidation": "server-scope lock and stale-401 isolation: six core groups plus final native-account/local-playback/restart acceptance passed"
+  }
+}

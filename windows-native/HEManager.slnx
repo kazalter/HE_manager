@@ -1,5 +1,7 @@
 <Solution>
+  <Project Path="HEManager.Core/HEManager.Core.csproj" />
   <Project Path="HEManager.Media/HEManager.Media.csproj" />
   <Project Path="HEManager.Windows/HEManager.Windows.csproj" />
+  <Project Path="HEManager.Tests/HEManager.Tests.csproj" />
   <Project Path="HEManager.UITests/HEManager.UITests.csproj" />
 </Solution>

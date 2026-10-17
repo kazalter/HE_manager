@@ -1,4 +1,4 @@
-param([string]$Toolchain='C:\HEManagerBuild\toolchain',[switch]$Locked)
+param([string]$Toolchain='C:\HEManagerBuild\toolchain',[switch]$Locked,[string]$OutputDirectory)
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 $dotnet=Join-Path $Toolchain 'dotnet/dotnet.exe'
@@ -13,7 +13,7 @@ foreach($file in $lock.files.PSObject.Properties){
 }
 Push-Location $root
 try {
-    $out=Join-Path $root '.artifacts/x64'
+    $out=if($OutputDirectory){[IO.Path]::GetFullPath($OutputDirectory)}else{Join-Path $root '.artifacts/x64'}
     New-Item $out -ItemType Directory -Force | Out-Null
     $vcvars=Join-Path $Toolchain 'BuildTools/VC/Auxiliary/Build/vcvars64.bat'
     if(!(Test-Path $vcvars)){throw "Missing MSVC environment: $vcvars"}

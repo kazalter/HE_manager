@@ -116,6 +116,7 @@ internal static class Program
             Native.SetProcessDpiAwarenessContext(new IntPtr(-4));
             executable=Path.GetFullPath(args[0]);
             string mode=args.Length>1?args[1]:"ui";
+            if(mode=="account")return AccountAcceptance.Run(executable,args.Length>2?int.Parse(args[2]):1800);
             directory=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"HEManager","WN01","acceptance-"+mode+"-"+DateTime.Now.ToString("yyyyMMdd-HHmmss"));
             Directory.CreateDirectory(directory);
             string buildInfo=Path.Combine(Path.GetDirectoryName(executable)!,"build-info.json");
@@ -258,6 +259,7 @@ internal static class Program
         while(watch.Elapsed.TotalSeconds<seconds)
         {
             Thread.Sleep(5000);var state=State();
+            Require(!Native.IsIconic(new IntPtr(state.GetProperty("hwnd").GetInt64())),"Continuous visible playback observation interrupted by window minimization");
             Require(Number(state,"frames")>previous,"No presented frames during soak");previous=Number(state,"frames");
             Require(Text(state,"session")==session&&Number(state,"graphicsError")==0,"Session/render failure during soak");
             Require(Text(state,"hwdec")=="d3d11va","Hardware decode lost during soak");

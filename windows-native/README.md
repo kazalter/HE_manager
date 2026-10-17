@@ -1,14 +1,18 @@
 # HE Manager Windows 原生客户端
 
-当前为 WN-01 可运行的内嵌播放原型；阶段验收状态见 [实测记录](reports/WN-01-2026-10-17.md)。主计划仍是仓库根 `PLAN.md`，完整范围见 `docs/windows-native-client-plan.md`。
+当前已实现 WN-02 的连接／登录／主题和原生导航，保留 WN-01 内嵌播放原型。阶段记录见 [WN-01](reports/WN-01-2026-10-17.md) 和 [WN-02](reports/WN-02-2026-10-17.md)。主计划仍是仓库根 `PLAN.md`，完整范围见 `docs/windows-native-client-plan.md`。
 
-本目录和 Linux `/opt/stacks/he-manager` 的现有业务代码共用同一仓库、同一 main。Windows 的 `C:\HEManagerBuild\windows-native` 是构建工作副本。此原型只播放本地测试片／用户选择的本地视频；账号、服务器媒体流和媒体库在后续阶段接入。
+本目录和 Linux `/opt/stacks/he-manager` 的现有业务代码共用同一仓库、同一 main。Windows 的 `C:\HEManagerBuild\windows-native` 是构建工作副本。当前可连接现有服务器并登录；本地播放支持测试片／用户选择的视频。服务器媒体库和鉴权流分别在 WN-03／WN-04 接入。
 
 ## 运行
 
-打开构建目录 `.artifacts\x64\HEManager.Windows.exe`，或 Windows 桌面的「HE Manager 原生播放原型」快捷方式。程序默认播放既有 8 秒合成测试片，支持打开本地视频、播放／暂停、进度拖动、音量和 Anime4K 三档。F11 进入／退出全屏，Esc 退出全屏。控制条使用视频上方的原生 XAML 控件，视频由本进程 libmpv 渲染至 SwapChainPanel。
+打开构建目录的 `HEManager.Windows.exe`，或 Windows 桌面的 HE Manager 快捷方式。默认进入连接与账号页，初始地址为现有局域网服务 `http://192.168.0.101:8011`；地址可修改，也可包含反代 API 前缀。登录现有账号后，重开会通过 `/auth/me` 验证并恢复登录。密码不保存，凭证通过当前用户 DPAPI 保护并按服务器隔离。退出账号即清除本机凭证，并尝试撤销服务器令牌；离线时明确说明未确认服务端注销。
 
-这是开发原型，尚未连接媒体库，也不是 WN-07 的正式分发包。保留整个输出目录一起运行。开发日志位于 `%LOCALAPPDATA%\HEManager\WN01\player.log`，每次启动覆盖。首次切换 Anime4K 需要编译着色器，可能短暂停顿；磁盘缓存位于 `%LOCALAPPDATA%\HEManager\shader-cache`，热缓存复测无渲染等待告警。当前尚未连接服务器。
+顶部「本地播放」打开既有 8 秒合成测试片，支持打开本地视频、播放／暂停、进度拖动、音量和 Anime4K 三档。F11 进入／退出全屏，Esc 退出全屏。控制条使用视频上方的原生 XAML 控件，视频由本进程 libmpv 渲染至 SwapChainPanel。
+
+这是开发原型，尚未连接媒体库，也不是 WN-07 的正式分发包。保留整个输出目录一起运行。开发日志位于 `%LOCALAPPDATA%\HEManager\WN01\player.log`，每次启动覆盖。首次切换 Anime4K 需要编译着色器，可能短暂停顿；磁盘缓存位于 `%LOCALAPPDATA%\HEManager\shader-cache`，热缓存复测无渲染等待告警。
+
+设置页支持浅色／深色／跟随系统，保存在 `%LOCALAPPDATA%\HEManager\settings.json`。换服务器立即取消旧请求并清空旧账号显示；断网不误删仍有效的凭证，401 则清除过期身份并提示重新登录。
 
 ## 重建
 
@@ -22,6 +26,8 @@
 .\windows-native\scripts\Prepare-Runtime.ps1 -Archive C:\HEManagerBuild\toolchain\mpv-dev.7z
 .\windows-native\scripts\Build.ps1 -Locked
 .\windows-native\scripts\Test-Smoke.ps1
+# 连接／账号、取消与 Windows 凭证保护回归
+dotnet run --project .\windows-native\HEManager.Tests\HEManager.Tests.csproj -c Release
 ```
 
 `Prepare-Runtime` 校验 libmpv 归档／DLL，并从同一仓库 `desktop/resources` 复制原有测试片、着色器和许可，资源不重复入库。`Build` 检查 DLL、头文件和媒体资源哈希；使用 MSVC 构建薄桥，再通过锁定 NuGet 还原和 .NET 构建 WinUI。原生桥静态链接 C++ 运行时。首次修改包版本后需不带 `-Locked` 生成并审查新的锁文件，正常重建保持 `-Locked`。
@@ -33,10 +39,13 @@
 需要已登录且解锁的 Windows 桌面，在独立测试窗口运行：
 
 ```powershell
+.\windows-native\scripts\Test-Window.ps1 -Mode account -Seconds 1800
 .\windows-native\scripts\Test-Window.ps1 -Mode ui
 .\windows-native\scripts\Test-Window.ps1 -Mode scales -Seconds 600
 .\windows-native\scripts\Test-Window.ps1 -Mode soak -Seconds 1800
 ```
+
+`account` 检查真实服务器连接、原生导航和主题切换，然后等待用户直接在 Windows 窗口输入现有账号密码。成功后正常关闭并重开，验证恢复同一账号；测试不读取密码、不在报告保存令牌。
 
 `ui` 通过外部 Windows UI Automation 操作真实控件，通过 SendInput 验证 F11、Esc、Space；检查最小窗口、焦点离开／返回、最小化恢复和 50 次视频重新加载后的实际 file-loaded 事件。键盘注入只在播放器确认为前台时执行。
 
@@ -44,7 +53,7 @@
 
 `soak` 在质量档预热 30 秒，再连续观察指定时长；记录帧推进、实际硬解、渲染错误、进程私有内存、句柄、线程和 DXGI 当前进程本地显存用量。阈值是原型资源回归报警线，不代表正式视频性能达标，也不代替 WN-04 的日常内容／格式矩阵。一般小改动只运行相关检查，完整矩阵留在对应阶段。
 
-证据保存在 `%LOCALAPPDATA%\HEManager\WN01\acceptance-<mode>-<时间>`：JSON 结果、每秒状态、构建摘要和可取得的播放器截图。截图要求播放器为前台，否则保存跳过说明；不把别的应用画面作为播放器证据。`--probe <目录>` 仅开启诊断，不提供外部播放控制接口。正常运行不启用 GPU 读回。
+证据保存在 `%LOCALAPPDATA%\HEManager\WN01\acceptance-<mode>-<时间>`：JSON 结果、每秒状态、构建摘要和可取得的播放器截图。截图要求播放器为前台，否则保存跳过说明；不把别的应用画面作为播放器证据。测试可用 `-Executable` 指定独立构建路径；每次测试的二进制与启动脚本使用独立目录，避免互相覆盖。`--probe <目录>` 仅开启诊断，不提供外部播放控制接口。正常运行不启用 GPU 读回。
 
 构建会生成 `build-info.json`，记录产品源码和主要二进制的 SHA-256、编译器／SDK 实际版本。测试记录自己的二进制摘要；由此核对证据使用的构建。GitHub Windows runner 执行锁定还原、C++／WinUI 构建及外部测试程序编译；GPU、真实桌面输入和 DPI 验收仍在真机完成。
 

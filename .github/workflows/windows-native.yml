@@ -45,6 +45,9 @@ jobs:
           ./windows-native/scripts/Prepare-Runtime.ps1 -Archive $archive
       - name: Build native graphics and WinUI with locked NuGet dependencies
         run: ./windows-native/scripts/Build.ps1 -Toolchain $env:HE_NATIVE_TOOLS -Locked
+      - name: Test server sessions and Windows credential protection
+        working-directory: windows-native
+        run: dotnet run --project HEManager.Tests/HEManager.Tests.csproj -c Release
       - name: Compile the independent Windows UI tests
         working-directory: windows-native
         run: dotnet build HEManager.UITests/HEManager.UITests.csproj -c Release -o .artifacts/uitests

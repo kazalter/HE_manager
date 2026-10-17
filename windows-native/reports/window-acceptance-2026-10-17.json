@@ -597,7 +597,7 @@
     }
   ],
   "longRun": {
-    "status": "running, not claimed passed",
+    "status": "incomplete: minimized at approximately 19 minutes; clean shutdown after observer detected no presented frames",
     "directory": "acceptance-soak-20261017-161917",
     "fixture": "640x360 H.264 synthetic loop; Anime4K quality; not WN-04 content/performance acceptance"
   }

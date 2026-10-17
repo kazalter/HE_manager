@@ -24,7 +24,7 @@ public partial class MainWindow : Window
     bool full => lifecycle.IsFullscreen;
     long lastProbe;
     int loads;
-    readonly string reportDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HEManager", "WN01");
+    readonly string reportDir = Path.Combine(NativePaths.Root, "WN01");
     StreamWriter? log;
     int ticks;
     readonly bool smoke = Environment.GetCommandLineArgs().Contains("--smoke");
@@ -40,13 +40,14 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         lifecycle = new(this);
+        InitializeShell();
         Root.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnKeyDown), true);
         AppWindow.Changed += WindowChanged;
         timer.Tick += Tick; Closed += (_, _) => Shutdown();
     }
     void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (player != null) return;
+        if (!playerVisible || player != null || Video.XamlRoot == null) return;
         Directory.CreateDirectory(reportDir); log = new(Path.Combine(reportDir, "player.log"), false) { AutoFlush = true };
         try
         {
@@ -68,7 +69,7 @@ public partial class MainWindow : Window
     [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hwnd);
     void WindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
     {
-        if(bridge!=IntPtr.Zero)he_graphics_suspend(bridge, IsIconic(WinRT.Interop.WindowNative.GetWindowHandle(this)));
+        if(bridge!=IntPtr.Zero)he_graphics_suspend(bridge, !playerVisible || IsIconic(WinRT.Interop.WindowNative.GetWindowHandle(this)));
     }
     void ResizeVideo() { if (bridge != IntPtr.Zero) { double scale = Video.XamlRoot?.RasterizationScale ?? 1; he_graphics_resize(bridge, (uint)Math.Max(1, Video.ActualWidth * scale), (uint)Math.Max(1, Video.ActualHeight * scale), (float)scale); } }
     void VideoSizeChanged(object sender, SizeChangedEventArgs e) => ResizeVideo();
@@ -93,6 +94,7 @@ public partial class MainWindow : Window
         try {lifecycle.ToggleFullscreen();}
         catch(Exception ex) {log?.WriteLine("Fullscreen transition failed: "+ex);Diagnostics.Text=ex.Message;return;}
         Chrome.Visibility=full?Visibility.Collapsed:Visibility.Visible;
+        Navigation.IsPaneVisible=!full;
         log?.WriteLine($"fullscreen={full}; session={player?.SessionId}; position={player?.Read("time-pos")}");
     }
     void OnKeyDown(object sender, KeyRoutedEventArgs e)
@@ -171,6 +173,7 @@ public partial class MainWindow : Window
     void Shutdown()
     {
         if (closing) return; closing = true; timer.Stop();
+        CloseConnection();
         AppWindow.Changed -= WindowChanged;
         probe?.Dispose();probe=null;
         if (Video.XamlRoot != null) Video.XamlRoot.Changed -= RootChanged;
