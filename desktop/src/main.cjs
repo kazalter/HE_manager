@@ -15,6 +15,7 @@ const {
     mediaRequest,
     staticPath,
     API_PATH,
+    allowPermission,
   } = require("./policy.cjs"),
   { Player } = require("./player.cjs"),
   { ImageCache } = require("./images.cjs");
@@ -208,6 +209,14 @@ async function protocolHandler(request) {
   )
     return new Response("Forbidden", { status: 403 });
   try {
+    if (
+      url.pathname === "/__fullscreen-test" &&
+      process.argv.includes("--fullscreen-selftest")
+    )
+      return new Response(
+        "<!doctype html><title>HE Manager fullscreen test</title><h1>Fullscreen self-test</h1>",
+        { headers: { "content-type": "text/html; charset=utf-8" } },
+      );
     if (url.pathname.startsWith("/__cache/"))
       return net.fetch(pathToFileURL(cache.file(url.pathname.slice(9))).href);
     if (API_PATH.test(url.pathname)) {
@@ -273,7 +282,7 @@ async function protocolHandler(request) {
     );
   }
 }
-async function createWindow() {
+async function createWindow(test = false) {
   window = new BrowserWindow({
     width: 1360,
     height: 900,
@@ -294,7 +303,21 @@ async function createWindow() {
     if (!url.startsWith("he://app/")) event.preventDefault();
   });
   window.webContents.session.setPermissionRequestHandler(
-    (_wc, _permission, callback) => callback(false),
+    (wc, permission, callback, details) =>
+      callback(
+        wc === window?.webContents &&
+          details.isMainFrame !== false &&
+          allowPermission(permission, details.requestingUrl || wc.getURL()),
+      ),
+  );
+  window.webContents.session.setPermissionCheckHandler(
+    (wc, permission, origin, details) =>
+      wc === window?.webContents &&
+      details.isMainFrame !== false &&
+      allowPermission(
+        permission,
+        details.requestingUrl || origin || wc.getURL(),
+      ),
   );
   window.webContents.session.on("will-download", (event) =>
     event.preventDefault(),
@@ -303,7 +326,7 @@ async function createWindow() {
     void player.stop();
     window = null;
   });
-  await window.loadURL("he://app/");
+  await window.loadURL(test ? "he://app/__fullscreen-test" : "he://app/");
 }
 app.whenReady().then(async () => {
   app.setAccessibilitySupportEnabled(true);
@@ -346,6 +369,41 @@ app.whenReady().then(async () => {
       },
     ]),
   );
+  if (process.argv.includes("--fullscreen-selftest")) {
+    try {
+      await createWindow(true);
+      await window.webContents.executeJavaScript(
+        "document.documentElement.requestFullscreen()",
+        true,
+      );
+      for (let attempt = 0; attempt < 60 && !window.isFullScreen(); attempt++)
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      const entered =
+        window.isFullScreen() &&
+        (await window.webContents.executeJavaScript(
+          "!!document.fullscreenElement",
+        ));
+      await window.webContents.executeJavaScript(
+        "document.exitFullscreen()",
+        true,
+      );
+      for (let attempt = 0; attempt < 60 && window.isFullScreen(); attempt++)
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      const exited =
+        !window.isFullScreen() &&
+        (await window.webContents.executeJavaScript(
+          "!document.fullscreenElement",
+        ));
+      console.log("HE_FULLSCREEN_TEST " + JSON.stringify({ entered, exited }));
+      app.exit(entered && exited ? 0 : 1);
+    } catch (error) {
+      console.log(
+        "HE_FULLSCREEN_TEST " + JSON.stringify({ error: error.message }),
+      );
+      app.exit(1);
+    }
+    return;
+  }
   if (process.argv.includes("--native-selftest")) {
     const report = await require("./native-selftest.cjs")({
       player,
@@ -385,12 +443,6 @@ app.on("window-all-closed", () => {
 app.on("activate", () => {
   if (!BrowserWindow.getAllWindows().length) void createWindow();
 });
-let quitting = false;
-app.on("before-quit", (event) => {
-  if (quitting) return;
-  event.preventDefault();
-  quitting = true;
-  Promise.allSettled([player.stop(), cache?.close()]).finally(() =>
-    setImmediate(() => app.quit()),
-  );
-});
+require("./lifecycle.cjs").installShutdown(app, () =>
+  Promise.allSettled([player.stop(), cache?.close()]),
+);

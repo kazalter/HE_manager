@@ -34,7 +34,7 @@ if platform=='darwin':
     (app/'Contents/MacOS/Electron').rename(app/'Contents/MacOS/HE Manager')
     plist=app/'Contents/Info.plist'
     data=plistlib.loads(plist.read_bytes())
-    data.update(CFBundleExecutable='HE Manager',CFBundleName='HE Manager',CFBundleDisplayName='HE Manager',CFBundleIdentifier='com.kaz.he-manager',CFBundleShortVersionString='0.1.0',CFBundleVersion='0.1.0',CFBundleIconFile='he.icns',NSLocalNetworkUsageDescription='HE Manager 需要连接你指定的局域网媒体服务器，读取媒体库并播放内容。')
+    data.update(CFBundleExecutable='HE Manager',CFBundleName='HE Manager',CFBundleDisplayName='HE Manager',CFBundleIdentifier='com.kaz.he-manager',CFBundleShortVersionString=json.loads((root/'package.json').read_text())['version'],CFBundleVersion=json.loads((root/'package.json').read_text())['version'],CFBundleIconFile='he.icns',NSLocalNetworkUsageDescription='HE Manager 需要连接你指定的局域网媒体服务器，读取媒体库并播放内容。')
     plist.write_bytes(plistlib.dumps(data))
     shutil.copy2(root/'resources/icons/he.icns',app/'Contents/Resources/he.icns')
 else:(output/'electron.exe').rename(output/'HE Manager.exe')

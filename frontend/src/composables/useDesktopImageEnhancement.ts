@@ -17,7 +17,12 @@ export function useDesktopImageEnhancement(visibleUrls: () => string[]) {
     if (disposed || epoch !== generation) return
     enhanced.set(`${mode}:${url}`, result.url); completed++
     while (enhanced.size > 24) enhanced.delete(enhanced.keys().next().value!)
-   } catch (e: any) { lastError = e.message }
+    } catch (e: any) {
+    const detail = String(e?.message || '').replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')
+    lastError = /abort|aborted|中止|退出/i.test(detail)
+      ? '超分任务已中止，当前显示原图；请重新打开应用后重试。'
+      : detail || '图片超分失败，当前显示原图。'
+   }
   }
   if (!disposed && epoch === generation) message.value = lastError || (completed ? '已显示本机超分画面' : '')
  }, { immediate: true })

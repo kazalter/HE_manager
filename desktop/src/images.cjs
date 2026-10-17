@@ -108,24 +108,40 @@ class ImageCache {
     this.allowed = new Set();
   }
   async prepare(source, mode, binary, models) {
+    if (this.abort.signal.aborted)
+      throw new Error("客户端正在退出，请重新打开后重试超分");
     if (!["anime", "photo"].includes(mode))
       throw new Error("未知的图片超分模式");
     if (this.jobs.size >= 8) throw new Error("超分队列已满，稍后重试");
-    const response = await this.fetch(source.url, {
-      headers: source.headers,
-      redirect: "error",
-      signal: AbortSignal.any([AbortSignal.timeout(30000), this.abort.signal]),
-    });
-    if (!response.ok)
-      throw new Error(
-        response.status === 401 ? "登录已过期，请重新登录" : "无法读取原图",
-      );
-    if (!response.headers.get("content-type")?.startsWith("image/")) {
-      await response.body?.cancel();
-      throw new Error("此内容不是图片");
+    const timeout = AbortSignal.timeout(30000);
+    let response, buffer;
+    try {
+      response = await this.fetch(source.url, {
+        headers: source.headers,
+        redirect: "error",
+        signal: AbortSignal.any([timeout, this.abort.signal]),
+      });
+      if (!response.ok) {
+        await response.body?.cancel();
+        throw new Error(
+          response.status === 401 ? "登录已过期，请重新登录" : "无法读取原图",
+        );
+      }
+      if (!response.headers.get("content-type")?.startsWith("image/")) {
+        await response.body?.cancel();
+        throw new Error("此内容不是图片");
+      }
+      buffer = await readLimited(response);
+    } catch (error) {
+      if (this.abort.signal.aborted)
+        throw new Error("客户端正在退出，请重新打开后重试超分");
+      if (timeout.aborted || error.name === "TimeoutError")
+        throw new Error("读取原图超时，当前显示原图，请稍后重试");
+      if (error.name === "AbortError")
+        throw new Error("读取原图已中止，当前显示原图，请重试");
+      throw error;
     }
-    const buffer = await readLimited(response),
-      [width, height, extension] = dimensions(buffer),
+    const [width, height, extension] = dimensions(buffer),
       scale = mode === "anime" ? 2 : 4;
     if (
       !width ||

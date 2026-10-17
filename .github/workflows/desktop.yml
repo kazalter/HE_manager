@@ -42,7 +42,8 @@ jobs:
         if: matrix.platform == 'darwin'
         run: |
           bash desktop/scripts/sign-macos.sh "desktop/release/HE Manager-darwin-arm64/HE Manager.app"
-          python3 desktop/scripts/archive.py "desktop/release/HE Manager-darwin-arm64" "desktop/release/HE-Manager-0.1.0-darwin-arm64.zip" darwin
+          version=$(node -p "require('./desktop/package.json').version")
+          python3 desktop/scripts/archive.py "desktop/release/HE Manager-darwin-arm64" "desktop/release/HE-Manager-${version}-darwin-arm64.zip" darwin
       - uses: actions/upload-artifact@v4
         with:
           name: he-manager-${{ matrix.platform }}

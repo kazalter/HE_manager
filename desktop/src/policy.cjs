@@ -76,4 +76,25 @@ function shaderFiles(mode, root) {
   if (!names) throw new Error("未知的超分档位");
   return names.map((name) => path.join(root, name));
 }
-module.exports = { serverUrl, mediaRequest, staticPath, shaderFiles, API_PATH };
+function allowPermission(permission, frameUrl) {
+  if (permission !== "fullscreen") return false;
+  try {
+    const url = new URL(frameUrl);
+    return (
+      url.protocol === "he:" &&
+      url.host === "app" &&
+      !url.username &&
+      !url.password
+    );
+  } catch {
+    return false;
+  }
+}
+module.exports = {
+  serverUrl,
+  mediaRequest,
+  staticPath,
+  shaderFiles,
+  API_PATH,
+  allowPermission,
+};

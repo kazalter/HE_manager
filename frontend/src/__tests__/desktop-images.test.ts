@@ -30,4 +30,14 @@ describe('desktop image enhancement', () => {
   expect(wrapper.text()).toContain('GPU unavailable')
   wrapper.unmount()
  })
+ it('does not expose Electron IPC details after a cancelled request', async () => {
+  mocks.enhanceImage.mockRejectedValue(new Error("Error invoking remote method 'he:image': Error: This operation was aborted"))
+  const wrapper = mount(defineComponent({ setup() { return { image: useDesktopImageEnhancement(() => ['/stream/3']) } }, template: '<p>{{ image.message.value }}</p>' }))
+  await flushPromises()
+  expect(wrapper.text()).toContain('当前显示原图')
+  expect(wrapper.text()).not.toContain('he:image')
+  expect(wrapper.text()).not.toContain('Error invoking')
+  wrapper.unmount()
+ })
+
 })

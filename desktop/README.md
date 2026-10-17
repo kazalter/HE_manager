@@ -1,4 +1,4 @@
-# HE Manager Desktop 0.1.0
+# HE Manager Desktop 0.1.1
 
 Mac Apple Silicon（arm64）与 Windows x64 共用 Electron/Vue 客户端。服务器只提供原始媒体和 API；mpv + Anime4K 和 Real-ESRGAN 在客户端 GPU 上运行。
 
@@ -13,6 +13,13 @@ Mac Apple Silicon（arm64）与 Windows x64 共用 Electron/Vue 客户端。服�
 体验包内含播放器、着色器、图片引擎和模型，无需安装 CUDA、Python 或 Homebrew。当前 mpv Mac 构建要求 macOS 15+。Linux 构建的 Mac 包需先在 Mac 执行 `bash scripts/sign-macos.sh "/path/HE Manager.app"` 完成本地 ad-hoc 签名，再按 `scripts/archive.py` 归档。当前交付到用户 Mac 的体验包已完成本地签名验证，但没有 Apple Developer ID 公证；Windows 未做发布者代码签名。
 
 图片结果只存客户端用户目录，缓存约 1GB，超限淘汰旧文件。缓存键隔离服务器、账号凭证、原图内容、模型和引擎版本；命中前仍向服务器验证读取权限。更换服务器清除当前登录状态。原图和服务器媒体文件不会被覆盖。
+
+## 0.1.1 修复
+
+- 为应用自身页面放行 Fullscreen API，图片／漫画全屏时隐藏信息侧栏；不开放其他站点或设备权限。
+- 退出时先停止播放器与图片任务，再结束应用；增加退出兜底，防止留下超分队列已关闭的旧进程。更新应用后必须完整退出并重新启动。
+- 图片读取中止、超时显示中文提示并保留原图，不再暴露 Electron IPC 错误。
+- `--fullscreen-selftest` 验证实际窗口进入和退出全屏；原生自检追加通用模型 4× 及缓存测试。
 
 ## 从 Linux 服务器构建
 
@@ -31,7 +38,7 @@ npm run package -- darwin
 npm run package -- win32
 ```
 
-生成 `desktop/release/HE-Manager-0.1.0-darwin-arm64.zip` 与 `HE-Manager-0.1.0-win32-x64.zip`。下载来源和 SHA-256 固定在 `runtime-lock.json`，校验失败会停止。Electron 下载由官方包的校验清单验证。依赖、模型、打包输出不提交 Git。
+生成 `desktop/release/HE-Manager-0.1.1-darwin-arm64.zip` 与 `HE-Manager-0.1.1-win32-x64.zip`。下载来源和 SHA-256 固定在 `runtime-lock.json`，校验失败会停止。Electron 下载由官方包的校验清单验证。依赖、模型、打包输出不提交 Git。
 
 `.github/workflows/desktop.yml` 为两种包提供独立的构建检查和构件上传。打包成功不代表客户端 GPU 性能验收通过。
 
@@ -40,7 +47,7 @@ npm run package -- win32
 - `npm test`：原生桥接范围、路径／URL 校验、秘密不进入播放器命令行、mpv JSON IPC、缓存权限与账号隔离、失败恢复、输出尺寸与资源上限。
 - `cd ../frontend && npm test`：原有 Web 回归、图片超分前显示原图、跳页后丢弃过期结果、关闭增强恢复原图。
 - Linux 无 GPU 启动检查：`xvfb-run -a node_modules/.bin/electron --no-sandbox --disable-gpu . --smoke-test`。`--no-sandbox` 只用于构建机无显示环境测试，正常安装包不禁用沙箱。
-- 客户端执行 `HE Manager --native-selftest`：使用随包合成测试片验证真实 mpv 渲染通道是否含 Anime4K、切回原画、实际图片 2× 推理与缓存。结果写入用户数据目录 `native-test-report.json`。不访问私人媒体，不需要登录，也不修改服务器。
+- 客户端执行 `HE Manager --native-selftest`：使用随包合成测试片验证真实 mpv 渲染通道是否含 Anime4K、切回原画、实际图片 2×／4× 推理与缓存。结果写入用户数据目录 `native-test-report.json`。不访问私人媒体，不需要登录，也不修改服务器。
 
 ## 实测记录
 

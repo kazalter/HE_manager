@@ -103,6 +103,31 @@ module.exports = async ({ player, mpv, image, resources }) => {
           path.join(path.dirname(image), "models"),
         );
         report.image.cacheHit = cached.cached;
+        const photo = await cache.prepare(
+          source(2),
+          "photo",
+          image,
+          path.join(path.dirname(image), "models"),
+        );
+        const [photoWidth, photoHeight] = dimensions(
+          await fs.readFile(
+            cache.file(new URL(photo.url).pathname.split("/").pop()),
+          ),
+        );
+        report.image.photo = {
+          ok: photoWidth === 512 && photoHeight === 512,
+          width: photoWidth,
+          height: photoHeight,
+        };
+        report.image.photo.cacheHit = (
+          await cache.prepare(
+            source(2),
+            "photo",
+            image,
+            path.join(path.dirname(image), "models"),
+          )
+        ).cached;
+        await cache.close();
       } catch (error) {
         report.image = { ok: false, error: error.message };
       }

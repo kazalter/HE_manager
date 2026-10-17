@@ -63,3 +63,24 @@ test("profiles use only bundled Anime4K shaders and off clears the chain", () =>
   );
   assert.throws(() => shaderFiles("../../bin/sh", "/shaders"));
 });
+
+test("only the bundled app can request fullscreen; other permissions stay denied", () => {
+  const { allowPermission } = require("../src/policy.cjs");
+  assert.equal(allowPermission("fullscreen", "he://app/"), true);
+  for (const url of [
+    "he://evil/",
+    "https://app/",
+    "he://app.evil/",
+    "he://user@app/",
+    "invalid",
+  ])
+    assert.equal(allowPermission("fullscreen", url), false);
+  for (const permission of [
+    "media",
+    "geolocation",
+    "notifications",
+    "automatic-fullscreen",
+    "unknown",
+  ])
+    assert.equal(allowPermission(permission, "he://app/"), false);
+});

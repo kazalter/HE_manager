@@ -114,3 +114,33 @@ test("closing the client terminates an in-flight image worker", async () => {
   controller.abort();
   await assert.rejects(work, /关闭/);
 });
+
+test("cancelled image downloads use actionable messages and closed queues never fetch", async () => {
+  let calls = 0;
+  const cache = new ImageCache("unused", {
+    fetch: async () => {
+      calls++;
+      throw new DOMException("This operation was aborted", "AbortError");
+    },
+  });
+  await assert.rejects(
+    cache.prepare(
+      { url: "http://server/stream/1" },
+      "photo",
+      "unused",
+      "unused",
+    ),
+    /读取原图已中止/,
+  );
+  await cache.close();
+  await assert.rejects(
+    cache.prepare(
+      { url: "http://server/stream/1" },
+      "photo",
+      "unused",
+      "unused",
+    ),
+    /重新打开/,
+  );
+  assert.equal(calls, 1);
+});
