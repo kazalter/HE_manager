@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+.artifacts/
+.runtime/
+.downloads/
+resources/sample.mp4
+resources/shaders/
+resources/licenses/
+*.obj
+*.lib
+*.exp
+*.pdb

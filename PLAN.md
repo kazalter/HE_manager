@@ -47,7 +47,7 @@
 
 用户已指定先做 Windows 原生版，Mac 原生版后置；暂停扩展 Electron 客户端。完整范围、方案、接口、风险与验收以 [Windows 原生客户端实施计划](docs/windows-native-client-plan.md) 为准，仍在同一仓库和 main 内维护。
 
-- [x] WN-00：核实 Windows 11 x64、既有 API 与可复用模型；制定分阶段计划。原生实现尚未开始。
+- [x] WN-00：核实 Windows 11 x64、既有 API 与可复用模型；制定分阶段计划。
 - [ ] WN-01：WinUI 3 + libmpv 单窗口渲染／全屏／硬件解码／Anime4K 原型；先通过真机技术门槛。
 - [ ] WN-02：服务器连接、账号、原生导航和亮暗主题。
 - [ ] WN-03：原生媒体库、分页搜索筛选、详情与继续观看。
@@ -56,7 +56,9 @@
 - [ ] WN-06：基础音频、缓存设置、多屏／DPI／键盘交互打磨。
 - [ ] WN-07：Windows x64 自包含分发、核心回归和真机验收报告。
 
-Windows 工具链安装、项目创建与代码实现均留待 WN-01；本轮只保存计划。
+WN-01 已开始（2026-10-17）：新增 `windows-native/` WinUI 3 应用、libmpv 封装与 C++ D3D11／SwapChainPanel 渲染桥。源码维护在本 Linux 仓库；Windows 隔离构建位于 `C:\HEManagerBuild`。已锁定 .NET SDK 10.0.402、Windows App SDK 2.5.1、MSVC 14.44.35207、Windows SDK 10.0.26100.0 与 libmpv ABI 2.6，完成真机编译及播放原型验证。详细证据和待验项见 [WN-01 实测记录](windows-native/reports/WN-01-2026-10-17.md)。
+
+WN-01 仍保持未完成：原型只播放本地文件；需继续完成 DPI、多屏、焦点／输入、最小化恢复、资源增长和格式矩阵等人工／长时验收。首次 Anime4K 编译可能有短暂停顿，已添加着色器磁盘缓存；不以编译通过或自动冒烟测试代替完整技术门槛。通过后再开始 WN-02。
 
 
 媒体库管家对话历史与标题（2026-10-10）：

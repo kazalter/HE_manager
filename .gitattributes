@@ -1,3 +1,6 @@
 
 # Preserve the exact upstream shader distribution, including CRLF and generated weights.
 desktop/resources/shaders/*.glsl -text -whitespace linguist-vendored
+
+# Keep pinned libmpv headers byte-for-byte, including upstream whitespace.
+windows-native/HEManager.Graphics/include/mpv/*.h -text -whitespace linguist-vendored

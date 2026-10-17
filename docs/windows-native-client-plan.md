@@ -1,6 +1,6 @@
 # HE Manager Windows 原生客户端实施计划
 
-日期：2026-10-17。状态：计划已制定，尚未开始原生客户端实现。
+日期：2026-10-17。状态：WN-01 开发中，已创建可运行的原生播放原型，完整第一关仍待验收；进度与证据见 [WN-01 实测记录](../windows-native/reports/WN-01-2026-10-17.md)。
 
 ## 目标与优先级
 
@@ -8,7 +8,7 @@
 
 首版必须能直接代替现有桌面壳完成本地库的浏览、视频播放、图片／漫画阅读和本机 GPU 超分。视频必须在主窗口内播放，进入全屏后沿用同一播放会话；不能通过启动独立 mpv.exe 窗口来完成验收。
 
-本轮仅制定计划和核实接口，不安装开发工具、不创建空工程、不修改现有服务部署。
+WN-00 阶段仅制定计划和核实接口。用户已于 2026-10-17 要求开始开发，现进入 WN-01，准备 Windows 工具链并实现可运行渲染原型；现有服务部署保持原状。
 
 ## 已核实的基础
 
@@ -126,7 +126,7 @@ WinUI 3 是微软面向新 Windows 桌面应用推荐的原生 UI 框架。libmp
 - HEManager.Tests：契约、任务取消／缓存、进度顺序和生命周期测试。
 - scripts、resources、runtime-lock：可重建构件、原生资源来源、锁定版本与校验。
 
-源代码仍在 Linux /opt/stacks/he-manager 维护。WinUI、XAML 和 C++／Windows SDK 产物需要 Windows 工具链；计划在用户 Windows 的隔离构建目录或 Windows CI runner 完成编译和 GUI／GPU 验证，不把 Linux 上生成文件当作 Windows 运行验收。Windows 工作副本只用于构建与验证，生成内容不覆盖 main 源码；相关 SDK／Build Tools 的安装在 WN-01 单独记录。本轮尚未执行这些安装和编译。
+源代码仍在 Linux /opt/stacks/he-manager 维护。WinUI、XAML 和 C++／Windows SDK 产物需要 Windows 工具链；计划在用户 Windows 的隔离构建目录或 Windows CI runner 完成编译和 GUI／GPU 验证，不把 Linux 上生成文件当作 Windows 运行验收。Windows 工作副本只用于构建与验证，生成内容不覆盖 main 源码；相关 SDK／Build Tools 的安装在 WN-01 单独记录。WN-01 已在 Windows 隔离目录执行安装和编译，具体版本与验证结果见上述实测记录。
 
 先确认仓库的 Windows 构建入口、工具版本和可用空间，才确定具体构建目录。CI 先做可执行构建和核心测试；GPU 与全屏只能由真机交互测试确认。发布保留依赖许可、来源、版本和校验信息；开发者签名和自动更新安排在正式分发阶段。
 

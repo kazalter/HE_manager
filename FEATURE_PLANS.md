@@ -37,4 +37,4 @@
 
 ## Windows 原生客户端（2026-10-17）
 
-已制定 C#／WinUI 3 + 内嵌 libmpv 的原生 Windows 客户端计划，原生实现尚未开始。首先验证同窗口渲染、全屏、硬件解码和 Anime4K，再实现媒体库、图片／漫画阅读、超分与分发；Windows 优先，Mac 原生版与 Electron 扩展后置。优先级见 PLAN.md，详细范围与验收见 [Windows 原生客户端实施计划](docs/windows-native-client-plan.md)。
+已开始 WN-01：`windows-native/` 包含可编译运行的 WinUI 3／C# 应用、进程内 libmpv 与 C++ D3D11／SwapChainPanel 桥。真机已观察到内嵌视频帧、d3d11va 硬解及 Anime4K M／VL 实际渲染通道，原型支持本地文件、基础播放控制和同会话全屏。阶段尚未完成，待 DPI、多屏、输入与稳定性等验收；尚未接入账号、媒体库和图片／漫画阅读。详细证据和限制见 [WN-01 实测记录](windows-native/reports/WN-01-2026-10-17.md)，整体范围见 [实施计划](docs/windows-native-client-plan.md)。Windows 优先，Mac 原生版与 Electron 扩展后置。

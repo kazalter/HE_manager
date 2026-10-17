@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="HEManager.Media/HEManager.Media.csproj" />
+  <Project Path="HEManager.Windows/HEManager.Windows.csproj" />
+</Solution>
