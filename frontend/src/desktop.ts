@@ -16,7 +16,7 @@ export interface DesktopBridge {
 }
 declare global { interface Window { heDesktop?: DesktopBridge } }
 export const desktopBridge = window.heDesktop
-export const desktopState = reactive<DesktopConfiguration>({ server: '', videoMode: 'efficiency', imageMode: 'off', platform: '', arch: '', version: '', mpv: false, image: false })
+export const desktopState = reactive<DesktopConfiguration>({ server: '', videoMode: 'off', imageMode: 'off', platform: '', arch: '', version: '', mpv: false, image: false })
 export async function initDesktop() {
  if (desktopBridge) {
   document.documentElement.classList.add('he-desktop')

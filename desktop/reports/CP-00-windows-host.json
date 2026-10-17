@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "phase": "CP-00",
+  "capturedAt": "2026-10-17T12:52:23.4262462Z",
+  "collection": "powershell-host-and-scheduled-launch-result",
+  "host": {
+    "arch": "x64",
+    "cpu": "AMD Ryzen 7 7745HX with Radeon Graphics        ",
+    "osVersion": "10.0.26200",
+    "build": "26200",
+    "memoryBytes": 33519120384,
+    "platform": "win32",
+    "logicalCpus": 16,
+    "gpus": [
+      {
+        "driver": "20.36.41.498",
+        "name": "MuMu Virtual Display Adapter"
+      },
+      {
+        "driver": "15.6.5.199",
+        "name": "GameViewer Virtual Display Adapter"
+      },
+      {
+        "driver": "1.10.9.289",
+        "name": "SudoMaker Virtual Display Adapter"
+      },
+      {
+        "driver": "32.0.13034.7001",
+        "name": "AMD Radeon(TM) 610M"
+      },
+      {
+        "driver": "32.0.16.1692",
+        "name": "NVIDIA GeForce RTX 5070 Laptop GPU"
+      }
+    ]
+  },
+  "toolchain": {
+    "msvc": [
+      "14.44.35207"
+    ],
+    "node": "v24.15.0"
+  },
+  "sourceArchiveSha256": "7e812ebf3bdf43fcb920adc1cd14738f2d73fded529130b7a39df9d50c3651fd",
+  "desktopTests": {
+    "command": "node --test test/*.test.cjs",
+    "failed": 0,
+    "passed": 18
+  },
+  "shell": {
+    "officialElectronZipSha256": "1c9319bab793492715f7668e0be0e6a30bf2a8577275e40035bd33601bf6f573",
+    "electronNodeMode": "process.versions returned Electron 44.8.0 / Node 24.22.0",
+    "reportWritten": false,
+    "scheduledTaskResult": 4294967295,
+    "rootCause": "unresolved",
+    "status": "startup-failed-before-app-entry",
+    "attempts": [
+      "copied-existing-package",
+      "official-electron-44.8.0",
+      "explicit-app-path",
+      "disable-gpu-diagnostic-only"
+    ]
+  },
+  "cp01": {
+    "status": "not-validated"
+  }
+}

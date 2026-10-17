@@ -34,11 +34,24 @@ protocol.registerSchemesAsPrivileged([
 const root = path.resolve(__dirname, ".."),
   ui = path.join(root, "ui"),
   runtime = path.join(root, "resources/runtime");
+const baselineMode = process.argv.includes("--baseline");
+// Diagnostics must never load the user's login, cache, or normal Chromium profile.
+if (baselineMode) {
+  const directory = require("node:fs").mkdtempSync(
+    path.join(require("node:os").tmpdir(), "he-baseline-"),
+  );
+  app.setPath("userData", directory);
+  app.setPath("sessionData", directory);
+  setTimeout(() => {
+    console.error("HE_BASELINE exceeded the 60 second diagnostic deadline");
+    app.exit(1);
+  }, 60000).unref();
+}
 const player = new Player(path.join(root, "resources/shaders"));
 let window, cache, settings, settingsFile;
 const defaults = {
   server: "",
-  videoMode: "efficiency",
+  videoMode: "off",
   imageMode: "off",
   engines: {},
 };
@@ -329,19 +342,24 @@ async function createWindow(test = false) {
   await window.loadURL(test ? "he://app/__fullscreen-test" : "he://app/");
 }
 app.whenReady().then(async () => {
+  const readyAt = performance.now();
+  const baselineOptions = baselineMode
+    ? require("./baseline.cjs").options(process.argv)
+    : null;
   app.setAccessibilitySupportEnabled(true);
   settingsFile = path.join(app.getPath("userData"), "desktop-settings.json");
   await fs.mkdir(app.getPath("userData"), { recursive: true });
   settings = { ...defaults, engines: {} };
-  try {
+  if (!baselineMode) try {
     const stored = JSON.parse(await fs.readFile(settingsFile, "utf8"));
     settings = { ...settings, ...stored };
     if (settings.server) settings.server = serverUrl(settings.server);
   } catch {}
   if (!["off", "efficiency", "quality"].includes(settings.videoMode))
-    settings.videoMode = "efficiency";
+    settings.videoMode = "off";
   if (!["off", "anime", "photo"].includes(settings.imageMode))
     settings.imageMode = "off";
+  if (baselineOptions?.server) settings.server = baselineOptions.server;
   cache = new ImageCache(path.join(app.getPath("userData"), "image-cache"));
   protocol.handle("he", protocolHandler);
   registerIPC();
@@ -369,6 +387,47 @@ app.whenReady().then(async () => {
       },
     ]),
   );
+  if (baselineMode) {
+    try {
+      await createWindow();
+      let shell;
+      for (let attempt = 0; attempt < 100; attempt++) {
+        shell = await window.webContents.executeJavaScript(`({
+          bridge: !!window.heDesktop,
+          toolbar: !!document.querySelector('.he-desktop-toolbar'),
+          viewport: {width: innerWidth, height: innerHeight, devicePixelRatio},
+          videoFrameAPI: typeof VideoFrame === 'function'
+        })`);
+        if (shell.bridge && shell.toolbar) break;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      shell.status = shell.bridge && shell.toolbar ? "ready" : "timeout";
+      shell.readyToShellMs = Math.round(performance.now() - readyAt);
+      shell.processUptimeToShellMs = Math.round(process.uptime() * 1000);
+      shell.profile = "isolated-temporary-profile";
+      shell.defaults = { videoMode: settings.videoMode, imageMode: settings.imageMode };
+      const diagnostics = require("./baseline.cjs");
+      const report = await diagnostics.collect({
+        app, root, shell,
+        screen: require("electron").screen,
+        sharedTexture: require("electron").sharedTexture,
+        server: baselineOptions.server,
+        resourceRoot: baselineOptions.resources,
+      });
+      const output = baselineOptions.output || path.join(
+        app.getPath("documents"), "HE Manager Diagnostics",
+        `baseline-${process.platform}-${process.arch}-${Date.now()}.json`,
+      );
+      await diagnostics.writeReport(output, report);
+      console.log("HE_BASELINE " + JSON.stringify({ output, shell: shell.status, server: report.server.status, cp01: report.cp01.status }));
+      app.exit(shell.status === "ready" ? 0 : 1);
+    } catch {
+      // No raw errors: network/file errors may contain private paths or URLs.
+      console.error("HE_BASELINE failed; check output/resources paths and the UI build");
+      app.exit(1);
+    }
+    return;
+  }
   if (process.argv.includes("--fullscreen-selftest")) {
     try {
       await createWindow(true);
@@ -436,6 +495,9 @@ app.whenReady().then(async () => {
     console.log("HE_DESKTOP_SMOKE " + report);
     app.exit(0);
   } else await createWindow();
+}).catch(() => {
+  console.error("HE Manager startup failed; check configuration and runtime resources");
+  app.exit(1);
 });
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
