@@ -1,3 +1,10 @@
 
 # Preserve the exact upstream shader distribution, including CRLF and generated weights.
 desktop/resources/shaders/*.glsl -text -whitespace linguist-vendored
+
+# Native/header hashes are checked across macOS and Windows checkouts.
+desktop/native/include/** -text linguist-vendored
+desktop/native/* text eol=lf
+desktop/src/* text eol=lf
+desktop/probe/* text eol=lf
+frontend/src/** text eol=lf
