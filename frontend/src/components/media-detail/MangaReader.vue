@@ -15,6 +15,7 @@ import {
   ZoomOut,
   X,
 } from 'lucide-vue-next'
+import { useDesktopImageEnhancement } from '../../composables/useDesktopImageEnhancement'
 import { API_BASE_URL, authUrl } from '../../config'
 import type { Media } from '../../types'
 import { useImageViewerZoom } from '../../composables/useImageViewerZoom'
@@ -119,6 +120,8 @@ const canvasPages = computed(() => {
   }
   return isRtl.value ? pages.reverse() : pages
 })
+const desktopImages = useDesktopImageEnhancement(() => canvasPages.value.filter(page => page >= 0 && (props.totalPages === null || page < props.totalPages)).map(pageUrlFor))
+const displayPageUrlFor = (page: number) => desktopImages.displayUrl(pageUrlFor(page))
 const pageLabel = (page: number) => `第 ${page + 1} ${props.imagePages ? '张' : '页'}`
 const thumbnailUrl = (page: number) => authUrl(`${API_BASE_URL}/manga/${props.media.id}/page/${page}?thumbnail=true`)
 
@@ -499,6 +502,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="flex-1 min-h-0 flex flex-col bg-black overflow-hidden relative">
+    <p v-if="desktopImages.message.value" role="status" class="pointer-events-none absolute left-1/2 top-16 z-30 max-w-[90%] -translate-x-1/2 rounded-full bg-black/70 px-4 py-2 text-caption text-white/80">{{ desktopImages.message.value }}</p>
     <div
       class="flex-1 min-h-0 flex items-center justify-center w-full relative group overflow-hidden"
       @wheel="onWheel"
@@ -538,7 +542,7 @@ onBeforeUnmount(() => {
         >
           <img
             v-if="pageReady(pageIndex)"
-            :src="pageUrlFor(pageIndex)"
+            :src="displayPageUrlFor(pageIndex)"
             :width="pageDimensionsFor(pageIndex)[0]"
             :height="pageDimensionsFor(pageIndex)[1]"
             loading="eager"
@@ -587,7 +591,7 @@ onBeforeUnmount(() => {
           >
             <img
               v-if="pageReady(pageIndex)"
-              :src="pageUrlFor(pageIndex)"
+              :src="displayPageUrlFor(pageIndex)"
               decoding="sync"
               class="h-full w-full object-contain pointer-events-none"
               :alt="imagePages?.[pageIndex]?.title || pageLabel(pageIndex)"

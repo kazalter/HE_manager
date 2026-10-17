@@ -3,6 +3,8 @@ import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { authState, logout } from './auth'
 import { ChevronUp } from 'lucide-vue-next'
+import { desktopBridge } from './desktop'
+import DesktopToolbar from './components/DesktopToolbar.vue'
 import Sidebar from './components/Sidebar.vue'
 import MobileNavigation from './components/MobileNavigation.vue'
 import AuthView from './views/AuthView.vue'
@@ -48,6 +50,7 @@ onMounted(() => { window.addEventListener('he:content-ready', onContentReady); d
 onBeforeUnmount(() => { window.removeEventListener('he:content-ready', onContentReady); document.removeEventListener('play', pauseAudioForVideo, true) })
 </script>
 <template>
+  <DesktopToolbar v-if="desktopBridge" />
   <AuthView v-if="authState.ready && !authState.user" :has-users="authState.hasUsers" :startup-error="authState.error" />
   <div v-else-if="authState.ready" class="he-app-shell w-full bg-background text-ink font-sans relative overflow-hidden flex" :class="{ 'he-compact-shell': compact && !isEmbed, 'he-has-mini': audioPlaybackStore.state.media && !audioPlaybackStore.state.expanded }">
     <a href="#he-main-content" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-accent focus:px-4 focus:py-3 focus:text-on-accent">跳转到主要内容</a>

@@ -1,0 +1,31 @@
+{
+  "anime4k": {
+    "url": "https://github.com/bloc97/Anime4K/releases/download/v4.0.1/Anime4K_v4.0.zip",
+    "sha256": "139cd282086457c5adc79caf7b75b8b825091d71c9b54958c18745fea62d7ed7",
+    "file": "anime4k.zip"
+  },
+  "darwin": {
+    "mpv": {
+      "url": "https://github.com/mpv-player/mpv/releases/download/git-release/mpv-v0.41.0-dev-gdde067107-38976593432-macos-15-arm.zip",
+      "sha256": "71d57ccc8f352cbd2b9010d25260745164e272d38e4fb31608853581fd1c0e79",
+      "file": "mpv-mac.zip"
+    },
+    "realesrgan": {
+      "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-macos.zip",
+      "sha256": "e0ad05580abfeb25f8d8fb55aaf7bedf552c375b5b4d9bd3c8d59764d2cc333a",
+      "file": "realesrgan-mac-full.zip"
+    }
+  },
+  "win32": {
+    "mpv": {
+      "url": "https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20261017/mpv-x86_64-20261017-git-dde0671072.7z",
+      "sha256": "2821d9eef879215e99975fae9616e1777f5e3747168edd3a571c41e21b8abbbc",
+      "file": "mpv-win.7z"
+    },
+    "realesrgan": {
+      "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-windows.zip",
+      "sha256": "abc02804e17982a3be33675e4d471e91ea374e65b70167abc09e31acb412802d",
+      "file": "realesrgan-win-full.zip"
+    }
+  }
+}

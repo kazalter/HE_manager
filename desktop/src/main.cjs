@@ -1,0 +1,396 @@
+const {
+  app,
+  BrowserWindow,
+  protocol,
+  net,
+  ipcMain,
+  dialog,
+  Menu,
+} = require("electron");
+const path = require("node:path"),
+  fs = require("node:fs/promises"),
+  { pathToFileURL } = require("node:url");
+const {
+    serverUrl,
+    mediaRequest,
+    staticPath,
+    API_PATH,
+  } = require("./policy.cjs"),
+  { Player } = require("./player.cjs"),
+  { ImageCache } = require("./images.cjs");
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "he",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+    },
+  },
+]);
+const root = path.resolve(__dirname, ".."),
+  ui = path.join(root, "ui"),
+  runtime = path.join(root, "resources/runtime");
+const player = new Player(path.join(root, "resources/shaders"));
+let window, cache, settings, settingsFile;
+const defaults = {
+  server: "",
+  videoMode: "efficiency",
+  imageMode: "off",
+  engines: {},
+};
+async function saveSettings() {
+  const temp = settingsFile + ".next";
+  await fs.writeFile(temp, JSON.stringify(settings, null, 2), { mode: 0o600 });
+  await fs.rename(temp, settingsFile);
+}
+async function engine(kind) {
+  const candidates =
+    kind === "mpv"
+      ? [
+          settings.engines?.mpv,
+          path.join(
+            runtime,
+            "mpv",
+            process.platform === "win32"
+              ? "mpv.exe"
+              : "mpv.app/Contents/MacOS/mpv",
+          ),
+          "/opt/homebrew/bin/mpv",
+          "/usr/local/bin/mpv",
+          ...(process.platform === "linux" ? ["/usr/bin/mpv"] : []),
+        ]
+      : [
+          settings.engines?.image,
+          path.join(
+            runtime,
+            "realesrgan",
+            process.platform === "win32"
+              ? "realesrgan-ncnn-vulkan.exe"
+              : "realesrgan-ncnn-vulkan",
+          ),
+        ];
+  for (const file of candidates.filter(Boolean)) {
+    try {
+      if ((await fs.stat(file)).isFile()) return file;
+    } catch {}
+  }
+  return null;
+}
+async function configuration() {
+  return {
+    server: settings.server,
+    videoMode: settings.videoMode,
+    imageMode: settings.imageMode,
+    platform: process.platform,
+    arch: process.arch,
+    version: app.getVersion(),
+    mpv: !!(await engine("mpv")),
+    image: !!(await engine("image")),
+  };
+}
+function handle(name, callback) {
+  ipcMain.handle(name, async (event, ...args) => {
+    if (
+      !window ||
+      event.sender !== window.webContents ||
+      !event.senderFrame?.url.startsWith("he://app/")
+    )
+      throw new Error("不允许的桌面调用");
+    try {
+      return await callback(...args);
+    } catch (error) {
+      throw new Error(
+        (error.cause?.code
+          ? `${error.message} (${error.cause.code})`
+          : error.message
+        )?.replace(
+          /(?:token|authorization)=[^\s&]+/gi,
+          "credential=[redacted]",
+        ) || "操作失败",
+      );
+    }
+  });
+}
+function registerIPC() {
+  handle("he:configuration", configuration);
+  handle("he:connect", async (value) => {
+    const server = serverUrl(value);
+    const response = await fetch(server + "/auth/status", {
+      redirect: "error",
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) throw new Error("连接失败，请检查地址与端口");
+    const data = await response.json();
+    if (typeof data.has_users !== "boolean")
+      throw new Error("这个地址不是 HE Manager 服务");
+    await player.stop();
+    settings.server = server;
+    await saveSettings();
+    cache.allowed.clear();
+    return configuration();
+  });
+  handle("he:choose-engine", async (kind) => {
+    if (!["mpv", "image"].includes(kind)) throw new Error("未知的引擎类型");
+    const result = await dialog.showOpenDialog(window, {
+      title:
+        kind === "mpv"
+          ? "选择 mpv 可执行文件或 mpv.app"
+          : "选择 realesrgan-ncnn-vulkan 可执行文件",
+      properties: ["openFile"],
+      filters:
+        process.platform === "win32"
+          ? [{ name: "可执行文件", extensions: ["exe"] }]
+          : [],
+    });
+    if (!result.canceled && result.filePaths[0]) {
+      let selected = result.filePaths[0];
+      if (kind === "mpv" && selected.endsWith(".app"))
+        selected = path.join(selected, "Contents/MacOS/mpv");
+      if (!(await fs.stat(selected)).isFile())
+        throw new Error("请选择引擎可执行文件");
+      settings.engines = { ...settings.engines, [kind]: selected };
+      await saveSettings();
+    }
+    return configuration();
+  });
+  handle("he:preferences", async (value) => {
+    if (
+      !value ||
+      !["off", "efficiency", "quality"].includes(value.videoMode) ||
+      !["off", "anime", "photo"].includes(value.imageMode)
+    )
+      throw new Error("无效的超分配置");
+    if (player.state.running) await player.setMode(value.videoMode);
+    settings.videoMode = value.videoMode;
+    settings.imageMode = value.imageMode;
+    await saveSettings();
+    return configuration();
+  });
+  handle("he:video-open", async (options) => {
+    if (!options || typeof options.url !== "string")
+      throw new Error("无效的播放请求");
+    const source = mediaRequest(settings.server, options.url),
+      binary = await engine("mpv");
+    if (!binary)
+      throw new Error("未找到本机 mpv，请在桌面设置中选择播放器引擎");
+    return player.open(
+      binary,
+      source,
+      settings.videoMode,
+      options.start,
+      options.title,
+    );
+  });
+  handle("he:video-control", (action, value) => player.control(action, value));
+  handle("he:video-state", () => ({ ...player.state }));
+  handle("he:video-stop", () => player.stop());
+  handle("he:image", async (options) => {
+    if (!options || !["anime", "photo"].includes(options.mode))
+      throw new Error("请选择图片超分类型");
+    const binary = await engine("image");
+    if (!binary) throw new Error("未找到图片超分引擎，请在桌面设置中选择引擎");
+    return cache.prepare(
+      mediaRequest(settings.server, options.url),
+      options.mode,
+      binary,
+      path.join(path.dirname(binary), "models"),
+    );
+  });
+}
+async function protocolHandler(request) {
+  const url = new URL(request.url);
+  if (
+    url.host !== "app" ||
+    (request.initiatorOrigin && request.initiatorOrigin !== "he://app")
+  )
+    return new Response("Forbidden", { status: 403 });
+  try {
+    if (url.pathname.startsWith("/__cache/"))
+      return net.fetch(pathToFileURL(cache.file(url.pathname.slice(9))).href);
+    if (API_PATH.test(url.pathname)) {
+      if (!settings.server)
+        return Response.json({ detail: "请先配置服务器地址" }, { status: 503 });
+      const headers = new Headers(request.headers);
+      for (const key of [
+        "host",
+        "origin",
+        "referer",
+        "connection",
+        "accept-encoding",
+        "cookie",
+      ])
+        headers.delete(key);
+      const options = {
+        method: request.method,
+        headers,
+        redirect: "manual",
+        signal: request.signal,
+      };
+      if (!["GET", "HEAD"].includes(request.method))
+        options.body = await request.arrayBuffer();
+      const response = await fetch(
+        settings.server + url.pathname + url.search,
+        options,
+      );
+      if (response.status >= 300 && response.status < 400) {
+        await response.body?.cancel();
+        return Response.json(
+          { detail: "服务器返回跳转，请使用最终服务地址" },
+          { status: 502 },
+        );
+      }
+      const outgoing = new Headers(response.headers);
+      for (const key of [
+        "content-encoding",
+        "content-length",
+        "set-cookie",
+        "content-security-policy",
+        "access-control-allow-origin",
+      ])
+        outgoing.delete(key);
+      outgoing.set("Cache-Control", "no-store");
+      return new Response(response.body, {
+        status: response.status,
+        headers: outgoing,
+      });
+    }
+    const response = await net.fetch(
+        pathToFileURL(staticPath(ui, url.pathname)).href,
+      ),
+      headers = new Headers(response.headers);
+    headers.set(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-src 'none'",
+    );
+    return new Response(response.body, { status: response.status, headers });
+  } catch {
+    return Response.json(
+      { detail: "读取失败，请检查服务器连接或本地文件" },
+      { status: 502 },
+    );
+  }
+}
+async function createWindow() {
+  window = new BrowserWindow({
+    width: 1360,
+    height: 900,
+    minWidth: 900,
+    minHeight: 640,
+    title: "HE Manager",
+    backgroundColor: "#0a0a0d",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+    },
+  });
+  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.on("will-navigate", (event, url) => {
+    if (!url.startsWith("he://app/")) event.preventDefault();
+  });
+  window.webContents.session.setPermissionRequestHandler(
+    (_wc, _permission, callback) => callback(false),
+  );
+  window.webContents.session.on("will-download", (event) =>
+    event.preventDefault(),
+  );
+  window.on("closed", () => {
+    void player.stop();
+    window = null;
+  });
+  await window.loadURL("he://app/");
+}
+app.whenReady().then(async () => {
+  app.setAccessibilitySupportEnabled(true);
+  settingsFile = path.join(app.getPath("userData"), "desktop-settings.json");
+  await fs.mkdir(app.getPath("userData"), { recursive: true });
+  settings = { ...defaults, engines: {} };
+  try {
+    const stored = JSON.parse(await fs.readFile(settingsFile, "utf8"));
+    settings = { ...settings, ...stored };
+    if (settings.server) settings.server = serverUrl(settings.server);
+  } catch {}
+  if (!["off", "efficiency", "quality"].includes(settings.videoMode))
+    settings.videoMode = "efficiency";
+  if (!["off", "anime", "photo"].includes(settings.imageMode))
+    settings.imageMode = "off";
+  cache = new ImageCache(path.join(app.getPath("userData"), "image-cache"));
+  protocol.handle("he", protocolHandler);
+  registerIPC();
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      { label: "HE Manager", submenu: [{ role: "about" }, { role: "quit" }] },
+      {
+        label: "编辑",
+        submenu: [
+          { role: "undo" },
+          { role: "redo" },
+          { role: "copy" },
+          { role: "paste" },
+          { role: "selectAll" },
+        ],
+      },
+      {
+        label: "窗口",
+        submenu: [
+          { role: "minimize" },
+          { role: "zoom" },
+          { role: "reload" },
+          { role: "toggleDevTools" },
+        ],
+      },
+    ]),
+  );
+  if (process.argv.includes("--native-selftest")) {
+    const report = await require("./native-selftest.cjs")({
+      player,
+      mpv: await engine("mpv"),
+      image: await engine("image"),
+      resources: path.join(root, "resources"),
+    });
+    await fs.writeFile(
+      path.join(app.getPath("userData"), "native-test-report.json"),
+      JSON.stringify(report, null, 2),
+    );
+    console.log("HE_NATIVE_TEST " + JSON.stringify(report));
+    app.exit(0);
+    return;
+  }
+  if (process.argv.includes("--smoke-test")) {
+    await createWindow();
+    for (let attempt = 0; attempt < 100; attempt++) {
+      if (
+        await window.webContents.executeJavaScript(
+          "!!document.querySelector('.he-desktop-toolbar')",
+        )
+      )
+        break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    const report = await window.webContents.executeJavaScript(
+      `JSON.stringify({title:document.title,bridge:!!window.heDesktop,body:document.body.innerText.slice(0,300)})`,
+    );
+    console.log("HE_DESKTOP_SMOKE " + report);
+    app.exit(0);
+  } else await createWindow();
+});
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") app.quit();
+});
+app.on("activate", () => {
+  if (!BrowserWindow.getAllWindows().length) void createWindow();
+});
+let quitting = false;
+app.on("before-quit", (event) => {
+  if (quitting) return;
+  event.preventDefault();
+  quitting = true;
+  Promise.allSettled([player.stop(), cache?.close()]).finally(() =>
+    setImmediate(() => app.quit()),
+  );
+});

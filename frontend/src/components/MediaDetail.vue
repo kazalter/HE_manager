@@ -12,6 +12,8 @@ import { useCompactViewport } from '../composables/useCompactViewport'
 const compact = useCompactViewport()
 import MangaReader from './media-detail/MangaReader.vue'
 import MetadataPanel from './media-detail/MetadataPanel.vue'
+import { desktopBridge } from '../desktop'
+import DesktopVideoPlayer from './media-detail/DesktopVideoPlayer.vue'
 import VideoPlayer from './media-detail/VideoPlayer.vue'
 import { UiButton } from './ui'
 import { useMediaOverlayControls } from '../composables/useMediaOverlayControls'
@@ -370,7 +372,7 @@ const {
   resizeVideoPlayer,
 } = useVideoPlayback({
   media: currentMedia,
-  isVideo,
+  isVideo: computed(() => isVideo.value && !desktopBridge),
   videoUrl,
   videoElement: progressVideoElement,
   bindVideo: bindVideoProgressEvents,
@@ -378,6 +380,21 @@ const {
   saveProgress: saveVideoProgress,
   onError: showToast,
 })
+
+let lastDesktopSave = 0
+let desktopEnded = false
+const desktopProgress = (position: number, duration: number, ended: boolean, force = false) => {
+  if (!Number.isFinite(position) || position < 0 || !isVideo.value) return
+  currentMedia.value.progress = position
+  if (duration > 0) currentMedia.value.duration = duration
+  if (Date.now() - lastDesktopSave > 5000 || (ended && !desktopEnded) || force) {
+    lastDesktopSave = Date.now()
+    void updateMedia({ progress: position, ...(duration > 0 ? { duration } : {}) }).catch(() => {})
+  }
+  if (ended && !desktopEnded) handleVideoSequenceEnded()
+  desktopEnded = ended
+}
+watch(() => currentMedia.value.id, () => { lastDesktopSave = 0; desktopEnded = false })
 
 const nextPage = () => {
   const step = localStorage.getItem(compact.value ? 'he_manga_read_mode_mobile' : 'he_manga_read_mode') === 'double' ? 2 : 1
@@ -529,6 +546,10 @@ const handleKeydown = (e: KeyboardEvent) => {
       reader.value?.nextPage()
       e.preventDefault()
       e.stopImmediatePropagation()
+    } else if (isVideo.value && desktopBridge) {
+      void desktopBridge.controlVideo('seek', 10).catch(() => {})
+      e.preventDefault()
+      e.stopImmediatePropagation()
     } else if (isVideo.value && progressVideoElement.value) {
       e.preventDefault()
       e.stopImmediatePropagation()
@@ -544,6 +565,10 @@ const handleKeydown = (e: KeyboardEvent) => {
   if (e.key === 'ArrowLeft') {
     if (isManga.value) {
       reader.value?.previousPage()
+      e.preventDefault()
+      e.stopImmediatePropagation()
+    } else if (isVideo.value && desktopBridge) {
+      void desktopBridge.controlVideo('seek', -10).catch(() => {})
       e.preventDefault()
       e.stopImmediatePropagation()
     } else if (isVideo.value && progressVideoElement.value) {
@@ -724,6 +749,8 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
               {{ toastMessage }}
             </div>
           </div>
+
+          <DesktopVideoPlayer v-else-if="isVideo && desktopBridge" :url="videoUrl" :title="currentMedia.title" :start="currentMedia.progress || 0" @progress="desktopProgress" />
 
           <VideoPlayer v-else-if="isVideo" :cover-url="coverUrl" @ready="setArtContainer" />
 
