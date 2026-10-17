@@ -124,7 +124,7 @@ const contrast = (a: number[], b: number[]) => {
 }
 
 /**
- * Builds the full dark palette from one accent color: hue-tinted neutral
+ * Builds the palette from one accent color: hue-tinted dark neutrals or calm light
  * surfaces (background → surface-3), hairlines, four text levels and the
  * accent with its readable on-accent text color.
  */
@@ -136,18 +136,22 @@ export const buildThemeTokens = (accentHex: string, mode: ResolvedColorMode = 'd
   const neutral = (lightness: number, saturation = ns) => hslToRgb(h, saturation, lightness)
   const white = [255, 255, 255]
   if (mode === 'light') {
-    // Accents also label links and controls: keep them readable on pale surfaces.
-    let lightness = l
-    while (contrast(accent, neutral(0.94)) < 4.5 && lightness > 0.05) {
+    // Keep pale neutrals independent of the accent so pink/green/custom themes
+    // do not tint the entire page. Reserve color for selected controls and links.
+    const lightSurface3 = [229, 233, 239]
+    const accentSaturation = s * 0.82
+    let lightness = Math.min(l, 0.46)
+    accent = hslToRgb(h, accentSaturation, lightness)
+    while (contrast(accent, lightSurface3) < 4.5 && lightness > 0.05) {
       lightness -= 0.01
-      accent = hslToRgb(h, s, lightness)
+      accent = hslToRgb(h, accentSaturation, lightness)
     }
     const tokens: Record<ThemeToken, number[]> = {
-      background: neutral(0.975), sidebar: neutral(0.99), surface: white,
-      'surface-2': neutral(0.955), 'surface-3': neutral(0.94),
-      line: neutral(0.87), 'line-strong': neutral(0.76),
-      ink: neutral(0.12, ts), muted: neutral(0.33, ts),
-      subtle: neutral(0.40, ts), faint: neutral(0.46, ts),
+      background: [239, 241, 244], sidebar: [232, 235, 239], surface: [250, 251, 252],
+      'surface-2': [242, 244, 247], 'surface-3': lightSurface3,
+      line: [215, 221, 229], 'line-strong': [184, 195, 208],
+      ink: [32, 40, 53], muted: [76, 89, 106],
+      subtle: [87, 101, 120], faint: [109, 121, 139],
       accent, 'accent-glow': accent, 'on-accent': white,
     }
     return Object.fromEntries(Object.entries(tokens).map(([key, rgb]) => [key, rgb.join(' ')])) as ThemeTokens

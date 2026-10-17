@@ -155,27 +155,33 @@
 /* Light defaults also cover the first paint before the application loads. */
 :root[data-color-mode="light"] {
   color-scheme: light;
-  --color-background: 248 248 249;
-  --color-sidebar: 252 252 253;
-  --color-surface: 255 255 255;
-  --color-surface-2: 242 242 245;
-  --color-surface-3: 238 238 242;
-  --color-line: 218 218 226;
-  --color-line-strong: 186 187 201;
-  --color-ink: 28 28 33;
-  --color-muted: 77 78 91;
-  --color-subtle: 94 94 110;
-  --color-faint: 108 108 127;
-  --color-accent: 80 84 239;
-  --color-accent-glow: 80 84 239;
+  --color-background: 239 241 244;
+  --color-sidebar: 232 235 239;
+  --color-surface: 250 251 252;
+  --color-surface-2: 242 244 247;
+  --color-surface-3: 229 233 239;
+  --color-line: 215 221 229;
+  --color-line-strong: 184 195 208;
+  --color-ink: 32 40 53;
+  --color-muted: 76 89 106;
+  --color-subtle: 87 101 120;
+  --color-faint: 109 121 139;
+  --color-accent: 37 40 198;
+  --color-accent-glow: 37 40 198;
   --color-on-accent: 255 255 255;
   --color-success: 4 120 87;
   --color-warning: 146 85 7;
   --color-danger: 185 28 28;
   --color-info: 3 105 161;
   --color-star: 161 98 7;
-  --he-shadow-pop: 0 0 0 1px rgb(15 23 42 / 0.04), 0 12px 32px -8px rgb(15 23 42 / 0.16);
-  --he-shadow-modal: 0 0 0 1px rgb(15 23 42 / 0.06), 0 28px 72px -16px rgb(15 23 42 / 0.24);
+  --he-shadow-pop: 0 0 0 1px rgb(15 23 42 / 0.04), 0 8px 24px -12px rgb(15 23 42 / 0.12);
+  --he-shadow-modal: 0 0 0 1px rgb(15 23 42 / 0.06), 0 20px 56px -16px rgb(15 23 42 / 0.18);
+}
+
+/* Dark ambient light washes out pale surfaces; use a calm, solid canvas. */
+:root[data-color-mode="light"] .he-ambient,
+:root[data-color-mode="light"] .he-auth-ambient {
+  display: none;
 }
 
 @layer base {

@@ -11,5 +11,5 @@
   document.documentElement.dataset.colorMode = mode
   document.documentElement.dataset.theme = theme
   document.querySelector('meta[name="color-scheme"]').content = mode
-  if (mode === 'light') document.querySelector('meta[name="theme-color"]').content = '#f8f8f9'
+  if (mode === 'light') document.querySelector('meta[name="theme-color"]').content = '#eff1f4'
 })()
