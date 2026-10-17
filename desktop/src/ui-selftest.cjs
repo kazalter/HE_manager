@@ -38,6 +38,18 @@ module.exports = async ({ window, player, config, output }) => {
     await fs.writeFile(path.join(path.dirname(output), file), (await window.webContents.capturePage()).toPNG());
     report.screenshots.push(file);
   }
+  async function hashTree(directory) {
+    const files = {};
+    async function visit(relative) {
+      const entries = await fs.readdir(path.join(directory, relative), { withFileTypes: true });
+      for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+        const name = relative ? relative + '/' + entry.name : entry.name;
+        if (entry.isDirectory()) await visit(name);
+        else if (entry.isFile()) files[name] = createHash('sha256').update(await fs.readFile(path.join(directory, name))).digest('hex');
+      }
+    }
+    await visit(''); return files;
+  }
   async function appearance(mode) {
     await click('.he-desktop-toolbar button');
     await click(`[aria-label="外观模式"] button:nth-child(${mode === 'light' ? 1 : mode === 'dark' ? 2 : 3})`);
@@ -61,6 +73,12 @@ module.exports = async ({ window, player, config, output }) => {
     await fs.mkdir(path.dirname(output), { recursive: true });
     report.sourceSha256 = {};
     for (const name of ['main.cjs', 'embedded-player.cjs', 'preload.cjs', 'ui-selftest.cjs']) report.sourceSha256[name] = createHash('sha256').update(await fs.readFile(path.join(__dirname, name))).digest('hex');
+    const root = path.resolve(__dirname, '..');
+    report.version = app.getVersion(); report.electron = process.versions.electron;
+    report.uiSha256 = await hashTree(path.join(root, 'ui'));
+    report.nativeBuild = JSON.parse((await fs.readFile(path.join(root, 'native/build', `${process.platform}-${process.arch}`, 'build-info.json'), 'utf8')).replace(/^\uFEFF/, ''));
+    report.nativeSha256 = createHash('sha256').update(await fs.readFile(player.addon)).digest('hex');
+    report.librarySha256 = createHash('sha256').update(await fs.readFile(player.library)).digest('hex');
     await evaluate(`window.heDesktop.connect(${JSON.stringify(config.server)})`);
     report.checks.directConnectivity = true;
     await wait(() => evaluate(`!!document.querySelector('input[autocomplete="username"]')`), 'Login form missing');
@@ -96,6 +114,11 @@ module.exports = async ({ window, player, config, output }) => {
     await wait(() => evaluate('document.querySelectorAll(".he-media-card").length >= 4'), 'Library did not recover');
     stage = 'embedded-video';
     await click(`.he-media-card[data-media-id="${config.videoId}"]`);
+    if (config.expectVideoLoading) {
+      await wait(() => evaluate('document.querySelector(".desktop-video")?.innerText.includes("正在打开视频")'), 'Video loading feedback did not appear');
+      await capture('video-loading');
+      report.checks.videoLoading = true;
+    }
     await wait(() => evaluate('Number(document.querySelector(".desktop-video canvas")?.dataset.heVideoFrames) >= 5'), 'Embedded video did not display frames');
     await wait(() => player.state.tracks.filter((track) => track.type === 'audio').length === 2, 'Audio track list missing');
     report.checks.embeddedVideo = true;
@@ -139,8 +162,12 @@ module.exports = async ({ window, player, config, output }) => {
     if (!report.checks.sameSessionFullscreen) throw new Error('Fullscreen changed the playback session');
     report.video = { hwdec: after.hwdec, tracks: after.tracks, position: after.position, sourceLoads: after.sourceLoads, speed: after.speed };
     await captureSizes('video', 'dark');
+    const closedOwner = player.owner;
     await key('Escape');
     await wait(() => !player.state.running && !player.owner, 'Closing viewer did not release the player');
+    const closed = player.native.state(closedOwner);
+    report.closedPlayer = { stopped: closed.stopped, surfaces: closed.surfaces, leases: closed.leases, references: player.references.size };
+    if (!closed.stopped || closed.surfaces || closed.leases || player.references.size) throw new Error('Closing viewer retained native resources');
     report.checks.viewerClose = true;
     stage = 'reader';
     await click(`.he-media-card[data-media-id="${config.mangaId}"]`);
@@ -177,10 +204,22 @@ module.exports = async ({ window, player, config, output }) => {
     await wait(() => evaluate('document.querySelector(".he-reader-canvas-page img")?.naturalWidth > 0'), 'Light reader did not display');
     await captureSizes('reader', 'light');
     report.checks.readerOpened = true;
+    await click('button[aria-label="返回媒体列表"]');
+    stage = 'video-error';
+    if (!config.errorVideoId) throw new Error('Unreadable media fixture is missing');
+    await click(`.he-media-card[data-media-id="${config.errorVideoId}"]`);
+    await wait(() => evaluate('document.querySelector(".desktop-video")?.innerText.includes("视频暂时无法播放")'), 'Unreadable video did not show an actionable error');
+    await capture('video-error');
+    await click('button[aria-label="重新打开视频"]');
+    await wait(async () => await evaluate('document.querySelector(".desktop-video")?.innerText.includes("视频暂时无法播放")') && !player.owner, 'Retry did not settle with released resources');
+    await click('button[aria-label="返回媒体列表"]');
+    await wait(() => evaluate('!document.querySelector(".he-media-overlay")'), 'Error viewer could not return to library');
+    report.checks.videoErrorAndRetry = true;
     report.status = 'partial-pass';
   } catch (error) {
     report.status = 'failed'; report.stage = stage; report.error = error.message;
     report.playback = player.state;
+    report.windowMetrics = { size: window.getSize(), contentSize: window.getContentSize(), minimum: window.getMinimumSize(), viewport: await evaluate('({width:innerWidth,height:innerHeight})') };
     try { await capture('failure'); } catch {}
   }
   report.capturedAt = new Date().toISOString();

@@ -39,6 +39,12 @@ shutil.copytree(root/'resources/runtime'/${JSON.stringify(target)},dest/'resourc
 native=root/'native'
 build=native/'build'/${JSON.stringify(`${target}-${arch}`)}
 metadata=json.loads((build/'build-info.json').read_text(encoding='utf-8-sig'))
+required={'embedded.cpp','surface.h','header-lock.json',${JSON.stringify(target === 'win32' ? 'build-windows.ps1' : 'build-macos.py')}}
+if ${JSON.stringify(target)}=='win32':required.add('delay-load.cpp')
+if not required.issubset(metadata['sourceSha256']):
+    raise RuntimeError('Native build metadata is incomplete; rebuild the addon')
+if metadata['platform']!=${JSON.stringify(`${target}-${arch}`)} or metadata['electron']!='44.8.0' or metadata['nodeAPI']!=8:
+    raise RuntimeError('Native addon targets a different runtime')
 for name,expected in metadata['sourceSha256'].items():
     if hashlib.sha256((native/name).read_bytes()).hexdigest()!=expected:
         raise RuntimeError('Rebuild the native module after changing '+name)

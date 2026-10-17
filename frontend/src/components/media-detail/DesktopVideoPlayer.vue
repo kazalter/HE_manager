@@ -83,7 +83,7 @@ onBeforeUnmount(() => {
     <LoadingState :label="busy ? '正在打开视频' : '正在缓冲'" description="准备好后将继续播放。" />
    </div>
    <div v-else-if="failure" class="absolute inset-0 grid place-items-center bg-background/95">
-    <EmptyState title="视频暂时无法播放" :description="failure" tone="warning"><UiButton @click="open">重新打开</UiButton></EmptyState>
+    <EmptyState title="视频暂时无法播放" :description="failure" tone="warning"><UiButton aria-label="重新打开视频" @click="open">重新打开</UiButton></EmptyState>
    </div>
   </div>
   <div class="shrink-0 space-y-1 border-t border-line bg-surface px-4 pb-3 pt-2">

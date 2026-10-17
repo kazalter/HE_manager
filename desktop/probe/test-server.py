@@ -13,6 +13,7 @@ import sys
 import threading
 import io
 import zipfile
+import asyncio
 from datetime import datetime
 
 repository = pathlib.Path(__file__).resolve().parents[2]
@@ -46,6 +47,7 @@ rich = fixture.name == "acceptance.mkv"
 for name in names:
     shutil.copy2(fixture, fixtures / name)
 ui_fixtures = os.environ.get('HE_PROBE_UI_FIXTURES') == '1'
+ui_stream_delay = min(3, max(0, float(os.environ.get('HE_PROBE_UI_STREAM_DELAY', '0')))) if ui_fixtures else 0
 ui_password = secrets.token_urlsafe(24) if ui_fixtures else None
 if ui_fixtures:
     from PIL import Image, ImageDraw
@@ -61,6 +63,7 @@ if ui_fixtures:
             if index == 0: image.save(thumbnails / 'cp02-portrait.png')
             if index == 2: image.save(thumbnails / 'cp02-landscape.png')
     image.save(fixtures / 'cp02-image.png')
+    (fixtures / 'cp02-unreadable.mp4').write_bytes(b'HE synthetic unsupported video fixture\n')
 with SessionLocal() as database:
     user = database.query(models.User).filter_by(username="desktop-probe").first()
     if user is None:
@@ -88,6 +91,7 @@ with SessionLocal() as database:
         for name, title, kind, cover in [
             ('cp02-manga.zip', '四季手记：单页、双页与卷轴阅读的长标题漫画代表作品', 'manga', 'cp02-portrait.png'),
             ('cp02-image.png', '午后的一张静态图片', 'image', None),
+            ('cp02-unreadable.mp4', '无法解码的测试视频 · 重试与返回', 'video', None),
         ]:
             file = fixtures / name
             media = database.query(models.Media).filter_by(absolute_path=str(file)).first()
@@ -102,8 +106,9 @@ with SessionLocal() as database:
     config = {"source": f"http://127.0.0.1:{port}/stream/{items[0].id}", "secondSource": f"http://127.0.0.1:{port}/stream/{items[1].id}", "headers": ["Authorization: Bearer " + token], "richFixture": rich}
     if ui_fixtures:
         manga = database.query(models.Media).filter_by(absolute_path=str(fixtures / 'cp02-manga.zip')).one()
+        unreadable = database.query(models.Media).filter_by(absolute_path=str(fixtures / 'cp02-unreadable.mp4')).one()
         config.update(server=f'http://127.0.0.1:{port}', username=user.username, password=ui_password,
-                      videoId=items[0].id, mangaId=manga.id)
+                      videoId=items[0].id, mangaId=manga.id, errorVideoId=unreadable.id, expectVideoLoading=ui_stream_delay > 0)
     descriptor = os.open(root / "client-access.json", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8") as file:
         json.dump(config, file)
@@ -117,6 +122,8 @@ lock = threading.Lock()
 
 @app.middleware("http")
 async def evidence(request, call_next):
+    if ui_stream_delay and request.url.path == f'/stream/{items[0].id}':
+        await asyncio.sleep(ui_stream_delay)
     response = await call_next(request)
     if request.url.path.startswith("/stream/"):
         with lock:

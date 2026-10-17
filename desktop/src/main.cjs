@@ -333,10 +333,6 @@ async function createWindow(test = false) {
   });
   diagnosticStage('window-created');
   const ownerWindow = window;
-  // The verified minimum is a CSS content area; native chrome differs by OS.
-  const [outerWidth, outerHeight] = ownerWindow.getSize();
-  const [contentWidth, contentHeight] = ownerWindow.getContentSize();
-  ownerWindow.setMinimumSize(1024 + outerWidth - contentWidth, 640 + outerHeight - contentHeight);
   ownerWindow._heGpuReady = app.getGPUInfo('basic').then((gpu) => {
     ownerWindow._heGpu = gpu.gpuDevice?.find((device) => device.active) || {};
   });
@@ -379,6 +375,11 @@ async function createWindow(test = false) {
   });
   diagnosticStage('load-window');
   await ownerWindow.loadURL(test ? "he://app/__fullscreen-test" : "he://app/");
+  // Measure after native menus attach: getContentSize on Windows can include
+  // the menu strip, while the verified design minimum is the CSS viewport.
+  const viewport = await ownerWindow.webContents.executeJavaScript('({width:innerWidth,height:innerHeight})');
+  const [outerWidth, outerHeight] = ownerWindow.getSize();
+  ownerWindow.setMinimumSize(1024 + outerWidth - viewport.width, 640 + outerHeight - viewport.height);
   diagnosticStage('window-loaded');
   diagnosticStage('window-ready');
 }
