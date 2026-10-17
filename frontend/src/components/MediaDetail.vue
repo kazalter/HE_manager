@@ -15,7 +15,7 @@ import MetadataPanel from './media-detail/MetadataPanel.vue'
 import { desktopBridge } from '../desktop'
 import DesktopVideoPlayer from './media-detail/DesktopVideoPlayer.vue'
 import VideoPlayer from './media-detail/VideoPlayer.vue'
-import { UiButton } from './ui'
+import { UiButton, UiToast } from './ui'
 import { useMediaOverlayControls } from '../composables/useMediaOverlayControls'
 import { useMediaProgress } from '../composables/useMediaProgress'
 import { useVideoPlayback } from '../composables/useVideoPlayback'
@@ -385,11 +385,13 @@ let lastDesktopSave = 0
 let desktopEnded = false
 const desktopProgress = (position: number, duration: number, ended: boolean, force = false) => {
   if (!Number.isFinite(position) || position < 0 || !isVideo.value) return
-  currentMedia.value.progress = position
-  if (duration > 0) currentMedia.value.duration = duration
+  const progress = Math.floor(position)
+  const savedDuration = Number.isFinite(duration) && duration >= 1 ? Math.floor(duration) : undefined
+  currentMedia.value.progress = progress
+  if (savedDuration !== undefined) currentMedia.value.duration = savedDuration
   if (Date.now() - lastDesktopSave > 5000 || (ended && !desktopEnded) || force) {
     lastDesktopSave = Date.now()
-    void updateMedia({ progress: position, ...(duration > 0 ? { duration } : {}) }).catch(() => {})
+    void updateMedia({ progress, ...(savedDuration !== undefined ? { duration: savedDuration } : {}) }).catch(() => {})
   }
   if (ended && !desktopEnded) handleVideoSequenceEnded()
   desktopEnded = ended
@@ -739,7 +741,7 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
             <span>正在加载媒体…</span>
           </div>
 
-          <div v-if="toastMessage && !currentMedia.is_missing" role="status" class="absolute bottom-44 left-1/2 z-[120] max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-2xl bg-black/85 px-4 py-2.5 text-body text-white ring-1 ring-inset ring-white/10">{{ toastMessage }}</div>
+          <UiToast v-if="toastMessage && !currentMedia.is_missing" :message="toastMessage" overlay class="absolute bottom-44 left-1/2 z-[120] max-w-[calc(100%-2rem)] -translate-x-1/2" />
 
           <div v-if="currentMedia.is_missing" class="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-black/85 p-6">
             <div class="w-full max-w-md rounded-3xl border border-line-strong bg-surface-3 p-6 text-center shadow-modal sm:p-8">

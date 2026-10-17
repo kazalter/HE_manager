@@ -3,11 +3,12 @@ import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { Maximize, Minimize, Pause, Play, Settings2, SkipBack, SkipForward, Volume2 } from 'lucide-vue-next'
 import { desktopBridge, desktopState, setDesktopPreferences, type DesktopPlayback, type DesktopVideoAction, type VideoEnhancement } from '../../desktop'
 import { audioPlaybackStore } from '../../stores/audioPlaybackStore'
-import { EmptyState, LoadingState, UiButton, UiIconButton, UiModal, UiSlider, controlClass } from '../ui'
+import { EmptyState, LoadingState, UiButton, UiIconButton, UiModal, UiSlider, UiToast, controlClass } from '../ui'
 const props = defineProps<{ url: string; title: string; start: number }>()
 const emit = defineEmits<{ progress: [position: number, duration: number, ended: boolean, force?: boolean] }>()
 const canvasId = `he-video-${useId()}`
 const state = ref<DesktopPlayback | null>(null), error = ref(''), busy = ref(false), settingsOpen = ref(false)
+const actionError = ref('')
 const seekValue = ref(0), dragging = ref(false), volume = ref(75)
 const volumeDragging = ref(false)
 const failure = computed(() => error.value || state.value?.error || '')
@@ -34,7 +35,7 @@ async function poll() {
 }
 async function open() {
  const current = ++epoch, requestedUrl = props.url
- loadedUrl = ''; busy.value = true; error.value = ''
+ loadedUrl = ''; busy.value = true; error.value = ''; actionError.value = ''
  if (audioPlaybackStore.state.playing) audioPlaybackStore.togglePlay()
  try {
   const next = await desktopBridge!.openVideo({ url: requestedUrl, title: props.title, start: props.start })
@@ -44,14 +45,19 @@ async function open() {
  } finally { if (!disposed && epoch === current) busy.value = false }
 }
 async function control(action: DesktopVideoAction, value?: number) {
- try { await desktopBridge!.controlVideo(action, value) }
- catch (failure: unknown) { error.value = failure instanceof Error ? failure.message : '播放操作失败，请重试。' }
+ actionError.value = ''
+ try {
+  if (action === 'pause' || action === 'fullscreen' || action === 'exit-fullscreen') await desktopBridge!.controlVideo(action)
+  else await desktopBridge!.controlVideo(action, value ?? NaN)
+ }
+ catch (failure: unknown) { actionError.value = failure instanceof Error ? failure.message : '播放操作失败，请重试。' }
 }
 async function seek(value: number) { dragging.value = false; await control('seek-to', value) }
 async function setVolume(value: number) { volumeDragging.value = false; await control('volume', value) }
 async function mode(value: VideoEnhancement) {
+ actionError.value = ''
  try { await setDesktopPreferences(value, desktopState.imageMode) }
- catch (failure: unknown) { error.value = failure instanceof Error ? failure.message : '画面设置失败。' }
+ catch (failure: unknown) { actionError.value = failure instanceof Error ? failure.message : '画面设置失败。' }
 }
 function onKeydown(event: KeyboardEvent) {
  if (event.key === 'F11') { event.preventDefault(); void control('fullscreen') }
@@ -72,6 +78,7 @@ onBeforeUnmount(() => {
  <div class="desktop-video flex min-h-0 flex-1 flex-col bg-background text-ink" @keydown="onKeydown">
   <div class="relative min-h-0 flex-1 bg-black">
    <canvas :id="canvasId" tabindex="0" :aria-label="title" class="absolute inset-0 h-full w-full focus-ring-inset" @click="control('pause')" @dblclick="control('fullscreen')" />
+   <UiToast v-if="actionError && !settingsOpen && !failure" :message="actionError" urgent overlay class="absolute bottom-4 left-1/2 z-20 max-w-[90%] -translate-x-1/2" />
    <div v-if="busy || state?.buffering" class="absolute inset-0 grid place-items-center bg-background/90">
     <LoadingState :label="busy ? '正在打开视频' : '正在缓冲'" description="准备好后将继续播放。" />
    </div>
@@ -93,12 +100,13 @@ onBeforeUnmount(() => {
   </div>
   <UiModal v-model:open="settingsOpen" title="播放设置" layer="viewer" size="sm" description="音轨、字幕和画面设置应用到当前播放会话。">
    <div class="space-y-5">
+    <UiToast v-if="actionError" :message="actionError" urgent />
     <label class="block"><span class="mb-2 block text-meta text-muted">音轨</span><select :value="Number(state?.aid) || 0" :disabled="!audioTracks.length" :class="controlClass()" @change="control('audio-track', Number(($event.target as HTMLSelectElement).value))"><option v-if="!audioTracks.length" value="0">没有音轨</option><option v-for="track in audioTracks" :key="track.id" :value="track.id">{{ track.title || track.language || `音轨 ${track.id}` }}</option></select></label>
     <label class="block"><span class="mb-2 block text-meta text-muted">字幕</span><select :value="Number(state?.sid) || 0" :class="controlClass()" @change="control('subtitle-track', Number(($event.target as HTMLSelectElement).value))"><option value="0">关闭字幕</option><option v-for="track in subtitles" :key="track.id" :value="track.id">{{ track.title || track.language || `字幕 ${track.id}` }}</option></select></label>
     <label class="block"><span class="mb-2 block text-meta text-muted">播放速度</span><select :value="state?.speed || 1" :class="controlClass()" @change="control('speed', Number(($event.target as HTMLSelectElement).value))"><option v-for="speed in [0.5, 0.75, 1, 1.25, 1.5, 2]" :key="speed" :value="speed">{{ speed }}×</option></select></label>
     <label class="block"><span class="mb-2 block text-meta text-muted">画面增强</span><select :value="desktopState.videoMode" :class="controlClass()" @change="mode(($event.target as HTMLSelectElement).value as VideoEnhancement)"><option value="off">原画</option><option value="efficiency">Anime4K · 效率</option><option value="quality">Anime4K · 质量</option></select></label>
     <div><div class="mb-1 flex items-center gap-2 text-meta text-muted"><Volume2 :size="16" /><span>音量 {{ volume }}%</span></div><UiSlider v-model="volume" label="音量" hide-label :value-text="`${volume}%`" @pointerdown="volumeDragging = true" @pointercancel="volumeDragging = false" @commit="setVolume" /></div>
-    <p class="text-caption text-subtle">{{ state?.hwdec ? `硬件解码：${state.hwdec}` : '正在读取解码状态' }}</p>
+    <p class="text-caption text-subtle">{{ state?.hwdec ? '硬件解码已启用' : '正在读取解码状态' }}</p>
    </div>
   </UiModal>
  </div>

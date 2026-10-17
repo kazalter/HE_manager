@@ -115,6 +115,7 @@ const frameStyle = computed(() => {
 <template>
   <button
     type="button"
+    :data-media-id="media.id"
     :style="{ animationDelay: `${Math.min(24, index) * 30}ms` }"
     :class="{
       'animate-fluid-entrance': !virtualized && index < 16,

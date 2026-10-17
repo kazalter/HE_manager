@@ -5,11 +5,12 @@ import { execFileSync } from "node:child_process";
 import { resedit } from "../node_modules/@electron/packager/dist/resedit.js";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const target = process.argv[2];
+const python = process.platform === "win32" ? "python" : "python3";
 if (!["darwin", "win32"].includes(target))
   throw new Error("Usage: npm run package -- darwin|win32");
 const arch = target === "darwin" ? "arm64" : "x64";
 execFileSync(
-  "python3",
+  python,
   [path.join(root, "scripts/electron-template.py"), target],
   { stdio: "inherit" },
 );
@@ -19,7 +20,7 @@ const destination =
     ? path.join(output, "HE Manager.app/Contents/Resources/app")
     : path.join(output, "resources/app");
 execFileSync(
-  "python3",
+  python,
   [
     "-c",
     `
@@ -44,7 +45,7 @@ for name,expected in metadata['sourceSha256'].items():
 if hashlib.sha256((build/'he_embedded.node').read_bytes()).hexdigest()!=metadata['addonSha256']:
     raise RuntimeError('Native addon checksum mismatch')
 shutil.copytree(build,dest/'native/build'/${JSON.stringify(`${target}-${arch}`)},ignore=shutil.ignore_patterns('*.obj','*.lib','*.exp'),dirs_exist_ok=True)
-shutil.copytree(native/'runtime'/${JSON.stringify(target)},dest/'native/runtime'/${JSON.stringify(target)},dirs_exist_ok=True)
+shutil.copytree(native/'runtime'/${JSON.stringify(target)},dest/'native/runtime'/${JSON.stringify(target)},ignore=shutil.ignore_patterns('include','*.lib','*.a'),dirs_exist_ok=True)
 for name in ['runtime-lock.json','header-lock.json','README.md']:
     shutil.copy2(native/name,dest/'native'/name)
 pkg=json.loads((root/'package.json').read_text())
@@ -76,7 +77,7 @@ const archive = path.join(
   `HE-Manager-${pkg.version}-${target}-${arch}.zip`,
 );
 execFileSync(
-  "python3",
+  python,
   [path.join(root, "scripts/archive.py"), output, archive, target],
   { stdio: "inherit" },
 );

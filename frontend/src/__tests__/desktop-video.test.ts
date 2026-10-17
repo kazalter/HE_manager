@@ -43,6 +43,15 @@ describe('embedded desktop video UI', () => {
   expect(document.querySelector('.ui-modal')).toBeNull()
   expect(bridge.stopVideo).not.toHaveBeenCalled()
  })
+ it('reports a rejected control without hiding the playing video', async () => {
+  defaults(); const wrapper = create(); await flushPromises()
+  bridge.controlVideo.mockRejectedValueOnce(new Error('定位暂时不可用'))
+  await wrapper.get('button[aria-label="前进十秒"]').trigger('click'); await flushPromises()
+  expect(wrapper.text()).toContain('定位暂时不可用')
+  expect(wrapper.text()).not.toContain('视频暂时无法播放')
+  expect(wrapper.find('canvas').exists()).toBe(true)
+  expect(bridge.stopVideo).not.toHaveBeenCalled()
+ })
  it('keeps a retry available after opening fails and releases on unmount', async () => {
   defaults(); bridge.openVideo.mockRejectedValueOnce(new Error('无法连接服务器，请重试。'))
   const wrapper = create(); await flushPromises()

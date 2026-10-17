@@ -1,5 +1,5 @@
 """Download pinned upstream runtimes. Run with Python 3.12+ on the build machine."""
-import argparse, hashlib, json, pathlib, shutil, subprocess, tarfile, urllib.request, zipfile
+import argparse, hashlib, json, pathlib, shutil, subprocess, tarfile, urllib.request, zipfile, os
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 LOCK=json.loads((ROOT/'runtime-lock.json').read_text())
 
@@ -38,6 +38,9 @@ for platform in (['darwin','win32'] if args.platform=='all' else [args.platform]
         if archive.suffix=='.zip':unzip(archive,target)
         else:
             executable=shutil.which('7z') or shutil.which('7zz')
+            if not executable and os.name=='nt':
+                candidate=pathlib.Path(os.environ.get('ProgramFiles','C:/Program Files'))/'7-Zip/7z.exe'
+                if candidate.is_file():executable=str(candidate)
             if not executable:raise RuntimeError('Install 7-Zip to extract the Windows mpv runtime')
             subprocess.run([executable,'x','-y','-o'+str(target),str(archive)],check=True,stdout=subprocess.DEVNULL)
         nested=target/'mpv.tar.gz'

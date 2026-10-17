@@ -1,5 +1,11 @@
 param([string]$BuildTools='C:\HEManagerBuild\toolchain\BuildTools')
 $ErrorActionPreference='Stop'
+if(!(Test-Path (Join-Path $BuildTools 'VC\Auxiliary\Build\vcvars64.bat'))) {
+    $vswhere=Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+    if(!(Test-Path $vswhere)){throw 'MSVC 14.44 Build Tools are required'}
+    $BuildTools=(& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1)
+    if(!$BuildTools){throw 'MSVC toolchain was not found'}
+}
 $root=$PSScriptRoot
 $download=Join-Path $root '.downloads'
 $out=Join-Path $root 'build\win32-x64'
@@ -27,6 +33,6 @@ try {
     if($LASTEXITCODE){throw 'Native addon build failed'}
 } finally {Pop-Location}
 $sourceHashes=@{}
-foreach($name in @('embedded.cpp','surface.h','delay-load.cpp','header-lock.json')){$sourceHashes[$name]=(Get-FileHash "$root\$name" -Algorithm SHA256).Hash.ToLowerInvariant()}
-@{platform='win32-x64';electron='44.8.0';nodeAPI=8;msvc='14.44.35207';windowsSdk='10.0.26100.0';sourceSha256=$sourceHashes;addonSha256=(Get-FileHash "$out\he_embedded.node" -Algorithm SHA256).Hash.ToLowerInvariant()} | ConvertTo-Json -Depth 4 | Set-Content "$out\build-info.json" -Encoding UTF8
+foreach($name in @('embedded.cpp','surface.h','delay-load.cpp','header-lock.json','build-windows.ps1')){$sourceHashes[$name]=(Get-FileHash "$root\$name" -Algorithm SHA256).Hash.ToLowerInvariant()}
+@{platform='win32-x64';electron='44.8.0';nodeAPI=8;msvc='14.44.35207';compilerFileVersion=(Get-Item (Get-Command cl.exe).Source).VersionInfo.FileVersion;windowsSdk='10.0.26100.0';sourceSha256=$sourceHashes;addonSha256=(Get-FileHash "$out\he_embedded.node" -Algorithm SHA256).Hash.ToLowerInvariant()} | ConvertTo-Json -Depth 4 | Set-Content "$out\build-info.json" -Encoding UTF8
 Write-Output "Built $out\he_embedded.node"

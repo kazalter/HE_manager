@@ -1,12 +1,20 @@
-"""Verify the complete CP-01 packaged acceptance matrix against current sources."""
+"""Verify CP-01 evidence against the current tree or an explicit historical commit."""
+import argparse
 import hashlib
 import json
 import pathlib
 import re
 import sys
+import subprocess
 
 root = pathlib.Path(__file__).resolve().parents[1]
-evidence = pathlib.Path(sys.argv[1]).resolve()
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('evidence', type=pathlib.Path)
+parser.add_argument('--revision', help='Git commit whose source bytes were packaged')
+parser.add_argument('--output', type=pathlib.Path, help='Separate verification report destination')
+args = parser.parse_args()
+evidence = args.evidence.resolve()
+revision = subprocess.check_output(['git', 'rev-parse', '--verify', args.revision + '^{commit}'], cwd=root, text=True).strip() if args.revision else None
 
 def read(name):
     return json.loads((evidence / name).read_text(encoding='utf-8-sig'))
@@ -17,6 +25,12 @@ def require(condition, description):
 
 def digest(file):
     return hashlib.sha256(file.read_bytes()).hexdigest()
+
+def source_digest(relative):
+    if revision:
+        content = subprocess.check_output(['git', 'show', f'{revision}:desktop/{relative}'], cwd=root)
+        return hashlib.sha256(content).hexdigest()
+    return digest(root / relative)
 
 checks = []
 for platform, label, hardware in [('darwin', 'mac', 'videotoolbox-copy'), ('win32', 'windows', 'd3d11va')]:
@@ -31,9 +45,9 @@ for platform, label, hardware in [('darwin', 'mac', 'videotoolbox-copy'), ('win3
         require(artifact['sourceKind'] == ('protected-http' if mode == 'network' else 'local-fixture'), name + ': source kind')
         require(artifact['hasAuthorizationHeader'] == (mode == 'network'), name + ': authorization')
         for path in ['probe/main.cjs', 'probe/preload.cjs']:
-            require(artifact['files'][path] == digest(root / path), name + ': stale JS ' + path)
+            require(artifact['files'][path] == source_digest(path), name + ': stale JS ' + path)
         for path, expected in artifact['nativeBuild']['sourceSha256'].items():
-            require(expected == digest(root / 'native' / path), name + ': stale native source ' + path)
+            require(expected == source_digest('native/' + path), name + ': stale native source ' + path)
         if binaries is None:
             binaries = artifact['files']
         require(binaries == artifact['files'], name + ': different binaries across local/network')
@@ -83,6 +97,7 @@ require(any(item['status'] == 401 and not item['hasBearer'] for item in requests
 require(any(item['status'] == 206 and item['hasBearer'] and re.match(r'bytes=[1-9]\d*-', item.get('range') or '') for item in requests), 'HTTP nonzero Range evidence')
 summary = {'phase': 'CP-01', 'status': 'passed', 'matrix': checks,
            'scope': 'Section 7.4 prototype gate; full format/performance/long-play/installer gates remain CP-04/06/07',
-           'sourceSha256': {p: digest(root / p) for p in ['probe/main.cjs', 'probe/preload.cjs', 'native/embedded.cpp', 'native/surface.h']}}
-(evidence / 'CP-01-verification.json').write_text(json.dumps(summary, indent=2) + '\n')
+           'sourceRevision': revision or 'working-tree',
+           'sourceSha256': {p: source_digest(p) for p in ['probe/main.cjs', 'probe/preload.cjs', 'native/embedded.cpp', 'native/surface.h']}}
+(args.output or evidence / 'CP-01-verification.json').write_text(json.dumps(summary, indent=2) + '\n')
 print('CP-01 packaged local/network/close matrix: passed')

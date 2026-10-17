@@ -2,10 +2,10 @@ name: Desktop clients
 on:
   workflow_dispatch:
   pull_request:
-    paths: ['desktop/**', 'frontend/**', '.github/workflows/desktop.yml']
+    paths: ['desktop/**', 'frontend/**', '.gitattributes', '.github/workflows/desktop.yml']
   push:
     branches: [main]
-    paths: ['desktop/**', 'frontend/**', '.github/workflows/desktop.yml']
+    paths: ['desktop/**', 'frontend/**', '.gitattributes', '.github/workflows/desktop.yml']
 jobs:
   desktop:
     runs-on: ${{ matrix.os }}
@@ -16,32 +16,46 @@ jobs:
           - platform: darwin
             os: macos-latest
           - platform: win32
-            os: ubuntu-latest
+            os: windows-2022
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/FRONTEND_PLAN.md
+            !/frontend_plan.md
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install packaging tools
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y p7zip-full
       - name: Install dependencies
         run: npm ci --prefix frontend && npm ci --prefix desktop
       - name: Test
         run: npm test --prefix desktop && npm test --prefix frontend
       - name: Check embedded prototype sources
         run: |
-          python3 -m py_compile desktop/native/*.py desktop/probe/*.py
+          python -c "import pathlib,py_compile; [py_compile.compile(str(p),doraise=True) for folder in ['desktop/native','desktop/probe'] for p in pathlib.Path(folder).glob('*.py')]"
           node --check desktop/probe/main.cjs
           node --check desktop/probe/preload.cjs
           node --check desktop/probe/renderer.js
       - name: Build shared UI
         run: npm run build:ui --prefix desktop
       - name: Verify and prepare native runtimes
-        run: python3 desktop/scripts/prepare-runtimes.py ${{ matrix.platform }}
+        run: python desktop/scripts/prepare-runtimes.py ${{ matrix.platform }}
+      - name: Verify native addon build inputs
+        run: python desktop/native/prepare-inputs.py ${{ matrix.platform }}
+      - name: Build macOS native bridge and bundled libmpv
+        if: matrix.platform == 'darwin'
+        run: |
+          python3 desktop/native/prepare-macos.py
+          python3 desktop/native/build-macos.py
+      - name: Build Windows native bridge and bundled libmpv
+        if: matrix.platform == 'win32'
+        shell: pwsh
+        run: ./desktop/native/build-windows.ps1
       - name: Package
         run: npm run package --prefix desktop -- ${{ matrix.platform }}
       - name: Ad-hoc sign macOS bundle and refresh archive
@@ -54,3 +68,4 @@ jobs:
         with:
           name: he-manager-${{ matrix.platform }}
           path: desktop/release/*.zip
+          retention-days: 14

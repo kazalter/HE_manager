@@ -23,14 +23,15 @@ recorded in `runtime-lock.json` and `header-lock.json`. No Homebrew dylib is shi
 
 ## Build
 
-Download the exact header tarball to `.downloads/electron-headers.tar.gz` from
-`runtime-lock.json`; Windows additionally needs `.downloads/node.lib` and the
-pinned `.downloads/libmpv-win.7z`. Checksums are checked before compilation.
+Run `prepare-inputs.py darwin|win32` to fetch the exact Electron headers and,
+on Windows, the Node import library and pinned libmpv archive. Cached inputs and
+new downloads are checked against `runtime-lock.json` before compilation.
 Install the repository's locked desktop npm dependencies first (`npm ci`).
 
 On Apple Silicon with Xcode command-line tools and Python 3.12+:
 
 ```sh
+python3 desktop/native/prepare-inputs.py darwin
 python3 desktop/native/prepare-macos.py
 python3 desktop/native/build-macos.py
 python3 desktop/probe/make-fixture.py
@@ -40,6 +41,7 @@ python3 desktop/probe/package.py darwin
 On Windows x64 with the specified MSVC and SDK installed:
 
 ```powershell
+python .\desktop\native\prepare-inputs.py win32
 & .\desktop\native\build-windows.ps1 -BuildTools C:\HEManagerBuild\toolchain\BuildTools
 python .\desktop\probe\make-fixture.py
 python .\desktop\probe\package.py win32
@@ -56,6 +58,13 @@ without that loader needs its vendor driver installed; a Vulkan SDK is not neede
 Generated build-info records source hashes and the exact addon, and packaging
 rejects stale native builds. Runtime preparation records original and transformed
 library hashes. The app manifest records the final signed/copied payload.
+
+The formal client now uses `src/embedded-player.cjs` and the page-facing
+`frontend/src/desktop-contract.ts` interface. `ui-selftest.cjs` checks the real
+Vue shell against a disposable HE backend with synthetic media. Put its private
+configuration and output in an owner-only temporary directory on macOS; reading
+an external Desktop test-config file can wait for OS folder access before the
+window is ready. No additional Desktop permission is needed for the test.
 
 ## Acceptance
 

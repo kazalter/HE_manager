@@ -13,14 +13,15 @@ export interface DesktopPlayback {
   loading: boolean; buffering: boolean; tracks: DesktopTrack[]; aid: string; sid: string
   speed: number; volume: number; generation: number; fullscreen: boolean
 }
-export type DesktopVideoAction = 'pause' | 'seek' | 'seek-to' | 'fullscreen' | 'exit-fullscreen' | 'mode' | 'audio-track' | 'subtitle-track' | 'speed' | 'volume'
+export type DesktopVideoAction = 'pause' | 'seek' | 'seek-to' | 'fullscreen' | 'exit-fullscreen' | 'audio-track' | 'subtitle-track' | 'speed' | 'volume'
 export interface DesktopBridge {
   configuration(): Promise<DesktopConfiguration>
   connect(server: string): Promise<DesktopConfiguration>
   chooseEngine(kind: 'mpv' | 'image'): Promise<DesktopConfiguration>
   setPreferences(value: { videoMode: VideoEnhancement; imageMode: ImageEnhancement }): Promise<DesktopConfiguration>
   openVideo(value: { url: string; start: number; title: string }): Promise<DesktopPlayback>
-  controlVideo(action: DesktopVideoAction, value?: number | VideoEnhancement): Promise<DesktopPlayback>
+  controlVideo(action: 'pause' | 'fullscreen' | 'exit-fullscreen'): Promise<DesktopPlayback>
+  controlVideo(action: 'seek' | 'seek-to' | 'audio-track' | 'subtitle-track' | 'speed' | 'volume', value: number): Promise<DesktopPlayback>
   videoState(): Promise<DesktopPlayback>
   stopVideo(): Promise<void>
   mountVideoSurface(id: string): void

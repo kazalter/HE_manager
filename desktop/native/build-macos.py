@@ -20,7 +20,7 @@ out = root / "build/darwin-arm64"
 out.mkdir(parents=True, exist_ok=True)
 arguments = ["clang++", "-std=c++17", "-O2", "-shared", "-fPIC", "-undefined", "dynamic_lookup", "-mmacosx-version-min=15.0", "-DNAPI_VERSION=8", "-DNODE_GYP_MODULE_NAME=he_embedded", "-I", str(download / "headers/node_headers/include/node"), "-framework", "OpenGL", "-framework", "IOSurface", "-framework", "CoreFoundation", str(root / "embedded.cpp"), "-o", str(out / "he_embedded.node")]
 subprocess.run(arguments, check=True)
-files = [root / "embedded.cpp", root / "surface.h", root / "header-lock.json"]
+files = [root / "embedded.cpp", root / "surface.h", root / "header-lock.json", pathlib.Path(__file__).resolve()]
 metadata = {"platform": "darwin-arm64", "electron": lock["electron"], "nodeAPI": 8, "minimumMacOS": "15.0", "compiler": subprocess.check_output(["clang++", "--version"], text=True).splitlines()[0], "sourceSha256": {file.name: hashlib.sha256(file.read_bytes()).hexdigest() for file in files}, "addonSha256": hashlib.sha256((out / "he_embedded.node").read_bytes()).hexdigest()}
 (out / "build-info.json").write_text(json.dumps(metadata, indent=2) + "\n")
 print("Built", out / "he_embedded.node")

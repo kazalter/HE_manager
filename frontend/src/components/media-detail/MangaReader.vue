@@ -15,6 +15,8 @@ import {
   ZoomOut,
   X,
 } from 'lucide-vue-next'
+import { desktopBridge, desktopState, setDesktopPreferences, type ImageEnhancement } from '../../desktop'
+import { UiToast } from '../ui'
 import { useDesktopImageEnhancement } from '../../composables/useDesktopImageEnhancement'
 import { API_BASE_URL, authUrl } from '../../config'
 import type { Media } from '../../types'
@@ -46,6 +48,12 @@ const emit = defineEmits<{
   loadMore: []
 }>()
 
+const enhancementError = ref('')
+async function changeEnhancement(mode: ImageEnhancement) {
+  enhancementError.value = ''
+  try { await setDesktopPreferences(desktopState.videoMode, mode) }
+  catch (error: unknown) { enhancementError.value = error instanceof Error ? error.message : '无法切换增强设置，当前仍可阅读原图。' }
+}
 const mobileReader = window.innerWidth < 900
 const preferencePrefix = props.imagePages ? 'he_image' : 'he_manga'
 const modeKey = `${preferencePrefix}_read_mode${mobileReader ? '_mobile' : ''}`
@@ -501,8 +509,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex-1 min-h-0 flex flex-col bg-black overflow-hidden relative">
-    <p v-if="desktopImages.message.value" role="status" class="pointer-events-none absolute left-1/2 top-16 z-30 max-w-[90%] -translate-x-1/2 rounded-full bg-black/70 px-4 py-2 text-caption text-white/80">{{ desktopImages.message.value }}</p>
+  <div class="he-manga-reader flex-1 min-h-0 flex flex-col bg-black overflow-hidden relative">
+    <UiToast v-if="enhancementError || desktopImages.message.value" :message="enhancementError || desktopImages.message.value" :urgent="!!enhancementError" overlay class="pointer-events-none absolute left-1/2 top-16 z-30 max-w-[90%] -translate-x-1/2" />
     <div
       class="flex-1 min-h-0 flex items-center justify-center w-full relative group overflow-hidden"
       @wheel="onWheel"
@@ -692,6 +700,13 @@ onBeforeUnmount(() => {
           </button>
 
           <button v-if="imagePages && hasNextBatch" type="button" title="加载后续图片" class="he-reader-btn px-2.5 text-meta font-medium text-white/80 hover:bg-white/10 hover:text-white" @click="emit('loadMore')">更多图片</button>
+
+          <label v-if="desktopBridge" class="min-w-0 text-meta text-white/80">
+            <span class="sr-only">图片增强</span>
+            <select aria-label="图片增强" :value="desktopState.imageMode" :disabled="!desktopState.image" class="he-reader-btn max-w-36 rounded-lg border border-white/20 bg-black/80 px-2 text-white focus-ring disabled:opacity-50" @change="changeEnhancement(($event.target as HTMLSelectElement).value as ImageEnhancement)">
+              <option value="off">原画</option><option value="anime">动漫 · 2×</option><option value="photo">图片 · 4×</option>
+            </select>
+          </label>
 
           <!-- Middle Page info -->
           <div class="ml-auto flex items-baseline gap-2 whitespace-nowrap px-1 tabular-nums">

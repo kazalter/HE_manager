@@ -38,4 +38,6 @@ if platform=='darwin':
     plist.write_bytes(plistlib.dumps(data))
     shutil.copy2(root/'resources/icons/he.icns',app/'Contents/Resources/he.icns')
 else:(output/'electron.exe').rename(output/'HE Manager.exe')
+resources=app/'Contents/Resources' if platform=='darwin' else output/'resources'
+(resources/'default_app.asar').unlink(missing_ok=True)
 print('Verified and assembled',name,flush=True)

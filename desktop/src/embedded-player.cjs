@@ -58,9 +58,16 @@ class EmbeddedPlayer {
       this.snapshot = { ...idle(), volume: this.volume, loading: true, mode, generation: ++this.generation };
       this.closing = false;
       const window = this.getWindow();
-      if (!window || window.isDestroyed()) throw new Error('播放窗口已关闭。');
-      const gpu = window._heGpu || {};
       try {
+        if (!window || window.isDestroyed()) throw new Error('播放窗口已关闭。');
+        let gpuDeadline;
+        try { await Promise.race([window._heGpuReady, new Promise((_, reject) => {
+          gpuDeadline = setTimeout(() => reject(new Error('GPU readiness timed out')), 5000);
+        })]); }
+        catch { throw new Error('无法读取显卡信息，请检查显卡驱动后重新打开客户端。'); }
+        finally { clearTimeout(gpuDeadline); }
+        if (intent !== this.intent || this.closing) throw new Error('播放已取消。');
+        const gpu = window._heGpu || {};
         this.owner = this.native.create({ library: this.library, source: source.url,
           headers: source.token ? [`Authorization: Bearer ${source.token}`] : [],
           shaders: shaderFiles(mode, path.join(this.root, 'resources/shaders')),
@@ -128,8 +135,7 @@ class EmbeddedPlayer {
     } else if (action === 'volume') {
       if (!Number.isFinite(value) || value < 0 || value > 100) throw new Error('无效的音量。');
       this.volume = value; this.snapshot.volume = value; command = ['set', 'volume', String(value)];
-    } else if (action === 'mode') return this.setMode(value);
-    else if (action === 'fullscreen' || action === 'exit-fullscreen') {
+    } else if (action === 'fullscreen' || action === 'exit-fullscreen') {
       const window = this.getWindow();
       if (window && !window.isDestroyed()) window.setFullScreen(action === 'fullscreen' && !window.isFullScreen());
       return this.state;
@@ -138,7 +144,7 @@ class EmbeddedPlayer {
   }
   async stopInternal() {
     this.closing = true; clearInterval(this.timer);
-    if (!this.owner) return;
+    if (!this.owner) { this.snapshot.loading = false; this.snapshot.running = false; return; }
     const window = this.getWindow();
     if (window && !window.isDestroyed()) window.webContents.send('he:video-flush');
     const owner = this.owner;

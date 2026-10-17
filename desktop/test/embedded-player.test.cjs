@@ -18,7 +18,7 @@ function fixture() {
     async sendSharedTexture() {},
   };
   const player = new EmbeddedPlayer({ root: '/app', sharedTexture, getWindow: () => window, native });
-  return { player, sessions, releases, imports };
+  return { player, sessions, releases, imports, window };
 }
 test('stopping waits for consumer leases before the next media owns textures', async () => {
   const { player, sessions, releases, imports } = fixture();
@@ -66,5 +66,32 @@ test('controls reject invalid commands and unavailable tracks', async () => {
   await assert.rejects(player.control('run-shell-command', 'private'));
   await player.control('subtitle-track', 0);
   assert.deepEqual(sessions[0].command.args, ['set', 'sid', 'no']);
+  await player.stop();
+});
+
+test('closing while GPU information is pending never starts a native media core', async () => {
+  const { player, sessions, window } = fixture();
+  let ready;
+  window._heGpuReady = new Promise((resolve) => { ready = resolve; });
+  const opening = player.open(null, { url: 'http://media/1' }, 'off');
+  await sleep(10);
+  const closing = player.stop();
+  ready();
+  await assert.rejects(opening, /取消/);
+  await closing;
+  assert.equal(sessions.length, 0);
+  assert.equal(player.state.loading, false);
+});
+
+test('GPU discovery failure leaves an idle player that can be retried', async () => {
+  const { player, sessions, window } = fixture();
+  window._heGpuReady = Promise.reject(new Error('private GPU diagnostic'));
+  await assert.rejects(player.open(null, { url: 'http://media/1' }, 'off'), /显卡信息/);
+  assert.equal(player.state.loading, false);
+  assert.equal(player.state.running, false);
+  assert.equal(sessions.length, 0);
+  window._heGpuReady = Promise.resolve();
+  await player.open(null, { url: 'http://media/1' }, 'off');
+  assert.equal(player.state.error, '');
   await player.stop();
 });

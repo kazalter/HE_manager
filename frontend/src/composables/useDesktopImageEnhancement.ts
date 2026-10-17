@@ -8,7 +8,7 @@ export function useDesktopImageEnhancement(visibleUrls: () => string[]) {
  watch([visibleUrls, () => desktopState.imageMode], async ([urls, mode]) => {
   const epoch = ++generation
   if (!desktopBridge || mode === 'off') { message.value = ''; return }
-  message.value = '正在本机超分，先显示原图…'
+  message.value = '正在排队或处理，先显示原图…'
   let lastError = '', completed = 0
   for (const url of urls) {
    if (disposed || epoch !== generation) return

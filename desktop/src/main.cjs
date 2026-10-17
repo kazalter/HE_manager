@@ -37,6 +37,12 @@ const root = path.resolve(__dirname, ".."),
   runtime = path.join(root, "resources/runtime");
 const baselineMode = process.argv.includes("--baseline");
 const uiTestConfigPath = process.env.HE_DESKTOP_TEST_CONFIG;
+function diagnosticStage(stage) {
+  if (uiTestConfigPath && process.env.HE_DESKTOP_TEST_OUTPUT) {
+    require('node:fs').appendFileSync(process.env.HE_DESKTOP_TEST_OUTPUT + '.startup.log', stage + '\n');
+  }
+}
+diagnosticStage('module-loaded');
 // Diagnostics must never load the user's login, cache, or normal Chromium profile.
 if (baselineMode || uiTestConfigPath) {
   const directory = require("node:fs").mkdtempSync(
@@ -50,6 +56,7 @@ if (baselineMode || uiTestConfigPath) {
   }, uiTestConfigPath ? 180000 : 60000).unref();
 }
 let window, cache, settings, settingsFile;
+let applicationReady = false;
 const player = new EmbeddedPlayer({ root, sharedTexture: require('electron').sharedTexture, getWindow: () => window });
 const legacyPlayer = new Player(path.join(root, "resources/shaders"));
 const defaults = {
@@ -221,6 +228,7 @@ function registerIPC() {
 }
 async function protocolHandler(request) {
   const url = new URL(request.url);
+  let operation = 'route';
   if (
     url.host !== "app" ||
     (request.initiatorOrigin && request.initiatorOrigin !== "he://app")
@@ -240,6 +248,7 @@ async function protocolHandler(request) {
     if (API_PATH.test(url.pathname)) {
       if (!settings.server)
         return Response.json({ detail: "请先配置服务器地址" }, { status: 503 });
+      operation = 'proxy-headers';
       const headers = new Headers(request.headers);
       for (const key of [
         "host",
@@ -258,10 +267,12 @@ async function protocolHandler(request) {
       };
       if (!["GET", "HEAD"].includes(request.method))
         options.body = await request.arrayBuffer();
+      operation = 'proxy-fetch';
       const response = await fetch(
         settings.server + url.pathname + url.search,
         options,
       );
+      diagnosticStage(`proxy-status-${request.method}-${url.pathname}-${response.status}`);
       if (response.status >= 300 && response.status < 400) {
         await response.body?.cancel();
         return Response.json(
@@ -269,6 +280,7 @@ async function protocolHandler(request) {
           { status: 502 },
         );
       }
+      operation = 'proxy-response-headers';
       const outgoing = new Headers(response.headers);
       for (const key of [
         "content-encoding",
@@ -279,6 +291,7 @@ async function protocolHandler(request) {
       ])
         outgoing.delete(key);
       outgoing.set("Cache-Control", "no-store");
+      operation = 'proxy-response';
       return new Response(response.body, {
         status: response.status,
         headers: outgoing,
@@ -293,7 +306,8 @@ async function protocolHandler(request) {
       "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-src 'none'",
     );
     return new Response(response.body, { status: response.status, headers });
-  } catch {
+  } catch (error) {
+    diagnosticStage(`protocol-error-${operation}-${error.name}-${error.cause?.code || error.code || 'none'}`);
     return Response.json(
       { detail: "读取失败，请检查服务器连接或本地文件" },
       { status: 502 },
@@ -301,6 +315,7 @@ async function protocolHandler(request) {
   }
 }
 async function createWindow(test = false) {
+  diagnosticStage('create-window');
   window = new BrowserWindow({
     width: 1360,
     height: 900,
@@ -316,9 +331,12 @@ async function createWindow(test = false) {
       webSecurity: true,
     },
   });
+  diagnosticStage('window-created');
   const ownerWindow = window;
-  const gpu = await app.getGPUInfo('complete');
-  window._heGpu = gpu.gpuDevice?.find((device) => device.active) || {};
+  ownerWindow._heGpuReady = app.getGPUInfo('basic').then((gpu) => {
+    ownerWindow._heGpu = gpu.gpuDevice?.find((device) => device.active) || {};
+  });
+  void ownerWindow._heGpuReady.catch(() => {});
   window._heFullscreen = false;
   window.on('enter-full-screen', () => { ownerWindow._heFullscreen = true; });
   window.on('leave-full-screen', () => { ownerWindow._heFullscreen = false; });
@@ -355,14 +373,19 @@ async function createWindow(test = false) {
   window.on("closed", () => {
     window = null;
   });
-  await window.loadURL(test ? "he://app/__fullscreen-test" : "he://app/");
+  diagnosticStage('load-window');
+  await ownerWindow.loadURL(test ? "he://app/__fullscreen-test" : "he://app/");
+  diagnosticStage('window-loaded');
+  diagnosticStage('window-ready');
 }
 app.whenReady().then(async () => {
+  diagnosticStage('app-ready');
   const readyAt = performance.now();
   const baselineOptions = baselineMode
     ? require("./baseline.cjs").options(process.argv)
     : null;
   app.setAccessibilitySupportEnabled(true);
+  diagnosticStage('accessibility-ready');
   settingsFile = path.join(app.getPath("userData"), "desktop-settings.json");
   await fs.mkdir(app.getPath("userData"), { recursive: true });
   settings = { ...defaults, engines: {} };
@@ -376,11 +399,14 @@ app.whenReady().then(async () => {
   if (!["off", "anime", "photo"].includes(settings.imageMode))
     settings.imageMode = "off";
   if (baselineOptions?.server) settings.server = baselineOptions.server;
+  diagnosticStage('settings-loaded');
   const uiTestConfig = uiTestConfigPath ? JSON.parse(await fs.readFile(uiTestConfigPath, 'utf8')) : null;
   if (uiTestConfig) { settings.server = serverUrl(uiTestConfig.server); player.volume = 0; }
+  diagnosticStage('config-loaded');
   cache = new ImageCache(path.join(app.getPath("userData"), "image-cache"));
   protocol.handle("he", protocolHandler);
   registerIPC();
+  diagnosticStage('services-registered');
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       { label: "HE Manager", submenu: [{ role: "about" }, { role: "quit" }] },
@@ -405,8 +431,11 @@ app.whenReady().then(async () => {
       },
     ]),
   );
+  diagnosticStage('menu-ready');
+  applicationReady = true;
   if (uiTestConfig) {
     await createWindow();
+    diagnosticStage('selftest-start');
     let passed = false;
     try { passed = await require('./ui-selftest.cjs')({ window, player, config: uiTestConfig, output: process.env.HE_DESKTOP_TEST_OUTPUT }); }
     finally { await player.stop(); await cache.close(); }
@@ -544,7 +573,9 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 app.on("activate", () => {
-  if (!BrowserWindow.getAllWindows().length) void createWindow();
+  if (applicationReady && !BrowserWindow.getAllWindows().length) void createWindow().catch(() => {
+    console.error("HE Manager window could not reopen");
+  });
 });
 require("./lifecycle.cjs").installShutdown(app, () =>
   Promise.allSettled([player.stop(), legacyPlayer.stop(), cache?.close()]),
