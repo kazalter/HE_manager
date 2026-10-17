@@ -37,7 +37,7 @@ def source_hash(relative):
     return digest(content)
 
 
-checks = ['directConnectivity', 'loginAndLibrary', 'minimumContent', 'libraryAppearance',
+checks = ['directConnectivity', 'loginAndLibrary', 'continueWatching', 'minimumContent', 'libraryAppearance',
           'systemAppearance', 'emptySearch', 'videoLoading', 'embeddedVideo',
           'videoEnhancement', 'keyboardSettings', 'seek', 'sameSessionFullscreen', 'viewerClose',
           'readerModesAndZoom', 'readerControlsFit', 'enhancementFeedback', 'readerOpened', 'videoErrorAndRetry']

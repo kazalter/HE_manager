@@ -90,6 +90,8 @@ module.exports = async ({ window, player, config, output }) => {
     await click('.he-auth-view button[type="submit"]');
     await wait(() => evaluate('document.querySelectorAll(".he-media-card").length >= 4'), 'Authenticated library missing');
     report.checks.loginAndLibrary = true;
+    await wait(() => evaluate(`!!document.querySelector('section[aria-label="继续观看"] button')`), 'Continue-watching fixture is missing; reseed the disposable test server before each run');
+    report.checks.continueWatching = true;
     enterStage('library-appearance');
     window.setSize(800, 500);
     await wait(() => evaluate('innerWidth >= 1024 && innerHeight >= 640'), 'Minimum content area is too small');

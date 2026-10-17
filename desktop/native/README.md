@@ -65,6 +65,12 @@ Vue shell against a disposable HE backend with synthetic media. Put its private
 configuration and output in an owner-only temporary directory on macOS; reading
 an external Desktop test-config file can wait for OS folder access before the
 window is ready. No additional Desktop permission is needed for the test.
+Before each UI acceptance run, restart the isolated fixture server with
+`HE_PROBE_UI_FIXTURES=1` and `HE_PROBE_UI_STREAM_DELAY=1`. This restores its seeded
+continue-watching progress and generates a fresh private `client-access.json`.
+Reuse of a previously completed 30-second clip would otherwise start at EOF and
+cannot prove active shader switching or paused fullscreen retention. Never use
+production data or credentials for this diagnostic workflow.
 
 ## Acceptance
 
