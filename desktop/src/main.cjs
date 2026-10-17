@@ -333,6 +333,10 @@ async function createWindow(test = false) {
   });
   diagnosticStage('window-created');
   const ownerWindow = window;
+  // The verified minimum is a CSS content area; native chrome differs by OS.
+  const [outerWidth, outerHeight] = ownerWindow.getSize();
+  const [contentWidth, contentHeight] = ownerWindow.getContentSize();
+  ownerWindow.setMinimumSize(1024 + outerWidth - contentWidth, 640 + outerHeight - contentHeight);
   ownerWindow._heGpuReady = app.getGPUInfo('basic').then((gpu) => {
     ownerWindow._heGpu = gpu.gpuDevice?.find((device) => device.active) || {};
   });

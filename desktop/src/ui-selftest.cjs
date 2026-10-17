@@ -70,6 +70,11 @@ module.exports = async ({ window, player, config, output }) => {
     await wait(() => evaluate('document.querySelectorAll(".he-media-card").length >= 4'), 'Authenticated library missing');
     report.checks.loginAndLibrary = true;
     stage = 'library-appearance';
+    window.setSize(800, 500);
+    await wait(() => evaluate('innerWidth >= 1024 && innerHeight >= 640'), 'Minimum content area is too small');
+    report.minimumContent = await evaluate('({width:innerWidth,height:innerHeight})');
+    if (report.minimumContent.width !== 1024 || report.minimumContent.height !== 640) throw new Error('Minimum content area differs from the verified design');
+    report.checks.minimumContent = true;
     for (const mode of ['light', 'dark']) {
       await appearance(mode);
       await captureSizes('library', mode);

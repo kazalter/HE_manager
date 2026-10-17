@@ -29,10 +29,10 @@ cmd /d /s /c "`"$vcvars`" -vcvars_ver=14.44 10.0.26100.0 >nul && set" | ForEach-
 if($LASTEXITCODE){throw 'MSVC setup failed'}
 Push-Location $root
 try {
-    & cl.exe /nologo /std:c++17 /EHsc /LD /MT /O2 /DNAPI_VERSION=8 /DNODE_GYP_MODULE_NAME=he_embedded "/I$download\headers\node_headers\include\node" embedded.cpp delay-load.cpp "/Fo$out\" /link "/OUT:$out\he_embedded.node" "$download\node.lib" d3d11.lib dxgi.lib delayimp.lib /DELAYLOAD:node.exe
+    & cl.exe /nologo /std:c++17 /EHsc /LD /MT /O2 /DNAPI_VERSION=8 /DNODE_GYP_MODULE_NAME=he_embedded "/I$download\headers\node_headers\include\node" embedded.cpp delay-load.cpp "/Fo$out\" /link "/OUT:$out\he_embedded.node" "/IMPLIB:$out\he_embedded.lib" "$download\node.lib" d3d11.lib dxgi.lib delayimp.lib /DELAYLOAD:node.exe
     if($LASTEXITCODE){throw 'Native addon build failed'}
 } finally {Pop-Location}
 $sourceHashes=@{}
 foreach($name in @('embedded.cpp','surface.h','delay-load.cpp','header-lock.json','build-windows.ps1')){$sourceHashes[$name]=(Get-FileHash "$root\$name" -Algorithm SHA256).Hash.ToLowerInvariant()}
-@{platform='win32-x64';electron='44.8.0';nodeAPI=8;msvc='14.44.35207';compilerFileVersion=(Get-Item (Get-Command cl.exe).Source).VersionInfo.FileVersion;windowsSdk='10.0.26100.0';sourceSha256=$sourceHashes;addonSha256=(Get-FileHash "$out\he_embedded.node" -Algorithm SHA256).Hash.ToLowerInvariant()} | ConvertTo-Json -Depth 4 | Set-Content "$out\build-info.json" -Encoding UTF8
+@{platform='win32-x64';electron='44.8.0';nodeAPI=8;msvc=$env:VCToolsVersion.TrimEnd('\');compilerFileVersion=(Get-Item (Get-Command cl.exe).Source).VersionInfo.FileVersion;windowsSdk='10.0.26100.0';sourceSha256=$sourceHashes;addonSha256=(Get-FileHash "$out\he_embedded.node" -Algorithm SHA256).Hash.ToLowerInvariant()} | ConvertTo-Json -Depth 4 | Set-Content "$out\build-info.json" -Encoding UTF8
 Write-Output "Built $out\he_embedded.node"
