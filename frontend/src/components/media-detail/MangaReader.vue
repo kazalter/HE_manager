@@ -645,6 +645,7 @@ onBeforeUnmount(() => {
         :inert="!showControls && clickOnlyControls"
         class="he-manga-controls absolute left-1/2 z-20 flex w-[min(640px,calc(100%-2rem))] select-none flex-col gap-2 rounded-2xl bg-black/75 p-2.5 text-white ring-1 ring-inset ring-white/10 transition-[transform,opacity] duration-200 ease-out sm:px-3"
         :style="{
+          width: desktopBridge ? 'min(800px, calc(100% - 2rem))' : undefined,
           bottom: 'calc(12px + env(safe-area-inset-bottom))',
           transform: `translate3d(-50%, ${isStripOpen ? '-184px' : (showControls || !clickOnlyControls ? '0px' : '12px')}, 0)`,
         }"
@@ -653,9 +654,9 @@ onBeforeUnmount(() => {
         @mouseleave="emit('controlsHover', false)"
         @click.stop
       >
-        <div class="flex items-center justify-between gap-2">
+        <div class="flex flex-wrap items-center justify-between gap-2">
           <!-- Reading Mode Switcher -->
-          <div class="flex items-center gap-0.5 rounded-lg bg-white/8 p-0.5" role="group" aria-label="阅读模式">
+          <div class="flex shrink-0 items-center gap-0.5 rounded-lg bg-white/8 p-0.5" role="group" aria-label="阅读模式">
             <button
               type="button"
               @click="setReadMode('single')"
@@ -701,7 +702,7 @@ onBeforeUnmount(() => {
 
           <button v-if="imagePages && hasNextBatch" type="button" title="加载后续图片" class="he-reader-btn px-2.5 text-meta font-medium text-white/80 hover:bg-white/10 hover:text-white" @click="emit('loadMore')">更多图片</button>
 
-          <label v-if="desktopBridge" class="min-w-0 text-meta text-white/80">
+          <label v-if="desktopBridge" class="shrink-0 text-meta text-white/80">
             <span class="sr-only">图片增强</span>
             <select aria-label="图片增强" :value="desktopState.imageMode" :disabled="!desktopState.image" class="he-reader-btn max-w-36 rounded-lg border border-white/20 bg-black/80 px-2 text-white focus-ring disabled:opacity-50" @change="changeEnhancement(($event.target as HTMLSelectElement).value as ImageEnhancement)">
               <option value="off">原画</option><option value="anime">动漫 · 2×</option><option value="photo">图片 · 4×</option>
@@ -709,7 +710,7 @@ onBeforeUnmount(() => {
           </label>
 
           <!-- Middle Page info -->
-          <div class="ml-auto flex items-baseline gap-2 whitespace-nowrap px-1 tabular-nums">
+          <div class="ml-auto flex shrink-0 items-baseline gap-2 whitespace-nowrap px-1 tabular-nums">
             <span class="text-body font-medium text-white">{{ progressText }}</span>
             <span class="text-meta text-white/60">{{ progressPercent }}%</span>
           </div>
@@ -942,6 +943,8 @@ onBeforeUnmount(() => {
 <style scoped>
 .he-reader-seg {
   display: inline-flex;
+  flex-shrink: 0;
+  white-space: nowrap;
   height: 32px;
   align-items: center;
   gap: 6px;

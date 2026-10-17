@@ -39,8 +39,8 @@ def source_hash(relative):
 
 checks = ['directConnectivity', 'loginAndLibrary', 'minimumContent', 'libraryAppearance',
           'systemAppearance', 'emptySearch', 'videoLoading', 'embeddedVideo',
-          'videoEnhancement', 'keyboardSettings', 'sameSessionFullscreen', 'viewerClose',
-          'readerModesAndZoom', 'enhancementFeedback', 'readerOpened', 'videoErrorAndRetry']
+          'videoEnhancement', 'keyboardSettings', 'seek', 'sameSessionFullscreen', 'viewerClose',
+          'readerModesAndZoom', 'readerControlsFit', 'enhancementFeedback', 'readerOpened', 'videoErrorAndRetry']
 matrix = []
 ui_payload = None
 for platform, label, hardware in [('darwin', 'mac', 'videotoolbox-copy'), ('win32', 'windows', 'd3d11va')]:

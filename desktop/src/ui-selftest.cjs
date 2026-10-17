@@ -153,6 +153,15 @@ module.exports = async ({ window, player, config, output }) => {
     if (!await evaluate('!!document.activeElement?.closest(".ui-modal")')) throw new Error('Playback settings lost keyboard focus');
     await key('Escape');
     report.checks.keyboardSettings = true;
+    await field('.desktop-video input[type="range"]', 8);
+    await wait(() => Math.abs(player.state.position - 8) < 1, 'Seeking through the playback slider failed');
+    report.checks.seek = true;
+    if (player.state.paused) {
+      await wait(() => evaluate(`!!document.querySelector('.desktop-video button[aria-label="播放"]')`), 'Play control missing');
+      await click('.desktop-video button[aria-label="播放"]');
+      await wait(() => !player.state.paused, 'Play input failed');
+    }
+    await wait(() => evaluate(`!!document.querySelector('.desktop-video button[aria-label="暂停"]')`), 'Pause control missing');
     await click('.desktop-video button[aria-label="暂停"]');
     await wait(() => player.state.paused, 'Pause input failed');
     enterStage('video-fullscreen');
@@ -165,7 +174,7 @@ module.exports = async ({ window, player, config, output }) => {
       await wait(() => !window._heFullscreen, 'Escape did not leave fullscreen');
     }
     const after = player.native.state(player.owner);
-    report.checks.sameSessionFullscreen = before.sourceLoads === after.sourceLoads && before.aid === after.aid && before.sid === after.sid && before.speed === after.speed && after.paused;
+    report.checks.sameSessionFullscreen = before.sourceLoads === after.sourceLoads && before.aid === after.aid && before.sid === after.sid && before.speed === after.speed && after.paused && Math.abs(before.position - after.position) < 0.1 && before.position < before.duration - 3;
     if (!report.checks.sameSessionFullscreen) throw new Error('Fullscreen changed the playback session');
     report.video = { hwdec: after.hwdec, tracks: after.tracks, position: after.position, sourceLoads: after.sourceLoads, speed: after.speed };
     await captureSizes('video', 'dark');
@@ -181,6 +190,8 @@ module.exports = async ({ window, player, config, output }) => {
     await wait(() => evaluate('document.querySelector(".he-reader-canvas-page img")?.naturalWidth > 0'), 'Reader did not display its page');
     await click('button[title="双页跨页模式"]');
     await wait(() => evaluate('document.querySelectorAll(".he-reader-canvas-page img").length === 2'), 'Double-page reader did not display both pages');
+    report.checks.readerControlsFit = await evaluate(`(() => { const bar=document.querySelector('.he-manga-controls');return bar.scrollWidth <= bar.clientWidth+1 && [...bar.querySelectorAll('[aria-label="阅读模式"] span')].every(label => label.getClientRects().length===1); })()`);
+    if (!report.checks.readerControlsFit) throw new Error('Reader controls overflow or wrap inside a mode label');
     await capture('reader-double-dark-1024');
     await click('button[title="连续卷轴模式 (条漫)"]');
     await wait(() => evaluate('document.querySelector(".he-reader-page img")?.naturalWidth > 0'), 'Scroll reader did not display a page');
