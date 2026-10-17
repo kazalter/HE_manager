@@ -7,4 +7,4 @@ desktop/native/include/** -text linguist-vendored
 desktop/native/* text eol=lf
 desktop/src/* text eol=lf
 desktop/probe/* text eol=lf
-frontend/src/** text eol=lf
+frontend/src/** text=auto eol=lf
