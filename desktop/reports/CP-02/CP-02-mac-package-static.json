@@ -1,0 +1,15 @@
+{
+  "phase": "CP-02",
+  "scope": "Static Mac package inspection only; no Mac UI/GPU-video/input acceptance claimed",
+  "status": "passed",
+  "sourceRevision": "60439e8",
+  "platform": "darwin-arm64",
+  "sameHostSourcesAndUiAsWindows": true,
+  "uiFiles": 67,
+  "nativeArchitecture": "arm64",
+  "nativeSourceHashesMatch": true,
+  "testedImageEngineMatches": true,
+  "archive": "HE-Manager-0.2.0-darwin-arm64.zip",
+  "archiveSha256": "6c9f67d120de2cb0b2bd662282a26dde3a57c9d22dbff8673ca670baff044cc2",
+  "capturedAt": "2026-10-17T23:01:09.738000+00:00"
+}

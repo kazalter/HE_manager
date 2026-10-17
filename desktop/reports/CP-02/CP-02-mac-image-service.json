@@ -1,0 +1,15 @@
+{
+  "phase": "CP-02",
+  "scope": "Supplementary bundled image service smoke; real Mac UI acceptance remains pending",
+  "platform": "darwin",
+  "mode": "anime",
+  "scale": 2,
+  "status": "passed",
+  "engineSha256": "c1c35d92079085de96b9d547fd7e4464bc8a2e9ccf28d7b8c712d72ade91b7cc",
+  "dimensions": [
+    960,
+    1440
+  ],
+  "outputSha256": "a8c2264321e46044b9ac9f2cad0d0e671e04e6232271288183e0591ffc8af08c",
+  "elapsedMs": 4284
+}

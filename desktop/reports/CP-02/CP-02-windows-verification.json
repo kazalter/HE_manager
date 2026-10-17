@@ -1,0 +1,16 @@
+{
+  "phase": "CP-02",
+  "status": "partial-pass",
+  "sourceRevision": "60439e852c53c858850e61f810a0caf5c91e5dc3",
+  "matrix": [
+    {
+      "platform": "win32",
+      "report": "CP-02-windows.json",
+      "reportSha256": "94fe2b3f78d40fccbc1197de1aab3d084ad53b043c51eae4186b8a456f8e331e",
+      "archive": "HE-Manager-0.2.0-win32-x64.zip",
+      "archiveSha256": "50e740ecef4f311d351d65dd38b2af2fecf439dd307a2d32744f2bc6360730f3",
+      "passed": true
+    }
+  ],
+  "scope": "Shared UI, theme, representative input and application foundation. CP-03–07 acceptance remains separate."
+}
