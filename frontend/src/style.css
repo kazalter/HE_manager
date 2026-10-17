@@ -44,8 +44,8 @@
   --radius-3xl: 20px;
 
   /* Shadows are for floating layers only. */
-  --shadow-pop: 0 0 0 1px rgb(0 0 0 / 0.25), 0 12px 32px -8px rgb(0 0 0 / 0.6);
-  --shadow-modal: 0 0 0 1px rgb(0 0 0 / 0.3), 0 28px 72px -16px rgb(0 0 0 / 0.75);
+  --shadow-pop: var(--he-shadow-pop);
+  --shadow-modal: var(--he-shadow-modal);
 
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
@@ -134,6 +134,8 @@
 /* Theme-independent tokens. */
 :root {
   color-scheme: dark;
+  --he-shadow-pop: 0 0 0 1px rgb(0 0 0 / 0.25), 0 12px 32px -8px rgb(0 0 0 / 0.6);
+  --he-shadow-modal: 0 0 0 1px rgb(0 0 0 / 0.3), 0 28px 72px -16px rgb(0 0 0 / 0.75);
   --color-success: 52 211 153;
   --color-warning: 251 191 36;
   --color-danger: 248 113 113;
@@ -148,6 +150,32 @@
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-in-out-sine: cubic-bezier(0.37, 0, 0.63, 1);
+}
+
+/* Light defaults also cover the first paint before the application loads. */
+:root[data-color-mode="light"] {
+  color-scheme: light;
+  --color-background: 248 248 249;
+  --color-sidebar: 252 252 253;
+  --color-surface: 255 255 255;
+  --color-surface-2: 242 242 245;
+  --color-surface-3: 238 238 242;
+  --color-line: 218 218 226;
+  --color-line-strong: 186 187 201;
+  --color-ink: 28 28 33;
+  --color-muted: 77 78 91;
+  --color-subtle: 94 94 110;
+  --color-faint: 108 108 127;
+  --color-accent: 80 84 239;
+  --color-accent-glow: 80 84 239;
+  --color-on-accent: 255 255 255;
+  --color-success: 4 120 87;
+  --color-warning: 146 85 7;
+  --color-danger: 185 28 28;
+  --color-info: 3 105 161;
+  --color-star: 161 98 7;
+  --he-shadow-pop: 0 0 0 1px rgb(15 23 42 / 0.04), 0 12px 32px -8px rgb(15 23 42 / 0.16);
+  --he-shadow-modal: 0 0 0 1px rgb(15 23 42 / 0.06), 0 28px 72px -16px rgb(15 23 42 / 0.24);
 }
 
 @layer base {

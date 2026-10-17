@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ColorModeSelect from '../components/ColorModeSelect.vue'
 import { computed } from 'vue'
 import { ArchiveX, BarChart3, Book, ChevronRight, CopyMinus, Download, LogOut, MessageSquare, Palette, Settings, Smartphone, Sparkles, Tags, Users } from 'lucide-vue-next'
 import { authState, logout } from '../auth'
@@ -47,6 +48,11 @@ const signOut = () => { if (window.confirm('确定退出当前账号吗？')) vo
               退出登录
             </UiButton>
           </UiCard>
+
+          <section>
+            <SectionHeader title="外观模式" as="h2" description="选择适合当前光线的界面，自动记住你的偏好" />
+            <ColorModeSelect />
+          </section>
 
           <section v-for="group in groups" :key="group.key">
             <SectionHeader :title="group.title" as="h2" />

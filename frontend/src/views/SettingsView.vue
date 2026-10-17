@@ -4,7 +4,8 @@ import axios from 'axios'
 import { Check, CheckCircle2, FolderOpen, FolderPlus, HardDrive, Pipette, RefreshCw, Trash2 } from 'lucide-vue-next'
 import { EmptyState, PageHeader, SectionHeader, UiBadge, UiButton, UiCard, UiIconButton, UiModal, UiSpinner, controlClass, fieldHintClass, fieldLabelClass } from '../components/ui'
 import { API_BASE_URL } from '../config'
-import { applyTheme, getStoredTheme, themes } from '../theme'
+import { applyTheme, themeState, themeOptionsForMode } from '../theme'
+import ColorModeSelect from '../components/ColorModeSelect.vue'
 import type { Folder } from '../types'
 
 const folders = ref<Folder[]>([])
@@ -14,7 +15,8 @@ const thumbnailEnabled = ref(true)
 const thumbnailInterval = ref(1)
 const loading = ref(false)
 const showAddModal = ref(false)
-const selectedTheme = ref<string>(getStoredTheme())
+const selectedTheme = computed(() => themeState.theme)
+const themes = computed(() => themeOptionsForMode(themeState.resolvedMode))
 const scanToast = ref<string | null>(null)
 const externalProxy = ref('')
 const loadingProxy = ref(false)
@@ -49,7 +51,6 @@ const scanModeLabel = (mode: Folder['scan_mode']) => {
 }
 
 const selectTheme = (themeId: string) => {
-  selectedTheme.value = themeId
   applyTheme(themeId)
 }
 
@@ -347,7 +348,8 @@ onMounted(() => {
 
           <!-- 界面主题 -->
           <section>
-            <SectionHeader title="界面主题" description="选择全局强调色" />
+            <SectionHeader title="界面主题" description="明暗模式与强调色可独立选择，自动记住你的偏好" />
+            <ColorModeSelect class="mb-4" />
             <div class="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3">
               <button
                 v-for="theme in themes"

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ColorModeToggle from '../components/ColorModeToggle.vue'
 import { computed, ref } from 'vue'
 import { bootstrapAdmin, login } from '../auth'
 import UiButton from '../components/ui/UiButton.vue'
@@ -38,6 +39,7 @@ const submit = async () => {
 
 <template>
   <div class="he-auth-view relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-background px-4 text-ink">
+    <div class="absolute right-4 top-4 z-20"><ColorModeToggle compact /></div>
     <div class="he-auth-ambient" aria-hidden="true"></div>
 
     <form

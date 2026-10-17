@@ -26,6 +26,13 @@ describe('theme tokens', () => {
     }
   })
 
+  it('keeps first-paint light defaults in sync with the runtime palette', () => {
+    const match = css.match(/:root\[data-color-mode="light"\]\s*\{([^}]*)\}/)!
+    const tokens = Object.fromEntries([...match[1]!.matchAll(/--color-([\w-]+):\s*([^;]+);/g)].map(m => [m[1], m[2]!.trim()]))
+    const expected = namedThemeTokens('midnight', 'light')!
+    for (const key of THEME_TOKENS) expect(tokens[key]).toBe(expected[key])
+  })
+
   it('never uses the invalid rgba(var(--token), a) form', () => {
     expect(css).not.toMatch(/rgba\(var\(/)
   })

@@ -24,6 +24,7 @@ import {
   Users,
   X,
 } from 'lucide-vue-next'
+import ColorModeToggle from './ColorModeToggle.vue'
 import type { User } from '../types'
 
 const props = withDefaults(defineProps<{
@@ -195,6 +196,7 @@ const handleLogout = () => {
 
     <!-- Footer -->
     <div class="shrink-0 space-y-0.5 border-t border-line py-3" :class="rail ? 'px-2' : 'px-3'">
+      <ColorModeToggle :compact="rail" />
       <router-link
         v-for="item in footerItems"
         :key="item.label"

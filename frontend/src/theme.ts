@@ -1,3 +1,5 @@
+import { reactive, readonly } from 'vue'
+
 export type ThemeId = 'midnight' | 'sakura' | 'forest' | 'amber' | string
 
 export interface ThemeOption {
@@ -10,6 +12,22 @@ export interface ThemeOption {
 
 const STORAGE_KEY = 'he-manager-theme'
 const DEFAULT_THEME: ThemeId = 'midnight'
+export type ColorMode = 'light' | 'dark' | 'system'
+export type ResolvedColorMode = 'light' | 'dark'
+const MODE_STORAGE_KEY = 'he-manager-color-mode'
+
+const readStorage = (key: string): string | null => {
+  try { return window.localStorage.getItem(key) } catch { return null }
+}
+const writeStorage = (key: string, value: string) => {
+  try { window.localStorage.setItem(key, value) } catch { /* Theme still works without storage. */ }
+}
+export const getStoredColorMode = (): ColorMode => {
+  const value = readStorage(MODE_STORAGE_KEY)
+  return value === 'light' || value === 'system' ? value : 'dark'
+}
+const resolveColorMode = (mode: ColorMode): ResolvedColorMode =>
+  mode === 'system' ? (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : mode
 
 /**
  * Every color token a theme defines. Each one is a space-separated RGB triplet
@@ -110,13 +128,30 @@ const contrast = (a: number[], b: number[]) => {
  * surfaces (background → surface-3), hairlines, four text levels and the
  * accent with its readable on-accent text color.
  */
-export const buildThemeTokens = (accentHex: string): ThemeTokens => {
-  const accent = hexToRgb(accentHex)
+export const buildThemeTokens = (accentHex: string, mode: ResolvedColorMode = 'dark'): ThemeTokens => {
+  let accent = hexToRgb(accentHex)
   const [h, s, l] = rgbToHsl(accent[0]!, accent[1]!, accent[2]!)
   const ns = Math.min(0.12, s)
   const ts = Math.min(0.08, s)
   const neutral = (lightness: number, saturation = ns) => hslToRgb(h, saturation, lightness)
   const white = [255, 255, 255]
+  if (mode === 'light') {
+    // Accents also label links and controls: keep them readable on pale surfaces.
+    let lightness = l
+    while (contrast(accent, neutral(0.94)) < 4.5 && lightness > 0.05) {
+      lightness -= 0.01
+      accent = hslToRgb(h, s, lightness)
+    }
+    const tokens: Record<ThemeToken, number[]> = {
+      background: neutral(0.975), sidebar: neutral(0.99), surface: white,
+      'surface-2': neutral(0.955), 'surface-3': neutral(0.94),
+      line: neutral(0.87), 'line-strong': neutral(0.76),
+      ink: neutral(0.12, ts), muted: neutral(0.33, ts),
+      subtle: neutral(0.40, ts), faint: neutral(0.46, ts),
+      accent, 'accent-glow': accent, 'on-accent': white,
+    }
+    return Object.fromEntries(Object.entries(tokens).map(([key, rgb]) => [key, rgb.join(' ')])) as ThemeTokens
+  }
   const onAccent = contrast(white, accent) >= 4.2 ? white : hslToRgb(h, Math.min(0.3, s), 0.07)
   const glow = hslToRgb(h, Math.min(1, s + 0.1), Math.min(0.88, Math.max(l + 0.2, 0.78)))
   const tokens: Record<ThemeToken, number[]> = {
@@ -140,8 +175,8 @@ export const buildThemeTokens = (accentHex: string): ThemeTokens => {
 
 const tokenHex = (tokens: ThemeTokens, key: ThemeToken) => rgbToHex(tokens[key].split(' ').map(Number))
 
-const option = (id: string, name: string, description: string): ThemeOption => {
-  const tokens = buildThemeTokens(THEME_ACCENTS[id]!)
+const option = (id: string, name: string, description: string, mode: ResolvedColorMode = 'dark'): ThemeOption => {
+  const tokens = buildThemeTokens(THEME_ACCENTS[id]!, mode)
   return { id, name, description, swatches: [tokenHex(tokens, 'background'), tokenHex(tokens, 'surface-2'), tokenHex(tokens, 'accent')] }
 }
 
@@ -152,9 +187,12 @@ export const themes: ThemeOption[] = [
   option('amber', '琥珀色', '偏暖的夜间主题，视觉上更有收藏室感。'),
 ]
 
+export const themeOptionsForMode = (mode: ResolvedColorMode) => themes.map(theme =>
+  option(theme.id, theme.name, theme.description, mode))
+
 /** Token values of a named theme (the same values style.css hard-codes). */
-export const namedThemeTokens = (themeId: string): ThemeTokens | null =>
-  THEME_ACCENTS[themeId] ? buildThemeTokens(THEME_ACCENTS[themeId]!) : null
+export const namedThemeTokens = (themeId: string, mode: ResolvedColorMode = 'dark'): ThemeTokens | null =>
+  THEME_ACCENTS[themeId] ? buildThemeTokens(THEME_ACCENTS[themeId]!, mode) : null
 
 export const isThemeId = (value: string | null): boolean => {
   if (!value) return false
@@ -164,7 +202,7 @@ export const isThemeId = (value: string | null): boolean => {
 
 export const getStoredTheme = (): string => {
   if (typeof window === 'undefined') return DEFAULT_THEME
-  const stored = window.localStorage.getItem(STORAGE_KEY)
+  const stored = readStorage(STORAGE_KEY)
   return isThemeId(stored) ? stored! : DEFAULT_THEME
 }
 
@@ -173,22 +211,53 @@ const syncThemeColorMeta = (tokens: ThemeTokens | null) => {
   if (meta && tokens) meta.content = tokenHex(tokens, 'background')
 }
 
-export const applyTheme = (themeId: string) => {
-  window.localStorage.setItem(STORAGE_KEY, themeId)
-  const root = document.documentElement
+const state = reactive({ theme: getStoredTheme(), mode: getStoredColorMode(), resolvedMode: 'dark' as ResolvedColorMode })
+export const themeState = readonly(state)
 
-  if (themeId.startsWith('#')) {
-    root.dataset.theme = 'custom'
-    const tokens = buildThemeTokens(themeId)
-    for (const key of THEME_TOKENS) root.style.setProperty(`--color-${key}`, tokens[key])
-    syncThemeColorMeta(tokens)
-  } else {
-    root.dataset.theme = themeId
-    for (const key of THEME_TOKENS) root.style.removeProperty(`--color-${key}`)
-    syncThemeColorMeta(namedThemeTokens(themeId))
+const renderTheme = () => {
+  const root = document.documentElement
+  state.resolvedMode = resolveColorMode(state.mode)
+  root.dataset.colorMode = state.resolvedMode
+  root.dataset.theme = state.theme.startsWith('#') ? 'custom' : state.theme
+  const tokens = namedThemeTokens(state.theme, state.resolvedMode) || buildThemeTokens(state.theme, state.resolvedMode)
+  for (const key of THEME_TOKENS) {
+    if (state.resolvedMode === 'light' || state.theme.startsWith('#')) root.style.setProperty(`--color-${key}`, tokens[key])
+    else root.style.removeProperty(`--color-${key}`)
   }
+  syncThemeColorMeta(tokens)
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="color-scheme"]')
+  if (meta) meta.content = state.resolvedMode
 }
 
+export const applyTheme = (themeId: string) => {
+  state.theme = isThemeId(themeId) ? themeId : DEFAULT_THEME
+  writeStorage(STORAGE_KEY, state.theme)
+  renderTheme()
+}
+
+export const applyColorMode = (mode: ColorMode) => {
+  state.mode = mode
+  writeStorage(MODE_STORAGE_KEY, mode)
+  renderTheme()
+}
+
+export const toggleColorMode = () => applyColorMode(state.resolvedMode === 'dark' ? 'light' : 'dark')
+
+let initialized = false
 export const initTheme = () => {
-  applyTheme(getStoredTheme())
+  state.theme = getStoredTheme()
+  state.mode = getStoredColorMode()
+  renderTheme()
+  if (initialized) return
+  initialized = true
+  window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (state.mode === 'system') renderTheme()
+  })
+  window.addEventListener('storage', event => {
+    if (event.key === STORAGE_KEY || event.key === MODE_STORAGE_KEY || event.key === null) {
+      state.theme = getStoredTheme()
+      state.mode = getStoredColorMode()
+      renderTheme()
+    }
+  })
 }
