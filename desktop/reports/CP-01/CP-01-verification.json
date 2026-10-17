@@ -1,0 +1,43 @@
+{
+  "phase": "CP-01",
+  "status": "passed",
+  "matrix": [
+    {
+      "report": "CP-01-mac-packaged-local.json",
+      "sha256": "c2e06bc655b3df6f2f08b3ee8042610dfbd77cc3227a2f1c2f3f6542ca84af9b",
+      "passed": true
+    },
+    {
+      "report": "CP-01-mac-packaged-network.json",
+      "sha256": "c03022990a39f4e5a643728822f8b3f877cc14dda05c2987778777d7d6823080",
+      "passed": true
+    },
+    {
+      "report": "CP-01-mac-packaged-close.json",
+      "sha256": "a3e33bb6ccd92671f51fc19fa5c7e571ed08b3dc5e46d3fa42d04196467f70eb",
+      "passed": true
+    },
+    {
+      "report": "CP-01-windows-packaged-local.json",
+      "sha256": "3e5ec164010262202e8b14d30b0da4731406357b42eef2567163a1ed189698a3",
+      "passed": true
+    },
+    {
+      "report": "CP-01-windows-packaged-network.json",
+      "sha256": "caf9d487dc3700c38d1e6797df02770c64cc2791a2d50e6880c42160eae8ceca",
+      "passed": true
+    },
+    {
+      "report": "CP-01-windows-packaged-close.json",
+      "sha256": "98f07bcdddbd050037126a329815e98ea04d6035b44a47b04fd19ab209acaf9d",
+      "passed": true
+    }
+  ],
+  "scope": "Section 7.4 prototype gate; full format/performance/long-play/installer gates remain CP-04/06/07",
+  "sourceSha256": {
+    "probe/main.cjs": "cb51785ac6d77c57941de072ec634652965e6a2a0f201a58db6e01f40e5277c2",
+    "probe/preload.cjs": "583a5ad717d195a5f951f0702750978dea90491ae17a398e11b00dc12991eca4",
+    "native/embedded.cpp": "c3d3054afa272df50e75d8bb0fae46e25abb7a565ba7100277ace6272115ebde",
+    "native/surface.h": "8ba5ccc8555e797a641fb20e7f3df22f937b9ec19fd9d2cc48cc06ef5cbc2176"
+  }
+}

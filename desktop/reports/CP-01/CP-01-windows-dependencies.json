@@ -1,0 +1,20 @@
+{
+  "status": "passed",
+  "method": "MSVC dumpbin /DEPENDENTS; addon /MT and delay-load host hook; packaged run with System32-only PATH",
+  "graphicsDriverLoader": {
+    "file": "C:\\Windows\\System32\\vulkan-1.dll",
+    "version": "1.4.341.0"
+  },
+  "files": [
+    {
+      "dumpbin": "Microsoft (R) COFF/PE Dumper Version 14.44.35229.0\nCopyright (C) Microsoft Corporation.  All rights reserved.\n\n\nDump of file C:\\HEManagerBuild\\cp01-package-validation\\HE-Manager-CP01-win32-x64\\resources\\app\\native\\build\\win32-x64\\he_embedded.node\n\nFile Type: DLL\n\n  Image has the following dependencies:\n\n    d3d11.dll\n    dxgi.dll\n    KERNEL32.dll\n\n  Image has the following delay load dependencies:\n\n    node.exe\n\n  Summary\n\n        3000 .data\n        1000 .fptable\n        2000 .pdata\n        E000 .rdata\n        1000 .reloc\n       1A000 .text",
+      "sha256": "b0a63c1c64502e47997c7e772c53474e1d9644ccacc99cbac0694b9acb036d8c",
+      "file": "native\\build\\win32-x64\\he_embedded.node"
+    },
+    {
+      "dumpbin": "Microsoft (R) COFF/PE Dumper Version 14.44.35229.0\nCopyright (C) Microsoft Corporation.  All rights reserved.\n\n\nDump of file C:\\HEManagerBuild\\cp01-package-validation\\HE-Manager-CP01-win32-x64\\resources\\app\\native\\runtime\\win32\\libmpv-2.dll\n\nFile Type: DLL\n\n  Image has the following dependencies:\n\n    GDI32.dll\n    ole32.dll\n    USER32.dll\n    VERSION.dll\n    vulkan-1.dll\n    ADVAPI32.dll\n    SHELL32.dll\n    KERNEL32.dll\n    OLEAUT32.dll\n    api-ms-win-core-winrt-l1-1-0.dll\n    ntdll.dll\n    AVRT.dll\n    dwmapi.dll\n    IMM32.dll\n    api-ms-win-core-path-l1-1-0.dll\n    SHCORE.dll\n    UxTheme.dll\n    api-ms-win-core-winrt-error-l1-1-1.dll\n    OPENGL32.dll\n    api-ms-win-crt-stdio-l1-1-0.dll\n    api-ms-win-crt-environment-l1-1-0.dll\n    api-ms-win-crt-runtime-l1-1-0.dll\n    api-ms-win-crt-filesystem-l1-1-0.dll\n    api-ms-win-crt-string-l1-1-0.dll\n    api-ms-win-crt-private-l1-1-0.dll\n    api-ms-win-crt-locale-l1-1-0.dll\n    api-ms-win-crt-time-l1-1-0.dll\n    api-ms-win-crt-convert-l1-1-0.dll\n    api-ms-win-crt-utility-l1-1-0.dll\n    api-ms-win-crt-heap-l1-1-0.dll\n    api-ms-win-crt-math-l1-1-0.dll\n    api-ms-win-crt-multibyte-l1-1-0.dll\n    bcrypt.dll\n    SHLWAPI.dll\n    WS2_32.dll\n    DWrite.dll\n    WLDAP32.dll\n    CRYPT32.dll\n    api-ms-win-core-synch-l1-2-0.dll\n    bcryptprimitives.dll\n    AVICAP32.dll\n    WINMM.dll\n    SETUPAPI.dll\n    IPHLPAPI.DLL\n    Secur32.dll\n    Normaliz.dll\n    d2d1.dll\nLINK : warning LNK4078: 找到多个“.rodata”节，它们具有不同的特性(C0000040)\n\n  Summary\n\n        1000 .buildid\n      CC8000 .data\n        1000 .eh_fram\n       C3000 .pdata\n     144F000 .rdata\n       4F000 .reloc\n       2D000 .rodata\n        2000 .rodata\n       43000 .rsrc\n     5D62000 .text\n        1000 .tls",
+      "sha256": "3c7dedc13718d9c3f38d41f9f2a1aed01810850982020f34f03b67a13b0659e8",
+      "file": "native\\runtime\\win32\\libmpv-2.dll"
+    }
+  ]
+}

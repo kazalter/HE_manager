@@ -1,0 +1,19 @@
+{
+  "mpvCommit": "dde0671072723c311df874a32dc4e48b5197ca62",
+  "files": {
+    "client.h": "3da9b8c61c3fb4e2d76bd248cebf72f3ee830331411b71a76adbd5e05660cc50",
+    "render.h": "f2550aa29b2e9b20988bd954b4383e9fa05fd9e40d1669fbc6edf2afac603f15",
+    "render_gl.h": "48662c0ed9872a14dd9e1684105c97f69f94a0414709c254c5d372adc41d2e69",
+    "render_d3d11.h": "7b880453ee3c780b0d0f1c3f8ecaa1d23b289522f4c687e6857c8475f4a3f6fb"
+  },
+  "electron": "44.8.0",
+  "electronHeadersSha256": "a53b3e7ecc1a3320b7dcbc7b7256e29a7c794e956349063b0e466c9e5c76d22b",
+  "darwin": {
+    "tag": "v0.41.0",
+    "files": {
+      "client.h": "3c073236a09cb456c6e80587d5523c8771c32fb22ca014e0f99cc3d43905b75c",
+      "render.h": "192691941602052f00df0587f126246c48785a1cf21de68d22a92ea1908d1c55",
+      "render_gl.h": "48662c0ed9872a14dd9e1684105c97f69f94a0414709c254c5d372adc41d2e69"
+    }
+  }
+}

@@ -32,6 +32,12 @@ jobs:
         run: npm ci --prefix frontend && npm ci --prefix desktop
       - name: Test
         run: npm test --prefix desktop && npm test --prefix frontend
+      - name: Check embedded prototype sources
+        run: |
+          python3 -m py_compile desktop/native/*.py desktop/probe/*.py
+          node --check desktop/probe/main.cjs
+          node --check desktop/probe/preload.cjs
+          node --check desktop/probe/renderer.js
       - name: Build shared UI
         run: npm run build:ui --prefix desktop
       - name: Verify and prepare native runtimes

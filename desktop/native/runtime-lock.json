@@ -1,0 +1,50 @@
+{
+  "electron": {
+    "version": "44.8.0",
+    "source": "https://github.com/electron/electron/tree/v44.8.0",
+    "headersUrl": "https://artifacts.electronjs.org/headers/dist/v44.8.0/node-v44.8.0-headers.tar.gz",
+    "headersSha256": "a53b3e7ecc1a3320b7dcbc7b7256e29a7c794e956349063b0e466c9e5c76d22b",
+    "windowsImportLibraryUrl": "https://artifacts.electronjs.org/headers/dist/v44.8.0/win-x64/node.lib",
+    "windowsImportLibrarySha256": "221dac8b3f9e9e7cabb1e782c347399b24f0a68d0778e294ee34714c59d6446e"
+  },
+  "win32-x64": {
+    "version": "mpv v0.41.0-1200-gdde067107",
+    "commit": "dde0671072723c311df874a32dc4e48b5197ca62",
+    "api": "2.6",
+    "url": "https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20261017/mpv-dev-x86_64-20261017-git-dde0671072.7z",
+    "archiveSha256": "d6638b2b40561e6071627f39ad60a38e15721dc87a49f244b897911ea2edfd9f",
+    "librarySha256": "3c7dedc13718d9c3f38d41f9f2a1aed01810850982020f34f03b67a13b0659e8",
+    "reasonForDevelopmentBuild": "Pinned D3D11 libmpv render API 2.6 is unavailable in the stable 0.41 API 2.5. Revalidate graphics, shader and lifetime matrix on upgrades."
+  },
+  "darwin-arm64": {
+    "version": "mpv v0.41.0",
+    "mpvCommit": "41f6a645068483470267271e1d09966ca3b9f413",
+    "api": "2.5",
+    "bundleVersion": "IINA 1.5.0",
+    "url": "https://github.com/iina/iina/releases/download/v1.5.0/IINA.v1.5.0.dmg",
+    "archiveSha256": "8fad50479b10e09645053457cec46bd53d054ced2242cfe68f74586735a20dc7",
+    "preparation": "prepare-macos.py",
+    "dependencyCount": 44,
+    "transformedHashes": "runtime/darwin/runtime-manifest.json"
+  },
+  "shaders": {
+    "version": "Anime4K v4.0.1",
+    "lock": "../runtime-lock.json",
+    "configuration": "../src/policy.cjs"
+  },
+  "builds": {
+    "darwin-arm64": {
+      "minimumOS": "15.0",
+      "compiler": "Apple clang 21",
+      "nodeAPI": 8
+    },
+    "win32-x64": {
+      "minimumOS": "Windows 11 24H2",
+      "msvc": "14.44.35207",
+      "sdk": "10.0.26100.0",
+      "runtime": "static /MT",
+      "nodeAPI": 8
+    }
+  },
+  "artifactHashes": "Generated build-info.json, runtime-manifest.json, app-manifest.json and acceptance reports record binaries actually executed; binaries are ignored, not committed."
+}

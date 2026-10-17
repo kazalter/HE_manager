@@ -1,0 +1,15 @@
+{
+  "artifacts": [
+    {
+      "file": "HE-Manager-CP01-darwin-arm64.zip",
+      "bytes": 155747667,
+      "sha256": "4407c3c442f22380cca5042a4f4e95b40b2d2a780d8b13cf88db3b5dd9f1d3f2"
+    },
+    {
+      "file": "HE-Manager-CP01-win32-x64.zip",
+      "bytes": 212087473,
+      "sha256": "a21b5df3c4362904852ab1669cec8b15016a2dd945564d09839a660e26a5e0a5"
+    }
+  ],
+  "distribution": "Local CP-01 prototypes; unsigned Windows, ad-hoc signed macOS; formal signed installers remain CP-07"
+}

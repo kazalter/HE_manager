@@ -48,7 +48,7 @@
 2026-10-17：按用户提供的[实施方案](docs/desktop-client-plan.md)开始开发；保留 Vue/TypeScript/Electron 与现有 FastAPI，不恢复 WinUI。先验证双平台内嵌 libmpv，再推进完整媒体功能。
 
 - [x] CP-00：两端真机、资源/工具链、实际 UI、三轮 shell/内存基线与范围/缺口记录完成；修复 Windows URL 参数导致的入口前退出。桌面各 19 项、前端 116 项与构建通过。详见 [阶段交付](desktop/reports/CP-00-complete.md)。
-- [ ] CP-01：双平台 libmpv → 平台共享纹理 → DOM 视频区域；验证覆盖输入、同会话全屏、释放、受保护流和最小运行包。API 存在或独立 mpv 播放均不代表通过。
+- [x] CP-01：两端打包程序完成 libmpv → 共享纹理 → DOM 视频区域；本地/真实鉴权流、HTTP seek、硬解/三档着色器、覆盖输入、同会话全屏、慢接收/缩放/重复打开及关闭释放通过。详见 [阶段交付](desktop/reports/CP-01-complete.md)；完整格式/压力与生产 Linux 联调按后续阶段执行。
 - [ ] CP-02～CP-07：按实施方案依次推进视觉基础、媒体库、视频音频、图片漫画、平台收敛和分发。
 
 旧 WN 阶段属于已弃置 WinUI 路线，其通过记录不能替代 CP 路线验收。
