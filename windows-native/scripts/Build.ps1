@@ -28,5 +28,6 @@ try {
     & $dotnet build HEManager.Windows/HEManager.Windows.csproj -c Release -p:Platform=x64 --no-restore -o "$out"
     if($LASTEXITCODE){throw 'WinUI build failed'}
     Copy-Item "$root/.runtime/libmpv-2.dll" $out -Force
+    & "$PSScriptRoot/Write-BuildInfo.ps1" -Root $root -Output $out
     Write-Output "Built: $out/HEManager.Windows.exe"
 } finally {Pop-Location}

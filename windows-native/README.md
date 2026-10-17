@@ -28,6 +28,26 @@
 
 `Test-Smoke` 在当前已登录 Windows 用户的交互会话中临时创建一次性测试任务，结束即删除。需要该用户已登录桌面；不在服务会话中假装完成 GUI 验收。测试期间自动开关超分、全屏20次并重载测试片，约30～60秒，超时上限180秒。它检查 GPU 纹理回读、渲染帧、实际硬解与 Anime4K 通道、会话和退出；不代替人工输入、DPI、多屏和长时间稳定性验收。
 
+## 窗口与资源回归
+
+需要已登录且解锁的 Windows 桌面，在独立测试窗口运行：
+
+```powershell
+.\windows-native\scripts\Test-Window.ps1 -Mode ui
+.\windows-native\scripts\Test-Window.ps1 -Mode scales -Seconds 600
+.\windows-native\scripts\Test-Window.ps1 -Mode soak -Seconds 1800
+```
+
+`ui` 通过外部 Windows UI Automation 操作真实控件，通过 SendInput 验证 F11、Esc、Space；检查最小窗口、焦点离开／返回、最小化恢复和 50 次视频重新加载后的实际 file-loaded 事件。键盘注入只在播放器确认为前台时执行。
+
+`scales` 等待用户在系统标准缩放下拉菜单执行 100% → 150% → 200% → 100%，以真实 XAML scale、窗口 DPI、纹理像素、GPU 非空回读及控件边界判断；不以放大截图模拟 DPI。若以 150% 启动则检查 150% → 200% → 100%。自定义缩放需要注销时，原进程已结束，不能当成同一窗口动态切换通过。
+
+`soak` 在质量档预热 30 秒，再连续观察指定时长；记录帧推进、实际硬解、渲染错误、进程私有内存、句柄、线程和 DXGI 当前进程本地显存用量。阈值是原型资源回归报警线，不代表正式视频性能达标，也不代替 WN-04 的日常内容／格式矩阵。一般小改动只运行相关检查，完整矩阵留在对应阶段。
+
+证据保存在 `%LOCALAPPDATA%\HEManager\WN01\acceptance-<mode>-<时间>`：JSON 结果、每秒状态、构建摘要和可取得的播放器截图。截图要求播放器为前台，否则保存跳过说明；不把别的应用画面作为播放器证据。`--probe <目录>` 仅开启诊断，不提供外部播放控制接口。正常运行不启用 GPU 读回。
+
+构建会生成 `build-info.json`，记录产品源码和主要二进制的 SHA-256、编译器／SDK 实际版本。测试记录自己的二进制摘要；由此核对证据使用的构建。GitHub Windows runner 执行锁定还原、C++／WinUI 构建及外部测试程序编译；GPU、真实桌面输入和 DPI 验收仍在真机完成。
+
 ## 生命周期与边界
 
 - `HEManager.Media` 封装进程内 libmpv C API、UTF-8 命令、事件排空及真实 render-pass 诊断。
@@ -35,7 +55,7 @@
 - 渲染线程只调用 render API，不调用／等待播放器控制 API；使用 advanced control 提供真实通道诊断。正常关闭先停止解码并等待 idle，再停止渲染线程、释放 render context、detach panel，最后销毁 mpv core。
 - 全屏只切换原 WinUI AppWindow presenter；保留同一个窗口、mpv core 和 render context。退出恢复原窗口位置尺寸。
 - 原型选取硬件适配器，优先较大独立显存；使用 d3d11va。其他显卡、解码路径与格式仍须验证。不启动 mpv.exe，不复用 Electron IPC。
-- GPU 纹理读取只在 `--smoke` 测试启用，不给正常播放增加 CPU readback。
+- GPU 纹理读取只在 `--smoke`／`--probe` 测试启用，不给正常播放增加 CPU readback。
 
 ## 第三方资源
 

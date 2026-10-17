@@ -1,0 +1,604 @@
+{
+  "date": "2026-10-17",
+  "scope": "WN-01 render/window prototype gate; synthetic H.264 fixture only",
+  "rawEvidenceRoot": "/home/user1/he-manager-builds/windows-native-acceptance",
+  "tests": [
+    {
+      "directory": "acceptance-ui-20261017-161814",
+      "passed": true,
+      "checkpoints": [
+        {
+          "name": "minimum-window-controls",
+          "state": {
+            "session": "8731ec0d-4d10-4ce2-b592-3a2a3b11a980",
+            "mpv": "25AEEDC4210",
+            "render": "25A651866C0",
+            "loads": 1,
+            "frames": 56,
+            "graphicsError": 0,
+            "hwdec": "d3d11va",
+            "scale": 1,
+            "dpi": 96,
+            "surface": {
+              "width": 844,
+              "height": 422,
+              "pixelWidth": 844,
+              "pixelHeight": 422
+            },
+            "window": {
+              "x": 680,
+              "y": 316,
+              "width": 860,
+              "height": 520
+            },
+            "privateBytes": 236204032,
+            "handles": 1553,
+            "threads": 147,
+            "gpuBytes": 56840192
+          }
+        },
+        {
+          "name": "focus-away-return-rendering",
+          "state": {
+            "session": "8731ec0d-4d10-4ce2-b592-3a2a3b11a980",
+            "mpv": "25AEEDC4210",
+            "render": "25A651866C0",
+            "loads": 1,
+            "frames": 95,
+            "graphicsError": 0,
+            "hwdec": "d3d11va",
+            "scale": 1,
+            "dpi": 96,
+            "surface": {
+              "width": 1184,
+              "height": 662,
+              "pixelWidth": 1184,
+              "pixelHeight": 662
+            },
+            "window": {
+              "x": 680,
+              "y": 316,
+              "width": 1200,
+              "height": 760
+            },
+            "privateBytes": 235991040,
+            "handles": 1552,
+            "threads": 147,
+            "gpuBytes": 67129344
+          }
+        },
+        {
+          "name": "overlay-accessibility",
+          "state": {
+            "session": "8731ec0d-4d10-4ce2-b592-3a2a3b11a980",
+            "mpv": "25AEEDC4210",
+            "render": "25A651866C0",
+            "loads": 1,
+            "frames": 95,
+            "graphicsError": 0,
+            "hwdec": "d3d11va",
+            "scale": 1,
+            "dpi": 96,
+            "surface": {
+              "width": 1184,
+              "height": 662,
+              "pixelWidth": 1184,
+              "pixelHeight": 662
+            },
+            "window": {
+              "x": 680,
+              "y": 316,
+              "width": 1200,
+              "height": 760
+            },
+            "privateBytes": 235991040,
+            "handles": 1552,
+            "threads": 147,
+            "gpuBytes": 67129344
+          }
+        },
+        {
+          "name": "pause-seek-volume",
+          "state": {
+            "session": "8731ec0d-4d10-4ce2-b592-3a2a3b11a980",
+            "mpv": "25AEEDC4210",
+            "render": "25A651866C0",
+            "loads": 1,
+            "frames": 108,
+            "graphicsError": 0,
+            "hwdec": "d3d11va",
+            "scale": 1,
+            "dpi": 96,
+            "surface": {
+              "width": 1184,
+              "height": 662,
+              "pixelWidth": 1184,
+              "pixelHeight": 662
+            },
+            "window": {
+              "x": 680,
+              "y": 316,
+              "width": 1200,
+              "height": 760
+            },
+            "privateBytes": 244150272,
+            "handles": 1552,
+            "threads": 147,
+            "gpuBytes": 70799360
+          }
+        },
+        {
+          "name": "space-button-single-toggle",
+          "state": {
+            "session": "8731ec0d-4d10-4ce2-b592-3a2a3b11a980",
+            "mpv": "25AEEDC4210",
+            "render": "25A651866C0",
+            "loads": 1,
+            "frames": 117,
+            "graphicsError": 0,
+            "hwdec": "d3d11va",
+            "scale": 1,
+            "dpi": 96,
+            "surface": {
+              "width": 1184,
+              "height": 662,
+              "pixelWidth": 1184,
+              "pixelHeight": 662
+            },
+            "window": {
+              "x": 680,
+              "y": 316,
+              "width": 1200,
+              "height": 760
+            },
+            "privateBytes": 248553472,
+            "handles": 1554,
+            "threads": 147,
+            "gpuBytes": 74534912
+          }
+        },
+        {
+          "name": "f11-esc-original-bounds",
+          "state": {
+            "session": "8731ec0d-4d10-4ce2-b592-3a2a3b11a980",
+            "mpv": "25AEEDC4210",
+            "render": "25A651866C0",
+            "loads": 1,
+            "frames": 158,
+            "graphicsError": 0,
+            "hwdec": "d3d11va",
+            "scale": 1,
+            "dpi": 96,
+            "surface": {
+              "width": 1184,
+              "height": 662,
+              "pixelWidth": 1184,
+              "pixelHeight": 662
+            },
+            "window": {
+              "x": 680,
+              "y": 316,
+              "width": 1200,
+              "height": 760
+            },
+            "privateBytes": 260964352,
+            "handles": 1563,
+            "threads": 147,
+            "gpuBytes": 107565056
+          }
+        },
+        {
+          "name": "escape-from-preset-exits-fullscreen",
+          "state": {
+            "session": "8731ec0d-4d10-4ce2-b592-3a2a3b11a980",
+            "mpv": "25AEEDC4210",
+            "render": "25A651866C0",
+            "loads": 1,
+            "frames": 186,
+            "graphicsError": 0,
+            "hwdec": "d3d11va",
+            "scale": 1,
+            "dpi": 96,
+            "surface": {
+              "width": 1184,
+              "height": 662,
+              "pixelWidth": 1184,
+              "pixelHeight": 662
+            },
+            "window": {
+              "x": 680,
+              "y": 316,
+              "width": 1200,
+              "height": 760
+            },
+            "privateBytes": 281706496,
+            "handles": 1584,
+            "threads": 147,
+            "gpuBytes": 118378496
+          }
+        },
+        {
+          "name": "slider-keyboard-isolation",
+          "state": {
+            "session": "8731ec0d-4d10-4ce2-b592-3a2a3b11a980",
+            "mpv": "25AEEDC4210",
+            "render": "25A651866C0",
+            "loads": 1,
+            "frames": 201,
+            "graphicsError": 0,
+            "hwdec": "d3d11va",
+            "scale": 1,
+            "dpi": 96,
+            "surface": {
+              "width": 1184,
+              "height": 662,
+              "pixelWidth": 1184,
+              "pixelHeight": 662
+            },
+            "window": {
+              "x": 680,
+              "y": 316,
+              "width": 1200,
+              "height": 760
+            },
+            "privateBytes": 281718784,
+            "handles": 1597,
+            "threads": 147,
+            "gpuBytes": 97902592
+          }
+        },
+        {
+          "name": "minimize-restore",
+          "state": {
+            "session": "8731ec0d-4d10-4ce2-b592-3a2a3b11a980",
+            "mpv": "25AEEDC4210",
+            "render": "25A651866C0",
+            "loads": 1,
+            "frames": 217,
+            "graphicsError": 0,
+            "hwdec": "d3d11va",
+            "scale": 1,
+            "dpi": 96,
+            "surface": {
+              "width": 1184,
+              "height": 662,
+              "pixelWidth": 1184,
+              "pixelHeight": 662
+            },
+            "window": {
+              "x": 680,
+              "y": 316,
+              "width": 1200,
+              "height": 760
+            },
+            "privateBytes": 273833984,
+            "handles": 1598,
+            "threads": 147,
+            "gpuBytes": 79585280
+          }
+        },
+        {
+          "name": "50-video-reloads-same-native-session",
+          "state": {
+            "session": "8731ec0d-4d10-4ce2-b592-3a2a3b11a980",
+            "mpv": "25AEEDC4210",
+            "render": "25A651866C0",
+            "loads": 51,
+            "frames": 1017,
+            "graphicsError": 0,
+            "hwdec": "d3d11va",
+            "scale": 1,
+            "dpi": 96,
+            "surface": {
+              "width": 1184,
+              "height": 662,
+              "pixelWidth": 1184,
+              "pixelHeight": 662
+            },
+            "window": {
+              "x": 680,
+              "y": 316,
+              "width": 1200,
+              "height": 760
+            },
+            "privateBytes": 318803968,
+            "handles": 1611,
+            "threads": 148,
+            "gpuBytes": 75522048
+          }
+        },
+        {
+          "name": "clean-exit",
+          "state": {
+            "session": "8731ec0d-4d10-4ce2-b592-3a2a3b11a980",
+            "mpv": "25AEEDC4210",
+            "render": "25A651866C0",
+            "loads": 51,
+            "frames": 1030,
+            "graphicsError": 0,
+            "hwdec": "d3d11va",
+            "scale": 1,
+            "dpi": 96,
+            "surface": {
+              "width": 1184,
+              "height": 662,
+              "pixelWidth": 1184,
+              "pixelHeight": 662
+            },
+            "window": {
+              "x": 680,
+              "y": 316,
+              "width": 1200,
+              "height": 760
+            },
+            "privateBytes": 318906368,
+            "handles": 1611,
+            "threads": 148,
+            "gpuBytes": 75522048
+          }
+        }
+      ],
+      "buildInfo": {
+        "builtAtUtc": "2026-10-17T08:18:12.4093411+00:00",
+        "msvc": "14.44.35207",
+        "windowsSdk": "10.0.26100.0\\",
+        "sources": {
+          "HEManager.Windows/app.manifest": "08ad33a1159f4663837cf6a593b3b13c1f70c7f9b8375d631bd75c7056c00812",
+          "HEManager.Windows/App.xaml": "ed4ff0b6d03fba2a4b227a990bb8b1f29eac9138594e5ad7c990bffa8d8019bf",
+          "HEManager.Windows/App.xaml.cs": "e0f85ba3982f57ea74f0a5eb9d3cbf8beb07137b7dfbe33b735e10a79daf5ad3",
+          "HEManager.Windows/HEManager.Windows.csproj": "0044394289bf0b9409a81735b47c93797783f021710e2b2ac68dd414d4595a36",
+          "HEManager.Windows/MainWindow.xaml": "088af462eadfcc8123787fda1e3b8cfdbcc84d33d913d031bfc22bbfd1bb9447",
+          "HEManager.Windows/MainWindow.xaml.cs": "b3b43f556c3b5ab2302e635202f1ccb95a453a6b4971f875887b8f82bc54dac4",
+          "HEManager.Windows/packages.lock.json": "bf4d640f5fb093386e02b38383fe4053a2dab1a2547159bc39958518385fedd5",
+          "HEManager.Windows/ProbeRecorder.cs": "19627a87b16447deae6d4509d145229fc5707f446240ab23a6315b8f69d4ee7c",
+          "HEManager.Windows/WindowLifecycle.cs": "aa682f46ac32c2311a423a0c4d2160c2183838379fd10f2a3a2dde19abb82528",
+          "HEManager.Media/HEManager.Media.csproj": "72d041fd6af13d59621fb6ba35510cc9891c969ee5e39336c29173e771353564",
+          "HEManager.Media/MpvSession.cs": "93bd28716ff351033b936a26a407e030ded995e0aa97e291813c505dbaad3364",
+          "HEManager.Graphics/Bridge.cpp": "a6670f86e6ec3540cf415cc4b8ddac7cdb1610ed4b2faf690be6ff9fb6a1b5b1",
+          "HEManager.Graphics/include/mpv/client.h": "3da9b8c61c3fb4e2d76bd248cebf72f3ee830331411b71a76adbd5e05660cc50",
+          "HEManager.Graphics/include/mpv/render.h": "f2550aa29b2e9b20988bd954b4383e9fa05fd9e40d1669fbc6edf2afac603f15",
+          "HEManager.Graphics/include/mpv/render_d3d11.h": "7b880453ee3c780b0d0f1c3f8ecaa1d23b289522f4c687e6857c8475f4a3f6fb"
+        },
+        "binaries": {
+          "HEManager.Windows.dll": "a585b391bf9478baf4c91d671262672abd45b35ce8c812879e2a5473073c9d33",
+          "HEManager.Media.dll": "784d8a7298921cd2b92bcc3edd3b52ed82fff02cb091006fde9d0dbe0219d7c6",
+          "HEManager.Graphics.dll": "4c9bfb51f647edd1e32fa2cd37a517e540b80baa455d3b0f8be5efa4b91ed992",
+          "libmpv-2.dll": "3c7dedc13718d9c3f38d41f9f2a1aed01810850982020f34f03b67a13b0659e8"
+        }
+      },
+      "files": {
+        "player.log": "94911b0033d7bcdc5380bc7b6c847421c26621cb9d98cdc29baf0b6046786921",
+        "samples.jsonl": "61301eec8072db578154582164a6e84a38fb84532f26ae12a6cf7b15f279400e",
+        "results.json": "4e11c105b46ff4dfc2417d3a917af86ad95bd1861a1ee25e9d2be512e8c721a8",
+        "test-binary-sha256.txt": "c64239fc2a03266e907a0ff9934a3042d38a5009c62915b2d3bd9a46b12ebff8",
+        "build-info.json": "031cd578ca1fa986d9aa6bf6cf0c8d866fff3ce27fa578a5c7dd4bd3a3b374e4"
+      },
+      "reloadSteadyRange": {
+        "privateBytes": {
+          "min": 308195328,
+          "max": 328601600,
+          "first": 317202432,
+          "last": 318906368
+        },
+        "handles": {
+          "min": 1609,
+          "max": 1612,
+          "first": 1609,
+          "last": 1611
+        },
+        "threads": {
+          "min": 148,
+          "max": 149,
+          "first": 149,
+          "last": 148
+        },
+        "gpuBytes": {
+          "min": 75522048,
+          "max": 75522048,
+          "first": 75522048,
+          "last": 75522048
+        },
+        "loadedFiles": {
+          "min": 10,
+          "max": 51,
+          "first": 10,
+          "last": 51
+        }
+      }
+    },
+    {
+      "directory": "acceptance-scales-20261017-161438",
+      "passed": true,
+      "checkpoints": [
+        {
+          "name": "actual-dpi-1-step-0",
+          "state": {
+            "session": "13df4725-46e3-4649-bf94-17a9a56813f4",
+            "mpv": "2DB71744750",
+            "render": "2DAE867B120",
+            "loads": 1,
+            "frames": 43,
+            "graphicsError": 0,
+            "hwdec": "d3d11va",
+            "scale": 1,
+            "dpi": 96,
+            "surface": {
+              "width": 1184,
+              "height": 662,
+              "pixelWidth": 1184,
+              "pixelHeight": 662
+            },
+            "window": {
+              "x": 680,
+              "y": 316,
+              "width": 1200,
+              "height": 760
+            },
+            "privateBytes": 236777472,
+            "handles": 1522,
+            "threads": 145,
+            "gpuBytes": 65818624
+          }
+        },
+        {
+          "name": "actual-dpi-1.5-step-1",
+          "state": {
+            "session": "13df4725-46e3-4649-bf94-17a9a56813f4",
+            "mpv": "2DB71744750",
+            "render": "2DAE867B120",
+            "loads": 1,
+            "frames": 3425,
+            "graphicsError": 0,
+            "hwdec": "d3d11va",
+            "scale": 1.5,
+            "dpi": 144,
+            "surface": {
+              "width": 1185.3333740234375,
+              "height": 663.3333129882812,
+              "pixelWidth": 1778,
+              "pixelHeight": 994
+            },
+            "window": {
+              "x": 680,
+              "y": 237,
+              "width": 1800,
+              "height": 1140
+            },
+            "privateBytes": 278450176,
+            "handles": 1581,
+            "threads": 140,
+            "gpuBytes": 84955136
+          }
+        },
+        {
+          "name": "actual-dpi-2-step-2",
+          "state": {
+            "session": "13df4725-46e3-4649-bf94-17a9a56813f4",
+            "mpv": "2DB71744750",
+            "render": "2DAE867B120",
+            "loads": 1,
+            "frames": 3763,
+            "graphicsError": 0,
+            "hwdec": "d3d11va",
+            "scale": 2,
+            "dpi": 192,
+            "surface": {
+              "width": 1187,
+              "height": 583,
+              "pixelWidth": 2374,
+              "pixelHeight": 1166
+            },
+            "window": {
+              "x": 160,
+              "y": 0,
+              "width": 2400,
+              "height": 1344
+            },
+            "privateBytes": 294096896,
+            "handles": 1583,
+            "threads": 140,
+            "gpuBytes": 112545792
+          }
+        },
+        {
+          "name": "actual-dpi-1-step-3",
+          "state": {
+            "session": "13df4725-46e3-4649-bf94-17a9a56813f4",
+            "mpv": "2DB71744750",
+            "render": "2DAE867B120",
+            "loads": 1,
+            "frames": 3969,
+            "graphicsError": 0,
+            "hwdec": "d3d11va",
+            "scale": 1,
+            "dpi": 96,
+            "surface": {
+              "width": 1704,
+              "height": 942,
+              "pixelWidth": 1704,
+              "pixelHeight": 942
+            },
+            "window": {
+              "x": 160,
+              "y": 0,
+              "width": 1720,
+              "height": 1040
+            },
+            "privateBytes": 294535168,
+            "handles": 1582,
+            "threads": 140,
+            "gpuBytes": 103960576
+          }
+        },
+        {
+          "name": "clean-exit",
+          "state": {
+            "session": "13df4725-46e3-4649-bf94-17a9a56813f4",
+            "mpv": "2DB71744750",
+            "render": "2DAE867B120",
+            "loads": 1,
+            "frames": 3983,
+            "graphicsError": 0,
+            "hwdec": "d3d11va",
+            "scale": 1,
+            "dpi": 96,
+            "surface": {
+              "width": 1704,
+              "height": 942,
+              "pixelWidth": 1704,
+              "pixelHeight": 942
+            },
+            "window": {
+              "x": 160,
+              "y": 0,
+              "width": 1720,
+              "height": 1040
+            },
+            "privateBytes": 294535168,
+            "handles": 1580,
+            "threads": 140,
+            "gpuBytes": 91639808
+          }
+        }
+      ],
+      "buildInfo": {
+        "builtAtUtc": "2026-10-17T08:08:46.4983470+00:00",
+        "sources": {
+          "HEManager.Windows/app.manifest": "08ad33a1159f4663837cf6a593b3b13c1f70c7f9b8375d631bd75c7056c00812",
+          "HEManager.Windows/App.xaml": "ed4ff0b6d03fba2a4b227a990bb8b1f29eac9138594e5ad7c990bffa8d8019bf",
+          "HEManager.Windows/App.xaml.cs": "e0f85ba3982f57ea74f0a5eb9d3cbf8beb07137b7dfbe33b735e10a79daf5ad3",
+          "HEManager.Windows/HEManager.Windows.csproj": "0044394289bf0b9409a81735b47c93797783f021710e2b2ac68dd414d4595a36",
+          "HEManager.Windows/MainWindow.xaml": "088af462eadfcc8123787fda1e3b8cfdbcc84d33d913d031bfc22bbfd1bb9447",
+          "HEManager.Windows/MainWindow.xaml.cs": "61a9146ce88350843be9a931f29ee171863d6a0b85125c000bc6a5aaabb7ba21",
+          "HEManager.Windows/packages.lock.json": "bf4d640f5fb093386e02b38383fe4053a2dab1a2547159bc39958518385fedd5",
+          "HEManager.Windows/ProbeRecorder.cs": "19627a87b16447deae6d4509d145229fc5707f446240ab23a6315b8f69d4ee7c",
+          "HEManager.Windows/WindowLifecycle.cs": "aa682f46ac32c2311a423a0c4d2160c2183838379fd10f2a3a2dde19abb82528",
+          "HEManager.Media/HEManager.Media.csproj": "72d041fd6af13d59621fb6ba35510cc9891c969ee5e39336c29173e771353564",
+          "HEManager.Media/MpvSession.cs": "0f7232897eaa086e191e785761ace2d3065aeff2f6366ddd45e830e46154e49e",
+          "HEManager.Graphics/Bridge.cpp": "a6670f86e6ec3540cf415cc4b8ddac7cdb1610ed4b2faf690be6ff9fb6a1b5b1",
+          "HEManager.Graphics/include/mpv/client.h": "3da9b8c61c3fb4e2d76bd248cebf72f3ee830331411b71a76adbd5e05660cc50",
+          "HEManager.Graphics/include/mpv/render.h": "f2550aa29b2e9b20988bd954b4383e9fa05fd9e40d1669fbc6edf2afac603f15",
+          "HEManager.Graphics/include/mpv/render_d3d11.h": "7b880453ee3c780b0d0f1c3f8ecaa1d23b289522f4c687e6857c8475f4a3f6fb"
+        },
+        "binaries": {
+          "HEManager.Windows.dll": "ebe8dfdd7f272ac627bd213e3527f14b20df746ba015d4b6c0dcbd4de585f6e5",
+          "HEManager.Media.dll": "bbd4700572e500c576d3129e75c415747894abfbc22ccf78f001f12fce9599fd",
+          "HEManager.Graphics.dll": "fdc4e3d0a270f41a0b38aa39cd4671f108a933dcc9fc8da8e5ec20bba4a35191",
+          "libmpv-2.dll": "3c7dedc13718d9c3f38d41f9f2a1aed01810850982020f34f03b67a13b0659e8"
+        }
+      },
+      "files": {
+        "samples.jsonl": "910aca1c3dfb7dd900b300d3aa3a44d0af8ac526e33242278530842c571ff9f8",
+        "results.json": "c27c3ffd639ce89b03f4686c97e1beb97b355bee36a8848c1f38b43256622c38",
+        "test-binary-sha256.txt": "76af67e139604bf009e0e2b8c3e2e21a13290ffd7fb00c8c95ef80f31ba0dd54",
+        "build-info.json": "fbd935f09adab8fe417922dd289bfa07ab0df28d256a1eeb6bf3e19da109f92b"
+      },
+      "screenshotCaveat": "The dynamic 150% screenshot captured Settings in front; excluded as visual evidence. DPI/texture/control assertions passed. Startup 150% and dynamic 200% screenshots are separate evidence."
+    }
+  ],
+  "longRun": {
+    "status": "running, not claimed passed",
+    "directory": "acceptance-soak-20261017-161917",
+    "fixture": "640x360 H.264 synthetic loop; Anime4K quality; not WN-04 content/performance acceptance"
+  }
+}

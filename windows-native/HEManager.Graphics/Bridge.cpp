@@ -2,13 +2,14 @@
 #define NOMINMAX
 #include <windows.h>
 #include <d3d11.h>
-#include <dxgi1_3.h>
+#include <dxgi1_4.h>
 #include <wrl/client.h>
 #include <atomic>
 #include <thread>
 #include <memory>
 #include <algorithm>
 #include <stdexcept>
+#include <mutex>
 #include "include/mpv/render_d3d11.h"
 using Microsoft::WRL::ComPtr;
 // Published WinUI ISwapChainPanelNative ABI. No XAML/business logic in this DLL.
@@ -32,10 +33,14 @@ struct Bridge {
     std::atomic<unsigned> width{1280},height{720};
     std::atomic<float> scale{1};
     std::atomic<bool> resized{false};
+    std::atomic<bool> suspended{false};
+    std::mutex resizeLock;
     std::atomic<int> error{0};
     std::atomic<unsigned long long> frames{0};
     std::atomic<bool> probing{false};
     std::atomic<unsigned> pixelSpread{0};
+    std::atomic<unsigned long long> readbackFrame{0};
+    std::atomic<unsigned> surfaceWidth{0},surfaceHeight{0};
     static void notify(void* p) { SetEvent(static_cast<Bridge*>(p)->wake); }
     ~Bridge() {
         stopping=true; SetEvent(wake);
@@ -51,6 +56,7 @@ struct Bridge {
                 if(stopping) break;
                 bool force=resized.exchange(false);
                 if(force) {
+                    std::lock_guard<std::mutex> guard(resizeLock);
                     context->ClearState(); context->Flush();
                     check(swap->ResizeBuffers(2,width.load(),height.load(),DXGI_FORMAT_B8G8R8A8_UNORM,0));
                     ComPtr<IDXGISwapChain2> s2; check(swap.As(&s2));
@@ -59,8 +65,15 @@ struct Bridge {
                 }
                 auto flags=update(render);
                 if(!(flags & MPV_RENDER_UPDATE_FRAME) && !force) continue;
+                if(suspended) {
+                    int skip=1;
+                    mpv_render_param params[]={{MPV_RENDER_PARAM_SKIP_RENDERING,&skip},{MPV_RENDER_PARAM_INVALID,nullptr}};
+                    int result=draw(render,params);if(result<0){error=result;break;}
+                    reportSwap(render);continue;
+                }
                 ComPtr<ID3D11Texture2D> target;
                 check(swap->GetBuffer(0,IID_PPV_ARGS(&target)));
+                D3D11_TEXTURE2D_DESC targetDesc{};target->GetDesc(&targetDesc);surfaceWidth=targetDesc.Width;surfaceHeight=targetDesc.Height;
                 mpv_d3d11_fbo fbo={target.Get()};
                 mpv_render_param params[]={{MPV_RENDER_PARAM_D3D11_FBO,&fbo},{MPV_RENDER_PARAM_INVALID,nullptr}};
                 int result=draw(render,params);
@@ -78,7 +91,7 @@ struct Bridge {
                             auto p=static_cast<unsigned char*>(mapped.pData)+y*mapped.RowPitch+x*4;
                             for(int c=0;c<3;c++){low=std::min(low,unsigned(p[c]));high=std::max(high,unsigned(p[c]));}
                         }
-                    context->Unmap(readback.Get(),0);pixelSpread=high-low;
+                    context->Unmap(readback.Get(),0);pixelSpread=high-low;readbackFrame=frames.load()+1;
                 }
                 check(swap->Present(1,0)); reportSwap(render); ++frames;
             }
@@ -104,7 +117,7 @@ EXPORT int __cdecl he_graphics_create(mpv_handle* mpv,IUnknown* panel,void** out
         ComPtr<IDXGIAdapter1> selected;
         SIZE_T largest=0;
         for(UINT i=0;;i++) {
-            ComPtr<IDXGIAdapter1> a; if(factory->EnumAdapters1(i,&a)==DXGI_ERROR_NOT_FOUND) break;
+            ComPtr<IDXGIAdapter1> a; auto hr=factory->EnumAdapters1(i,&a);if(hr==DXGI_ERROR_NOT_FOUND)break;check(hr);
             DXGI_ADAPTER_DESC1 desc{}; check(a->GetDesc1(&desc));
             if(!(desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) && (!selected || desc.DedicatedVideoMemory>largest)) {selected=a;largest=desc.DedicatedVideoMemory;}
         }
@@ -129,6 +142,7 @@ EXPORT int __cdecl he_graphics_create(mpv_handle* mpv,IUnknown* panel,void** out
     } catch(HRESULT hr) {return hr;} catch(...) {return E_FAIL;}
 }
 EXPORT void __cdecl he_graphics_resize(Bridge* b,unsigned w,unsigned h,float scale) {
+    std::lock_guard<std::mutex> guard(b->resizeLock);
     b->width=w?w:1;b->height=h?h:1;b->scale=scale>0?scale:1;b->resized=true;SetEvent(b->wake);
 }
 EXPORT unsigned long long __cdecl he_graphics_frames(Bridge* b) {return b->frames.load();}
@@ -137,3 +151,20 @@ EXPORT void __cdecl he_graphics_destroy(Bridge* b) {delete b;}
 
 EXPORT void __cdecl he_graphics_probe(Bridge* b) {b->probing=true;}
 EXPORT unsigned __cdecl he_graphics_pixel_spread(Bridge* b) {return b->pixelSpread.load();}
+
+EXPORT void __cdecl he_graphics_suspend(Bridge* b,bool suspended) {
+    b->suspended=suspended;SetEvent(b->wake);
+}
+EXPORT long long __cdecl he_graphics_gpu_bytes(Bridge* b) {
+    ComPtr<IDXGIDevice> dxgi; if(FAILED(b->device.As(&dxgi)))return -1;
+    ComPtr<IDXGIAdapter> adapter;if(FAILED(dxgi->GetAdapter(&adapter)))return -1;
+    ComPtr<IDXGIAdapter3> a3;if(FAILED(adapter.As(&a3)))return -1;
+    DXGI_QUERY_VIDEO_MEMORY_INFO info{};
+    if(FAILED(a3->QueryVideoMemoryInfo(0,DXGI_MEMORY_SEGMENT_GROUP_LOCAL,&info)))return -1;
+    return static_cast<long long>(info.CurrentUsage);
+}
+
+EXPORT unsigned __cdecl he_graphics_width(Bridge* b) {return b->surfaceWidth.load();}
+EXPORT unsigned __cdecl he_graphics_height(Bridge* b) {return b->surfaceHeight.load();}
+
+EXPORT unsigned long long __cdecl he_graphics_readback_frame(Bridge* b) {return b->readbackFrame.load();}

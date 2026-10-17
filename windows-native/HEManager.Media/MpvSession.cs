@@ -8,6 +8,7 @@ public sealed class MpvSession : IDisposable
     public ulong ApiVersion { get; }
     public Guid SessionId { get; } = Guid.NewGuid();
     public string Preset { get; private set; } = "off";
+    public int LoadedFiles { get; private set; }
     public event Action<string>? Log;
     [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)] static extern uint mpv_client_api_version();
     [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)] static extern IntPtr mpv_create();
@@ -88,6 +89,7 @@ public sealed class MpvSession : IDisposable
         {
             var e = Marshal.PtrToStructure<Event>(mpv_wait_event(Handle, 0)); if (e.Id == 0) break;
             if (e.Id == 2 && e.Data != IntPtr.Zero) { var l = Marshal.PtrToStructure<LogMessage>(e.Data); Log?.Invoke($"[{Marshal.PtrToStringUTF8(l.Prefix)}] {Marshal.PtrToStringUTF8(l.Text)?.TrimEnd()}"); }
+            if (e.Id == 8) ++LoadedFiles; // MPV_EVENT_FILE_LOADED, not merely an accepted command.
             if (e.Error < 0) Log?.Invoke($"mpv event {e.Id} failed: {Marshal.PtrToStringUTF8(mpv_error_string(e.Error))}");
         }
     }
