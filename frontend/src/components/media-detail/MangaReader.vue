@@ -808,8 +808,9 @@ onBeforeUnmount(() => {
         :inert="!showControls"
         class="he-manga-zoom absolute right-6 z-20 flex select-none items-center gap-0.5 rounded-2xl bg-black/75 p-1 text-white/80 ring-1 ring-inset ring-white/10 transition-[transform,opacity] duration-200 ease-out"
         :style="{
-          bottom: 'calc(12px + env(safe-area-inset-bottom))',
-          transform: `translate3d(0, ${isStripOpen ? '-184px' : (showControls ? '0px' : '12px')}, 0)`,
+          top: desktopBridge ? '84px' : undefined,
+          bottom: desktopBridge ? 'auto' : 'calc(12px + env(safe-area-inset-bottom))',
+          transform: `translate3d(0, ${desktopBridge ? (showControls ? '0px' : '-12px') : isStripOpen ? '-184px' : (showControls ? '0px' : '12px')}, 0)`,
         }"
         style="will-change: transform, opacity;"
         @click.stop

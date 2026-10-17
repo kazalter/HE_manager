@@ -195,7 +195,7 @@ module.exports = async ({ window, player, config, output }) => {
     await wait(() => evaluate('document.querySelector(".he-reader-canvas-page img")?.naturalWidth > 0'), 'Reader did not display its page');
     await click('button[title="双页跨页模式"]');
     await wait(() => evaluate('document.querySelectorAll(".he-reader-canvas-page img").length === 2'), 'Double-page reader did not display both pages');
-    report.checks.readerControlsFit = await evaluate(`(() => { const bar=document.querySelector('.he-manga-controls');return bar.scrollWidth <= bar.clientWidth+1 && [...bar.querySelectorAll('[aria-label="阅读模式"] span')].every(label => label.getClientRects().length===1); })()`);
+    report.checks.readerControlsFit = await evaluate(`(() => { const bar=document.querySelector('.he-manga-controls'), a=bar.getBoundingClientRect(), b=document.querySelector('.he-manga-zoom').getBoundingClientRect();const separate=a.right<=b.left || a.left>=b.right || a.bottom<=b.top || a.top>=b.bottom;return separate && bar.scrollWidth <= bar.clientWidth+1 && [...bar.querySelectorAll('[aria-label="阅读模式"] span')].every(label => label.getClientRects().length===1); })()`);
     if (!report.checks.readerControlsFit) throw new Error('Reader controls overflow or wrap inside a mode label');
     await capture('reader-double-dark-1024');
     await click('button[title="连续卷轴模式 (条漫)"]');
