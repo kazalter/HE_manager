@@ -101,6 +101,7 @@ with SessionLocal() as database:
             media.title = title; media.media_type = kind; media.extension = file.suffix
             media.file_size = file.stat().st_size; media.cover_path = cover
             media.width = 480; media.height = 720; media.page_count = 4 if kind == 'manga' else None
+            media.progress = 0; media.view_status = 'unviewed'
         database.commit()
     token = auth.create_access_token(database, user)
     config = {"source": f"http://127.0.0.1:{port}/stream/{items[0].id}", "secondSource": f"http://127.0.0.1:{port}/stream/{items[1].id}", "headers": ["Authorization: Bearer " + token], "richFixture": rich}

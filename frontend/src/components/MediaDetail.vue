@@ -353,7 +353,6 @@ watch(
       if (currentMedia.value.id !== media.id) return
       mangaPageDimensions.value = res.data.page_dimensions || []
       totalMangaPages.value = res.data.total_pages
-      void axios.post(`${API_BASE_URL}/manga/${media.id}/thumbnails/generate`).catch(() => {})
     } catch {
       if (currentMedia.value.id === media.id) totalMangaPages.value = null
     }
