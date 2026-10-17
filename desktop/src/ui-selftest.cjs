@@ -28,8 +28,10 @@ module.exports = async ({ window, player, config, output }) => {
     await sleep(100);
   }
   async function key(keyCode) {
-    app.focus({ steal: true }); window.focus();
+    app.focus({ steal: true }); window.focus(); window.webContents.focus();
+    await wait(() => window.isFocused(), 'Window did not focus for keyboard input');
     window.webContents.sendInputEvent({ type: 'keyDown', keyCode });
+    if (keyCode === 'Enter') window.webContents.sendInputEvent({ type: 'char', keyCode: '\r' });
     window.webContents.sendInputEvent({ type: 'keyUp', keyCode });
     await sleep(150);
   }
@@ -142,6 +144,7 @@ module.exports = async ({ window, player, config, output }) => {
     report.checks.videoEnhancement = true;
     await key('Escape');
     await wait(() => evaluate('!document.querySelector(".ui-modal") && !!document.querySelector(".desktop-video")'), 'Escape closed viewer instead of settings');
+    if (!await evaluate('document.activeElement?.matches("button[aria-label=\"播放设置\"]")')) throw new Error('Playback settings did not restore keyboard focus');
     await key('Enter');
     await wait(() => evaluate('!!document.querySelector(".ui-modal")'), 'Keyboard did not reopen playback settings');
     await key('Tab');
