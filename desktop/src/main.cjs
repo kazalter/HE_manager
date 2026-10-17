@@ -18,6 +18,7 @@ const {
     allowPermission,
   } = require("./policy.cjs"),
   { Player } = require("./player.cjs"),
+  { EmbeddedPlayer } = require("./embedded-player.cjs"),
   { ImageCache } = require("./images.cjs");
 protocol.registerSchemesAsPrivileged([
   {
@@ -35,20 +36,22 @@ const root = path.resolve(__dirname, ".."),
   ui = path.join(root, "ui"),
   runtime = path.join(root, "resources/runtime");
 const baselineMode = process.argv.includes("--baseline");
+const uiTestConfigPath = process.env.HE_DESKTOP_TEST_CONFIG;
 // Diagnostics must never load the user's login, cache, or normal Chromium profile.
-if (baselineMode) {
+if (baselineMode || uiTestConfigPath) {
   const directory = require("node:fs").mkdtempSync(
     path.join(require("node:os").tmpdir(), "he-baseline-"),
   );
   app.setPath("userData", directory);
   app.setPath("sessionData", directory);
   setTimeout(() => {
-    console.error("HE_BASELINE exceeded the 60 second diagnostic deadline");
+    console.error("HE desktop diagnostic deadline exceeded");
     app.exit(1);
-  }, 60000).unref();
+  }, uiTestConfigPath ? 180000 : 60000).unref();
 }
-const player = new Player(path.join(root, "resources/shaders"));
 let window, cache, settings, settingsFile;
+const player = new EmbeddedPlayer({ root, sharedTexture: require('electron').sharedTexture, getWindow: () => window });
+const legacyPlayer = new Player(path.join(root, "resources/shaders"));
 const defaults = {
   server: "",
   videoMode: "off",
@@ -101,16 +104,19 @@ async function configuration() {
     platform: process.platform,
     arch: process.arch,
     version: app.getVersion(),
-    mpv: !!(await engine("mpv")),
+    mpv: player.available(),
+    videoPresentation: 'embedded',
     image: !!(await engine("image")),
   };
+}
+function trusted(event) {
+  return window && !window.isDestroyed() && event.sender === window.webContents
+    && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url.startsWith('he://app/');
 }
 function handle(name, callback) {
   ipcMain.handle(name, async (event, ...args) => {
     if (
-      !window ||
-      event.sender !== window.webContents ||
-      !event.senderFrame?.url.startsWith("he://app/")
+      !trusted(event)
     )
       throw new Error("不允许的桌面调用");
     try {
@@ -129,6 +135,8 @@ function handle(name, callback) {
   });
 }
 function registerIPC() {
+  ipcMain.on('he:video-ready', (event) => { if (trusted(event)) player.ready(); });
+  ipcMain.on('he:video-size', (event, value) => { if (trusted(event)) player.resize(value); });
   handle("he:configuration", configuration);
   handle("he:connect", async (value) => {
     const server = serverUrl(value);
@@ -186,12 +194,9 @@ function registerIPC() {
   handle("he:video-open", async (options) => {
     if (!options || typeof options.url !== "string")
       throw new Error("无效的播放请求");
-    const source = mediaRequest(settings.server, options.url),
-      binary = await engine("mpv");
-    if (!binary)
-      throw new Error("未找到本机 mpv，请在桌面设置中选择播放器引擎");
+    const source = mediaRequest(settings.server, options.url);
     return player.open(
-      binary,
+      null,
       source,
       settings.videoMode,
       options.start,
@@ -299,7 +304,7 @@ async function createWindow(test = false) {
   window = new BrowserWindow({
     width: 1360,
     height: 900,
-    minWidth: 900,
+    minWidth: 1024,
     minHeight: 640,
     title: "HE Manager",
     backgroundColor: "#0a0a0d",
@@ -311,6 +316,13 @@ async function createWindow(test = false) {
       webSecurity: true,
     },
   });
+  const ownerWindow = window;
+  const gpu = await app.getGPUInfo('complete');
+  window._heGpu = gpu.gpuDevice?.find((device) => device.active) || {};
+  window._heFullscreen = false;
+  window.on('enter-full-screen', () => { ownerWindow._heFullscreen = true; });
+  window.on('leave-full-screen', () => { ownerWindow._heFullscreen = false; });
+  player.receiverReady = false;
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event, url) => {
     if (!url.startsWith("he://app/")) event.preventDefault();
@@ -335,8 +347,12 @@ async function createWindow(test = false) {
   window.webContents.session.on("will-download", (event) =>
     event.preventDefault(),
   );
+  window.on('close', (event) => {
+    if (ownerWindow._heClosing) return;
+    event.preventDefault(); ownerWindow._heClosing = true;
+    void player.stop().catch(() => {}).finally(() => ownerWindow.destroy());
+  });
   window.on("closed", () => {
-    void player.stop();
     window = null;
   });
   await window.loadURL(test ? "he://app/__fullscreen-test" : "he://app/");
@@ -350,7 +366,7 @@ app.whenReady().then(async () => {
   settingsFile = path.join(app.getPath("userData"), "desktop-settings.json");
   await fs.mkdir(app.getPath("userData"), { recursive: true });
   settings = { ...defaults, engines: {} };
-  if (!baselineMode) try {
+  if (!baselineMode && !uiTestConfigPath) try {
     const stored = JSON.parse(await fs.readFile(settingsFile, "utf8"));
     settings = { ...settings, ...stored };
     if (settings.server) settings.server = serverUrl(settings.server);
@@ -360,6 +376,8 @@ app.whenReady().then(async () => {
   if (!["off", "anime", "photo"].includes(settings.imageMode))
     settings.imageMode = "off";
   if (baselineOptions?.server) settings.server = baselineOptions.server;
+  const uiTestConfig = uiTestConfigPath ? JSON.parse(await fs.readFile(uiTestConfigPath, 'utf8')) : null;
+  if (uiTestConfig) { settings.server = serverUrl(uiTestConfig.server); player.volume = 0; }
   cache = new ImageCache(path.join(app.getPath("userData"), "image-cache"));
   protocol.handle("he", protocolHandler);
   registerIPC();
@@ -387,6 +405,14 @@ app.whenReady().then(async () => {
       },
     ]),
   );
+  if (uiTestConfig) {
+    await createWindow();
+    let passed = false;
+    try { passed = await require('./ui-selftest.cjs')({ window, player, config: uiTestConfig, output: process.env.HE_DESKTOP_TEST_OUTPUT }); }
+    finally { await player.stop(); await cache.close(); }
+    app.exit(passed ? 0 : 1);
+    return;
+  }
   if (baselineMode) {
     let stage = "create-window";
     try {
@@ -480,7 +506,7 @@ app.whenReady().then(async () => {
   }
   if (process.argv.includes("--native-selftest")) {
     const report = await require("./native-selftest.cjs")({
-      player,
+      player: legacyPlayer,
       mpv: await engine("mpv"),
       image: await engine("image"),
       resources: path.join(root, "resources"),
@@ -521,5 +547,5 @@ app.on("activate", () => {
   if (!BrowserWindow.getAllWindows().length) void createWindow();
 });
 require("./lifecycle.cjs").installShutdown(app, () =>
-  Promise.allSettled([player.stop(), cache?.close()]),
+  Promise.allSettled([player.stop(), legacyPlayer.stop(), cache?.close()]),
 );

@@ -24,6 +24,7 @@ execFileSync(
     "-c",
     `
 import pathlib,shutil,json
+import hashlib
 shutil._USE_CP_SENDFILE=False
 root=pathlib.Path(${JSON.stringify(root)})
 dest=pathlib.Path(${JSON.stringify(destination)})
@@ -34,6 +35,18 @@ for name in ['src','ui']:
 for name in ['shaders','licenses','test']:
     shutil.copytree(root/'resources'/name,dest/'resources'/name,symlinks=True,dirs_exist_ok=True)
 shutil.copytree(root/'resources/runtime'/${JSON.stringify(target)},dest/'resources/runtime',symlinks=True,dirs_exist_ok=True)
+native=root/'native'
+build=native/'build'/${JSON.stringify(`${target}-${arch}`)}
+metadata=json.loads((build/'build-info.json').read_text(encoding='utf-8-sig'))
+for name,expected in metadata['sourceSha256'].items():
+    if hashlib.sha256((native/name).read_bytes()).hexdigest()!=expected:
+        raise RuntimeError('Rebuild the native module after changing '+name)
+if hashlib.sha256((build/'he_embedded.node').read_bytes()).hexdigest()!=metadata['addonSha256']:
+    raise RuntimeError('Native addon checksum mismatch')
+shutil.copytree(build,dest/'native/build'/${JSON.stringify(`${target}-${arch}`)},ignore=shutil.ignore_patterns('*.obj','*.lib','*.exp'),dirs_exist_ok=True)
+shutil.copytree(native/'runtime'/${JSON.stringify(target)},dest/'native/runtime'/${JSON.stringify(target)},dirs_exist_ok=True)
+for name in ['runtime-lock.json','header-lock.json','README.md']:
+    shutil.copy2(native/name,dest/'native'/name)
 pkg=json.loads((root/'package.json').read_text())
 pkg.pop('devDependencies',None);pkg.pop('scripts',None)
 (dest/'package.json').write_text(json.dumps(pkg,indent=2))

@@ -66,12 +66,18 @@ struct Slot {
     std::unique_ptr<Surface> surface;
     uint64_t frame = 0;
 };
+struct Track {
+    int64_t id = 0;
+    std::string type, title, language;
+    bool selected = false;
+};
 struct Snapshot {
-    bool ready = false, stopped = false, paused = false, ended = false;
+    bool ready = false, stopped = false, paused = false, ended = false, buffering = false;
     double position = 0, duration = 0;
     int64_t dropped = 0;
     std::string error, hwdec, version, passes, aid, sid;
     double speed = 1;
+    std::vector<Track> tracks;
 };
 struct Command { bool shaders = false; std::vector<std::string> values; };
 struct Session {
@@ -103,6 +109,27 @@ struct Session {
         if ((node.format == MPV_FORMAT_NODE_ARRAY || node.format == MPV_FORMAT_NODE_MAP) && node.u.list) {
             for (int i = 0; i < node.u.list->num && i < 256; ++i) strings(node.u.list->values[i], output, depth + 1);
         }
+    }
+    static std::vector<Track> tracks(const mpv_node& node) {
+        std::vector<Track> output;
+        if (node.format != MPV_FORMAT_NODE_ARRAY || !node.u.list) return output;
+        for (int i = 0; i < node.u.list->num && i < 128; ++i) {
+            const auto& item = node.u.list->values[i];
+            if (item.format != MPV_FORMAT_NODE_MAP || !item.u.list) continue;
+            Track track;
+            for (int k = 0; k < item.u.list->num; ++k) {
+                const std::string key = item.u.list->keys[k]; const auto& value = item.u.list->values[k];
+                if (key == "id" && value.format == MPV_FORMAT_INT64) track.id = value.u.int64;
+                if (key == "selected" && value.format == MPV_FORMAT_FLAG) track.selected = value.u.flag;
+                if (value.format == MPV_FORMAT_STRING && value.u.string) {
+                    if (key == "type") track.type = value.u.string;
+                    if (key == "title") track.title = value.u.string;
+                    if (key == "lang") track.language = value.u.string;
+                }
+            }
+            if (track.type == "audio" || track.type == "sub") output.push_back(std::move(track));
+        }
+        return output;
     }
     void setList(Api& api, mpv_handle* core, const char* property, std::vector<std::string>& values) {
         std::vector<mpv_node> items(values.size());
@@ -226,6 +253,7 @@ struct Session {
             api.observe_property(core, 7, "aid", MPV_FORMAT_STRING);
             api.observe_property(core, 8, "sid", MPV_FORMAT_STRING);
             api.observe_property(core, 9, "speed", MPV_FORMAT_DOUBLE);
+            api.observe_property(core, 10, "paused-for-cache", MPV_FORMAT_FLAG);
             setList(api, core, "http-header-fields", headers);
             setList(api, core, "glsl-shaders", initialShaders);
             std::vector<std::string> load{"loadfile", source}; command(api, core, load);
@@ -253,6 +281,7 @@ struct Session {
                         if (event->reply_userdata == 7 && prop->format == MPV_FORMAT_STRING) snapshot.aid = *static_cast<char**>(prop->data);
                         if (event->reply_userdata == 8 && prop->format == MPV_FORMAT_STRING) snapshot.sid = *static_cast<char**>(prop->data);
                         if (event->reply_userdata == 9 && prop->format == MPV_FORMAT_DOUBLE) snapshot.speed = *static_cast<double*>(prop->data);
+                        if (event->reply_userdata == 10 && prop->format == MPV_FORMAT_FLAG) snapshot.buffering = *static_cast<int*>(prop->data);
                     }
                 }
                 if (event->event_id == MPV_EVENT_END_FILE && static_cast<mpv_event_end_file*>(event->data)->reason == MPV_END_FILE_REASON_ERROR)
@@ -262,6 +291,11 @@ struct Session {
                     if (api.get_property(core, "vo-passes", MPV_FORMAT_NODE, &node) >= 0) {
                         std::string text; strings(node, text); api.free_node_contents(&node);
                         std::lock_guard<std::mutex> guard(mutex); snapshot.passes = std::move(text);
+                    }
+                    mpv_node trackNode{};
+                    if (api.get_property(core, "track-list", MPV_FORMAT_NODE, &trackNode) >= 0) {
+                        auto values = tracks(trackNode); api.free_node_contents(&trackNode);
+                        std::lock_guard<std::mutex> guard(mutex); snapshot.tracks = std::move(values);
                     }
                     passesAt = std::chrono::steady_clock::now();
                 }
@@ -333,6 +367,15 @@ static napi_value state(napi_env env, napi_callback_info info) {
     put(env, output, "position", s.position); put(env, output, "duration", s.duration); put(env, output, "error", s.error);
     put(env, output, "hwdec", s.hwdec); put(env, output, "version", s.version); put(env, output, "passes", s.passes);
     put(env, output, "aid", s.aid); put(env, output, "sid", s.sid); put(env, output, "speed", s.speed);
+    put(env, output, "buffering", s.buffering);
+    napi_value trackList; napi_create_array_with_length(env, s.tracks.size(), &trackList);
+    for (size_t i = 0; i < s.tracks.size(); ++i) {
+        const auto& track = s.tracks[i]; napi_value item; napi_create_object(env, &item);
+        put(env, item, "id", static_cast<double>(track.id)); put(env, item, "type", track.type);
+        put(env, item, "title", track.title); put(env, item, "language", track.language); put(env, item, "selected", track.selected);
+        napi_set_element(env, trackList, i, item);
+    }
+    napi_set_named_property(env, output, "tracks", trackList);
     put(env, output, "apiVersion", static_cast<double>(target->apiVersion));
     put(env, output, "renderedFrames", static_cast<double>(target->frames)); put(env, output, "acquiredFrames", static_cast<double>(target->acquired));
     put(env, output, "releasedFrames", static_cast<double>(target->released)); put(env, output, "sourceLoads", static_cast<double>(target->loads));

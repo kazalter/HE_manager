@@ -1,0 +1,29 @@
+/** Page-facing capabilities. Native modules, file paths and texture handles stay in the host. */
+export type VideoEnhancement = 'off' | 'efficiency' | 'quality'
+export type ImageEnhancement = 'off' | 'anime' | 'photo'
+export interface DesktopConfiguration {
+  server: string; videoMode: VideoEnhancement; imageMode: ImageEnhancement
+  platform: string; arch: string; version: string; mpv: boolean; image: boolean
+  videoPresentation: 'embedded'
+}
+export interface DesktopTrack { id: number; type: 'audio' | 'sub'; title: string; language: string; selected: boolean }
+export interface DesktopPlayback {
+  running: boolean; paused: boolean; position: number; duration: number; droppedFrames: number
+  hwdec: string; ended: boolean; mode: VideoEnhancement; error: string
+  loading: boolean; buffering: boolean; tracks: DesktopTrack[]; aid: string; sid: string
+  speed: number; volume: number; generation: number; fullscreen: boolean
+}
+export type DesktopVideoAction = 'pause' | 'seek' | 'seek-to' | 'fullscreen' | 'exit-fullscreen' | 'mode' | 'audio-track' | 'subtitle-track' | 'speed' | 'volume'
+export interface DesktopBridge {
+  configuration(): Promise<DesktopConfiguration>
+  connect(server: string): Promise<DesktopConfiguration>
+  chooseEngine(kind: 'mpv' | 'image'): Promise<DesktopConfiguration>
+  setPreferences(value: { videoMode: VideoEnhancement; imageMode: ImageEnhancement }): Promise<DesktopConfiguration>
+  openVideo(value: { url: string; start: number; title: string }): Promise<DesktopPlayback>
+  controlVideo(action: DesktopVideoAction, value?: number | VideoEnhancement): Promise<DesktopPlayback>
+  videoState(): Promise<DesktopPlayback>
+  stopVideo(): Promise<void>
+  mountVideoSurface(id: string): void
+  unmountVideoSurface(): void
+  enhanceImage(value: { url: string; mode: 'anime' | 'photo' }): Promise<{ url: string; cached: boolean; scale: number }>
+}

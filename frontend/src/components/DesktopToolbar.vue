@@ -44,7 +44,7 @@ const preferences = async (videoMode: VideoEnhancement, imageMode: ImageEnhancem
    </form>
    <section class="space-y-2">
     <label class="block"><span :class="fieldLabelClass">动漫视频增强</span><select :value="desktopState.videoMode" :class="controlClass()" @change="preferences(($event.target as HTMLSelectElement).value as VideoEnhancement, desktopState.imageMode)"><option value="off">原画／普通视频</option><option value="efficiency">Anime4K · 效率档</option><option value="quality">Anime4K · 质量档</option></select></label>
-    <p class="text-meta text-subtle">在本机播放器窗口实时处理；M1 Pro 建议先用效率档。高分辨率源若掉帧可关闭增强。</p>
+    <p class="text-meta text-subtle">在当前窗口实时处理；默认显示原画，高分辨率源若掉帧可关闭增强。</p>
    </section>
    <section class="space-y-2">
     <label class="block"><span :class="fieldLabelClass">图片与漫画增强</span><select :value="desktopState.imageMode" :class="controlClass()" @change="preferences(desktopState.videoMode, ($event.target as HTMLSelectElement).value as ImageEnhancement)"><option value="off">显示原图</option><option value="anime">动漫／漫画 · 2×</option><option value="photo">普通图片 · 4×</option></select></label>
@@ -52,7 +52,7 @@ const preferences = async (videoMode: VideoEnhancement, imageMode: ImageEnhancem
    </section>
    <section class="space-y-3 border-t border-line pt-4">
     <p class="text-meta text-muted">{{ desktopState.platform }} · {{ desktopState.arch }} · v{{ desktopState.version }}</p>
-    <div class="flex items-center justify-between gap-3"><span class="text-body">mpv：{{ desktopState.mpv ? '已就绪' : '未找到' }}</span><UiButton size="sm" @click="choose('mpv')">选择引擎</UiButton></div>
+    <p class="text-body">内嵌播放器：{{ desktopState.mpv ? '已就绪' : '运行库缺失，请安装完整客户端' }}</p>
     <div class="flex items-center justify-between gap-3"><span class="text-body">图片超分：{{ desktopState.image ? '已就绪' : '未找到' }}</span><UiButton size="sm" @click="choose('image')">选择引擎</UiButton></div>
    </section>
    <p v-if="error" role="alert" class="text-body text-danger">{{ error }}</p>

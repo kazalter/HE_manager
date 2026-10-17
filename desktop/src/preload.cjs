@@ -1,16 +1,63 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, sharedTexture } = require("electron");
+// Keep Electron's IPC method names and stack decoration out of product errors.
+const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args).catch((error) => {
+  const message = String(error?.message || '').replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '');
+  throw new Error(message || '操作失败，请重试。');
+});
+let videoCanvas = null, videoObserver = null, videoGeneration = 0;
+function detachVideoSurface() {
+  videoObserver?.disconnect(); videoObserver = null;
+  if (videoCanvas) videoCanvas.width = videoCanvas.width;
+  videoCanvas = null;
+}
+ipcRenderer.on('he:video-generation', (_event, value) => { videoGeneration = value; });
+ipcRenderer.on('he:video-flush', () => {
+  videoGeneration = 0;
+  if (videoCanvas) videoCanvas.width = videoCanvas.width;
+});
+sharedTexture.setSharedTextureReceiver(({ importedSharedTexture }, metadata) => {
+  let frame;
+  try {
+    frame = importedSharedTexture.getVideoFrame();
+    if (!videoCanvas?.isConnected || metadata.generation !== videoGeneration) return;
+    if (videoCanvas.width !== frame.displayWidth || videoCanvas.height !== frame.displayHeight) {
+      videoCanvas.width = frame.displayWidth; videoCanvas.height = frame.displayHeight;
+    }
+    videoCanvas.getContext('2d', { alpha: false }).drawImage(frame, 0, 0);
+    videoCanvas.dataset.heVideoFrames = String((Number(videoCanvas.dataset.heVideoFrames) || 0) + 1);
+  } finally { frame?.close(); importedSharedTexture.release(); }
+});
+function mountVideoSurface(id) {
+  if (typeof id !== 'string' || id.length > 128) throw new Error('无效的视频区域');
+  const canvas = document.getElementById(id);
+  if (!(canvas instanceof HTMLCanvasElement)) throw new Error('视频区域尚未就绪');
+  detachVideoSurface(); videoCanvas = canvas;
+  videoObserver = new ResizeObserver(() => {
+    const rectangle = canvas.getBoundingClientRect();
+    if (rectangle.width <= 0 || rectangle.height <= 0) return;
+    ipcRenderer.send('he:video-size', {
+      width: Math.min(3840, Math.max(32, Math.round(rectangle.width * devicePixelRatio))),
+      height: Math.min(2160, Math.max(32, Math.round(rectangle.height * devicePixelRatio))),
+    });
+  });
+  videoObserver.observe(canvas);
+  ipcRenderer.send('he:video-ready');
+}
+
 contextBridge.exposeInMainWorld(
   "heDesktop",
   Object.freeze({
-    configuration: () => ipcRenderer.invoke("he:configuration"),
-    connect: (server) => ipcRenderer.invoke("he:connect", server),
-    chooseEngine: (kind) => ipcRenderer.invoke("he:choose-engine", kind),
-    setPreferences: (value) => ipcRenderer.invoke("he:preferences", value),
-    openVideo: (options) => ipcRenderer.invoke("he:video-open", options),
+    configuration: () => invoke("he:configuration"),
+    connect: (server) => invoke("he:connect", server),
+    chooseEngine: (kind) => invoke("he:choose-engine", kind),
+    setPreferences: (value) => invoke("he:preferences", value),
+    openVideo: (options) => invoke("he:video-open", options),
     controlVideo: (action, value) =>
-      ipcRenderer.invoke("he:video-control", action, value),
-    videoState: () => ipcRenderer.invoke("he:video-state"),
-    stopVideo: () => ipcRenderer.invoke("he:video-stop"),
-    enhanceImage: (options) => ipcRenderer.invoke("he:image", options),
+      invoke("he:video-control", action, value),
+    videoState: () => invoke("he:video-state"),
+    mountVideoSurface,
+    unmountVideoSurface: detachVideoSurface,
+    stopVideo: () => invoke("he:video-stop"),
+    enhanceImage: (options) => invoke("he:image", options),
   }),
 );

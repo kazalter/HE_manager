@@ -11,6 +11,9 @@ import shutil
 import socket
 import sys
 import threading
+import io
+import zipfile
+from datetime import datetime
 
 repository = pathlib.Path(__file__).resolve().parents[2]
 root = pathlib.Path(os.environ["HE_PROBE_SERVER_ROOT"]).resolve()
@@ -42,12 +45,30 @@ names = ["first" + fixture.suffix, "second" + fixture.suffix]
 rich = fixture.name == "acceptance.mkv"
 for name in names:
     shutil.copy2(fixture, fixtures / name)
+ui_fixtures = os.environ.get('HE_PROBE_UI_FIXTURES') == '1'
+ui_password = secrets.token_urlsafe(24) if ui_fixtures else None
+if ui_fixtures:
+    from PIL import Image, ImageDraw
+    from app.services.thumbnails import THUMBNAIL_DIR
+    thumbnails = pathlib.Path(THUMBNAIL_DIR)
+    with zipfile.ZipFile(fixtures / 'cp02-manga.zip', 'w') as archive:
+        for index, dimensions in enumerate([(480, 720), (480, 720), (960, 540), (480, 720)]):
+            image = Image.new('RGB', dimensions, ['#c7d2fe', '#fbcfe8', '#a7f3d0', '#fde68a'][index])
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((24, 24, dimensions[0] - 24, dimensions[1] - 24), outline='#334155', width=5)
+            draw.text((44, 60), f'HE Manager / CP-02 / page {index + 1}', fill='#0f172a')
+            buffer = io.BytesIO(); image.save(buffer, 'PNG'); archive.writestr(f'{index + 1:03}.png', buffer.getvalue())
+            if index == 0: image.save(thumbnails / 'cp02-portrait.png')
+            if index == 2: image.save(thumbnails / 'cp02-landscape.png')
+    image.save(fixtures / 'cp02-image.png')
 with SessionLocal() as database:
     user = database.query(models.User).filter_by(username="desktop-probe").first()
     if user is None:
         user = models.User(username="desktop-probe", password_hash=auth.hash_password(secrets.token_urlsafe(32)), is_admin=True, is_active=True)
         database.add(user)
         database.commit()
+    if ui_password:
+        user.password_hash = auth.hash_password(ui_password)
     folder = database.query(models.Folder).filter_by(path=str(fixtures)).first()
     if folder is None:
         folder = models.Folder(path=str(fixtures), scan_mode="video", status="idle")
@@ -59,8 +80,30 @@ with SessionLocal() as database:
             database.add(models.Media(folder_id=folder.id, title="CP-01 synthetic " + name, relative_path=name, absolute_path=str(file), media_type="video", extension=fixture.suffix, file_size=file.stat().st_size, width=640, height=360, duration=30 if rich else 8))
     database.commit()
     items = [database.query(models.Media).filter_by(absolute_path=str(fixtures / name)).one() for name in names]
+    if ui_fixtures:
+        items[0].title = '星海漫游：带有很长标题的跨平台内嵌播放器验收视频 · 第二章节与字幕音轨切换'
+        items[0].cover_path = 'cp02-landscape.png'
+        items[0].progress = 3; items[0].view_status = 'viewing'; items[0].last_opened_at = datetime.utcnow()
+        items[1].title = '没有封面的短片 · 原画'; items[1].favorite = True
+        for name, title, kind, cover in [
+            ('cp02-manga.zip', '四季手记：单页、双页与卷轴阅读的长标题漫画代表作品', 'manga', 'cp02-portrait.png'),
+            ('cp02-image.png', '午后的一张静态图片', 'image', None),
+        ]:
+            file = fixtures / name
+            media = database.query(models.Media).filter_by(absolute_path=str(file)).first()
+            if media is None:
+                media = models.Media(folder_id=folder.id, absolute_path=str(file), relative_path=name)
+                database.add(media)
+            media.title = title; media.media_type = kind; media.extension = file.suffix
+            media.file_size = file.stat().st_size; media.cover_path = cover
+            media.width = 480; media.height = 720; media.page_count = 4 if kind == 'manga' else None
+        database.commit()
     token = auth.create_access_token(database, user)
     config = {"source": f"http://127.0.0.1:{port}/stream/{items[0].id}", "secondSource": f"http://127.0.0.1:{port}/stream/{items[1].id}", "headers": ["Authorization: Bearer " + token], "richFixture": rich}
+    if ui_fixtures:
+        manga = database.query(models.Media).filter_by(absolute_path=str(fixtures / 'cp02-manga.zip')).one()
+        config.update(server=f'http://127.0.0.1:{port}', username=user.username, password=ui_password,
+                      videoId=items[0].id, mangaId=manga.id)
     descriptor = os.open(root / "client-access.json", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8") as file:
         json.dump(config, file)

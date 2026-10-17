@@ -1,52 +1,105 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
-import { Maximize, Pause, Play, SkipBack, SkipForward, Sparkles } from 'lucide-vue-next'
-import { desktopBridge, desktopState, setDesktopPreferences, type DesktopPlayback, type VideoEnhancement } from '../../desktop'
-import { UiButton, controlClass } from '../ui'
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
+import { Maximize, Minimize, Pause, Play, Settings2, SkipBack, SkipForward, Volume2 } from 'lucide-vue-next'
+import { desktopBridge, desktopState, setDesktopPreferences, type DesktopPlayback, type DesktopVideoAction, type VideoEnhancement } from '../../desktop'
+import { audioPlaybackStore } from '../../stores/audioPlaybackStore'
+import { EmptyState, LoadingState, UiButton, UiIconButton, UiModal, UiSlider, controlClass } from '../ui'
 const props = defineProps<{ url: string; title: string; start: number }>()
 const emit = defineEmits<{ progress: [position: number, duration: number, ended: boolean, force?: boolean] }>()
-const state = ref<DesktopPlayback | null>(null), error = ref(''), busy = ref(false)
-let loadedUrl = ''
-let disposed = false, epoch = 0, timer: ReturnType<typeof setTimeout> | undefined
+const canvasId = `he-video-${useId()}`
+const state = ref<DesktopPlayback | null>(null), error = ref(''), busy = ref(false), settingsOpen = ref(false)
+const seekValue = ref(0), dragging = ref(false), volume = ref(75)
+const volumeDragging = ref(false)
+const failure = computed(() => error.value || state.value?.error || '')
+const audioTracks = computed(() => state.value?.tracks.filter(track => track.type === 'audio') || [])
+const subtitles = computed(() => state.value?.tracks.filter(track => track.type === 'sub') || [])
+let loadedUrl = '', disposed = false, epoch = 0, timer: ReturnType<typeof setTimeout> | undefined
+const time = (seconds: number) => {
+ const value = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0
+ return `${Math.floor(value / 60)}:${(value % 60).toString().padStart(2, '0')}`
+}
 async function poll() {
  if (disposed) return
- try { state.value = await desktopBridge!.videoState(); if (state.value.running && !busy.value && loadedUrl === props.url) emit('progress', state.value.position, state.value.duration, state.value.ended) } catch { /* Retry status, without opening another player. */ }
- if (!disposed) timer = setTimeout(poll, 1000)
+ const url = props.url
+ try {
+  const next = await desktopBridge!.videoState()
+  if (!disposed && url === props.url && next.generation >= (state.value?.generation || 0)) {
+   state.value = next
+   if (!dragging.value) seekValue.value = next.position
+   if (!volumeDragging.value) volume.value = next.volume
+   if (next.running && !busy.value && loadedUrl === props.url) emit('progress', next.position, next.duration, next.ended)
+  }
+ } catch { /* A transient IPC failure does not create a second player. */ }
+ if (!disposed) timer = setTimeout(poll, 200)
 }
 async function open() {
- const current = ++epoch; const requestedUrl = props.url; loadedUrl = ''; busy.value = true; error.value = ''
- try { const next = await desktopBridge!.openVideo({ url: props.url, title: props.title, start: props.start }); if (!disposed && epoch === current) { state.value = next; loadedUrl = requestedUrl } }
- catch (e: any) { if (!disposed && epoch === current) error.value = e.message }
- finally { if (epoch === current) busy.value = false }
+ const current = ++epoch, requestedUrl = props.url
+ loadedUrl = ''; busy.value = true; error.value = ''
+ if (audioPlaybackStore.state.playing) audioPlaybackStore.togglePlay()
+ try {
+  const next = await desktopBridge!.openVideo({ url: requestedUrl, title: props.title, start: props.start })
+  if (!disposed && epoch === current) { state.value = next; loadedUrl = requestedUrl; seekValue.value = next.position }
+ } catch (failure: unknown) {
+  if (!disposed && epoch === current) error.value = failure instanceof Error ? failure.message : '无法打开此视频，请重试。'
+ } finally { if (!disposed && epoch === current) busy.value = false }
 }
-async function control(action: 'pause' | 'seek' | 'fullscreen', value?: number) {
- try { await desktopBridge!.controlVideo(action, value); state.value = await desktopBridge!.videoState() } catch (e: any) { error.value = e.message }
+async function control(action: DesktopVideoAction, value?: number) {
+ try { await desktopBridge!.controlVideo(action, value) }
+ catch (failure: unknown) { error.value = failure instanceof Error ? failure.message : '播放操作失败，请重试。' }
 }
+async function seek(value: number) { dragging.value = false; await control('seek-to', value) }
+async function setVolume(value: number) { volumeDragging.value = false; await control('volume', value) }
 async function mode(value: VideoEnhancement) {
- try { await setDesktopPreferences(value, desktopState.imageMode) } catch (e: any) { error.value = e.message }
+ try { await setDesktopPreferences(value, desktopState.imageMode) }
+ catch (failure: unknown) { error.value = failure instanceof Error ? failure.message : '画面设置失败。' }
 }
-watch(() => props.url, () => { void open() }, { immediate: true })
-void poll()
+function onKeydown(event: KeyboardEvent) {
+ if (event.key === 'F11') { event.preventDefault(); void control('fullscreen') }
+ if ((event.key === ' ' || event.key.toLowerCase() === 'k') && event.target instanceof HTMLCanvasElement) {
+  event.preventDefault(); void control('pause')
+ }
+}
+watch(() => props.url, () => { settingsOpen.value = false; void open() }, { immediate: true })
+onMounted(() => { desktopBridge!.mountVideoSurface(canvasId); void poll() })
 onBeforeUnmount(() => {
  disposed = true; epoch++; clearTimeout(timer)
  if (state.value?.running && loadedUrl === props.url) emit('progress', state.value.position, state.value.duration, state.value.ended, true)
- void desktopBridge!.stopVideo()
+ desktopBridge!.unmountVideoSurface()
+ void desktopBridge!.stopVideo().catch(() => {})
 })
-const time = (seconds: number) => `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`
 </script>
 <template>
- <div class="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-5 bg-background p-8 text-ink">
-  <span class="grid size-16 place-items-center rounded-3xl bg-accent/10 text-accent"><Sparkles :size="28" /></span>
-  <div class="max-w-lg text-center"><h2 class="text-heading font-semibold">本机 GPU 播放</h2><p class="mt-2 text-body text-muted">视频在独立播放器窗口中显示，超分由这台电脑处理。</p><p class="mt-2 text-meta text-subtle">{{ state?.hwdec ? `硬件解码：${state.hwdec}` : '正在连接本机播放器' }} · 累计掉帧 {{ state?.droppedFrames || 0 }}</p></div>
-  <label class="w-full max-w-sm"><span class="mb-2 block text-meta text-muted">画面增强</span><select :value="desktopState.videoMode" :class="controlClass()" @change="mode(($event.target as HTMLSelectElement).value as VideoEnhancement)"><option value="off">原画／普通视频</option><option value="efficiency">Anime4K · 效率</option><option value="quality">Anime4K · 质量</option></select></label>
-  <div v-if="state?.running" class="flex flex-wrap justify-center gap-2">
-   <UiButton aria-label="后退十秒" @click="control('seek', -10)"><SkipBack :size="18" /></UiButton>
-   <UiButton @click="control('pause')"><Play v-if="state.paused" :size="18" /><Pause v-else :size="18" />{{ state.paused ? '播放' : '暂停' }}</UiButton>
-   <UiButton aria-label="前进十秒" @click="control('seek', 10)"><SkipForward :size="18" /></UiButton>
-   <UiButton @click="control('fullscreen')"><Maximize :size="18" />全屏</UiButton>
+ <div class="desktop-video flex min-h-0 flex-1 flex-col bg-background text-ink" @keydown="onKeydown">
+  <div class="relative min-h-0 flex-1 bg-black">
+   <canvas :id="canvasId" tabindex="0" :aria-label="title" class="absolute inset-0 h-full w-full focus-ring-inset" @click="control('pause')" @dblclick="control('fullscreen')" />
+   <div v-if="busy || state?.buffering" class="absolute inset-0 grid place-items-center bg-background/90">
+    <LoadingState :label="busy ? '正在打开视频' : '正在缓冲'" description="准备好后将继续播放。" />
+   </div>
+   <div v-else-if="failure" class="absolute inset-0 grid place-items-center bg-background/95">
+    <EmptyState title="视频暂时无法播放" :description="failure" tone="warning"><UiButton @click="open">重新打开</UiButton></EmptyState>
+   </div>
   </div>
-  <p v-if="state?.duration" class="text-meta tabular-nums text-muted">{{ time(state.position) }} / {{ time(state.duration) }}</p>
-  <p v-if="error || state?.error" role="alert" class="max-w-lg text-center text-body text-danger">{{ error || state?.error }}</p>
-  <UiButton v-if="!state?.running || error" :loading="busy" @click="open">{{ busy ? '正在启动' : '重新打开播放器' }}</UiButton>
+  <div class="shrink-0 space-y-1 border-t border-line bg-surface px-4 pb-3 pt-2">
+   <UiSlider v-model="seekValue" label="播放位置" hide-label :max="state?.duration || 1" :step="0.1" :value-text="`${time(seekValue)} / ${time(state?.duration || 0)}`" :disabled="busy || !state?.duration" @pointerdown="dragging = true" @pointercancel="dragging = false" @commit="seek" />
+   <div class="flex min-w-0 items-center gap-2">
+    <UiIconButton :label="state?.paused ? '播放' : '暂停'" :disabled="busy || !state?.running" @click="control('pause')"><Play v-if="state?.paused" :size="20" /><Pause v-else :size="20" /></UiIconButton>
+    <UiIconButton label="后退十秒" :disabled="busy" @click="control('seek', -10)"><SkipBack :size="18" /></UiIconButton>
+    <UiIconButton label="前进十秒" :disabled="busy" @click="control('seek', 10)"><SkipForward :size="18" /></UiIconButton>
+    <span class="min-w-0 flex-1 truncate text-meta tabular-nums text-muted">{{ time(state?.position || 0) }} / {{ time(state?.duration || 0) }}</span>
+    <span class="hidden text-meta text-subtle lg:block">{{ desktopState.videoMode === 'off' ? '原画' : desktopState.videoMode === 'quality' ? 'Anime4K · 质量' : 'Anime4K · 效率' }}</span>
+    <UiIconButton label="播放设置" :pressed="settingsOpen" @click="settingsOpen = true"><Settings2 :size="20" /></UiIconButton>
+    <UiIconButton :label="state?.fullscreen ? '退出全屏' : '全屏'" :disabled="busy" @click="control('fullscreen')"><Minimize v-if="state?.fullscreen" :size="20" /><Maximize v-else :size="20" /></UiIconButton>
+   </div>
+  </div>
+  <UiModal v-model:open="settingsOpen" title="播放设置" layer="viewer" size="sm" description="音轨、字幕和画面设置应用到当前播放会话。">
+   <div class="space-y-5">
+    <label class="block"><span class="mb-2 block text-meta text-muted">音轨</span><select :value="Number(state?.aid) || 0" :disabled="!audioTracks.length" :class="controlClass()" @change="control('audio-track', Number(($event.target as HTMLSelectElement).value))"><option v-if="!audioTracks.length" value="0">没有音轨</option><option v-for="track in audioTracks" :key="track.id" :value="track.id">{{ track.title || track.language || `音轨 ${track.id}` }}</option></select></label>
+    <label class="block"><span class="mb-2 block text-meta text-muted">字幕</span><select :value="Number(state?.sid) || 0" :class="controlClass()" @change="control('subtitle-track', Number(($event.target as HTMLSelectElement).value))"><option value="0">关闭字幕</option><option v-for="track in subtitles" :key="track.id" :value="track.id">{{ track.title || track.language || `字幕 ${track.id}` }}</option></select></label>
+    <label class="block"><span class="mb-2 block text-meta text-muted">播放速度</span><select :value="state?.speed || 1" :class="controlClass()" @change="control('speed', Number(($event.target as HTMLSelectElement).value))"><option v-for="speed in [0.5, 0.75, 1, 1.25, 1.5, 2]" :key="speed" :value="speed">{{ speed }}×</option></select></label>
+    <label class="block"><span class="mb-2 block text-meta text-muted">画面增强</span><select :value="desktopState.videoMode" :class="controlClass()" @change="mode(($event.target as HTMLSelectElement).value as VideoEnhancement)"><option value="off">原画</option><option value="efficiency">Anime4K · 效率</option><option value="quality">Anime4K · 质量</option></select></label>
+    <div><div class="mb-1 flex items-center gap-2 text-meta text-muted"><Volume2 :size="16" /><span>音量 {{ volume }}%</span></div><UiSlider v-model="volume" label="音量" hide-label :value-text="`${volume}%`" @pointerdown="volumeDragging = true" @pointercancel="volumeDragging = false" @commit="setVolume" /></div>
+    <p class="text-caption text-subtle">{{ state?.hwdec ? `硬件解码：${state.hwdec}` : '正在读取解码状态' }}</p>
+   </div>
+  </UiModal>
  </div>
 </template>

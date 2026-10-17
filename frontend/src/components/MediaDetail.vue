@@ -521,7 +521,10 @@ const handleKeydown = (e: KeyboardEvent) => {
   const target = e.target as HTMLElement | null
   if (
     target &&
-    (target.tagName === 'INPUT' ||
+    (target.closest('.ui-modal') ||
+      target.tagName === 'SELECT' ||
+      (target.closest('button, a[href]') && e.key !== 'Escape') ||
+      target.tagName === 'INPUT' ||
       target.tagName === 'TEXTAREA' ||
       target.isContentEditable)
   ) {
@@ -529,6 +532,16 @@ const handleKeydown = (e: KeyboardEvent) => {
   }
 
   if (e.key === 'Escape') {
+    if (isVideo.value && desktopBridge) {
+      const bridge = desktopBridge
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      void bridge.videoState().then(state => {
+        if (state.fullscreen) return bridge.controlVideo('exit-fullscreen')
+        emit('close')
+      }).catch(() => emit('close'))
+      return
+    }
     if (document.fullscreenElement || (isVideo.value && isArtFullscreen())) {
       if (isVideo.value) exitArtFullscreen()
       else void document.exitFullscreen()
@@ -589,7 +602,10 @@ const handleKeyup = (e: KeyboardEvent) => {
   const target = e.target as HTMLElement | null
   if (
     target &&
-    (target.tagName === 'INPUT' ||
+    (target.closest('.ui-modal') ||
+      target.tagName === 'SELECT' ||
+      target.closest('button, a[href]') ||
+      target.tagName === 'INPUT' ||
       target.tagName === 'TEXTAREA' ||
       target.isContentEditable)
   ) {

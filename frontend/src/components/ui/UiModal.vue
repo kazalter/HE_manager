@@ -13,12 +13,14 @@ const props = withDefaults(defineProps<{
   placement?: 'center' | 'right'
   closeOnBackdrop?: boolean
   hideClose?: boolean
+  layer?: 'default' | 'viewer'
 }>(), {
   description: '',
   size: 'md',
   placement: 'center',
   closeOnBackdrop: true,
   hideClose: false,
+  layer: 'default',
 })
 
 const emit = defineEmits<{ close: [] }>()
@@ -71,7 +73,8 @@ const widths = { sm: 'sm:max-w-[400px]', md: 'sm:max-w-[560px]', lg: 'sm:max-w-[
     <Transition name="ui-modal">
       <div
         v-if="open"
-        class="ui-modal fixed inset-0 z-[200] flex bg-black/60"
+        class="ui-modal fixed inset-0 flex bg-black/60"
+        :style="{ zIndex: layer === 'viewer' ? 300 : 200 }"
         :class="props.placement === 'right' ? 'justify-end' : 'items-end justify-center sm:items-center sm:p-6'"
         @click.self="closeOnBackdrop && close()"
         @keydown="onKeydown"
