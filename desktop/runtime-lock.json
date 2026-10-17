@@ -6,9 +6,9 @@
   },
   "darwin": {
     "mpv": {
-      "url": "https://github.com/mpv-player/mpv/releases/download/git-release/mpv-v0.41.0-dev-gdde067107-38976593432-macos-15-arm.zip",
-      "sha256": "71d57ccc8f352cbd2b9010d25260745164e272d38e4fb31608853581fd1c0e79",
-      "file": "mpv-mac.zip"
+      "url": "https://github.com/mpv-player/mpv/releases/download/v0.41.0/mpv-v0.41.0-macos-15-arm.zip",
+      "sha256": "489cf6a54f57c54f86ad8d7cedaf5bb26848770d58dc059021214e2f689ee799",
+      "file": "mpv-mac-v0.41.0.zip"
     },
     "realesrgan": {
       "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-macos.zip",
