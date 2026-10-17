@@ -26,8 +26,12 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $vswhere='C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
-          $vs=& $vswhere -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1
-          if(!$vs){throw 'Visual Studio 2022 C++ tools are required'}
+          $installations=& $vswhere -all -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json
+          $vs=$installations | Sort-Object {[version]$_.installationVersion} -Descending | Where-Object {
+            Test-Path (Join-Path $_.installationPath 'VC/Tools/MSVC/14.44.*')
+          } | Select-Object -First 1 -ExpandProperty installationPath
+          if(!$vs){throw 'An MSVC 14.44 toolset is required (supported in VS 2022 and VS 2026)'}
+          Write-Output "MSVC 14.44 installation: $vs"
           $tools=Join-Path $env:RUNNER_TEMP 'he-native-tools'
           New-Item $tools -ItemType Directory -Force | Out-Null
           New-Item (Join-Path $tools 'BuildTools') -ItemType Junction -Target $vs | Out-Null
