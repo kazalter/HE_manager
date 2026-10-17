@@ -34,3 +34,7 @@
 ## 桌面端 0.1.0（2026-10-17，体验版）
 
 新增 `desktop/` 共享客户端，面向 Mac arm64 / Windows x64；复用 Vue 媒体库，通过当前服务器鉴权 API 读取媒体。独立 mpv 窗口提供本地 Anime4K 档位切换；本地库 JPG/PNG 图片与漫画支持 Real-ESRGAN 超分、原图回退和客户端缓存。原生 GPU 验证与已知边界见 [桌面端说明](desktop/README.md)。
+
+## Windows 原生客户端（2026-10-17）
+
+已制定 C#／WinUI 3 + 内嵌 libmpv 的原生 Windows 客户端计划，原生实现尚未开始。首先验证同窗口渲染、全屏、硬件解码和 Anime4K，再实现媒体库、图片／漫画阅读、超分与分发；Windows 优先，Mac 原生版与 Electron 扩展后置。优先级见 PLAN.md，详细范围与验收见 [Windows 原生客户端实施计划](docs/windows-native-client-plan.md)。
