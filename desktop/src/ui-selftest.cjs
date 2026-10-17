@@ -9,6 +9,7 @@ module.exports = async ({ window, player, config, output }) => {
   if (!output) throw new Error('Diagnostic output path is required');
   const report = { phase: 'CP-02', status: 'running', platform: process.platform, packaged: app.isPackaged, checks: {}, screenshots: [], layouts: [] };
   let stage = 'login';
+  const enterStage = (value) => { stage = value; console.log('HE_UI_STAGE ' + value); };
   const evaluate = (script) => window.webContents.executeJavaScript(script);
   async function wait(test, label, timeout = 15000) {
     const until = Date.now() + timeout;
@@ -89,7 +90,7 @@ module.exports = async ({ window, player, config, output }) => {
     await click('.he-auth-view button[type="submit"]');
     await wait(() => evaluate('document.querySelectorAll(".he-media-card").length >= 4'), 'Authenticated library missing');
     report.checks.loginAndLibrary = true;
-    stage = 'library-appearance';
+    enterStage('library-appearance');
     window.setSize(800, 500);
     await wait(() => evaluate('innerWidth >= 1024 && innerHeight >= 640'), 'Minimum content area is too small');
     report.minimumContent = await evaluate('({width:innerWidth,height:innerHeight})');
@@ -108,13 +109,13 @@ module.exports = async ({ window, player, config, output }) => {
     nativeTheme.themeSource = 'system';
     report.checks.systemAppearance = true;
     await appearance('dark');
-    stage = 'empty-search';
+    enterStage('empty-search');
     await field('input[placeholder="搜索标题、文件名…"]', 'HE-NO-SUCH-FIXTURE-RESULT');
     await wait(() => evaluate('document.querySelectorAll(".he-media-card").length === 0 && document.body.innerText.includes("没有找到匹配的媒体")'), 'Search did not show empty result');
     report.checks.emptySearch = true;
     await field('input[placeholder="搜索标题、文件名…"]', '');
     await wait(() => evaluate('document.querySelectorAll(".he-media-card").length >= 4'), 'Library did not recover');
-    stage = 'embedded-video';
+    enterStage('embedded-video');
     await click(`.he-media-card[data-media-id="${config.videoId}"]`);
     if (config.expectVideoLoading) {
       await wait(() => evaluate('document.querySelector(".desktop-video")?.innerText.includes("正在打开视频")'), 'Video loading feedback did not appear');
@@ -142,9 +143,10 @@ module.exports = async ({ window, player, config, output }) => {
       report.shaderModes.push({ mode, passes: native.passes, sourceLoads: native.sourceLoads, hwdec: native.hwdec });
     }
     report.checks.videoEnhancement = true;
+    enterStage('playback-keyboard');
     await key('Escape');
     await wait(() => evaluate('!document.querySelector(".ui-modal") && !!document.querySelector(".desktop-video")'), 'Escape closed viewer instead of settings');
-    if (!await evaluate('document.activeElement?.matches("button[aria-label=\"播放设置\"]")')) throw new Error('Playback settings did not restore keyboard focus');
+    if (!await evaluate(`document.activeElement?.matches('button[aria-label="播放设置"]')`)) throw new Error('Playback settings did not restore keyboard focus');
     await key('Enter');
     await wait(() => evaluate('!!document.querySelector(".ui-modal")'), 'Keyboard did not reopen playback settings');
     await key('Tab');
@@ -153,9 +155,10 @@ module.exports = async ({ window, player, config, output }) => {
     report.checks.keyboardSettings = true;
     await click('.desktop-video button[aria-label="暂停"]');
     await wait(() => player.state.paused, 'Pause input failed');
+    enterStage('video-fullscreen');
     const before = player.native.state(player.owner);
     for (let index = 0; index < 3; index++) {
-      await wait(() => evaluate('!!document.querySelector(".desktop-video button[aria-label=\"全屏\"]")'), 'Fullscreen control did not return to its normal state');
+      await wait(() => evaluate(`!!document.querySelector('.desktop-video button[aria-label="全屏"]')`), 'Fullscreen control did not return to its normal state');
       await click('.desktop-video button[aria-label="全屏"]');
       await wait(() => window._heFullscreen, 'Fullscreen event missing');
       await key('Escape');
@@ -173,7 +176,7 @@ module.exports = async ({ window, player, config, output }) => {
     report.closedPlayer = { stopped: closed.stopped, surfaces: closed.surfaces, leases: closed.leases, references: player.references.size };
     if (!closed.stopped || closed.surfaces || closed.leases || player.references.size) throw new Error('Closing viewer retained native resources');
     report.checks.viewerClose = true;
-    stage = 'reader';
+    enterStage('reader');
     await click(`.he-media-card[data-media-id="${config.mangaId}"]`);
     await wait(() => evaluate('document.querySelector(".he-reader-canvas-page img")?.naturalWidth > 0'), 'Reader did not display its page');
     await click('button[title="双页跨页模式"]');
@@ -184,11 +187,12 @@ module.exports = async ({ window, player, config, output }) => {
     await capture('reader-scroll-dark-1024');
     await click('button[title="单页模式"]');
     await click('button[aria-label="放大"]');
-    if (!await evaluate('!document.querySelector("button[aria-label=\"缩小\"]").disabled')) throw new Error('Reader zoom did not change');
+    if (!await evaluate(`!document.querySelector('button[aria-label="缩小"]').disabled`)) throw new Error('Reader zoom did not change');
     await click('button[aria-label="适应屏幕"]');
     report.checks.readerModesAndZoom = true;
     await captureSizes('reader', 'dark');
-    if (!await evaluate('!document.querySelector("select[aria-label=\"图片增强\"]").disabled')) throw new Error('Bundled image enhancement is unavailable');
+    enterStage('reader-enhancement');
+    if (!await evaluate(`!document.querySelector('select[aria-label="图片增强"]').disabled`)) throw new Error('Bundled image enhancement is unavailable');
     await field('select[aria-label="图片增强"]', 'anime');
     await wait(() => evaluate('document.querySelector(".he-manga-reader").innerText.includes("排队或处理") || document.querySelector(".he-manga-reader img")?.src.includes("/__cache/")'), 'Enhancement feedback did not appear');
     report.checks.enhancementFeedback = true;
@@ -209,7 +213,7 @@ module.exports = async ({ window, player, config, output }) => {
     await captureSizes('reader', 'light');
     report.checks.readerOpened = true;
     await click('button[aria-label="返回媒体列表"]');
-    stage = 'video-error';
+    enterStage('video-error');
     if (!config.errorVideoId) throw new Error('Unreadable media fixture is missing');
     await click(`.he-media-card[data-media-id="${config.errorVideoId}"]`);
     await wait(() => evaluate('document.querySelector(".desktop-video")?.innerText.includes("视频暂时无法播放")'), 'Unreadable video did not show an actionable error');
