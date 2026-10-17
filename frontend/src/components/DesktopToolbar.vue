@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { Monitor, Server, Settings2 } from 'lucide-vue-next'
 import { desktopBridge, desktopState, setDesktopPreferences, type ImageEnhancement, type VideoEnhancement } from '../desktop'
 import { controlClass, fieldLabelClass, UiButton, UiModal } from './ui'
+import ColorModeSelect from './ColorModeSelect.vue'
 const open = ref(false), server = ref(''), error = ref(''), busy = ref(false)
 onMounted(() => { server.value = desktopState.server || 'http://192.168.0.101:8011'; open.value = !desktopState.server })
 const changeServer = async () => {
@@ -31,6 +32,11 @@ const preferences = async (videoMode: VideoEnhancement, imageMode: ImageEnhancem
  </header>
  <UiModal v-model:open="open" title="桌面设置" @close="open = false">
   <div class="space-y-6">
+   <section class="space-y-2" aria-labelledby="desktop-appearance-title">
+    <h3 id="desktop-appearance-title" :class="fieldLabelClass">外观</h3>
+    <ColorModeSelect />
+    <p class="text-meta text-subtle">外观立即应用到整个客户端；跟随系统会自动切换白天和黑夜模式。</p>
+   </section>
    <form class="space-y-2" @submit.prevent="changeServer">
     <label class="block"><span :class="fieldLabelClass">HE Manager 服务器地址</span><input v-model="server" :class="controlClass()" placeholder="http://192.168.0.101:8011" autocomplete="url" /></label>
     <p class="text-meta text-subtle">使用网页端访问地址；切换服务器后需要重新登录。</p>
