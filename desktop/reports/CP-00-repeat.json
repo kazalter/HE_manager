@@ -1,0 +1,656 @@
+{
+  "phase": "CP-00",
+  "method": "3 separate processes with isolated profiles; OS filesystem cache uncontrolled",
+  "platforms": {
+    "darwin-arm64": {
+      "runs": [
+        {
+          "capturedAt": "2026-10-17T13:15:45.740Z",
+          "shell": {
+            "bridge": true,
+            "toolbar": true,
+            "viewport": {
+              "width": 1360,
+              "height": 864,
+              "devicePixelRatio": 2
+            },
+            "videoFrameAPI": true,
+            "status": "ready",
+            "readyToShellMs": 563,
+            "processUptimeToShellMs": 779,
+            "profile": "isolated-temporary-profile",
+            "defaults": {
+              "videoMode": "off",
+              "imageMode": "off"
+            },
+            "loginForm": true,
+            "screenshot": "CP-00-mac-run1.png"
+          },
+          "source": [
+            {
+              "path": "src/main.cjs",
+              "sha256": "734f4ca2dd57739286fe19d54607c482aa4b16da24d6d15314fddc1401a7fbb8"
+            },
+            {
+              "path": "src/baseline.cjs",
+              "sha256": "077dfbeefb61aeef7d7ef18ddc9ca9d4574f783ae65312de9568df53f491c98b"
+            },
+            {
+              "path": "src/preload.cjs",
+              "sha256": "928195ed3b26e5a1ca99ebf17f4b1d7be8855f0931ee6bd5a1d1d9f919fec3fb"
+            },
+            {
+              "path": "package.json",
+              "sha256": "15c68a3694daeb7c5aa30019c6fdd9127ed86b63a2493cdb4bd30f4094143b42"
+            },
+            {
+              "path": "runtime-lock.json",
+              "sha256": "bb22463f11491ae4e75dba11955a83874b03f74cc4054488ba6b404635b11419"
+            },
+            {
+              "path": "ui/index.html",
+              "sha256": "ae46cb4de81071a671c31aaaf3773e5033ca0c64c25b3486973e392ef07cc91b"
+            },
+            {
+              "path": "ui/version.json",
+              "sha256": "e3c95f3c5b647977838b0290fd9ba859cbb402a43abba54382619a75d1888ed6"
+            }
+          ],
+          "workingSetSumKiB": 475184,
+          "processes": [
+            {
+              "type": "Browser",
+              "cpu": {
+                "cumulativeCPUUsage": 1.068179,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 226544,
+                "peakWorkingSetSize": 233200
+              }
+            },
+            {
+              "type": "GPU",
+              "cpu": {
+                "cumulativeCPUUsage": 0.252552,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 98272,
+                "peakWorkingSetSize": 118912
+              }
+            },
+            {
+              "type": "Utility",
+              "cpu": {
+                "cumulativeCPUUsage": 0.089355,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 43648,
+                "peakWorkingSetSize": 48944
+              }
+            },
+            {
+              "type": "Tab",
+              "cpu": {
+                "cumulativeCPUUsage": 0.195225,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 106720,
+                "peakWorkingSetSize": 128192
+              }
+            }
+          ]
+        },
+        {
+          "capturedAt": "2026-10-17T13:15:48.488Z",
+          "shell": {
+            "bridge": true,
+            "toolbar": true,
+            "viewport": {
+              "width": 1360,
+              "height": 864,
+              "devicePixelRatio": 2
+            },
+            "videoFrameAPI": true,
+            "status": "ready",
+            "readyToShellMs": 355,
+            "processUptimeToShellMs": 422,
+            "profile": "isolated-temporary-profile",
+            "defaults": {
+              "videoMode": "off",
+              "imageMode": "off"
+            },
+            "loginForm": true,
+            "screenshot": "CP-00-mac-run2.png"
+          },
+          "source": [
+            {
+              "path": "src/main.cjs",
+              "sha256": "734f4ca2dd57739286fe19d54607c482aa4b16da24d6d15314fddc1401a7fbb8"
+            },
+            {
+              "path": "src/baseline.cjs",
+              "sha256": "077dfbeefb61aeef7d7ef18ddc9ca9d4574f783ae65312de9568df53f491c98b"
+            },
+            {
+              "path": "src/preload.cjs",
+              "sha256": "928195ed3b26e5a1ca99ebf17f4b1d7be8855f0931ee6bd5a1d1d9f919fec3fb"
+            },
+            {
+              "path": "package.json",
+              "sha256": "15c68a3694daeb7c5aa30019c6fdd9127ed86b63a2493cdb4bd30f4094143b42"
+            },
+            {
+              "path": "runtime-lock.json",
+              "sha256": "bb22463f11491ae4e75dba11955a83874b03f74cc4054488ba6b404635b11419"
+            },
+            {
+              "path": "ui/index.html",
+              "sha256": "ae46cb4de81071a671c31aaaf3773e5033ca0c64c25b3486973e392ef07cc91b"
+            },
+            {
+              "path": "ui/version.json",
+              "sha256": "e3c95f3c5b647977838b0290fd9ba859cbb402a43abba54382619a75d1888ed6"
+            }
+          ],
+          "workingSetSumKiB": 476208,
+          "processes": [
+            {
+              "type": "Browser",
+              "cpu": {
+                "cumulativeCPUUsage": 0.866858,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 224752,
+                "peakWorkingSetSize": 230960
+              }
+            },
+            {
+              "type": "GPU",
+              "cpu": {
+                "cumulativeCPUUsage": 0.197201,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 101280,
+                "peakWorkingSetSize": 121696
+              }
+            },
+            {
+              "type": "Utility",
+              "cpu": {
+                "cumulativeCPUUsage": 0.081674,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 43088,
+                "peakWorkingSetSize": 49200
+              }
+            },
+            {
+              "type": "Tab",
+              "cpu": {
+                "cumulativeCPUUsage": 0.148113,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 107088,
+                "peakWorkingSetSize": 129968
+              }
+            }
+          ]
+        },
+        {
+          "capturedAt": "2026-10-17T13:15:51.269Z",
+          "shell": {
+            "bridge": true,
+            "toolbar": true,
+            "viewport": {
+              "width": 1360,
+              "height": 864,
+              "devicePixelRatio": 2
+            },
+            "videoFrameAPI": true,
+            "status": "ready",
+            "readyToShellMs": 338,
+            "processUptimeToShellMs": 404,
+            "profile": "isolated-temporary-profile",
+            "defaults": {
+              "videoMode": "off",
+              "imageMode": "off"
+            },
+            "loginForm": true,
+            "screenshot": "CP-00-mac-run3.png"
+          },
+          "source": [
+            {
+              "path": "src/main.cjs",
+              "sha256": "734f4ca2dd57739286fe19d54607c482aa4b16da24d6d15314fddc1401a7fbb8"
+            },
+            {
+              "path": "src/baseline.cjs",
+              "sha256": "077dfbeefb61aeef7d7ef18ddc9ca9d4574f783ae65312de9568df53f491c98b"
+            },
+            {
+              "path": "src/preload.cjs",
+              "sha256": "928195ed3b26e5a1ca99ebf17f4b1d7be8855f0931ee6bd5a1d1d9f919fec3fb"
+            },
+            {
+              "path": "package.json",
+              "sha256": "15c68a3694daeb7c5aa30019c6fdd9127ed86b63a2493cdb4bd30f4094143b42"
+            },
+            {
+              "path": "runtime-lock.json",
+              "sha256": "bb22463f11491ae4e75dba11955a83874b03f74cc4054488ba6b404635b11419"
+            },
+            {
+              "path": "ui/index.html",
+              "sha256": "ae46cb4de81071a671c31aaaf3773e5033ca0c64c25b3486973e392ef07cc91b"
+            },
+            {
+              "path": "ui/version.json",
+              "sha256": "e3c95f3c5b647977838b0290fd9ba859cbb402a43abba54382619a75d1888ed6"
+            }
+          ],
+          "workingSetSumKiB": 505888,
+          "processes": [
+            {
+              "type": "Browser",
+              "cpu": {
+                "cumulativeCPUUsage": 0.884341,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 233168,
+                "peakWorkingSetSize": 239008
+              }
+            },
+            {
+              "type": "GPU",
+              "cpu": {
+                "cumulativeCPUUsage": 0.212325,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 108336,
+                "peakWorkingSetSize": 127104
+              }
+            },
+            {
+              "type": "Utility",
+              "cpu": {
+                "cumulativeCPUUsage": 0.080197,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 46784,
+                "peakWorkingSetSize": 49248
+              }
+            },
+            {
+              "type": "Tab",
+              "cpu": {
+                "cumulativeCPUUsage": 0.148348,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 117600,
+                "peakWorkingSetSize": 130064
+              }
+            }
+          ]
+        }
+      ],
+      "medianReadyToShellMs": 355,
+      "medianProcessUptimeToShellMs": 422,
+      "futureShellRegressionLimitMs": 655
+    },
+    "win32-x64": {
+      "runs": [
+        {
+          "capturedAt": "2026-10-17T13:15:47.919Z",
+          "shell": {
+            "bridge": true,
+            "toolbar": true,
+            "viewport": {
+              "width": 1344,
+              "height": 835,
+              "devicePixelRatio": 1
+            },
+            "videoFrameAPI": true,
+            "status": "ready",
+            "readyToShellMs": 316,
+            "processUptimeToShellMs": 460,
+            "profile": "isolated-temporary-profile",
+            "defaults": {
+              "videoMode": "off",
+              "imageMode": "off"
+            },
+            "loginForm": true,
+            "screenshot": "CP-00-windows-run1.png"
+          },
+          "source": [
+            {
+              "path": "src/main.cjs",
+              "sha256": "734f4ca2dd57739286fe19d54607c482aa4b16da24d6d15314fddc1401a7fbb8"
+            },
+            {
+              "path": "src/baseline.cjs",
+              "sha256": "077dfbeefb61aeef7d7ef18ddc9ca9d4574f783ae65312de9568df53f491c98b"
+            },
+            {
+              "path": "src/preload.cjs",
+              "sha256": "928195ed3b26e5a1ca99ebf17f4b1d7be8855f0931ee6bd5a1d1d9f919fec3fb"
+            },
+            {
+              "path": "package.json",
+              "sha256": "15c68a3694daeb7c5aa30019c6fdd9127ed86b63a2493cdb4bd30f4094143b42"
+            },
+            {
+              "path": "runtime-lock.json",
+              "sha256": "bb22463f11491ae4e75dba11955a83874b03f74cc4054488ba6b404635b11419"
+            },
+            {
+              "path": "ui/index.html",
+              "sha256": "ae46cb4de81071a671c31aaaf3773e5033ca0c64c25b3486973e392ef07cc91b"
+            },
+            {
+              "path": "ui/version.json",
+              "sha256": "e3c95f3c5b647977838b0290fd9ba859cbb402a43abba54382619a75d1888ed6"
+            }
+          ],
+          "workingSetSumKiB": 404980,
+          "processes": [
+            {
+              "type": "Browser",
+              "cpu": {
+                "cumulativeCPUUsage": 1.26905,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 142980,
+                "peakWorkingSetSize": 195108,
+                "privateBytes": 94468
+              }
+            },
+            {
+              "type": "GPU",
+              "cpu": {
+                "cumulativeCPUUsage": 0.848291,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 121732,
+                "peakWorkingSetSize": 133692,
+                "privateBytes": 155880
+              }
+            },
+            {
+              "type": "Utility",
+              "cpu": {
+                "cumulativeCPUUsage": 0.138312,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 48692,
+                "peakWorkingSetSize": 48692,
+                "privateBytes": 12632
+              }
+            },
+            {
+              "type": "Tab",
+              "cpu": {
+                "cumulativeCPUUsage": 0.153628,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 91576,
+                "peakWorkingSetSize": 91620,
+                "privateBytes": 37764
+              }
+            }
+          ]
+        },
+        {
+          "capturedAt": "2026-10-17T13:15:51.885Z",
+          "shell": {
+            "bridge": true,
+            "toolbar": true,
+            "viewport": {
+              "width": 1344,
+              "height": 835,
+              "devicePixelRatio": 1
+            },
+            "videoFrameAPI": true,
+            "status": "ready",
+            "readyToShellMs": 323,
+            "processUptimeToShellMs": 470,
+            "profile": "isolated-temporary-profile",
+            "defaults": {
+              "videoMode": "off",
+              "imageMode": "off"
+            },
+            "loginForm": true,
+            "screenshot": "CP-00-windows-run2.png"
+          },
+          "source": [
+            {
+              "path": "src/main.cjs",
+              "sha256": "734f4ca2dd57739286fe19d54607c482aa4b16da24d6d15314fddc1401a7fbb8"
+            },
+            {
+              "path": "src/baseline.cjs",
+              "sha256": "077dfbeefb61aeef7d7ef18ddc9ca9d4574f783ae65312de9568df53f491c98b"
+            },
+            {
+              "path": "src/preload.cjs",
+              "sha256": "928195ed3b26e5a1ca99ebf17f4b1d7be8855f0931ee6bd5a1d1d9f919fec3fb"
+            },
+            {
+              "path": "package.json",
+              "sha256": "15c68a3694daeb7c5aa30019c6fdd9127ed86b63a2493cdb4bd30f4094143b42"
+            },
+            {
+              "path": "runtime-lock.json",
+              "sha256": "bb22463f11491ae4e75dba11955a83874b03f74cc4054488ba6b404635b11419"
+            },
+            {
+              "path": "ui/index.html",
+              "sha256": "ae46cb4de81071a671c31aaaf3773e5033ca0c64c25b3486973e392ef07cc91b"
+            },
+            {
+              "path": "ui/version.json",
+              "sha256": "e3c95f3c5b647977838b0290fd9ba859cbb402a43abba54382619a75d1888ed6"
+            }
+          ],
+          "workingSetSumKiB": 403544,
+          "processes": [
+            {
+              "type": "Browser",
+              "cpu": {
+                "cumulativeCPUUsage": 1.248987,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 141664,
+                "peakWorkingSetSize": 196004,
+                "privateBytes": 93656
+              }
+            },
+            {
+              "type": "GPU",
+              "cpu": {
+                "cumulativeCPUUsage": 0.846107,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 122012,
+                "peakWorkingSetSize": 136276,
+                "privateBytes": 158356
+              }
+            },
+            {
+              "type": "Utility",
+              "cpu": {
+                "cumulativeCPUUsage": 0.134179,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 48264,
+                "peakWorkingSetSize": 48264,
+                "privateBytes": 12196
+              }
+            },
+            {
+              "type": "Tab",
+              "cpu": {
+                "cumulativeCPUUsage": 0.153253,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 91604,
+                "peakWorkingSetSize": 91652,
+                "privateBytes": 38144
+              }
+            }
+          ]
+        },
+        {
+          "capturedAt": "2026-10-17T13:15:55.800Z",
+          "shell": {
+            "bridge": true,
+            "toolbar": true,
+            "viewport": {
+              "width": 1344,
+              "height": 835,
+              "devicePixelRatio": 1
+            },
+            "videoFrameAPI": true,
+            "status": "ready",
+            "readyToShellMs": 315,
+            "processUptimeToShellMs": 482,
+            "profile": "isolated-temporary-profile",
+            "defaults": {
+              "videoMode": "off",
+              "imageMode": "off"
+            },
+            "loginForm": true,
+            "screenshot": "CP-00-windows-run3.png"
+          },
+          "source": [
+            {
+              "path": "src/main.cjs",
+              "sha256": "734f4ca2dd57739286fe19d54607c482aa4b16da24d6d15314fddc1401a7fbb8"
+            },
+            {
+              "path": "src/baseline.cjs",
+              "sha256": "077dfbeefb61aeef7d7ef18ddc9ca9d4574f783ae65312de9568df53f491c98b"
+            },
+            {
+              "path": "src/preload.cjs",
+              "sha256": "928195ed3b26e5a1ca99ebf17f4b1d7be8855f0931ee6bd5a1d1d9f919fec3fb"
+            },
+            {
+              "path": "package.json",
+              "sha256": "15c68a3694daeb7c5aa30019c6fdd9127ed86b63a2493cdb4bd30f4094143b42"
+            },
+            {
+              "path": "runtime-lock.json",
+              "sha256": "bb22463f11491ae4e75dba11955a83874b03f74cc4054488ba6b404635b11419"
+            },
+            {
+              "path": "ui/index.html",
+              "sha256": "ae46cb4de81071a671c31aaaf3773e5033ca0c64c25b3486973e392ef07cc91b"
+            },
+            {
+              "path": "ui/version.json",
+              "sha256": "e3c95f3c5b647977838b0290fd9ba859cbb402a43abba54382619a75d1888ed6"
+            }
+          ],
+          "workingSetSumKiB": 407264,
+          "processes": [
+            {
+              "type": "Browser",
+              "cpu": {
+                "cumulativeCPUUsage": 1.244389,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 144456,
+                "peakWorkingSetSize": 195400,
+                "privateBytes": 95692
+              }
+            },
+            {
+              "type": "GPU",
+              "cpu": {
+                "cumulativeCPUUsage": 0.819001,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 121728,
+                "peakWorkingSetSize": 135712,
+                "privateBytes": 157160
+              }
+            },
+            {
+              "type": "Utility",
+              "cpu": {
+                "cumulativeCPUUsage": 0.135393,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 48844,
+                "peakWorkingSetSize": 48844,
+                "privateBytes": 12364
+              }
+            },
+            {
+              "type": "Tab",
+              "cpu": {
+                "cumulativeCPUUsage": 0.150848,
+                "percentCPUUsage": 0,
+                "idleWakeupsPerSecond": 0
+              },
+              "memory": {
+                "workingSetSize": 92236,
+                "peakWorkingSetSize": 92280,
+                "privateBytes": 37924
+              }
+            }
+          ]
+        }
+      ],
+      "medianReadyToShellMs": 316,
+      "medianProcessUptimeToShellMs": 470,
+      "futureShellRegressionLimitMs": 616
+    }
+  }
+}

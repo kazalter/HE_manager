@@ -4,7 +4,7 @@ Mac Apple Silicon（arm64）与 Windows x64 共用 Electron/Vue 客户端。服�
 
 ## 新路线开工（2026-10-17）
 
-按[跨平台实施方案](../docs/desktop-client-plan.md)从 CP-00 开始，Windows 优先，保持 Mac arm64 共用实现。旧版独立 mpv 播放不等于 CP-01 内嵌播放通过，旧 WinUI 原型也不再继续。阶段状态见根目录 `PLAN.md` 和 [CP-00 记录](reports/CP-00-2026-10-17.md)。
+按[跨平台实施方案](../docs/desktop-client-plan.md)推进，Windows 优先，保持 Mac arm64 共用实现。CP-00 已完成，当前进入 CP-01。旧版独立 mpv 播放不等于 CP-01 内嵌播放通过，旧 WinUI 原型也不再继续。阶段状态见根目录 `PLAN.md` 和 [CP-00 交付](reports/CP-00-complete.md)。
 
 新增 `--baseline`，在临时用户目录启动实际界面，记录系统/GPU/DPI、Electron/Node、界面就绪时间、公共连接检查及资源文件 SHA-256；不读取正常客户端的账号、缓存或配置。新安装和无效配置默认原画，已有合法增强偏好保持不变。
 
@@ -18,10 +18,12 @@ npm run baseline -- --baseline-server http://192.168.0.101:8011 --baseline-outpu
 Windows 包直接运行：
 
 ```powershell
-& '.\HE Manager.exe' --baseline --baseline-server http://192.168.0.101:8011 --baseline-output C:\HEManagerBuild\baseline.json
+& '.\HE Manager.exe' --baseline --baseline-server=http://192.168.0.101:8011 --baseline-output=C:\HEManagerBuild\baseline.json
 ```
 
 `--baseline-resources` 可指定另一份已安装客户端的 `resources` 目录，仅用于盘点其文件，不会加载其中的引擎。省略输出路径时保存到“文档/HE Manager Diagnostics”。采集有 60 秒上限，退出码 0 仅表示报告已写出且界面就绪；连接、资源和 CP-01 必须分别检查报告状态。资源哈希是实际文件清单，不代表已经匹配下载来源或完成新媒体链路验收。界面时间来自进程启动及 Electron ready，不是控制系统缓存后的冷启动性能。
+
+Windows 安装包参数使用 `--名称=值`。独立 URL 后再追加开关会在 Electron 的应用入口之前被拒绝；npm 采集脚本自动规范化参数，允许普通的空格分隔写法。
 
 本机 Node 26 会使现有 Vitest/happy-dom 测试中的 `localStorage` 不可用；开发与 CI 使用 Node 22。Electron 内置 Node 与开发用 Node 分开记录。
 

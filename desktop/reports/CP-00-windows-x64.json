@@ -1,0 +1,495 @@
+{
+  "schemaVersion": 1,
+  "phase": "CP-00",
+  "capturedAt": "2026-10-17T13:14:45.104Z",
+  "source": {
+    "revision": null,
+    "trackedChanges": null,
+    "files": [
+      {
+        "path": "src/main.cjs",
+        "sha256": "734f4ca2dd57739286fe19d54607c482aa4b16da24d6d15314fddc1401a7fbb8"
+      },
+      {
+        "path": "src/baseline.cjs",
+        "sha256": "077dfbeefb61aeef7d7ef18ddc9ca9d4574f783ae65312de9568df53f491c98b"
+      },
+      {
+        "path": "src/preload.cjs",
+        "sha256": "928195ed3b26e5a1ca99ebf17f4b1d7be8855f0931ee6bd5a1d1d9f919fec3fb"
+      },
+      {
+        "path": "package.json",
+        "sha256": "15c68a3694daeb7c5aa30019c6fdd9127ed86b63a2493cdb4bd30f4094143b42"
+      },
+      {
+        "path": "runtime-lock.json",
+        "sha256": "bb22463f11491ae4e75dba11955a83874b03f74cc4054488ba6b404635b11419"
+      },
+      {
+        "path": "ui/index.html",
+        "sha256": "ae46cb4de81071a671c31aaaf3773e5033ca0c64c25b3486973e392ef07cc91b"
+      },
+      {
+        "path": "ui/version.json",
+        "sha256": "e3c95f3c5b647977838b0290fd9ba859cbb402a43abba54382619a75d1888ed6"
+      }
+    ]
+  },
+  "runtime": {
+    "app": "0.1.1",
+    "electron": "44.8.0",
+    "node": "24.22.0",
+    "chrome": "152.0.7977.167",
+    "v8": "15.2.124.43-electron.0"
+  },
+  "host": {
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "osVersion": "Windows 11 Home China",
+    "cpu": "AMD Ryzen 7 7745HX with Radeon Graphics        ",
+    "logicalCpus": 16,
+    "memoryBytes": 33519120384,
+    "details": {
+      "os": {
+        "caption": "Microsoft Windows 11 家庭版 中文版",
+        "build": "26200",
+        "version": "10.0.26200"
+      },
+      "gpus": [
+        {
+          "driver": "20.36.41.498",
+          "name": "MuMu Virtual Display Adapter"
+        },
+        {
+          "driver": "15.6.5.199",
+          "name": "GameViewer Virtual Display Adapter"
+        },
+        {
+          "driver": "1.10.9.289",
+          "name": "SudoMaker Virtual Display Adapter"
+        },
+        {
+          "driver": "32.0.13034.7001",
+          "name": "AMD Radeon(TM) 610M"
+        },
+        {
+          "driver": "32.0.16.1692",
+          "name": "NVIDIA GeForce RTX 5070 Laptop GPU"
+        }
+      ]
+    }
+  },
+  "toolchain": {
+    "externalNode": "v24.15.0",
+    "compiler": null,
+    "nativeAddon": "not-built"
+  },
+  "displays": [
+    {
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 2560,
+        "height": 1440
+      },
+      "workArea": {
+        "x": 0,
+        "y": 0,
+        "width": 2560,
+        "height": 1392
+      },
+      "scaleFactor": 1,
+      "rotation": 0,
+      "internal": false
+    }
+  ],
+  "gpu": {
+    "featureStatus": {
+      "2d_canvas": "enabled",
+      "direct_rendering_display_compositor": "disabled_off_ok",
+      "gpu_compositing": "enabled",
+      "multiple_raster_threads": "enabled_on",
+      "opengl": "enabled_on",
+      "rasterization": "enabled",
+      "raw_draw": "disabled_off_ok",
+      "skia_graphite": "disabled_off",
+      "trees_in_viz": "disabled_off",
+      "video_decode": "enabled",
+      "video_encode": "enabled",
+      "webgl": "enabled",
+      "webgpu": "enabled",
+      "webnn": "disabled_off"
+    },
+    "devices": [
+      {
+        "vendorId": 4318,
+        "deviceId": 11544,
+        "active": true,
+        "driverVendor": "NVIDIA",
+        "driverVersion": "32.0.16.1692",
+        "deviceString": "NVIDIA GeForce RTX 5070 Laptop GPU"
+      },
+      {
+        "vendorId": 4098,
+        "deviceId": 5710,
+        "active": false,
+        "driverVersion": "32.0.13034.7001",
+        "deviceString": "AMD Radeon(TM) 610M"
+      },
+      {
+        "vendorId": 4098,
+        "deviceId": 5710,
+        "active": false,
+        "driverVersion": "32.0.13034.7001",
+        "deviceString": "AMD Radeon(TM) 610M"
+      },
+      {
+        "vendorId": 4098,
+        "deviceId": 5710,
+        "active": false,
+        "driverVersion": "32.0.13034.7001",
+        "deviceString": "AMD Radeon(TM) 610M"
+      },
+      {
+        "vendorId": 4098,
+        "deviceId": 5710,
+        "active": false,
+        "driverVersion": "32.0.13034.7001",
+        "deviceString": "AMD Radeon(TM) 610M"
+      },
+      {
+        "vendorId": 5140,
+        "deviceId": 140,
+        "active": false,
+        "driverVersion": "10.0.26100.9711",
+        "deviceString": "Microsoft Basic Render Driver"
+      }
+    ],
+    "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Laptop GPU (0x00002D18) Direct3D11 vs_5_0 ps_5_0, D3D11-32.0.16.1692)"
+  },
+  "processSnapshot": {
+    "units": "memory-in-KiB; CPU-as-reported-by-Electron",
+    "timing": "after-first-shell-and-1500ms-settle",
+    "processes": [
+      {
+        "type": "Browser",
+        "cpu": {
+          "cumulativeCPUUsage": 1.240807,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "memory": {
+          "workingSetSize": 143892,
+          "peakWorkingSetSize": 195988,
+          "privateBytes": 94916
+        }
+      },
+      {
+        "type": "GPU",
+        "cpu": {
+          "cumulativeCPUUsage": 0.836115,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "memory": {
+          "workingSetSize": 121516,
+          "peakWorkingSetSize": 133812,
+          "privateBytes": 157640
+        }
+      },
+      {
+        "type": "Utility",
+        "cpu": {
+          "cumulativeCPUUsage": 0.127819,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "memory": {
+          "workingSetSize": 48584,
+          "peakWorkingSetSize": 48584,
+          "privateBytes": 12384
+        }
+      },
+      {
+        "type": "Tab",
+        "cpu": {
+          "cumulativeCPUUsage": 0.152315,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "memory": {
+          "workingSetSize": 92876,
+          "peakWorkingSetSize": 92928,
+          "privateBytes": 38884
+        }
+      }
+    ]
+  },
+  "shell": {
+    "bridge": true,
+    "toolbar": true,
+    "viewport": {
+      "width": 1344,
+      "height": 835,
+      "devicePixelRatio": 1
+    },
+    "videoFrameAPI": true,
+    "status": "ready",
+    "readyToShellMs": 329,
+    "processUptimeToShellMs": 465,
+    "profile": "isolated-temporary-profile",
+    "defaults": {
+      "videoMode": "off",
+      "imageMode": "off"
+    },
+    "loginForm": true,
+    "screenshot": "CP-00-windows-x64.png"
+  },
+  "server": {
+    "server": "http://192.168.0.101:8011",
+    "status": "reachable",
+    "hasUsers": true
+  },
+  "resources": {
+    "status": "observed",
+    "files": [
+      {
+        "path": "licenses/Anime4K-LICENSE.txt",
+        "bytes": 1063,
+        "sha256": "5bad448b737378e3d0c977ad0d0521fa37ad279a7e76ea9a31d9257eeb6953f5"
+      },
+      {
+        "path": "licenses/FFmpeg-COPYING.GPLv3.txt",
+        "bytes": 35147,
+        "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+      },
+      {
+        "path": "licenses/mpv-COPYING.txt",
+        "bytes": 4096,
+        "sha256": "bfe9ee4cceabcb8ecbfadf208d04156f73d801e6a57369a5606bb8341e204a23"
+      },
+      {
+        "path": "licenses/mpv-GPLv3.txt",
+        "bytes": 17984,
+        "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6"
+      },
+      {
+        "path": "licenses/mpv-LICENSE.GPL.txt",
+        "bytes": 17984,
+        "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6"
+      },
+      {
+        "path": "licenses/Realesrgan-LICENSE.txt",
+        "bytes": 2228,
+        "sha256": "5abb941454de437b0e90d78dcb72e3688f74e14bcd4e24393273cb5cd0e9c937"
+      },
+      {
+        "path": "licenses/SOURCES.md",
+        "bytes": 1264,
+        "sha256": "c47e0583d3abfb970471ce6433b9f87a043e2dd7d05797d88e0914184118fc52"
+      },
+      {
+        "path": "runtime/mpv/d3dcompiler_43.dll",
+        "bytes": 4481992,
+        "sha256": "4b074a3976399dc735484f5d43d04b519b7bdee8ac719d9ab8ed6bd4e6be0345"
+      },
+      {
+        "path": "runtime/mpv/doc/manual.pdf",
+        "bytes": 1043512,
+        "sha256": "c5e8950f6265f0b654f4559da7dd9aa69d37c96fde19d3ba33d3183cadf1b965"
+      },
+      {
+        "path": "runtime/mpv/doc/mpbindings.png",
+        "bytes": 190376,
+        "sha256": "d27b24e45be912eb14935c3540147a65ad3be513c3fe444f010ad543ae4cc352"
+      },
+      {
+        "path": "runtime/mpv/installer/mpv-icon.ico",
+        "bytes": 270345,
+        "sha256": "c42ee25aeddb88e741cf94fb12867f61edd012cd82ef346e43c5f01c27898434"
+      },
+      {
+        "path": "runtime/mpv/installer/mpv-install.bat",
+        "bytes": 16984,
+        "sha256": "906669f7c397d5137fd3e3dde5d78beff27dd0c51edd4b22ef7d27ae578f0436"
+      },
+      {
+        "path": "runtime/mpv/installer/mpv-uninstall.bat",
+        "bytes": 3095,
+        "sha256": "5770710c6e39549db0df6a0e88491f862b12d90ae14177968bbf2dbcce60ea27"
+      },
+      {
+        "path": "runtime/mpv/installer/updater.ps1",
+        "bytes": 19608,
+        "sha256": "01c35d27f90de8da36b5106511c8c4937c934b80708abd8d44c1edd925b6a98d"
+      },
+      {
+        "path": "runtime/mpv/mpv/fonts.conf",
+        "bytes": 2703,
+        "sha256": "f141c1b89b172d22f213531646c21e288f0ebf3ec46484698896e1b33c626756"
+      },
+      {
+        "path": "runtime/mpv/mpv-register.bat",
+        "bytes": 202,
+        "sha256": "e3c354d13bfe4ae2b9bafbd1b7609753c47f78a3a4989b082f34d5a938aa7a09"
+      },
+      {
+        "path": "runtime/mpv/mpv-unregister.bat",
+        "bytes": 206,
+        "sha256": "d40f2f76e00e08287c39c15654e9350831e4418f1bd9619bc8dcff0dfb055e91"
+      },
+      {
+        "path": "runtime/mpv/mpv.com",
+        "bytes": 3584,
+        "sha256": "e8b97c8bf2560ab8dfeaf66a634b16f0c7f7fc522d8847d6abd525bc663e29f8"
+      },
+      {
+        "path": "runtime/mpv/mpv.exe",
+        "bytes": 121051136,
+        "sha256": "f8bf7e8fd8d6696e35441c55091498060e4594f724a132fd6c46579341bc0790"
+      },
+      {
+        "path": "runtime/mpv/updater.bat",
+        "bytes": 818,
+        "sha256": "120fd67c7d0109eb01961a47c301f77da7f6da18b80a7b39c5f7ea4664817f7b"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesr-animevideov3-x2.bin",
+        "bytes": 1247368,
+        "sha256": "548a36f9c3f4ab8da56cd3b13badf23968bee207b396dad14d04b830e5f2ab2d"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesr-animevideov3-x2.param",
+        "bytes": 3173,
+        "sha256": "b88ff4f00ebf019a7fdac17fdd45a7fd3665d37509efc5baf2e4da2e24420a04"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesr-animevideov3-x3.bin",
+        "bytes": 1247368,
+        "sha256": "548a36f9c3f4ab8da56cd3b13badf23968bee207b396dad14d04b830e5f2ab2d"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesr-animevideov3-x3.param",
+        "bytes": 3173,
+        "sha256": "d1a5755008791d09b57e3425fc9dd0bd26b00fdf79c606210bc0e693f8230881"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesr-animevideov3-x4.bin",
+        "bytes": 1247368,
+        "sha256": "548a36f9c3f4ab8da56cd3b13badf23968bee207b396dad14d04b830e5f2ab2d"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesr-animevideov3-x4.param",
+        "bytes": 3077,
+        "sha256": "850a248e7c14c27e5bd8cf7265113a9441036a7db63963bb8aa5169d788a435e"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesrgan-x4plus-anime.bin",
+        "bytes": 8943500,
+        "sha256": "fe01c269cfd10cdef8e018ab66ebe750cf79c7af4d1f9c16c737e1295229bacc"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesrgan-x4plus-anime.param",
+        "bytes": 30290,
+        "sha256": "2b8fb6e0ae4d2d85704ca08c119a2f5ea40add4f2ecd512eb7f4cd44b6127ed4"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesrgan-x4plus.bin",
+        "bytes": 33424520,
+        "sha256": "713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesrgan-x4plus.param",
+        "bytes": 116029,
+        "sha256": "35330ececcea33b6c397a72548e788d5d53becee4734c50b7fada36e89f10a86"
+      },
+      {
+        "path": "runtime/realesrgan/README_windows.md",
+        "bytes": 1859,
+        "sha256": "2b882314a0c7a9f17a347b9b04f909939f6274aa96cf5b2ebba2f7ab75987480"
+      },
+      {
+        "path": "runtime/realesrgan/realesrgan-ncnn-vulkan.exe",
+        "bytes": 6161408,
+        "sha256": "07e49f7cbb4ede01ae4dd4c399d3a7e5846e3d2085c3128eff881e55cb7b1a0c"
+      },
+      {
+        "path": "runtime/realesrgan/vcomp140.dll",
+        "bytes": 182704,
+        "sha256": "8f72ef2e483465444b2059fc6744d6cb22cd8d8a27f6fa56befd2a42dcd0f78b"
+      },
+      {
+        "path": "shaders/Anime4K_AutoDownscalePre_x2.glsl",
+        "bytes": 1596,
+        "sha256": "9141668ced0b26512253e6396e805820716f35b57c92950d9da489f8b96a7ba4"
+      },
+      {
+        "path": "shaders/Anime4K_AutoDownscalePre_x4.glsl",
+        "bytes": 1604,
+        "sha256": "dadb7b713cfa1d810c55b5deff616072f3390e546fed1e6a54f80ea555f7b95d"
+      },
+      {
+        "path": "shaders/Anime4K_Clamp_Highlights.glsl",
+        "bytes": 2884,
+        "sha256": "8c5fb67c76bed3021f8a27b050c3b97a6ac1b284f9ce91c04189015c354c0217"
+      },
+      {
+        "path": "shaders/Anime4K_Restore_CNN_M.glsl",
+        "bytes": 35916,
+        "sha256": "67ea3ed26539e8de3b7d307688535d2ff17e8d147e11dda0247da7770dbecf41"
+      },
+      {
+        "path": "shaders/Anime4K_Restore_CNN_VL.glsl",
+        "bytes": 144075,
+        "sha256": "35036722733305cd4d4e57660b883bbe2569ba2914033c254327107d7b77e35e"
+      },
+      {
+        "path": "shaders/Anime4K_Upscale_CNN_x2_M.glsl",
+        "bytes": 37685,
+        "sha256": "716e02098a68f0d648761f2b96b4dd139e1cb09b174bb369fca3aa34328fff7e"
+      },
+      {
+        "path": "shaders/Anime4K_Upscale_CNN_x2_VL.glsl",
+        "bytes": 146743,
+        "sha256": "5638fe31c37c151a3443fea3451a3ef91af073f4dbb9615f6c0d1e29db11493d"
+      },
+      {
+        "path": "test/checkerboard.png",
+        "bytes": 385,
+        "sha256": "109b21c1164b665b0344c1c54a452564c45b1918510a7203e4437bc7e116bdc2"
+      },
+      {
+        "path": "test/sample.mp4",
+        "bytes": 755917,
+        "sha256": "af63fdb8726ae315bee2e4e724809484acb43d4c5e11f383d85ab5d25db221c9"
+      }
+    ],
+    "verification": "observed-file-hashes-only",
+    "runtimePresent": true
+  },
+  "cp01": {
+    "status": "not-validated",
+    "sharedTextureAPI": true,
+    "libmpvPresent": false,
+    "required": [
+      "native-render-thread",
+      "shared-texture-import",
+      "DOM-overlay-input",
+      "protected-stream-seek",
+      "same-session-fullscreen",
+      "bounded-frame-lifetime",
+      "packaged-target-tests"
+    ]
+  },
+  "unmeasured": [
+    "authenticated-library-performance",
+    "representative-video-playback",
+    "frame-drop-rate",
+    "decoded-image-memory",
+    "GPU-memory-trend",
+    "enhancement-latency",
+    "cold-start-with-controlled-OS-cache"
+  ]
+}

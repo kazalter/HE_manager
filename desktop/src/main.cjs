@@ -388,6 +388,7 @@ app.whenReady().then(async () => {
     ]),
   );
   if (baselineMode) {
+    let stage = "create-window";
     try {
       await createWindow();
       let shell;
@@ -406,7 +407,24 @@ app.whenReady().then(async () => {
       shell.processUptimeToShellMs = Math.round(process.uptime() * 1000);
       shell.profile = "isolated-temporary-profile";
       shell.defaults = { videoMode: settings.videoMode, imageMode: settings.imageMode };
+      // Let authentication status and the first compositor frame settle before
+      // taking a visual/resource baseline. Startup timing above stays separate.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      stage = "login-form";
+      shell.loginForm = await window.webContents.executeJavaScript(
+        "!!document.querySelector('.he-auth-view input[autocomplete=username]')",
+      );
+      const output = baselineOptions.output || path.join(
+        app.getPath("documents"), "HE Manager Diagnostics",
+        `baseline-${process.platform}-${process.arch}-${Date.now()}.json`,
+      );
+      const screenshot = output.replace(/\.json$/i, "") + ".png";
+      stage = "screenshot";
+      await fs.mkdir(path.dirname(screenshot), { recursive: true });
+      await fs.writeFile(screenshot, (await window.webContents.capturePage()).toPNG());
+      shell.screenshot = path.basename(screenshot);
       const diagnostics = require("./baseline.cjs");
+      stage = "collect";
       const report = await diagnostics.collect({
         app, root, shell,
         screen: require("electron").screen,
@@ -414,16 +432,13 @@ app.whenReady().then(async () => {
         server: baselineOptions.server,
         resourceRoot: baselineOptions.resources,
       });
-      const output = baselineOptions.output || path.join(
-        app.getPath("documents"), "HE Manager Diagnostics",
-        `baseline-${process.platform}-${process.arch}-${Date.now()}.json`,
-      );
+      stage = "write-report";
       await diagnostics.writeReport(output, report);
       console.log("HE_BASELINE " + JSON.stringify({ output, shell: shell.status, server: report.server.status, cp01: report.cp01.status }));
       app.exit(shell.status === "ready" ? 0 : 1);
-    } catch {
+    } catch (error) {
       // No raw errors: network/file errors may contain private paths or URLs.
-      console.error("HE_BASELINE failed; check output/resources paths and the UI build");
+      console.error(`HE_BASELINE failed at ${stage} (${error.code || error.name || "Error"})`);
       app.exit(1);
     }
     return;

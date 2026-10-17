@@ -1,0 +1,917 @@
+{
+  "schemaVersion": 1,
+  "phase": "CP-00",
+  "capturedAt": "2026-10-17T12:46:31.784Z",
+  "source": {
+    "revision": "c80aa014cd3b825bd66ede1f8f1d114051b85cbd",
+    "trackedChanges": true,
+    "files": [
+      {
+        "path": "src/main.cjs",
+        "sha256": "409737346c9a73c41368afbc9ec823e3eea336c4a329f2554a4592edbbffe681"
+      },
+      {
+        "path": "src/baseline.cjs",
+        "sha256": "7ce364b812b42ea94f92106301c2630165094ed48502d5541771cb0d56be83f5"
+      },
+      {
+        "path": "src/preload.cjs",
+        "sha256": "928195ed3b26e5a1ca99ebf17f4b1d7be8855f0931ee6bd5a1d1d9f919fec3fb"
+      },
+      {
+        "path": "package.json",
+        "sha256": "1385f9437229f5e5988b14428b41d3715ae2140b4ca17551fd79e0565e21312d"
+      },
+      {
+        "path": "runtime-lock.json",
+        "sha256": "bb22463f11491ae4e75dba11955a83874b03f74cc4054488ba6b404635b11419"
+      },
+      {
+        "path": "ui/index.html",
+        "sha256": "ae46cb4de81071a671c31aaaf3773e5033ca0c64c25b3486973e392ef07cc91b"
+      },
+      {
+        "path": "ui/version.json",
+        "sha256": "e3c95f3c5b647977838b0290fd9ba859cbb402a43abba54382619a75d1888ed6"
+      }
+    ]
+  },
+  "runtime": {
+    "app": "0.1.1",
+    "electron": "44.8.0",
+    "node": "24.22.0",
+    "chrome": "152.0.7977.167",
+    "v8": "15.2.124.43-electron.0"
+  },
+  "host": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "osRelease": "27.0.0",
+    "osVersion": "Darwin Kernel Version 27.0.0: Tue Aug 11 21:22:49 PDT 2026; root:xnu-13432.1.9~1/RELEASE_ARM64_T6000",
+    "cpu": "Apple M1 Pro",
+    "logicalCpus": 8,
+    "memoryBytes": 17179869184,
+    "details": {
+      "productVersion": "27.0",
+      "build": "26A428",
+      "model": "MacBookPro18,3",
+      "compiler": "Apple clang version 21.0.0 (clang-2100.3.34.2)"
+    }
+  },
+  "toolchain": {
+    "externalNode": "v26.9.0",
+    "compiler": "Apple clang version 21.0.0 (clang-2100.3.34.2)",
+    "nativeAddon": "not-built"
+  },
+  "displays": [
+    {
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 1512,
+        "height": 982
+      },
+      "workArea": {
+        "x": 0,
+        "y": 33,
+        "width": 1512,
+        "height": 896
+      },
+      "scaleFactor": 2,
+      "rotation": 0,
+      "internal": true
+    }
+  ],
+  "gpu": {
+    "featureStatus": {
+      "2d_canvas": "enabled",
+      "direct_rendering_display_compositor": "disabled_off_ok",
+      "gpu_compositing": "enabled",
+      "multiple_raster_threads": "enabled_on",
+      "opengl": "enabled_on",
+      "rasterization": "enabled",
+      "raw_draw": "disabled_off_ok",
+      "skia_graphite": "enabled_on",
+      "trees_in_viz": "disabled_off",
+      "video_decode": "enabled",
+      "video_encode": "enabled",
+      "webgl": "enabled",
+      "webgpu": "enabled",
+      "webnn": "disabled_off"
+    },
+    "devices": [
+      {
+        "vendorId": 4203,
+        "deviceId": 0,
+        "active": true,
+        "driverVendor": "Apple",
+        "driverVersion": "27.0",
+        "deviceString": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Pro, Version 27.0 (Build 26A428))"
+      }
+    ],
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Pro, Version 27.0 (Build 26A428))"
+  },
+  "shell": {
+    "bridge": true,
+    "toolbar": true,
+    "viewport": {
+      "width": 1360,
+      "height": 864,
+      "devicePixelRatio": 2
+    },
+    "videoFrameAPI": true,
+    "status": "ready",
+    "readyToShellMs": 726,
+    "processUptimeToShellMs": 1027,
+    "profile": "isolated-temporary-profile",
+    "defaults": {
+      "videoMode": "off",
+      "imageMode": "off"
+    }
+  },
+  "server": {
+    "server": "http://192.168.0.101:8011",
+    "status": "reachable",
+    "hasUsers": true
+  },
+  "resources": {
+    "status": "observed",
+    "files": [
+      {
+        "path": "licenses/Anime4K-LICENSE.txt",
+        "bytes": 1063,
+        "sha256": "5bad448b737378e3d0c977ad0d0521fa37ad279a7e76ea9a31d9257eeb6953f5"
+      },
+      {
+        "path": "licenses/FFmpeg-COPYING.GPLv3.txt",
+        "bytes": 35147,
+        "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+      },
+      {
+        "path": "licenses/mpv-COPYING.txt",
+        "bytes": 4096,
+        "sha256": "bfe9ee4cceabcb8ecbfadf208d04156f73d801e6a57369a5606bb8341e204a23"
+      },
+      {
+        "path": "licenses/mpv-LICENSE.GPL.txt",
+        "bytes": 17984,
+        "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6"
+      },
+      {
+        "path": "licenses/Realesrgan-LICENSE.txt",
+        "bytes": 2228,
+        "sha256": "5abb941454de437b0e90d78dcb72e3688f74e14bcd4e24393273cb5cd0e9c937"
+      },
+      {
+        "path": "licenses/SOURCES.md",
+        "bytes": 1264,
+        "sha256": "c47e0583d3abfb970471ce6433b9f87a043e2dd7d05797d88e0914184118fc52"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/_CodeSignature/CodeResources",
+        "bytes": 29880,
+        "sha256": "dc839dfe241f4dda259fa364f8aa68099728cba0a4a2105b779eb6689c328965"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/Frameworks/libMoltenVK.dylib",
+        "bytes": 5328032,
+        "sha256": "25bc19292d11faa0429b99b03f55f2f5acabcea066c64647ccdaf99ada054a26"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/Info.plist",
+        "bytes": 36331,
+        "sha256": "0e2b225bf2e7c4fd345f08b1d601ad8b06a6abf103b86b8f7b9117f37c71bc86"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/.gitkeep",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/.gitkeep",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libaom.3.dylib",
+        "bytes": 4382416,
+        "sha256": "1713ff4141edf09fcbbdeb7915d0fca1feeb98e796e118476f787a465def0683"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libarchive.13.dylib",
+        "bytes": 724400,
+        "sha256": "4b02906fbb30ef83a0c9916d24c78ed2c6596502822c804cc47b508431043461"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libaribb24.0.dylib",
+        "bytes": 122768,
+        "sha256": "2af2623b5c5e3ef6e3c2f6f4eeb59cf0129cee4347c6894ef5914c0eff2915f4"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libass.9.dylib",
+        "bytes": 247696,
+        "sha256": "06a27820af8c054b3b7d9f47c29320043966b40549f6b126b682c071de8e781f"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libavcodec.63.dylib",
+        "bytes": 10957312,
+        "sha256": "3cba5b1ec14d475a519e5b17e751982dbc49b86fb327d2b04b12eb4c8a4745fe"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libavdevice.63.dylib",
+        "bytes": 204096,
+        "sha256": "291e4be096efbcf65e9bc2065af63b38cc32e4cd89fa0decea270a2a333903e4"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libavfilter.12.dylib",
+        "bytes": 3432016,
+        "sha256": "36040d1f847d7b8e6c4abfe7b2e82bd414ad075229dff4f865b949b1e3167d80"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libavformat.63.dylib",
+        "bytes": 2527776,
+        "sha256": "cb52a7a21da2fbcf067c4808850f5ef32f492823d7c2cc1b818b59841b1fc7ab"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libavutil.61.dylib",
+        "bytes": 728352,
+        "sha256": "647c80948a7e08b2ff630e9123a166d8962f4ae276039c0a555597dd40fa8974"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libb2.1.dylib",
+        "bytes": 85968,
+        "sha256": "794afcc5908b608d537f6ec6344a7ecb036702a93a2859ce6bd8563e9b4b2f1f"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libbluray.4.dylib",
+        "bytes": 373648,
+        "sha256": "783a4c06fe4faf569d6dc25e065a0c4db6c6b92968483f8e515d4cb6846dd93a"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libbrotlicommon.1.dylib",
+        "bytes": 168128,
+        "sha256": "0fd8540fa8951eecfff6af9628bd2bb07f575d34c4a82606655c7e28445323be"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libbrotlidec.1.dylib",
+        "bytes": 88112,
+        "sha256": "213084a30215821ffe873c510cb10cf7a926938d6998c856106ed578515264a1"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libbrotlienc.1.dylib",
+        "bytes": 657136,
+        "sha256": "3528be6c0219d94006c477fc56a0d0b0a10a43df9e619cb4a2e6c3f0ade0c54a"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libcaca.0.dylib",
+        "bytes": 833232,
+        "sha256": "5c32fdd763b9edede49a800131234a3a973dfd2c9b81c53d59c85d9fb642780d"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libcdio_cdda.2.dylib",
+        "bytes": 89440,
+        "sha256": "f327b8bd7a69a0bfc514425fc6be5b2d968a2df3b78278bcf20c309bd8fec34f"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libcdio_paranoia.2.dylib",
+        "bytes": 89344,
+        "sha256": "3e219cd7472bf654cc2b6fc3af68005c4a8cb0566b179ad7c36dd3137ebc8d8c"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libcdio.21.dylib",
+        "bytes": 183184,
+        "sha256": "0aa20334fb90da93c7bbfac4aa5aa3366d2ad064092e330ea427f43158ef06d6"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libcjson.1.dylib",
+        "bytes": 73856,
+        "sha256": "5c468bd98b9f3a60d17a4274b4178d0281787e63e79e207bcf1d155bbe428066"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libcrypto.4.dylib",
+        "bytes": 4829200,
+        "sha256": "5f87a46fd9f54ab14d0b2ad5cc764637e8a87469b3fc437786243df31fe771ca"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libdav1d.7.dylib",
+        "bytes": 864608,
+        "sha256": "3ede1ad8c20a9ce035e41ce7730d0ace0c2ff657b3631471b26a8cbe37cd0885"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libdvdcss.2.dylib",
+        "bytes": 90224,
+        "sha256": "7f90cebec111291c1f9421182e5d6b2117ef0d4212b55103a59749955a4d1bf2"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libdvdnav.4.dylib",
+        "bytes": 116048,
+        "sha256": "9e2c10a488766ba383258151434d32b6f743ba92c10578ca22417b48ea3dab6e"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libdvdread.8.dylib",
+        "bytes": 177408,
+        "sha256": "686bed7246cbfddad044cea67a3bcc97d6833bcdab2c547219bda6b2d955571a"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libfontconfig.1.dylib",
+        "bytes": 474016,
+        "sha256": "ce5745afe632246fb1510ef3ef6657fccdd68e60cd175893be78ebe08606b6dc"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libfreetype.6.dylib",
+        "bytes": 680608,
+        "sha256": "40dd6f3119f8eeac9e8e7c0d788eb1ffd3d418b59c7e25bb315804ef0e55194d"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libfribidi.0.dylib",
+        "bytes": 172096,
+        "sha256": "06c328d3950da0c78bd25727c9f75d70d7629158b22cd95d21ca900830f33833"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libggml-base.0.dylib",
+        "bytes": 543024,
+        "sha256": "c74a59cb84e1494a94b039eb015cfac272a0cc1d7d2ff464e5b9cce90fbb93ed"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libggml.0.dylib",
+        "bytes": 77952,
+        "sha256": "925294fde1cec87cc97f6fd3a15c3c85987ca07e7e25c00d8dc23aa9574bb0e8"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libgif.dylib",
+        "bytes": 73008,
+        "sha256": "b7a0713da68c332e9cef3b028965832816e07a37ef5c5e1b34b78aa31a78f37f"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libglib-2.0.0.dylib",
+        "bytes": 1384880,
+        "sha256": "cf47f03876eaa1ee7fb77b7b8a3a313d513a2be875e294268bed91fb4e3e5f73"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libgmp.10.dylib",
+        "bytes": 454880,
+        "sha256": "16f0fc143cad2acbd2a3767b715d877e5d583451a4826f99978675b783e6c0e8"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libgnutls.30.dylib",
+        "bytes": 2462928,
+        "sha256": "43f5af0699786b965847ae3b0f5c9b875ff1ea8f3f74f0c23c34391a8a9bc31d"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libgraphite2.3.dylib",
+        "bytes": 143216,
+        "sha256": "60d1eb952ad808757bafa1baff9a90de8635940db347028b442e6c30440dbf3f"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libharfbuzz.0.dylib",
+        "bytes": 1305040,
+        "sha256": "b9b67a9657eafd43de34aab300fdbd53776136afd56fb1ced3334851538376c5"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libhogweed.7.dylib",
+        "bytes": 297136,
+        "sha256": "cccdd5d235a6e965f83706e95fabd8b024d9d477c4250a652553f5b8b7680b94"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libhwy.1.dylib",
+        "bytes": 98320,
+        "sha256": "97c025edf08fff0cdfd2022315d50ca3eb73ace3e9a06888d2ca9e862b9defc5"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libidn2.0.dylib",
+        "bytes": 258528,
+        "sha256": "82176ab8c78a03ed63dcc644c165dccf7bd9a65eb898e46b06d3e29125733fb8"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libintl.8.dylib",
+        "bytes": 230048,
+        "sha256": "ba5caf4f834d5c4db45197ff55d6ac3592429e0654519a3c985dfb77b0d9dd69"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libjpeg.8.dylib",
+        "bytes": 474896,
+        "sha256": "840e8d3efa4bc84d898b9f0f39aafafacc7f169e75753e8d3c5493c13b09ae42"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libjxl_cms.0.12.dylib",
+        "bytes": 112912,
+        "sha256": "e6601139f33c050406b34b95c041cce0a6fdd394afcca46422ad6019e405ab13"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libjxl_threads.0.12.dylib",
+        "bytes": 56864,
+        "sha256": "5e3ce3d2c7b40f2eee1af1490f77c0acf91350984472d10c739ff9b4b1e7e0a6"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libjxl.0.12.dylib",
+        "bytes": 1927488,
+        "sha256": "886e87b7594e85679d7d79a316e5173a5787557a2ce541bd38ba46f34b21354c"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/liblcms2.2.dylib",
+        "bytes": 374752,
+        "sha256": "b97452a3e4fcb70a4328873498ed17ee70be3b8c2c35cc23eb865a4379711a23"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libleptonica.6.dylib",
+        "bytes": 2221232,
+        "sha256": "cb41b5ff96a382ec3551f8cbc6073c82551385d5d01a469b6f553af2b9d8d9c6"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libluajit-5.1.2.dylib",
+        "bytes": 561408,
+        "sha256": "e809ba8da0bb9589b0f88158f0ea48e644b6cbd99ff7dd1cb40220c34dc7b902"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/liblz4.1.dylib",
+        "bytes": 178976,
+        "sha256": "37d99b07b3310f70e6e9ac9d8bfad05d0e05293fb61228e0acc41123955b6bee"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/liblzma.5.dylib",
+        "bytes": 185520,
+        "sha256": "a49e2503362cc577ea4a401516f45edd0c0cff595e630e0e5f3c127f6155490a"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libmp3lame.0.dylib",
+        "bytes": 250000,
+        "sha256": "9918cbda66bf4c435b641d6c0f69b27bc5034653d241b03c2517833224b77b68"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libmpg123.0.dylib",
+        "bytes": 289888,
+        "sha256": "3a3f7c5e22095d850902b90d5c7815e45200287bdebd52f5e8dc602a5bd9d8f4"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libmujs.dylib",
+        "bytes": 308768,
+        "sha256": "324c1475f8f13afc738a9ef74e9a4ef2d9b85a1d9c7ea2183f319075d4dc533f"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libnettle.9.dylib",
+        "bytes": 334400,
+        "sha256": "3dc61b6e569e880ee6b6dba1001cc5e1b7e3d99aeb8591a2368e726c8f171261"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libogg.0.dylib",
+        "bytes": 72032,
+        "sha256": "58164dbdc35c3c9e580045c1c0f16d40d700cc087f44b95aa144d5a5778b8248"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libomp.dylib",
+        "bytes": 743984,
+        "sha256": "2e6dd727adb701dd6555d1bd13f489ca4b5973442ee3e5f11601a41b7d037b2f"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libopencore-amrnb.0.dylib",
+        "bytes": 178512,
+        "sha256": "e192521a98645191cb31a41263866f89faf983fa6a3a78b71e54900252ef1ea1"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libopencore-amrwb.0.dylib",
+        "bytes": 106144,
+        "sha256": "e58e69793665ef5d75a72e0f7e95634e719e50371352883047a5ad58a97ab57a"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libopenjp2.7.dylib",
+        "bytes": 325952,
+        "sha256": "b449124824aab4837f34368154dfd51d79ebe42db3751569b84b688b63109457"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libopus.0.dylib",
+        "bytes": 375824,
+        "sha256": "54a34b8f6e43945e72c6135ba226e484219c135b924f8bcd7e65321b39af5bc1"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libp11-kit.0.dylib",
+        "bytes": 1626144,
+        "sha256": "5e4f1f21cb8291a149e7d8321e44562d594060df2b0beff89c188faccc3e8aee"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libpcre2-8.0.dylib",
+        "bytes": 592032,
+        "sha256": "89d2f1371046430b2cc3bc797a63b03e7238dccd57bfc62571ddb408bb034727"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libplacebo.360.dylib",
+        "bytes": 998512,
+        "sha256": "24bfb64fbea4135f7b51db9f5634a7752f7467f629cc8af8df85e4a36e3c869c"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libpng16.16.dylib",
+        "bytes": 209392,
+        "sha256": "1ef111244630922d6a05ea7857a77f6f34a0945073e9334a0602772767d4ece7"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libqrencode.4.dylib",
+        "bytes": 91424,
+        "sha256": "09831237ae5250b4283ab147eaf42d350dfc343d1eae38689fa82eca231c795a"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/librav1e.0.8.dylib",
+        "bytes": 2959600,
+        "sha256": "9e61d4249e322edc72603ffb948a8bb8bd859d45c9221d71116cdf7462a47e5f"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/librist.4.dylib",
+        "bytes": 243920,
+        "sha256": "0fa2e6f126545ab0d05dfaa21fa7b85b433f4ed66440a392fb1540e7b2f7f9e2"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/librubberband.3.dylib",
+        "bytes": 393840,
+        "sha256": "6b4475cdc4a519ad49f9c7c39c88d34b4fe0867119604d7cc9ed95080e8b8b07"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libsamplerate.0.dylib",
+        "bytes": 1556768,
+        "sha256": "aac007939a80e501e04c23db93409ed92858ecea0fb62ca11e585832baba18b0"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libshaderc_shared.1.dylib",
+        "bytes": 7728144,
+        "sha256": "c14b11e192da32496ac15841ba2bb413640dda19ffc3c49b601958fb840cf234"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libsharpyuv.0.dylib",
+        "bytes": 69856,
+        "sha256": "fccadf44a1cdfedaeed21ef51752a235c023537a858df170f749b3b5b97311d3"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libsixel.1.dylib",
+        "bytes": 324656,
+        "sha256": "2e432ae742e87023c1f4315920a09dff140f1291a96f662808c207e2d29e54f1"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libsnappy.1.dylib",
+        "bytes": 81088,
+        "sha256": "c5efa831480713be22fec51d3c9507e49f215c7ac2572bfeae428bd633096a2a"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libsodium.26.dylib",
+        "bytes": 366864,
+        "sha256": "0b9890095059b7a7b6a41d538745570b2f0273cbe4adacd3146a76b57d56ab45"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libsoxr.0.dylib",
+        "bytes": 159360,
+        "sha256": "33bdbaa3d2a6fd3c45aa8b2e68ce26000e5ce7e69059873cd1c8ec5637b30987"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libspeex.1.dylib",
+        "bytes": 126176,
+        "sha256": "8e555ed5a765ebc21804433d9c0705cc65a02d5fa1a9696d419f007565e2ba32"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libsrt.1.5.dylib",
+        "bytes": 715184,
+        "sha256": "467b5b7334f0bfb5fee043c2143e960ec83d56f8bb773cef9e6a604742a02d68"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libssh.4.dylib",
+        "bytes": 537648,
+        "sha256": "c0e4cc380a9395222790c1e796c93f01643e1c251d38343b3a37bc7a295eeb9b"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libssl.4.dylib",
+        "bytes": 946688,
+        "sha256": "ac2b0df065fb81e902741343a5456e439c7c4b28d3a898e728806342783fc881"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libSvtAv1Enc.4.dylib",
+        "bytes": 3108528,
+        "sha256": "794ba15218655c3f63dd564268d809a5dafcbc82daaed7f4f7a5c3550bd801ca"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libswresample.7.dylib",
+        "bytes": 122080,
+        "sha256": "17effc7cdf3d09c9b17cf9f9941935cddcdb1f262cc6713f54811fbe5a3e7498"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libswscale.10.dylib",
+        "bytes": 757296,
+        "sha256": "cf33b29bd092923ce2d846981c70049490acfe666946df0e0541ea428165e20a"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libtasn1.6.dylib",
+        "bytes": 108240,
+        "sha256": "b9592904a3fc43a658f880f6bf1f3cc3446ffe0e1197dea9ea86b801ac0183f4"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libtesseract.5.dylib",
+        "bytes": 2815856,
+        "sha256": "80a2ef4b3e6db61b163534ba52654cc44e5766b85b094bcb7290de58e68ea384"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libtheoradec.2.dylib",
+        "bytes": 91216,
+        "sha256": "8ffab1be3a37d62f9df181f64b68f2be06b833e4868d0f823e28eaa02633da4a"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libtheoraenc.2.dylib",
+        "bytes": 178080,
+        "sha256": "a121e9cfe49b0c11e8ac6e6d0562a3c84fc137716b9c611f8bc8f4b4c9aad0cf"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libtiff.6.dylib",
+        "bytes": 545920,
+        "sha256": "49c738b9ead1e031cca718e4bd081b832ad03523fd713f38e3edefeee4ba70d3"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libuchardet.0.dylib",
+        "bytes": 225056,
+        "sha256": "f782793d5fab88aa329fe15b612beef746d9e1e21da4079e6b56623665ba3761"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libudfread.3.dylib",
+        "bytes": 71456,
+        "sha256": "359e34841febe82e93ae070aa291dd33288dacc41fbc8914a96a2be40db41250"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libunibreak.8.dylib",
+        "bytes": 186688,
+        "sha256": "bcd123e6f2e5e32da44ad15c76546e8e6598e66b4f1e647e37aa59d91cb3d504"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libunistring.5.dylib",
+        "bytes": 2034752,
+        "sha256": "33c46f33c1dd0696c911ba81621ae8c460630ada7acb42df2a8a3831f82763d6"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libvidstab.1.2.dylib",
+        "bytes": 112144,
+        "sha256": "322a49c7d02a8060e24541aca511051943f3f27d74e0fef544058018d5e3249d"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libvmaf.3.dylib",
+        "bytes": 919088,
+        "sha256": "b24bbaa4dfce681c179a49c1fd1415eb19b8506bf8646a3100bac3b0cd984e95"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libvorbis.0.dylib",
+        "bytes": 194096,
+        "sha256": "460ae1ed49f104d303fbf226395bde8d666a9df110a07a4d0710d56253281d0a"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libvorbisenc.2.dylib",
+        "bytes": 727936,
+        "sha256": "4dd37f7aca5d1a59c1947e5a1486413dd7332f6e7a7f80a2d1c731c14e3c0903"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libvpx.12.dylib",
+        "bytes": 1782464,
+        "sha256": "6317c4b11a8b4b84d0ae0545b759844c71720215cb9fe141263a01fbd2d2ca7f"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libvulkan.1.dylib",
+        "bytes": 701104,
+        "sha256": "dae4e6213174fe789abbcff6f375aac35ce5b17463d6d3c4c549f4ee98cc6b93"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libwebp.7.dylib",
+        "bytes": 354272,
+        "sha256": "5ba1a340e1a5754e25fcc2179c863fb0c53f9d598cf55f4517e1829af67f4cb0"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libwebpmux.3.dylib",
+        "bytes": 73552,
+        "sha256": "e343ae1588becae21b5ab05e8299b87244f4f31a71f85d4d1750da0793e0fce3"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libwhisper.1.dylib",
+        "bytes": 448144,
+        "sha256": "6b0e99de91090e7eb6645e73ace2d8eb803c3d0d745eb89570c4fb45b612f892"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libX11.6.dylib",
+        "bytes": 1025184,
+        "sha256": "634df0196dd0abe08d0ae3df1ec5ccf717e965eb221d076d6206cc2021eab932"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libx264.165.dylib",
+        "bytes": 1281664,
+        "sha256": "562698d4f1c0110936087ca4df7a3c87f4bad803965c3a094da83174a9b8ea69"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libx265.217.dylib",
+        "bytes": 7701744,
+        "sha256": "8c80d1d76835cfdc64987ba795324bb013046615625cdfadf131773243928d6c"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libXau.6.dylib",
+        "bytes": 53312,
+        "sha256": "1dcc150b069b498115fce5a41c8ab014ed88a8868b76cbc3e0cc2469183f47c2"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libxcb-shape.0.dylib",
+        "bytes": 71328,
+        "sha256": "16402fb07bfb272e713311bf559522b9bf7380b0666de4222c726991a3608b8e"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libxcb-shm.0.dylib",
+        "bytes": 70432,
+        "sha256": "7259cbd64b9a6abe96cb9d26af9d8139c84ee8e3c158b3181764fe6368218e49"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libxcb-xfixes.0.dylib",
+        "bytes": 81024,
+        "sha256": "595d516aa83221c9e620a652c753f53d43b39083a442e632e4dd8ca816b5016f"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libxcb.1.dylib",
+        "bytes": 194768,
+        "sha256": "1037ad3453ae1d395a5c75532426183a0ef5b70600fbc86b9145fdf707edb83a"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libXdmcp.6.dylib",
+        "bytes": 54224,
+        "sha256": "1258d17a4e04045ad0e59fd45d9bcbe644ee81bb91c1085332e7ab844c2154cb"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libxvidcore.4.dylib",
+        "bytes": 459776,
+        "sha256": "2deef444c10d739524d20d014055249b43ed0704e45cc87c2c2822feee61f3ab"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libzimg.2.dylib",
+        "bytes": 406464,
+        "sha256": "5ecf0c6c3667430f7d08b2920abb2368c4482466625415ac6f9600903db453dd"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libzmq.5.dylib",
+        "bytes": 680256,
+        "sha256": "41a9af8699b976d0562c9ecc11f319e9253c283ad8ea9e51eb576ccc82ac3289"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/lib/libzstd.1.dylib",
+        "bytes": 653328,
+        "sha256": "d14e7756c597c0ac7b264651ee53f37b600da34c914ece461ee483280216c678"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/MacOS/mpv",
+        "bytes": 5534032,
+        "sha256": "553f54ed2f5c9b6e0fd21226d9a04758d035665e8b8949e55d82b6d99b825ebb"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/PkgInfo",
+        "bytes": 8,
+        "sha256": "82502191c9484b04d685374f9879a0066069c49b8acae7a04b01d38d07e8eca0"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/Resources/Assets.car",
+        "bytes": 3065736,
+        "sha256": "58466a2c0abe9f8f40e79bdec253a1942332c90d3b1661e4e2420519ea2abd00"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/Resources/document.icns",
+        "bytes": 311266,
+        "sha256": "64ddbf1ef2c75f6e8d9c2c25d35eae3227eab5bd065d1460967daacd0bf03c88"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/Resources/icon.icns",
+        "bytes": 1387652,
+        "sha256": "044d61e5008b516d17342a000eb171cb9a023ee4baafd8848d201e63eb155589"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/Resources/mpv.conf",
+        "bytes": 65,
+        "sha256": "44045cb398a71a4bb96f02a7c1e2c069356ad98c60dae72e39347eea7eb10135"
+      },
+      {
+        "path": "runtime/mpv/mpv.app/Contents/Resources/vulkan/icd.d/MoltenVK_icd.json",
+        "bytes": 193,
+        "sha256": "bc2b6cccbf8b7f52206f6681cf34ac76dce6416bdc94ca34c03a93f88c8e874d"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesr-animevideov3-x2.bin",
+        "bytes": 1247368,
+        "sha256": "548a36f9c3f4ab8da56cd3b13badf23968bee207b396dad14d04b830e5f2ab2d"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesr-animevideov3-x2.param",
+        "bytes": 3173,
+        "sha256": "b88ff4f00ebf019a7fdac17fdd45a7fd3665d37509efc5baf2e4da2e24420a04"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesr-animevideov3-x3.bin",
+        "bytes": 1247368,
+        "sha256": "548a36f9c3f4ab8da56cd3b13badf23968bee207b396dad14d04b830e5f2ab2d"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesr-animevideov3-x3.param",
+        "bytes": 3173,
+        "sha256": "d1a5755008791d09b57e3425fc9dd0bd26b00fdf79c606210bc0e693f8230881"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesr-animevideov3-x4.bin",
+        "bytes": 1247368,
+        "sha256": "548a36f9c3f4ab8da56cd3b13badf23968bee207b396dad14d04b830e5f2ab2d"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesr-animevideov3-x4.param",
+        "bytes": 3077,
+        "sha256": "850a248e7c14c27e5bd8cf7265113a9441036a7db63963bb8aa5169d788a435e"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesrgan-x4plus-anime.bin",
+        "bytes": 8943500,
+        "sha256": "fe01c269cfd10cdef8e018ab66ebe750cf79c7af4d1f9c16c737e1295229bacc"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesrgan-x4plus-anime.param",
+        "bytes": 30290,
+        "sha256": "2b8fb6e0ae4d2d85704ca08c119a2f5ea40add4f2ecd512eb7f4cd44b6127ed4"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesrgan-x4plus.bin",
+        "bytes": 33424520,
+        "sha256": "713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf"
+      },
+      {
+        "path": "runtime/realesrgan/models/realesrgan-x4plus.param",
+        "bytes": 116029,
+        "sha256": "35330ececcea33b6c397a72548e788d5d53becee4734c50b7fada36e89f10a86"
+      },
+      {
+        "path": "runtime/realesrgan/README_macos.md",
+        "bytes": 2258,
+        "sha256": "630762f9b76808feacc4277e5b57245d84a2636ca94ef7624330b40a347b29be"
+      },
+      {
+        "path": "runtime/realesrgan/realesrgan-ncnn-vulkan",
+        "bytes": 26787080,
+        "sha256": "c1c35d92079085de96b9d547fd7e4464bc8a2e9ccf28d7b8c712d72ade91b7cc"
+      },
+      {
+        "path": "shaders/Anime4K_AutoDownscalePre_x2.glsl",
+        "bytes": 1596,
+        "sha256": "9141668ced0b26512253e6396e805820716f35b57c92950d9da489f8b96a7ba4"
+      },
+      {
+        "path": "shaders/Anime4K_AutoDownscalePre_x4.glsl",
+        "bytes": 1604,
+        "sha256": "dadb7b713cfa1d810c55b5deff616072f3390e546fed1e6a54f80ea555f7b95d"
+      },
+      {
+        "path": "shaders/Anime4K_Clamp_Highlights.glsl",
+        "bytes": 2884,
+        "sha256": "8c5fb67c76bed3021f8a27b050c3b97a6ac1b284f9ce91c04189015c354c0217"
+      },
+      {
+        "path": "shaders/Anime4K_Restore_CNN_M.glsl",
+        "bytes": 35916,
+        "sha256": "67ea3ed26539e8de3b7d307688535d2ff17e8d147e11dda0247da7770dbecf41"
+      },
+      {
+        "path": "shaders/Anime4K_Restore_CNN_VL.glsl",
+        "bytes": 144075,
+        "sha256": "35036722733305cd4d4e57660b883bbe2569ba2914033c254327107d7b77e35e"
+      },
+      {
+        "path": "shaders/Anime4K_Upscale_CNN_x2_M.glsl",
+        "bytes": 37685,
+        "sha256": "716e02098a68f0d648761f2b96b4dd139e1cb09b174bb369fca3aa34328fff7e"
+      },
+      {
+        "path": "shaders/Anime4K_Upscale_CNN_x2_VL.glsl",
+        "bytes": 146743,
+        "sha256": "5638fe31c37c151a3443fea3451a3ef91af073f4dbb9615f6c0d1e29db11493d"
+      },
+      {
+        "path": "test/checkerboard.png",
+        "bytes": 385,
+        "sha256": "109b21c1164b665b0344c1c54a452564c45b1918510a7203e4437bc7e116bdc2"
+      },
+      {
+        "path": "test/sample.mp4",
+        "bytes": 755917,
+        "sha256": "af63fdb8726ae315bee2e4e724809484acb43d4c5e11f383d85ab5d25db221c9"
+      }
+    ],
+    "verification": "observed-file-hashes-only",
+    "runtimePresent": true
+  },
+  "cp01": {
+    "status": "not-validated",
+    "sharedTextureAPI": true,
+    "libmpvPresent": false,
+    "required": [
+      "native-render-thread",
+      "shared-texture-import",
+      "DOM-overlay-input",
+      "protected-stream-seek",
+      "same-session-fullscreen",
+      "bounded-frame-lifetime",
+      "packaged-target-tests"
+    ]
+  },
+  "unmeasured": [
+    "authenticated-library-performance",
+    "representative-video-playback",
+    "frame-drop-rate",
+    "decoded-image-memory",
+    "GPU-memory-trend",
+    "enhancement-latency",
+    "cold-start-with-controlled-OS-cache"
+  ]
+}

@@ -1,18 +1,18 @@
 {
   "schemaVersion": 1,
   "phase": "CP-00",
-  "capturedAt": "2026-10-17T12:46:31.784Z",
+  "capturedAt": "2026-10-17T13:16:26.525Z",
   "source": {
-    "revision": "c80aa014cd3b825bd66ede1f8f1d114051b85cbd",
+    "revision": "0705d2a449a22fda0a71c23285d4642109c926a0",
     "trackedChanges": true,
     "files": [
       {
         "path": "src/main.cjs",
-        "sha256": "409737346c9a73c41368afbc9ec823e3eea336c4a329f2554a4592edbbffe681"
+        "sha256": "734f4ca2dd57739286fe19d54607c482aa4b16da24d6d15314fddc1401a7fbb8"
       },
       {
         "path": "src/baseline.cjs",
-        "sha256": "7ce364b812b42ea94f92106301c2630165094ed48502d5541771cb0d56be83f5"
+        "sha256": "077dfbeefb61aeef7d7ef18ddc9ca9d4574f783ae65312de9568df53f491c98b"
       },
       {
         "path": "src/preload.cjs",
@@ -20,7 +20,7 @@
       },
       {
         "path": "package.json",
-        "sha256": "1385f9437229f5e5988b14428b41d3715ae2140b4ca17551fd79e0565e21312d"
+        "sha256": "15c68a3694daeb7c5aa30019c6fdd9127ed86b63a2493cdb4bd30f4094143b42"
       },
       {
         "path": "runtime-lock.json",
@@ -111,6 +111,60 @@
     ],
     "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Pro, Version 27.0 (Build 26A428))"
   },
+  "processSnapshot": {
+    "units": "memory-in-KiB; CPU-as-reported-by-Electron",
+    "timing": "after-first-shell-and-1500ms-settle",
+    "processes": [
+      {
+        "type": "Browser",
+        "cpu": {
+          "cumulativeCPUUsage": 0.932882,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "memory": {
+          "workingSetSize": 237744,
+          "peakWorkingSetSize": 247424
+        }
+      },
+      {
+        "type": "GPU",
+        "cpu": {
+          "cumulativeCPUUsage": 0.222196,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "memory": {
+          "workingSetSize": 106912,
+          "peakWorkingSetSize": 127936
+        }
+      },
+      {
+        "type": "Utility",
+        "cpu": {
+          "cumulativeCPUUsage": 0.083862,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "memory": {
+          "workingSetSize": 43552,
+          "peakWorkingSetSize": 49152
+        }
+      },
+      {
+        "type": "Tab",
+        "cpu": {
+          "cumulativeCPUUsage": 0.158447,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "memory": {
+          "workingSetSize": 121264,
+          "peakWorkingSetSize": 131600
+        }
+      }
+    ]
+  },
   "shell": {
     "bridge": true,
     "toolbar": true,
@@ -121,13 +175,15 @@
     },
     "videoFrameAPI": true,
     "status": "ready",
-    "readyToShellMs": 726,
-    "processUptimeToShellMs": 1027,
+    "readyToShellMs": 342,
+    "processUptimeToShellMs": 419,
     "profile": "isolated-temporary-profile",
     "defaults": {
       "videoMode": "off",
       "imageMode": "off"
-    }
+    },
+    "loginForm": true,
+    "screenshot": "CP-00-mac-arm64.png"
   },
   "server": {
     "server": "http://192.168.0.101:8011",

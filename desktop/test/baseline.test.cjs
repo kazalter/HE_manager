@@ -4,13 +4,22 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
-const { options, inventory, connection, writeReport } = require("../src/baseline.cjs");
+const { options, electronArguments, inventory, connection, writeReport } = require("../src/baseline.cjs");
 
 test("baseline CLI rejects credential-bearing addresses and missing values", () => {
   assert.throws(() => options(["--baseline-server", "http://example.test/?token=secret"]));
   assert.throws(() => options(["--baseline-server", "http://user:secret@example.test"]));
   assert.throws(() => options(["--baseline-output", "--baseline"]));
   assert.equal(options(["--baseline-server", "http://example.test/"]).server, "http://example.test");
+});
+
+test("Windows launch arguments contain no positional URL followed by switches", () => {
+  const args = electronArguments(["--baseline-server", "http://example.test", "--baseline-output", "report with spaces=1.json"]);
+  assert.deepEqual(args, [".", "--baseline", `--baseline-output=${path.resolve("report with spaces=1.json")}`, "--baseline-server=http://example.test"]);
+  assert.deepEqual(options(args), options(["--baseline-server=http://example.test", "--baseline-output", "report with spaces=1.json"]));
+  assert.throws(() => options(["--baseline-server="]));
+  assert.throws(() => options(["--baseline-server=http://user:secret@example.test"]));
+  assert.throws(() => options(["--baseline-output=one", "--baseline-output", "two"]));
 });
 
 test("public status check has bounded, anonymous, non-redirected reads", async () => {

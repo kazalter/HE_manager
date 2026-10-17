@@ -13,13 +13,21 @@ function options(argv) {
   const result = {};
   for (const name of ["output", "server", "resources"]) {
     const flag = `--baseline-${name}`;
-    const index = argv.indexOf(flag);
+    const indexes = argv.flatMap((value, index) => value === flag || value.startsWith(flag + "=") ? [index] : []);
+    if (indexes.length > 1) throw new Error(`${flag} must only be supplied once`);
+    const index = indexes[0] ?? -1;
     if (index < 0) continue;
-    const value = argv[index + 1];
+    const value = argv[index] === flag ? argv[index + 1] : argv[index].slice(flag.length + 1);
     if (!value || value.startsWith("--")) throw new Error(`${flag} requires a value`);
     result[name] = name === "server" ? serverUrl(value) : path.resolve(value);
   }
   return result;
+}
+
+function electronArguments(argv) {
+  // Windows Electron rejects switches following a positional URL before JS starts.
+  // Keep values inside their switches; spawn passes each argument without a shell.
+  return [".", "--baseline", ...Object.entries(options(argv)).map(([name, value]) => `--baseline-${name}=${value}`)];
 }
 
 async function sha256(file) {
@@ -134,6 +142,11 @@ async function collect({ app, screen, sharedTexture, root, resourceRoot, server,
       devices: (gpu.gpuDevice || []).map(({ vendorId, deviceId, active, driverVendor, driverVersion, deviceString }) => ({ vendorId, deviceId, active, driverVendor, driverVersion, deviceString })),
       renderer: gpu.auxAttributes?.glRenderer || null,
     },
+    processSnapshot: {
+      units: "memory-in-KiB; CPU-as-reported-by-Electron",
+      timing: "after-first-shell-and-1500ms-settle",
+      processes: app.getAppMetrics().map(({ type, cpu, memory }) => ({ type, cpu, memory })),
+    },
     shell,
     server: await connection(server),
     resources: { ...resources, verification: "observed-file-hashes-only", runtimePresent: runtime.length > 0 },
@@ -149,4 +162,4 @@ async function writeReport(file, report) {
   await fs.rename(temporary, file);
 }
 
-module.exports = { options, sha256, inventory, connection, collect, writeReport };
+module.exports = { options, electronArguments, sha256, inventory, connection, collect, writeReport };
