@@ -155,8 +155,10 @@ module.exports = async ({ window, player, config, output }) => {
     if (!await evaluate('!!document.activeElement?.closest(".ui-modal")')) throw new Error('Playback settings lost keyboard focus');
     await key('Escape');
     report.checks.keyboardSettings = true;
-    await field('.desktop-video input[type="range"]', 8);
-    await wait(() => Math.abs(player.state.position - 8) < 1, 'Seeking through the playback slider failed');
+    const seekBefore = player.state.position, seekTarget = seekBefore < 12 ? 20 : 5;
+    await field('.desktop-video input[type="range"]', seekTarget);
+    await wait(() => Math.abs(player.state.position - seekTarget) < 0.2, 'Seeking through the playback slider failed');
+    report.seek = { before: seekBefore, target: seekTarget, after: player.state.position };
     report.checks.seek = true;
     if (player.state.paused) {
       await wait(() => evaluate(`!!document.querySelector('.desktop-video button[aria-label="播放"]')`), 'Play control missing');
@@ -168,6 +170,7 @@ module.exports = async ({ window, player, config, output }) => {
     await wait(() => player.state.paused, 'Pause input failed');
     enterStage('video-fullscreen');
     const before = player.native.state(player.owner);
+    if (Math.abs(before.position - seekTarget) > 1) throw new Error('Paused playback differs from the selected position');
     for (let index = 0; index < 3; index++) {
       await wait(() => evaluate(`!!document.querySelector('.desktop-video button[aria-label="全屏"]')`), 'Fullscreen control did not return to its normal state');
       await click('.desktop-video button[aria-label="全屏"]');

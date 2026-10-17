@@ -52,6 +52,8 @@ for platform, label, hardware in [('darwin', 'mac', 'videotoolbox-copy'), ('win3
     require(report['platform'] == platform and report['packaged'] and report['electron'] == '44.8.0', name + ': packaged target mismatch')
     require(all(report['checks'].get(key) is True for key in checks), name + ': missing or failed UI gate')
     require(report['minimumContent'] == {'width': 1024, 'height': 640}, name + ': minimum content size')
+    seek = report['seek']
+    require(abs(seek['before'] - seek['target']) >= 3 and abs(seek['after'] - seek['target']) < 0.2, name + ': actual slider seek')
     require(report['video']['hwdec'] == hardware and report['video']['sourceLoads'] == 1 and report['video']['speed'] == 1.25, name + ': playback session')
     require(all(sum(track['type'] == kind for track in report['video']['tracks']) == 2 for kind in ['audio', 'sub']), name + ': actual track list')
     shaders = {item['mode']: item for item in report['shaderModes']}
