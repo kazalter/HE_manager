@@ -1,1 +1,0 @@
-Build resources are copied by scripts/Prepare-Runtime.ps1 from the existing desktop/resources directory in this same repository. Preserve exact upstream shader bytes. No Electron JavaScript or IPC is reused. Runtime DLL provenance and archive/hash are pinned in runtime-lock/dependencies.json; the upstream archive is not committed.
