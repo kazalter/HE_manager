@@ -1,9 +1,13 @@
 # HE Manager 跨平台桌面客户端实施方案
 
-版本：1.0  
-日期：2026-10-17  
-目标平台：Windows 11 x64、macOS Apple Silicon（arm64）  
-状态：方案交付；客户端升级、双平台原型和性能验收尚未执行。  
+版本：1.0
+
+日期：2026-10-17
+
+目标平台：Windows 11 x64、macOS Apple Silicon（arm64）
+
+状态：方案交付；客户端升级、双平台原型和性能验收尚未执行。
+
 代码审阅基线：`kazalter/HE_manager@56935f06e8b032537ede50a7f62a7085030a8b7f`。
 
 ## 1. 项目决策
@@ -497,4 +501,3 @@ CI 负责前端构建、接口/状态测试、原生模块构建和包内依赖�
 [T11]: https://github.com/mpv-player/mpv/blob/dde0671072723c311df874a32dc4e48b5197ca62/include/mpv/render.h
 [T12]: https://github.com/media-kit/media-kit
 [T13]: https://www.electronjs.org/docs/latest/api/browser-window#winsetfullscreenflag
-
