@@ -21,8 +21,15 @@ if((Get-FileHash "$download\libmpv-win.7z" -Algorithm SHA256).Hash.ToLowerInvari
 New-Item "$download\headers" -ItemType Directory -Force | Out-Null
 tar -xzf "$download\electron-headers.tar.gz" -C "$download\headers"
 if($LASTEXITCODE){throw 'Header extraction failed'}
-tar -xf "$download\libmpv-win.7z" -C $runtime
-if($LASTEXITCODE){throw 'libmpv extraction failed'}
+# The hosted Windows tar does not always include an LZMA codec.
+$sevenZip=(Get-Command 7z.exe -ErrorAction SilentlyContinue).Source
+if(!$sevenZip) {
+    $candidate=Join-Path $env:ProgramFiles '7-Zip\7z.exe'
+    if(Test-Path $candidate){$sevenZip=$candidate}
+}
+if($sevenZip){& $sevenZip x -y "-o$runtime" "$download\libmpv-win.7z" | Out-Null}
+else {tar -xf "$download\libmpv-win.7z" -C $runtime}
+if($LASTEXITCODE){throw 'libmpv extraction failed; install 7-Zip if tar lacks LZMA support'}
 if((Get-FileHash "$runtime\libmpv-2.dll" -Algorithm SHA256).Hash.ToLowerInvariant() -ne '3c7dedc13718d9c3f38d41f9f2a1aed01810850982020f34f03b67a13b0659e8'){throw 'libmpv DLL checksum mismatch'}
 $vcvars=Join-Path $BuildTools 'VC\Auxiliary\Build\vcvars64.bat'
 cmd /d /s /c "`"$vcvars`" -vcvars_ver=14.44 10.0.26100.0 >nul && set" | ForEach-Object {if($_ -match '^([^=]+)=(.*)$'){[Environment]::SetEnvironmentVariable($matches[1],$matches[2],'Process')}}
