@@ -1,4 +1,4 @@
-import { onUnmounted, ref, watch, type ComputedRef, type Ref } from 'vue'
+import { onBeforeUnmount, ref, watch, type ComputedRef, type Ref } from 'vue'
 import type { Media } from '../types'
 
 type ProgressPatch = Partial<Pick<Media, 'duration' | 'progress'>>
@@ -12,6 +12,8 @@ interface MediaProgressOptions {
   updateMedia: (payload: ProgressPatch, mediaId?: number) => Promise<void>
   emitUpdated: (media: Media) => void
   onVideoEnded: () => void
+  visibleMangaOnly?: boolean
+  beforeFlush?: () => void
 }
 
 /** Owns throttled video/manga progress persistence and media event binding. */
@@ -20,6 +22,7 @@ export function useMediaProgress(options: MediaProgressOptions) {
   let lastVideoSavedAt = 0
   let lastVideoProgress = -1
   let lastMangaProgress = -1
+  let visibleMangaPage: number | null = null
   let mangaTimer: number | undefined
   const progressWrites = new Map<number, Promise<void>>()
   const SAVE_INTERVAL_MS = 5000
@@ -57,14 +60,15 @@ export function useMediaProgress(options: MediaProgressOptions) {
   }
 
   const saveMangaProgress = async (force = false) => {
-    if (!options.isManga.value) return
+    if (!options.isManga.value || options.visibleMangaOnly && visibleMangaPage === null) return
     const media = options.media.value
     const maxPage = options.totalMangaPages.value
       ? options.totalMangaPages.value - 1
       : media.page_count ? media.page_count - 1 : null
+    const anchor = options.visibleMangaOnly ? visibleMangaPage! : options.currentPage.value
     const progress = maxPage === null
-      ? Math.max(0, options.currentPage.value)
-      : Math.max(0, Math.min(options.currentPage.value, maxPage))
+      ? Math.max(0, anchor)
+      : Math.max(0, Math.min(anchor, maxPage))
     if (!force && progress === lastMangaProgress) return
     lastMangaProgress = progress
 
@@ -121,6 +125,7 @@ export function useMediaProgress(options: MediaProgressOptions) {
   watch(() => options.media.value.id, () => {
     lastVideoSavedAt = 0
     lastVideoProgress = -1
+    visibleMangaPage = null
     // MediaDetail applies the persisted manga page in its own id watcher.
     // Defer this baseline until those synchronous watchers have run.
     queueMicrotask(() => {
@@ -128,10 +133,11 @@ export function useMediaProgress(options: MediaProgressOptions) {
     })
   })
   watch(options.currentPage, () => {
-    if (options.isManga.value) scheduleMangaProgressSave()
+    if (options.isManga.value && !options.visibleMangaOnly) scheduleMangaProgressSave()
   })
 
-  onUnmounted(() => {
+  onBeforeUnmount(() => {
+    options.beforeFlush?.()
     window.clearTimeout(mangaTimer)
     void saveMangaProgress(true)
     void saveVideoProgress(true)
@@ -143,5 +149,15 @@ export function useMediaProgress(options: MediaProgressOptions) {
     bindVideo,
     unbindVideo,
     saveVideoProgress,
+    visiblePage: (page: number) => {
+      if (!Number.isSafeInteger(page) || page < 0 || !options.isManga.value) return
+      visibleMangaPage = page
+      scheduleMangaProgressSave()
+    },
+    flushProgress: async () => {
+      options.beforeFlush?.()
+      window.clearTimeout(mangaTimer)
+      await Promise.allSettled([saveMangaProgress(true), saveVideoProgress(true), ...progressWrites.values()])
+    },
   }
 }

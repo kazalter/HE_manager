@@ -45,15 +45,13 @@ function diagnosticStage(stage) {
 diagnosticStage('module-loaded');
 // Diagnostics must never load the user's login, cache, or normal Chromium profile.
 if (baselineMode || uiTestConfigPath) {
-  const directory = require("node:fs").mkdtempSync(
-    path.join(require("node:os").tmpdir(), "he-baseline-"),
-  );
+  const directory = require('./diagnostic-profile.cjs').diagnosticProfile(uiTestConfigPath ? process.env.HE_DESKTOP_TEST_PROFILE : undefined);
   app.setPath("userData", directory);
   app.setPath("sessionData", directory);
   setTimeout(() => {
     console.error("HE desktop diagnostic deadline exceeded");
     app.exit(1);
-  }, uiTestConfigPath ? 180000 : 60000).unref();
+  }, uiTestConfigPath ? 300000 : 60000).unref();
 }
 let window, cache, settings, settingsFile, session;
 let applicationReady = false;
@@ -61,6 +59,16 @@ const player = new EmbeddedPlayer({ root, sharedTexture: require('electron').sha
 const legacyPlayer = new Player(path.join(root, "resources/shaders"));
 const { DesktopSession, SessionError } = require('./session.cjs');
 const { CredentialStore } = require('./credential-store.cjs');
+const { CloseFlush } = require('./close-flush.cjs');
+const closeFlush = new CloseFlush((owner, nonce) => owner.webContents.send('he:before-close', nonce));
+function prepareWindowClose(owner) {
+  if (!owner || owner.isDestroyed()) return session?.flushWrites(2000);
+  owner._heProgressFlushed ||= (async () => {
+    await closeFlush.request(owner);
+    return session?.flushWrites(2000);
+  })();
+  return owner._heProgressFlushed;
+}
 function createImageCache() {
   const generation = session.snapshot().generation;
   return new ImageCache(path.join(app.getPath('userData'), 'image-cache'), { fetch: async (url, options) => {
@@ -153,6 +161,8 @@ function handle(name, callback) {
   });
 }
 function registerIPC() {
+  ipcMain.on('he:close-ready', (event, nonce) => { if (trusted(event)) closeFlush.acknowledge(window, nonce); });
+  handle('he:retry-progress', () => session.retryProgress());
   ipcMain.on('he:video-ready', (event) => { if (trusted(event)) player.ready(); });
   ipcMain.on('he:video-size', (event, value) => { if (trusted(event)) player.resize(value); });
   handle("he:configuration", configuration);
@@ -207,6 +217,7 @@ function registerIPC() {
     return configuration();
   });
   handle("he:video-open", async (options) => {
+    if (window?._heClosing) throw new Error("窗口正在关闭");
     if (!options || typeof options.url !== "string")
       throw new Error("无效的播放请求");
     const source = session.mediaSource(options.url);
@@ -225,6 +236,7 @@ function registerIPC() {
     return player.stop();
   });
   handle("he:image", async (options) => {
+    if (window?._heClosing) throw new Error("窗口正在关闭");
     if (!options || !["anime", "photo"].includes(options.mode))
       throw new Error("请选择图片超分类型");
     const source = session.mediaSource(options.url);
@@ -314,6 +326,7 @@ async function protocolHandler(request) {
 }
 async function createWindow(test = false) {
   diagnosticStage('create-window');
+  if (cache?.abort.signal.aborted) cache = createImageCache();
   window = new BrowserWindow({
     width: 1360,
     height: 900,
@@ -382,7 +395,10 @@ async function createWindow(test = false) {
   window.on('close', (event) => {
     if (ownerWindow._heClosing) return;
     event.preventDefault(); ownerWindow._heClosing = true;
-    void player.stop().catch(() => {}).finally(() => ownerWindow.destroy());
+    void prepareWindowClose(ownerWindow).catch(() => {}).then(() => {
+      cache?.allowed.clear();
+      return Promise.allSettled([player.stop(), cache?.close()]);
+    }).finally(() => { if (!ownerWindow.isDestroyed()) ownerWindow.destroy(); });
   });
   window.on("closed", () => {
     window = null;
@@ -418,7 +434,12 @@ app.whenReady().then(async () => {
   const uiTestConfig = uiTestConfigPath ? JSON.parse(await fs.readFile(uiTestConfigPath, 'utf8')) : null;
   if (uiTestConfig) { settings.server = serverUrl(uiTestConfig.server); player.volume = 0; }
   diagnosticStage('config-loaded');
+  const diagnosticRequests = [];
   session = new DesktopSession({
+    fetch: async (url, options) => {
+      if (uiTestConfigPath) diagnosticRequests.push({ method: options.method || 'GET', path: new URL(url).pathname, hasBearer: new Headers(options.headers).has('Authorization') });
+      return fetch(url, options);
+    },
     server: settings.server,
     store: new CredentialStore(path.join(app.getPath('userData'), 'desktop-login.json'), safeStorage),
     onChange: (state) => { if (window && !window.isDestroyed()) window.webContents.send('he:session-changed', state); },
@@ -427,6 +448,7 @@ app.whenReady().then(async () => {
       await Promise.all([previous?.close(), player.stop()]);
     },
   });
+  session.diagnosticRequests = diagnosticRequests;
   cache = createImageCache();
   void session.restore().catch(() => {});
   protocol.handle("he", protocolHandler);
@@ -464,7 +486,8 @@ app.whenReady().then(async () => {
     let passed = false;
     try { passed = await require('./ui-selftest.cjs')({ window, player, session, config: uiTestConfig, output: process.env.HE_DESKTOP_TEST_OUTPUT }); }
     finally { await player.stop(); await cache.close(); }
-    app.exit(passed ? 0 : 1);
+    if (passed && uiTestConfig.lifecycleStep) app.quit();
+    else app.exit(passed ? 0 : 1);
     return;
   }
   if (baselineMode) {
@@ -595,13 +618,17 @@ app.whenReady().then(async () => {
   app.exit(1);
 });
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  if (process.platform !== "darwin" && !uiTestConfigPath) app.quit();
 });
 app.on("activate", () => {
   if (applicationReady && !BrowserWindow.getAllWindows().length) void createWindow().catch(() => {
     console.error("HE Manager window could not reopen");
   });
 });
-require("./lifecycle.cjs").installShutdown(app, () =>
-  Promise.allSettled([player.stop(), legacyPlayer.stop(), cache?.close()]),
-);
+require("./lifecycle.cjs").installShutdown(app, async () => {
+  try { await prepareWindowClose(window); }
+  finally {
+    session?.stopRetries();
+    await Promise.allSettled([player.stop(), legacyPlayer.stop(), cache?.close()]);
+  }
+});

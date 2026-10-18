@@ -124,7 +124,7 @@ const { DesktopSession } = require('../src/session.cjs');
     if (held) { held.release(); held = null; }
     for (const credential of credentials) try { await (await fetch(credential.server + '/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + credential.token }, signal: AbortSignal.timeout(3000) })).body?.cancel(); } catch {}
     const hashes = {};
-    for (const name of ['session.cjs', 'credential-store.cjs', 'media-queue.cjs']) hashes[name] = createHash('sha256').update(await fs.readFile(path.join(__dirname, '../src', name))).digest('hex');
+    for (const name of ['session.cjs', 'credential-store.cjs', 'media-queue.cjs', 'progress-outbox.cjs']) hashes[name] = createHash('sha256').update(await fs.readFile(path.join(__dirname, '../src', name))).digest('hex');
     const report = { phase: 'CP-03', scope: 'Headless DesktopSession over two disposable real FastAPI servers with 69 items and two accounts each; packaged identity UI and OS restart are separate gates', status: Object.values(checks).every(Boolean) ? 'partial-pass' : 'failed', node: process.version, probeSha256: createHash('sha256').update(await fs.readFile(__filename)).digest('hex'), checks, requests, sourceSha256: hashes, capturedAt: new Date().toISOString() };
     const text = JSON.stringify(report, null, 2);
     for (const credential of credentials) if (text.includes(credential.token)) throw new Error('Credential in diagnostic');

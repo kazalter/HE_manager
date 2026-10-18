@@ -36,7 +36,18 @@ async function poll() {
 function flushProgress() {
  if (state.value?.running && loadedUrl && !busy.value) emit('progress', state.value.position, state.value.duration, state.value.ended, true, loadedUrl)
 }
-defineExpose({ flushProgress })
+async function captureFinalProgress() {
+ const url = loadedUrl, generation = state.value?.generation
+ if (!url || busy.value) return
+ try {
+  const latest = await desktopBridge!.videoState()
+  if (!disposed && loadedUrl === url && latest.generation === generation && latest.running) {
+   state.value = latest
+   flushProgress()
+  }
+ } catch { flushProgress() }
+}
+defineExpose({ flushProgress, captureFinalProgress })
 async function open() {
  flushProgress()
  const current = ++epoch, requestedUrl = props.url

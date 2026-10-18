@@ -38,6 +38,12 @@ describe('embedded desktop video UI', () => {
   wrapper.unmount(); wrappers.splice(0)
   expect(wrapper.emitted('progress')?.at(-1)).toEqual([15, 30, false, true, '/stream/2'])
  })
+ it('captures the actual native position for a close flush rather than the last polled position', async () => {
+  defaults(); const wrapper = create(); await flushPromises()
+  bridge.videoState.mockResolvedValue(playback(24.9))
+  await (wrapper.vm as any).captureFinalProgress()
+  expect(wrapper.emitted('progress')?.at(-1)).toEqual([24.9, 30, false, true, '/stream/1'])
+ })
  it('shows actual tracks, applies subtitle off, and closes its settings on Escape', async () => {
   defaults(); const wrapper = create(); await flushPromises()
   await wrapper.get('button[aria-label="播放设置"]').trigger('click'); await flushPromises()

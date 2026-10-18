@@ -63,7 +63,7 @@ const { DesktopSession } = require('../src/session.cjs');
   const revoked = await fetch(config.server + '/auth/me', { headers: { Authorization: 'Bearer ' + oldToken }, redirect: 'error' });
   await revoked.body?.cancel(); checks.serverLogout = revoked.status === 401;
   const hashes = {};
-  for (const name of ['session.cjs', 'credential-store.cjs', 'media-queue.cjs']) hashes[name] = createHash('sha256').update(await fs.readFile(path.join(__dirname, '../src', name))).digest('hex');
+  for (const name of ['session.cjs', 'credential-store.cjs', 'media-queue.cjs', 'progress-outbox.cjs']) hashes[name] = createHash('sha256').update(await fs.readFile(path.join(__dirname, '../src', name))).digest('hex');
   const report = { phase: 'CP-03', scope: 'Headless session service against the disposable real FastAPI backend; host/renderer integration and OS encryption pending', status: Object.values(checks).every(Boolean) ? 'partial-pass' : 'failed', node: process.version, checks, requests, sourceSha256: hashes, capturedAt: new Date().toISOString() };
   const text = JSON.stringify(report, null, 2);
   if (text.includes(oldToken) || text.includes(config.password)) throw new Error('Diagnostic contains a credential');

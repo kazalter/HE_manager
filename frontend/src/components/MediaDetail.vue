@@ -26,6 +26,7 @@ const sessionHeaders = authHeaders(), openedIdentity = authIdentity()
 if (desktopBridge) sessionHeaders['X-HE-Media-Session'] = crypto.randomUUID()
 let mutationRevision = 0
 const fieldRevision = new Map<string, number>()
+const pendingWrites = new Set<Promise<unknown>>()
 const props = defineProps<{
   initialMedia: Media
   allMedia: Media[]
@@ -166,20 +167,24 @@ const updateMedia = async (
   if (authIdentity() !== openedIdentity) return
   const revision = ++mutationRevision
   for (const field of Object.keys(payload)) fieldRevision.set(field, revision)
-  const res = await axios.patch(`${API_BASE_URL}/media/${mediaId}`, payload, { headers: sessionHeaders })
-  if (authIdentity() !== openedIdentity || viewerDisposed || currentMedia.value.id !== mediaId) return
-  // Metadata responses contain the whole DTO, including possibly older progress.
-  // Apply only this mutation's fields, and only while their local intent is current.
-  const accepted = Object.fromEntries(Object.keys(payload)
-    .filter(field => fieldRevision.get(field) === revision && field in res.data)
-    .filter(field => field !== 'progress' && field !== 'duration' || currentMedia.value.progress === payload.progress)
-    .map(field => [field, res.data[field]]))
-  if (payload.progress !== undefined && fieldRevision.get('progress') === revision &&
-      currentMedia.value.progress === payload.progress && res.data.view_status) {
-    accepted.view_status = res.data.view_status
-  }
-  Object.assign(currentMedia.value, accepted)
-  emit('updated', { ...currentMedia.value })
+  const write = axios.patch(`${API_BASE_URL}/media/${mediaId}`, payload, { headers: sessionHeaders })
+  pendingWrites.add(write)
+  try {
+    const res = await write
+    if (authIdentity() !== openedIdentity || viewerDisposed || currentMedia.value.id !== mediaId) return
+    // Metadata responses contain the whole DTO, including possibly older progress.
+    // Apply only this mutation's fields, and only while their local intent is current.
+    const accepted = Object.fromEntries(Object.keys(payload)
+      .filter(field => fieldRevision.get(field) === revision && field in res.data)
+      .filter(field => field !== 'progress' && field !== 'duration' || currentMedia.value.progress === payload.progress)
+      .map(field => [field, res.data[field]]))
+    if (payload.progress !== undefined && fieldRevision.get('progress') === revision &&
+        currentMedia.value.progress === payload.progress && res.data.view_status) {
+      accepted.view_status = res.data.view_status
+    }
+    Object.assign(currentMedia.value, accepted)
+    emit('updated', { ...currentMedia.value })
+  } finally { pendingWrites.delete(write) }
 }
 
 const setRating = async (score: number) => {
@@ -235,6 +240,7 @@ const navigateMedia = async (direction: -1 | 1) => {
     if (desktopBridge) desktopPlayer.value?.flushProgress()
     else void saveVideoProgress(true)
   }
+  if (desktopBridge && isManga.value) void flushMediaProgress()
   if (!desktopBridge) { currentMedia.value = target; currentPage.value = 0 }
   emit('navigate', target)
 }
@@ -276,8 +282,12 @@ const {
   bindVideo: bindVideoProgressEvents,
   unbindVideo: unbindVideoProgressEvents,
   saveVideoProgress,
+  flushProgress: flushMediaProgress,
+  visiblePage: saveVisiblePage,
 } = useMediaProgress({
   media: currentMedia,
+  visibleMangaOnly: !!desktopBridge,
+  beforeFlush: () => { if (desktopBridge) reader.value?.flushVisiblePage() },
   currentPage,
   totalMangaPages,
   isVideo,
@@ -287,6 +297,14 @@ const {
   onVideoEnded: handleVideoSequenceEnded,
 })
 
+
+const removeCloseHandler = desktopBridge?.onBeforeClose(async () => {
+  if (authIdentity() !== openedIdentity) return
+  await desktopPlayer.value?.captureFinalProgress()
+  await flushMediaProgress()
+  await Promise.allSettled([...pendingWrites])
+})
+onUnmounted(() => removeCloseHandler?.())
 
 const reader = ref<InstanceType<typeof MangaReader> | null>(null)
 const imagePages = computed(() => {
@@ -796,6 +814,7 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
             :progress-text="isImage ? `${imagePage + 1} / ${imagePages.length}` : mangaProgressText"
             :progress-percent="isImage ? Math.round((imagePage + 1) / imagePages.length * 100) : mangaProgressPercent"
             @update:current-page="setReaderPage"
+            @visible-page="(id, page) => { if (desktopBridge && id === currentMedia.id) saveVisiblePage(page) }"
             @boundary="loadImageBatch($event, true)"
             @load-more="loadImageBatch(1)"
             @viewer-click="handleViewerClick"

@@ -17,6 +17,8 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-vue-next'
+import { desktopBridge, desktopSession } from '../../desktop'
+import { authState } from '../../auth'
 import { API_BASE_URL, authUrl } from '../../config'
 import type { Media } from '../../types'
 import { audioPlaybackStore } from '../../stores/audioPlaybackStore'
@@ -52,7 +54,8 @@ let resumeTime = 0
 let lastSavedAt = 0
 const playbackError = ref('')
 let playingMediaId = props.media.id
-const resumeKey = () => `he_audio_resume_${playingMediaId}`
+const audioOwner = desktopBridge ? encodeURIComponent(JSON.stringify([desktopSession.server, authState.user?.id])) : ''
+const resumeKey = () => desktopBridge ? `he_audio_resume_desktop_${audioOwner}_${playingMediaId}` : `he_audio_resume_${playingMediaId}`
 
 const isPlaying = ref(false)
 const currentTime = ref(0)
@@ -356,6 +359,7 @@ watch([() => props.media.title, () => props.coverUrl, currentTrack], () => {
   navigator.mediaSession.metadata = new MediaMetadata({ title: currentTrack.value?.title || props.media.title, artist: props.media.title, album: 'HE Manager', artwork: props.coverUrl ? [{ src: new URL(props.coverUrl, window.location.href).href }] : [] })
 }, { immediate: true })
 const saveBeforePageHide = () => saveResume(true)
+const removeCloseHandler = desktopBridge?.onBeforeClose(() => { saveResume(true); audioRef.value?.pause() })
 onMounted(() => {
   window.addEventListener('pagehide', saveBeforePageHide)
   audioPlaybackStore.bind({ togglePlay, nextTrack, prevTrack })
@@ -383,6 +387,7 @@ watch(currentIndex, () => {
 watch(() => props.media.id, fetchTracks, { immediate: true })
 
 onBeforeUnmount(() => {
+  removeCloseHandler?.()
   window.removeEventListener('pagehide', saveBeforePageHide)
   saveResume(true)
   requestId++; lyricsRequestId++

@@ -50,9 +50,10 @@ watch(() => route.fullPath, async (next, previous) => {
 const onContentReady = () => { restoreScroll(); pendingPosition = null }
 const handleMainScroll = (event: Event) => { showBackToTop.value = (event.target as HTMLElement).scrollTop > 360 }
 const scrollToTop = () => mainScrollRef.value?.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+const retryProgress = () => { void desktopBridge?.retryProgress().catch(() => {}) }
 const pauseAudioForVideo = (event: Event) => { if (event.target instanceof HTMLVideoElement && audioPlaybackStore.state.playing) audioPlaybackStore.togglePlay() }
-onMounted(() => { window.addEventListener('he:content-ready', onContentReady); document.addEventListener('play', pauseAudioForVideo, true) })
-onBeforeUnmount(() => { window.removeEventListener('he:content-ready', onContentReady); document.removeEventListener('play', pauseAudioForVideo, true) })
+onMounted(() => { window.addEventListener('online', retryProgress); window.addEventListener('he:content-ready', onContentReady); document.addEventListener('play', pauseAudioForVideo, true) })
+onBeforeUnmount(() => { window.removeEventListener('online', retryProgress); window.removeEventListener('he:content-ready', onContentReady); document.removeEventListener('play', pauseAudioForVideo, true) })
 </script>
 <template>
   <DesktopToolbar v-if="desktopBridge" />

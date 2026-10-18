@@ -25,6 +25,8 @@ export interface DesktopBridge {
   login(value: { username: string; password: string; bootstrap?: boolean }): Promise<DesktopSessionSnapshot>
   logout(): Promise<DesktopSessionSnapshot>
   restoreLogin(): Promise<DesktopSessionSnapshot>
+  retryProgress(): Promise<void>
+  onBeforeClose(callback: () => void | Promise<void>): () => void
   onSessionChanged(callback: (snapshot: DesktopSessionSnapshot) => void): () => void
   connect(server: string): Promise<DesktopConfiguration>
   chooseEngine(kind: 'mpv' | 'image'): Promise<DesktopConfiguration>

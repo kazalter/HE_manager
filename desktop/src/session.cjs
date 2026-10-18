@@ -1,5 +1,7 @@
 const { randomUUID } = require('node:crypto');
 const { MediaQueue } = require('./media-queue.cjs');
+const { ProgressOutbox } = require('./progress-outbox.cjs');
+const RETRY = Symbol('host-progress-retry');
 const { setTimeout: delay } = require('node:timers/promises');
 const { serverUrl, mediaRequest, API_PATH } = require('./policy.cjs');
 class SessionError extends Error {
@@ -14,8 +16,9 @@ function userValue(value) {
 class DesktopSession {
   #token = ''; #user = null; #generation = randomUUID(); #cancel = new AbortController();
   #revision = 0; #opened = new Set();
-  #operation = 0; #save = Promise.resolve(); #cleanup = Promise.resolve(); #writes = new MediaQueue();
-  constructor({ server = '', store, fetch: fetcher = fetch, onInvalidate = () => {}, onChange = () => {} }) {
+  #operation = 0; #save = Promise.resolve(); #cleanup = Promise.resolve(); #writes = new MediaQueue(); #outbox;
+  constructor({ server = '', store, fetch: fetcher = fetch, retryDelay = 1000, onInvalidate = () => {}, onChange = () => {} }) {
+    this.#outbox = new ProgressOutbox({ retryDelay });
     this.server = server ? serverUrl(server) : ''; this.store = store; this.fetch = fetcher;
     this.onInvalidate = onInvalidate; this.onChange = onChange; this.restoring = false; this.hasUsers = true; this.error = ''; this.persisted = false;
   }
@@ -33,6 +36,7 @@ class DesktopSession {
     return this.#save;
   }
   #invalidate(reason) {
+    this.#outbox.clear();
     this.#cancel.abort(); this.#cancel = new AbortController(); this.#generation = randomUUID();
     this.#token = ''; this.#user = null; this.#opened.clear(); this.restoring = reason === 'restore'; this.error = reason === 'expired' ? '登录已过期，请重新登录' : ''; this.persisted = false;
     this.#cleanup = this.#cleanup.catch(() => {}).then(() => this.onInvalidate(reason));
@@ -42,7 +46,11 @@ class DesktopSession {
   async #send(server, route, options = {}, signal) {
     const timeout = new AbortController();
     const timer = setTimeout(() => timeout.abort(), 15000); timer.unref?.();
-    try { return await this.fetch(server + route, { ...options, redirect: 'error', signal: AbortSignal.any([timeout.signal, ...(signal ? [signal] : []), ...(options.signal ? [options.signal] : [])]) }); }
+    try {
+      const response = await this.fetch(server + route, { ...options, redirect: 'error', signal: AbortSignal.any([timeout.signal, ...(signal ? [signal] : []), ...(options.signal ? [options.signal] : [])]) });
+      if (response.ok) void this.#outbox.retry(false);
+      return response;
+    }
     catch {
       if (signal?.aborted || options.signal?.aborted) throw stale();
       throw new SessionError(503, timeout.signal.aborted ? '连接服务器超时，请重试' : '无法连接服务器，请检查网络');
@@ -150,7 +158,14 @@ class DesktopSession {
     }
     return { ...source, token: identity.token, headers: { Authorization: 'Bearer ' + identity.token }, generation };
   }
+  retryProgress() { return this.#outbox.retry(true); }
+  async flushWrites(timeout = 2000) {
+    void this.retryProgress();
+    return this.#writes.drain(timeout);
+  }
+  stopRetries() { this.#outbox.close(); }
   async request(route, options = {}, generation) {
+    const { [RETRY]: retryIntent, ...requestOptions } = options; options = requestOptions;
     const identity = this.identity(generation), parsed = new URL(route, 'he://app');
     if (parsed.protocol !== 'he:' || parsed.host !== 'app' || parsed.username || parsed.password || !API_PATH.test(parsed.pathname) || parsed.pathname.startsWith('/auth') || parsed.searchParams.has('token') || parsed.hash) throw new SessionError(400, '不允许的服务器请求');
     const pathname = parsed.pathname + parsed.search;
@@ -188,68 +203,99 @@ class DesktopSession {
     }
     const progress = payload && typeof payload === 'object' && !Array.isArray(payload) &&
       Object.hasOwn(payload, 'progress') && Object.keys(payload).every(key => ['progress', 'duration'].includes(key));
-    const packet = await this.#writes.enqueue(identity.server + '\0' + media[1], {
-      kind: opening ? 'open' : progress ? 'progress' : 'metadata', scope: generation + '\0' + scene,
-      run: async isLatest => {
-        this.#current(generation);
-        if (opening && options.signal?.aborted) throw stale();
-        const timeout = new AbortController();
-        // Headers and the finite JSON body are bounded; media/SSE bodies use the streaming path above.
-        const signal = AbortSignal.any([timeout.signal, ...(opening ? [identity.signal, ...(options.signal ? [options.signal] : [])] : [])]);
-        let timer;
-        const expired = new Promise((_, reject) => {
-          timer = setTimeout(() => { timeout.abort(); reject(new SessionError(503, '保存或读取作品超时，请重试')); }, 30000);
-          timer.unref?.();
-        });
-        const collect = async response => {
-          const chunks = []; let size = 0;
-          const reader = response.body?.getReader();
-          const cancel = () => { void reader?.cancel().catch(() => {}); };
-          signal.addEventListener('abort', cancel, { once: true });
-          try {
-            if (reader) while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              if (signal.aborted) throw stale();
-              size += value.byteLength;
-              if (size > 4 * 1024 * 1024) throw new SessionError(502, '作品响应过大');
-              chunks.push(Buffer.from(value));
+    const key = identity.server + '\0' + media[1];
+    let intent;
+    const previousIntent = opening ? this.#outbox.peek(key) : undefined;
+    if (opening) void this.#outbox.retry(true, key);
+    if (progress) {
+      intent = retryIntent || this.#outbox.capture(key, ticket => this.request(pathname, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-HE-Media-Session': scene },
+        body: JSON.stringify(payload), [RETRY]: ticket,
+      }, generation).then(response => response.body?.cancel()));
+      if (retryIntent && !this.#outbox.current(intent)) throw stale();
+    }
+    let packet;
+    try {
+      packet = await this.#writes.enqueue(key, {
+        kind: opening ? 'open' : progress ? 'progress' : 'metadata', scope: generation + '\0' + scene,
+        run: async isLatest => {
+          this.#current(generation);
+          if (retryIntent && !this.#outbox.current(intent)) throw stale();
+          if (opening && options.signal?.aborted) throw stale();
+          const timeout = new AbortController();
+          // Headers and the finite JSON body are bounded; media/SSE bodies use the streaming path above.
+          const signal = AbortSignal.any([timeout.signal, ...(opening ? [identity.signal, ...(options.signal ? [options.signal] : [])] : [])]);
+          let timer;
+          const expired = new Promise((_, reject) => {
+            timer = setTimeout(() => { timeout.abort(); reject(new SessionError(503, '保存或读取作品超时，请重试')); }, 30000);
+            timer.unref?.();
+          });
+          const collect = async response => {
+            const chunks = []; let size = 0;
+            const reader = response.body?.getReader();
+            const cancel = () => { void reader?.cancel().catch(() => {}); };
+            signal.addEventListener('abort', cancel, { once: true });
+            try {
+              if (reader) while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                if (signal.aborted) throw stale();
+                size += value.byteLength;
+                if (size > 4 * 1024 * 1024) throw new SessionError(502, '作品响应过大');
+                chunks.push(Buffer.from(value));
+              }
+            } catch (error) {
+              cancel();
+              if (error instanceof SessionError || signal.aborted) throw error;
+              throw new SessionError(503, '连接中断，请重试');
             }
-          } catch (error) { cancel(); throw error; }
-          finally { signal.removeEventListener('abort', cancel); }
-          if (signal.aborted) throw stale();
-          const bytes = Buffer.concat(chunks);
-          let data;
-          try { data = JSON.parse(bytes.toString('utf8')); } catch { /* Keep the original HTTP response. */ }
-          return { status: response.status, statusText: response.statusText, headers: [...response.headers], bytes, data };
-        };
-        const operation = async () => {
-          let result = await collect(await execute(options.body, signal));
-          if (result.status >= 200 && result.status < 300) {
-            this.#current(generation);
-            if (opening && result.data?.id === Number(media[1])) this.#opened.add(result.data.id);
-            // A zero page is a real reading intent. Keep both compatibility writes
-            // under this lock; a later page/open makes an old repair obsolete.
-            if (progress && payload.progress === 0 && result.data?.media_type === 'manga' && result.data.page_count > 1) {
-              for (let attempt = 0; attempt < 3; ++attempt) {
-                if (!isLatest() || signal.aborted || generation !== this.#generation) break;
-                try {
-                  const repaired = await collect(await execute(JSON.stringify({ view_status: 'viewing' }), signal));
-                  if (repaired.status < 500) { result = repaired; break; }
-                  if (attempt === 2) result = repaired;
-                } catch (error) { if (attempt === 2 || signal.aborted || generation !== this.#generation) throw error; }
-                if (attempt < 2 && isLatest()) await delay(250 * (attempt + 1), undefined, { signal });
+            finally { signal.removeEventListener('abort', cancel); }
+            if (signal.aborted) throw stale();
+            const bytes = Buffer.concat(chunks);
+            let data;
+            try { data = JSON.parse(bytes.toString('utf8')); } catch { /* Keep the original HTTP response. */ }
+            return { status: response.status, statusText: response.statusText, headers: [...response.headers], bytes, data };
+          };
+          const operation = async () => {
+            let result = await collect(await execute(options.body, signal));
+            if (result.status >= 200 && result.status < 300) {
+              this.#current(generation);
+              if (opening && result.data?.id === Number(media[1])) {
+                this.#opened.add(result.data.id); this.#outbox.complete(previousIntent);
+              }
+              // A zero page is a real reading intent. Keep both compatibility writes
+              // under this lock; a later page/open makes an old repair obsolete.
+              if (progress && payload.progress === 0 && result.data?.media_type === 'manga' && result.data.page_count > 1) {
+                for (let attempt = 0; attempt < 3; ++attempt) {
+                  if (!isLatest() || signal.aborted || generation !== this.#generation) break;
+                  try {
+                    const repaired = await collect(await execute(JSON.stringify({ view_status: 'viewing' }), signal));
+                    if (repaired.status < 500) { result = repaired; break; }
+                    if (attempt === 2) result = repaired;
+                  } catch (error) { if (attempt === 2 || signal.aborted || generation !== this.#generation) throw error; }
+                  if (attempt < 2 && isLatest()) await delay(250 * (attempt + 1), undefined, { signal });
+                }
               }
             }
-          }
-          if (result.status === 401) await this.expire(generation);
-          else this.#current(generation);
-          return result;
-        };
-        try { return await Promise.race([operation(), expired]); }
-        finally { clearTimeout(timer); }
-      },
-    });
+            if (result.status === 401) await this.expire(generation);
+            else this.#current(generation);
+            return result;
+          };
+          try { return await Promise.race([operation(), expired]); }
+          finally { clearTimeout(timer); }
+        },
+      });
+      if (intent) {
+        if (packet.status >= 500 || packet.status === 408 || packet.status === 429) this.#outbox.fail(intent);
+        else this.#outbox.complete(intent);
+      }
+    } catch (error) {
+      if (intent) {
+        if (error.status === 503 && generation === this.#generation) this.#outbox.fail(intent);
+        else this.#outbox.complete(intent);
+      }
+      throw error;
+    }
     // Coalesced callers each own a body; never share a consumed Response stream.
     return new Response([204, 205, 304].includes(packet.status) ? null : packet.bytes,
       { status: packet.status, statusText: packet.statusText, headers: packet.headers });

@@ -299,3 +299,68 @@ test('stream 401 returns a readable error after current identity cancellation', 
   assert.equal(response.status, 401); assert.equal((await response.json()).detail, '登录已过期，请重新登录');
   assert.equal(session.snapshot().user, null);
 });
+test('network recovery retries only the latest failed progress and never metadata', async () => {
+  let online = false; const sent = [];
+  const { session } = setup((_url, options) => {
+    const body = JSON.parse(typeof options.body === 'string' ? options.body : Buffer.from(options.body).toString());
+    sent.push(body);
+    if (!online) throw new Error('offline');
+    return json({ id: 7, ...body });
+  });
+  const { generation } = await session.login('1', 'pw');
+  for (const value of [1, 2, 3]) await assert.rejects(patch(session, generation, value), { status: 503 });
+  await assert.rejects(session.request('/media/7', { method: 'PATCH', body: '{"favorite":true}' }, generation), { status: 503 });
+  online = true; await session.retryProgress();
+  assert.deepEqual(sent, [{ progress: 1 }, { progress: 2 }, { progress: 3 }, { favorite: true }, { progress: 3 }]);
+  await session.retryProgress(); assert.equal(sent.length, 5);
+  session.stopRetries();
+});
+test('re-opening a media item drains its failed latest position before reading detail', async () => {
+  let online = false, position = 0; const sent = [];
+  const { session } = setup((_url, options) => {
+    if (!online) throw new Error('offline');
+    if (options.method === 'PATCH') { position = JSON.parse(options.body).progress; sent.push(position); }
+    else sent.push('open');
+    return json({ id: 7, progress: position });
+  });
+  const { generation } = await session.login('1', 'pw');
+  await assert.rejects(patch(session, generation, 12), { status: 503 });
+  online = true;
+  const opened = await session.request('/media/7', {}, generation);
+  assert.equal((await opened.json()).progress, 12);
+  assert.deepEqual(sent, [12, 'open']); session.stopRetries();
+});
+test('an in-flight failed retry cannot resurrect itself after a newer progress succeeds', async () => {
+  const pending = deferred(), sent = [];
+  const { session } = setup((_url, options) => {
+    const value = JSON.parse(typeof options.body === 'string' ? options.body : Buffer.from(options.body).toString()).progress;
+    sent.push(value);
+    if (sent.length === 1) return json({}, 503);
+    if (sent.length === 2) return pending.promise;
+    return json({ id: 7, progress: value });
+  });
+  const { generation } = await session.login('1', 'pw');
+  assert.equal((await patch(session, generation, 1)).status, 503);
+  const retry = session.retryProgress(); await tick();
+  const latest = patch(session, generation, 20);
+  pending.resolve(json({}, 503)); await Promise.all([retry, latest]);
+  await session.retryProgress(); assert.deepEqual(sent, [1, 1, 20]); session.stopRetries();
+});
+test('account changes discard unsent retry state, and bounded drain does not cancel an in-flight write', async () => {
+  let pending = null; const sent = [];
+  const { session } = setup((_url, options) => {
+    sent.push(options.headers.get('Authorization'));
+    return pending ? pending.promise : json({}, 503);
+  });
+  const first = await session.login('1', 'pw');
+  await patch(session, first.generation, 2);
+  const second = await session.login('2', 'pw');
+  await session.retryProgress(); assert.equal(sent.length, 1);
+  pending = deferred();
+  const write = patch(session, second.generation, 10);
+  assert.equal(await session.flushWrites(10), false);
+  assert.equal(sent.length, 2);
+  pending.resolve(json({ id: 7, progress: 10 })); await write;
+  assert.equal(await session.flushWrites(10), true);
+  assert.deepEqual(sent, ['Bearer opaque-secret-1', 'Bearer opaque-secret-2']); session.stopRetries();
+});

@@ -18,6 +18,7 @@ import {
 import { desktopBridge, desktopState, setDesktopPreferences, type ImageEnhancement } from '../../desktop'
 import { UiToast } from '../ui'
 import { useDesktopImageEnhancement } from '../../composables/useDesktopImageEnhancement'
+import { authIdentity } from '../../auth'
 import { API_BASE_URL, authUrl } from '../../config'
 import type { Media } from '../../types'
 import { useImageViewerZoom } from '../../composables/useImageViewerZoom'
@@ -41,6 +42,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:currentPage': [page: number]
+  visiblePage: [mediaId: number, page: number]
   viewerClick: []
   viewerDoubleClick: []
   controlsHover: [hovering: boolean]
@@ -367,13 +369,14 @@ const onWheel = (event: WheelEvent) => {
 }
 
 const onWebtoonScroll = () => {
+  scheduleVisiblePage()
   if (isProgrammaticScroll || readMode.value !== 'webtoon' || webtoonScrollRafId !== null) return
   webtoonScrollRafId = requestAnimationFrame(() => {
     webtoonScrollRafId = null
     if (isProgrammaticScroll || readMode.value !== 'webtoon') return
     const container = webtoonContainerRef.value
     if (!container || !props.totalPages) return
-    const containerTop = container.scrollTop + 100
+    const containerTop = container.scrollTop + (desktopBridge ? container.clientHeight / 2 : 100)
     const children = container.children
     if (!children.length) return
     let low = 0
@@ -384,6 +387,7 @@ const onWebtoonScroll = () => {
       if (el.offsetTop + el.offsetHeight < containerTop) low = mid + 1
       else high = mid
     }
+    if (desktopBridge && container.scrollTop + container.clientHeight >= container.scrollHeight - 2) low = children.length - 1
     if (low !== props.currentPage) {
       // Scrolling reports progress; it must not trigger the page-navigation watcher.
       scrollReportedPage = low
@@ -444,9 +448,55 @@ const preloadAdjacentPages = () => {
   const indices = [page, page + 1, page + 2, page - 1, page + 3, page + 4, page - 2, page + 5, page + 6]
   imageBuffer.requestWindow(indices.filter(p => p >= 0 && p < props.totalPages!).map(pageUrlFor), readMode.value === 'single' ? 1 : 2)
 }
+// Decoder/prefetch readiness alone never advances desktop reading progress.
+// Observe the actual displayed image after a paint, including cache hits.
+const openedIdentity = authIdentity()
+let visibleRaf: number | null = null, visibleDisposed = false, lastVisible = ''
+function reportVisiblePage() {
+  if (!desktopBridge || props.imagePages || visibleDisposed || document.hidden || authIdentity() !== openedIdentity) return
+  const container = readMode.value === 'webtoon' ? webtoonContainerRef.value : imageContainerRef.value
+  if (!container?.isConnected) return
+  const rect = container.getBoundingClientRect()
+  const top = Math.max(0, rect.top), bottom = Math.min(innerHeight, rect.bottom)
+  const left = Math.max(0, rect.left), right = Math.min(innerWidth, rect.right)
+  if (bottom <= top || right <= left) return
+  let candidates = canvasPages.value
+  if (readMode.value === 'webtoon') {
+    const pages = [...container.querySelectorAll<HTMLElement>('.he-reader-page')]
+    const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 2
+    const line = (top + bottom) / 2
+    const page = atBottom ? pages.at(-1) : pages.find(page => {
+      const box = page.getBoundingClientRect(); return box.top <= line && box.bottom >= line
+    })
+    candidates = page ? [Number(page.dataset.page)] : []
+  }
+  const visible = candidates.filter(page => {
+    const holder = container.querySelector<HTMLElement>(`[data-page="${page}"]`)
+    const image = holder?.querySelector('img')
+    if (!holder || !image?.complete || !image.naturalWidth) return false
+    const source = new URL(image.currentSrc || image.getAttribute('src') || '', location.href).href
+    if (source !== new URL(displayPageUrlFor(page), location.href).href) return false
+    const box = image.getBoundingClientRect()
+    return box.width > 0 && box.height > 0 && box.bottom > top && box.top < bottom && box.right > left && box.left < right
+  })
+  if (!visible.length) return
+  const page = Math.max(...visible), key = `${props.media.id}:${page}`
+  if (key === lastVisible) return
+  lastVisible = key
+  emit('visiblePage', props.media.id, page)
+}
+function scheduleVisiblePage() {
+  if (!desktopBridge || visibleDisposed || visibleRaf !== null) return
+  visibleRaf = requestAnimationFrame(() => {
+    visibleRaf = requestAnimationFrame(() => { visibleRaf = null; reportVisiblePage() })
+  })
+}
+watch([() => props.currentPage, readMode, () => props.totalPages,
+  () => canvasPages.value.map(page => displayPageUrlFor(page)).join('|')], () => { void nextTick(scheduleVisiblePage) }, { immediate: true })
+
 watch(() => [props.totalPages, readMode.value, props.imagePages?.map(item => item.id).join(',')], preloadAdjacentPages)
 watch(() => props.showControls, visible => { if (!visible) showShortcutGuide.value = false })
-defineExpose({ nextPage, previousPage, stepSize })
+defineExpose({ nextPage, previousPage, stepSize, flushVisiblePage: reportVisiblePage })
 
 watch(() => props.currentPage, page => {
   if (readMode.value !== 'webtoon') {
@@ -489,9 +539,15 @@ watch(isStripOpen, (open) => {
 onMounted(() => {
   updateStripWidth()
   window.addEventListener('resize', updateStripWidth, { passive: true })
+  window.addEventListener('resize', scheduleVisiblePage, { passive: true })
+  document.addEventListener('visibilitychange', scheduleVisiblePage)
 })
 
 onBeforeUnmount(() => {
+  visibleDisposed = true
+  if (visibleRaf !== null) cancelAnimationFrame(visibleRaf)
+  window.removeEventListener('resize', scheduleVisiblePage)
+  document.removeEventListener('visibilitychange', scheduleVisiblePage)
   imageBuffer.dispose()
   window.removeEventListener('mousemove', onDragMove)
   window.removeEventListener('mouseup', onDragEnd)
@@ -545,12 +601,14 @@ onBeforeUnmount(() => {
           v-for="pageIndex in totalPagesList"
           :key="imagePages?.[pageIndex]?.id ?? pageIndex"
           :id="`webtoon-page-${pageIndex}`"
+          :data-page="pageIndex"
           class="he-reader-page w-full max-w-[840px] shrink-0 my-1 relative group bg-white/5"
           :style="{ aspectRatio: `${pageDimensionsFor(pageIndex)[0]} / ${pageDimensionsFor(pageIndex)[1]}` }"
         >
           <img
             v-if="pageReady(pageIndex)"
             :src="displayPageUrlFor(pageIndex)"
+            @load="scheduleVisiblePage"
             :width="pageDimensionsFor(pageIndex)[0]"
             :height="pageDimensionsFor(pageIndex)[1]"
             loading="eager"
@@ -595,11 +653,13 @@ onBeforeUnmount(() => {
             :key="pageUrlFor(pageIndex)"
             class="he-reader-canvas-page relative flex h-full min-w-0 flex-1 items-center justify-center"
             :aria-label="pageLabel(pageIndex)"
+            :data-page="pageIndex"
             :aria-busy="!pageReady(pageIndex) && !pageFailed(pageIndex)"
           >
             <img
               v-if="pageReady(pageIndex)"
               :src="displayPageUrlFor(pageIndex)"
+            @load="scheduleVisiblePage"
               decoding="sync"
               class="h-full w-full object-contain pointer-events-none"
               :alt="imagePages?.[pageIndex]?.title || pageLabel(pageIndex)"

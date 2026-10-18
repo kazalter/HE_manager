@@ -4,6 +4,12 @@ const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args).catch(
   const message = String(error?.message || '').replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '');
   throw new Error(message || '操作失败，请重试。');
 });
+const closeHandlers = new Set();
+ipcRenderer.on('he:before-close', (_event, nonce) => {
+  if (typeof nonce !== 'string' || nonce.length > 128) return;
+  Promise.allSettled([...closeHandlers].map(callback => Promise.resolve().then(callback)))
+    .then(() => ipcRenderer.send('he:close-ready', nonce));
+});
 let videoCanvas = null, videoObserver = null, videoGeneration = 0;
 function detachVideoSurface() {
   videoObserver?.disconnect(); videoObserver = null;
@@ -52,6 +58,12 @@ contextBridge.exposeInMainWorld(
     login: (value) => invoke('he:login', value),
     logout: () => invoke('he:logout'),
     restoreLogin: () => invoke('he:restore-login'),
+    retryProgress: () => invoke('he:retry-progress'),
+    onBeforeClose: (callback) => {
+      if (typeof callback !== 'function') throw new Error('无效的关闭监听器');
+      closeHandlers.add(callback);
+      return () => closeHandlers.delete(callback);
+    },
     onSessionChanged: (callback) => {
       if (typeof callback !== 'function') throw new Error('无效的会话监听器');
       const listener = (_event, value) => callback(value);

@@ -83,20 +83,24 @@ module.exports = async ({ window, player, session, config, output }) => {
   try {
     await fs.mkdir(path.dirname(output), { recursive: true });
     report.sourceSha256 = {};
-    for (const name of ['main.cjs', 'embedded-player.cjs', 'preload.cjs', 'ui-selftest.cjs', 'session.cjs', 'credential-store.cjs', 'policy.cjs', 'images.cjs']) report.sourceSha256[name] = createHash('sha256').update(await fs.readFile(path.join(__dirname, name))).digest('hex');
+    for (const name of (await fs.readdir(__dirname)).filter(name => name.endsWith('.cjs')).sort()) report.sourceSha256[name] = createHash('sha256').update(await fs.readFile(path.join(__dirname, name))).digest('hex');
     const root = path.resolve(__dirname, '..');
     report.version = app.getVersion(); report.electron = process.versions.electron;
     report.uiSha256 = await hashTree(path.join(root, 'ui'));
     report.nativeBuild = JSON.parse((await fs.readFile(path.join(root, 'native/build', `${process.platform}-${process.arch}`, 'build-info.json'), 'utf8')).replace(/^\uFEFF/, ''));
     report.nativeSha256 = createHash('sha256').update(await fs.readFile(player.addon)).digest('hex');
     report.librarySha256 = createHash('sha256').update(await fs.readFile(player.library)).digest('hex');
-    await evaluate(`window.heDesktop.connect(${JSON.stringify(config.server)})`);
-    report.checks.directConnectivity = true;
-    await wait(() => evaluate(`!!document.querySelector('input[autocomplete="username"]')`), 'Login form missing');
-    await field('input[autocomplete="username"]', config.username);
-    await field('input[type="password"]', config.password);
-    await click('.he-auth-view button[type="submit"]');
-    await wait(() => evaluate('document.querySelectorAll(".he-media-card").length >= 4'), 'Authenticated library missing');
+    if (config.lifecycleStep === 'restore') {
+      await wait(() => !!session.snapshot().user, 'Encrypted login did not restore', 120000);
+    } else {
+      await evaluate(`window.heDesktop.connect(${JSON.stringify(config.server)})`);
+      report.checks.directConnectivity = true;
+      await wait(() => evaluate(`!!document.querySelector('input[autocomplete="username"]')`), 'Login form missing');
+      await field('input[autocomplete="username"]', config.username);
+      await field('input[type="password"]', config.password);
+      await click('.he-auth-view button[type="submit"]');
+    }
+    await wait(() => evaluate('document.querySelectorAll(".he-media-card").length >= 4'), 'Authenticated library missing', 120000);
     report.checks.loginAndLibrary = true;
     const authentication = session.snapshot();
     const credential = session.identity(authentication.generation).token;
@@ -111,6 +115,10 @@ module.exports = async ({ window, player, session, config, output }) => {
     };
     if (!Object.values(report.authentication).every(Boolean)) throw new Error('Desktop authentication integration failed');
     report.checks.desktopAuthentication = true;
+    if (config.lifecycleStep) {
+      await require('./ui-lifecycle-selftest.cjs')({ window, player, session, config, report, evaluate, wait, click, field, capture, enterStage });
+      report.status = 'partial-pass';
+    } else {
     await wait(() => evaluate(`!!document.querySelector('section[aria-label="继续观看"] button')`), 'Continue-watching fixture is missing; reseed the disposable test server before each run');
     report.checks.continueWatching = true;
     enterStage('library-appearance');
@@ -261,14 +269,18 @@ module.exports = async ({ window, player, session, config, output }) => {
     await wait(() => evaluate('!document.querySelector(".he-media-overlay")'), 'Error viewer could not return to library');
     report.checks.videoErrorAndRetry = true;
     report.status = 'partial-pass';
+    }
   } catch (error) {
     report.status = 'failed'; report.stage = stage; report.error = error.message;
     report.playback = player.state;
     report.nativeFailure = player.owner ? player.native.state(player.owner) : null;
-    report.canvasFailure = await evaluate(`(() => {const c=document.querySelector('.desktop-video canvas'), r=c?.getBoundingClientRect();return {exists:!!c,width:r?.width,height:r?.height,frames:Number(c?.dataset.heVideoFrames)||0,hidden:document.hidden};})()`);
-    report.windowMetrics = { size: window.getSize(), contentSize: window.getContentSize(), minimum: window.getMinimumSize(), viewport: await evaluate('({width:innerWidth,height:innerHeight})') };
-    try { await capture('failure'); } catch {}
+    if (!window.isDestroyed()) {
+      report.canvasFailure = await evaluate(`(() => {const c=document.querySelector('.desktop-video canvas'), r=c?.getBoundingClientRect();return {exists:!!c,width:r?.width,height:r?.height,frames:Number(c?.dataset.heVideoFrames)||0,hidden:document.hidden};})()`);
+      report.windowMetrics = { size: window.getSize(), contentSize: window.getContentSize(), minimum: window.getMinimumSize(), viewport: await evaluate('({width:innerWidth,height:innerHeight})') };
+      try { await capture('failure'); } catch {}
+    } else report.windowClosed = true;
   }
+  report.httpRequests = session.diagnosticRequests;
   report.capturedAt = new Date().toISOString();
   nativeTheme.themeSource = 'system';
   await fs.writeFile(output, JSON.stringify(report, null, 2) + '\n');
