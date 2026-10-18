@@ -1,0 +1,11 @@
+{
+  "sourceRevision": "82512118175fd9c10a34a3881780024da4abe7a8",
+  "target": "Linux /opt/stacks/he-manager shared Web frontend",
+  "build": "npm run build -- --outDir ../.deploy/cp02-8251211",
+  "status": "passed",
+  "filesReadBackAndCompared": 69,
+  "backup": "/home/user1/he-manager-backups/desktop-cp02-8251211/frontend-dist-before.tgz",
+  "buildRetained": "/home/user1/he-manager-builds/cp02-8251211",
+  "existingUntrackedFilePreserved": ".env.bak-20261010-1443",
+  "backendChanged": false
+}

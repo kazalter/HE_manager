@@ -1,0 +1,20 @@
+{
+  "url": "https://github.com/kazalter/HE_manager/actions/runs/39092576937",
+  "headSha": "67667075e05450bf5591c74fd7407a04d8ab6735",
+  "status": "completed",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "name": "desktop (win32, windows-2022)",
+      "conclusion": "success",
+      "startedAt": "2026-10-18T03:08:44Z",
+      "completedAt": "2026-10-18T03:11:09Z"
+    },
+    {
+      "name": "desktop (darwin, macos-latest)",
+      "conclusion": "success",
+      "startedAt": "2026-10-18T03:08:49Z",
+      "completedAt": "2026-10-18T03:10:32Z"
+    }
+  ]
+}
