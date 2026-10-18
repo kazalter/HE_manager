@@ -173,3 +173,112 @@ test('restore exposes a recoverable terminal state if host cleanup fails', async
   session.onInvalidate = async () => { throw new Error('Host cleanup failed'); };
   const state = await session.restore(); assert.equal(state.restoring, false); assert.equal(state.user, null); assert.ok(state.error);
 });
+
+const patch = (session, generation, progress, scene = 'scene-a') => session.request('/media/7', {
+  method: 'PATCH', body: new TextEncoder().encode(JSON.stringify({ progress })).buffer,
+  headers: { 'Content-Type': 'application/json', 'X-HE-Media-Session': scene },
+}, generation);
+test('slow progress coalesces pending ArrayBuffer bodies, with independent responses and metadata barriers', async () => {
+  const pending = deferred(), sent = [];
+  const { session } = setup((_url, options) => {
+    assert.equal(options.headers.get('X-HE-Media-Session'), null);
+    const value = JSON.parse(typeof options.body === 'string' ? options.body : Buffer.from(options.body).toString());
+    sent.push(value); return sent.length === 1 ? pending.promise : json({ id: 7, ...value });
+  });
+  const { generation } = await session.login('1', 'pw');
+  const first = patch(session, generation, 1);
+  const second = patch(session, generation, 2), third = patch(session, generation, 3);
+  const metadata = session.request('/media/7', { method: 'PATCH', body: '{"favorite":true}' }, generation);
+  const fourth = patch(session, generation, 4), fifth = patch(session, generation, 5);
+  assert.deepEqual(sent, [{ progress: 1 }]);
+  pending.resolve(json({ id: 7, progress: 1 }));
+  const result = await Promise.all([first, second, third, metadata, fourth, fifth]);
+  assert.deepEqual(sent, [{ progress: 1 }, { progress: 3 }, { favorite: true }, { progress: 5 }]);
+  assert.deepEqual(await Promise.all(result.map(response => response.json())), [
+    { id: 7, progress: 1 }, { id: 7, progress: 3 }, { id: 7, progress: 3 }, { id: 7, favorite: true }, { id: 7, progress: 5 }, { id: 7, progress: 5 },
+  ]);
+});
+test('different player scenes never merge; a re-open waits for old writes before verifying detail', async () => {
+  const pending = deferred(), sent = []; let position = 0;
+  const { session } = setup((_url, options) => {
+    if (options.method === 'PATCH') {
+      const value = JSON.parse(Buffer.from(options.body).toString()); sent.push(value.progress);
+      if (sent.length === 1) return pending.promise.then(() => { position = value.progress; return json({ id: 7, progress: position }); });
+      position = value.progress;
+    } else sent.push('open');
+    return json({ id: 7, progress: position });
+  });
+  const { generation } = await session.login('1', 'pw');
+  const first = patch(session, generation, 1);
+  const oldScene = patch(session, generation, 2, 'old');
+  const newScene = patch(session, generation, 3, 'new');
+  const open = session.request('/media/7', {}, generation);
+  await tick(); assert.deepEqual(sent, [1]);
+  pending.resolve(); await Promise.all([first, oldScene, newScene]);
+  assert.equal((await (await open).json()).progress, 3); assert.deepEqual(sent, [1, 2, 3, 'open']);
+});
+test('multi-page zero and its viewing repair are one logical write; single-page keeps viewed', async () => {
+  const repair = deferred(), sent = []; let pages = 4;
+  const { session } = setup((_url, options) => {
+    const body = JSON.parse(typeof options.body === 'string' ? options.body : Buffer.from(options.body).toString()); sent.push(body);
+    if (body.view_status) return repair.promise;
+    return json({ id: 7, media_type: 'manga', page_count: pages, progress: body.progress, view_status: pages === 1 ? 'viewed' : 'unviewed' });
+  });
+  const { generation } = await session.login('1', 'pw');
+  const zero = patch(session, generation, 0); await tick();
+  assert.deepEqual(sent, [{ progress: 0 }, { view_status: 'viewing' }]);
+  const last = patch(session, generation, 3); await tick(); assert.equal(sent.length, 2);
+  repair.resolve(json({ id: 7, progress: 0, view_status: 'viewing' }));
+  assert.equal((await (await zero).json()).view_status, 'viewing'); await last;
+  assert.deepEqual(sent.at(-1), { progress: 3 });
+  pages = 1;
+  const single = await patch(session, generation, 0);
+  assert.equal((await single.json()).view_status, 'viewed'); assert.equal(sent.length, 4);
+});
+test('a superseded zero-page repair never retries over a newer last-page intent', async () => {
+  const failed = deferred(), sent = [];
+  const { session } = setup((_url, options) => {
+    const body = JSON.parse(typeof options.body === 'string' ? options.body : Buffer.from(options.body).toString()); sent.push(body);
+    if (body.view_status) return failed.promise;
+    return json({ id: 7, media_type: 'manga', page_count: 4, progress: body.progress, view_status: body.progress === 3 ? 'viewed' : 'unviewed' });
+  });
+  const { generation } = await session.login('1', 'pw');
+  const zero = patch(session, generation, 0); await tick();
+  const last = patch(session, generation, 3);
+  failed.resolve(json({ detail: 'temporary' }, 503)); await zero;
+  assert.equal((await (await last).json()).view_status, 'viewed');
+  assert.deepEqual(sent, [{ progress: 0 }, { view_status: 'viewing' }, { progress: 3 }]);
+});
+test('a still-current zero-page repair retries a temporary server failure', async () => {
+  const sent = [];
+  const { session } = setup((_url, options) => {
+    const body = JSON.parse(typeof options.body === 'string' ? options.body : Buffer.from(options.body).toString()); sent.push(body);
+    if (body.view_status) return sent.length === 2 ? json({}, 503) : json({ id: 7, progress: 0, view_status: 'viewing' });
+    return json({ id: 7, media_type: 'manga', page_count: 4, progress: 0, view_status: 'unviewed' });
+  });
+  const { generation } = await session.login('1', 'pw');
+  assert.equal((await (await patch(session, generation, 0)).json()).view_status, 'viewing');
+  assert.equal(sent.length, 3);
+});
+test('aborted queued opens do not mark a media item opened or issue a side-effecting GET', async () => {
+  const pending = deferred(); let opens = 0;
+  const { session } = setup((_url, options) => {
+    if (options.method === 'PATCH') return pending.promise;
+    opens++; return json({ id: 7 });
+  });
+  const { generation } = await session.login('1', 'pw');
+  const write = patch(session, generation, 4), abort = new AbortController();
+  const opening = session.request('/media/7', { signal: abort.signal }, generation);
+  const rejected = assert.rejects(opening, { status: 409 }); abort.abort();
+  pending.resolve(json({ id: 7 })); await Promise.all([write, rejected]);
+  assert.equal(opens, 0);
+  assert.throws(() => session.mediaSource('he://app/stream/7?he_session=' + generation), { status: 403 });
+});
+
+test('finite detail 401 is buffered before identity cancellation and still clears login', async () => {
+  const { session } = setup(() => json({ detail: 'expired' }, 401));
+  const { generation } = await session.login('1', 'pw');
+  const response = await session.request('/media/7', {}, generation);
+  assert.equal(response.status, 401); assert.deepEqual(await response.json(), { detail: 'expired' });
+  assert.equal(session.snapshot().user, null);
+});

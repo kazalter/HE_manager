@@ -1,8 +1,11 @@
 import { computed, reactive } from 'vue'
-import axios from 'axios'
 import { API_BASE_URL } from '../config'
 import type { DedupCandidatePage, DedupSummary, DuplicateCandidatePair } from '../types'
 
+import { desktopScopedStore, type StoreScope } from './desktopScopedStore'
+
+function createStore(scope: StoreScope) {
+const axios = scope.http
 interface DedupState {
   summary: DedupSummary | null
   pairs: DuplicateCandidatePair[]
@@ -150,7 +153,7 @@ const batchResolve = async (pairIds: number[], action: 'keep_both' | 'ignore') =
   }
 }
 
-export const dedupStore = {
+return {
   state,
   summary: computed(() => state.summary),
   pairs: computed(() => state.pairs),
@@ -175,3 +178,6 @@ export const dedupStore = {
   setPage(page: number) { state.page = Math.max(1, page) },
   clearError() { state.errorMessage = '' },
 }
+
+}
+export const dedupStore = desktopScopedStore(createStore)

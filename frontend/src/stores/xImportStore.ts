@@ -1,8 +1,11 @@
 import { computed, reactive } from 'vue'
-import axios from 'axios'
 import { API_BASE_URL } from '../config'
 import type { XImportJob, XImportSource, XImportStats, XSyncJob } from '../types'
 
+import { desktopScopedStore, type StoreScope } from './desktopScopedStore'
+
+function createStore(scope: StoreScope) {
+const axios = scope.http
 const STORAGE_KEY = 'he-manager:x-import-job'
 const SYNC_STORAGE_KEY = 'he-manager:x-sync-job'
 const POLL_INTERVAL_MS = 1500
@@ -43,16 +46,16 @@ const isFinalStatus = (status: string) => ['completed', 'failed', 'canceled'].in
 const persistJob = (jobId: string | null, sourceId: number | null) => {
   try {
     if (jobId && sourceId !== null) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ jobId, sourceId } satisfies PersistedJob))
+      scope.storage.setItem(STORAGE_KEY, JSON.stringify({ jobId, sourceId } satisfies PersistedJob))
     } else {
-      localStorage.removeItem(STORAGE_KEY)
+      scope.storage.removeItem(STORAGE_KEY)
     }
   } catch { /* ignore */ }
 }
 
 const readPersistedJob = (): PersistedJob | null => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = scope.storage.getItem(STORAGE_KEY)
     if (!raw) return null
     return JSON.parse(raw) as PersistedJob
   } catch {
@@ -62,12 +65,13 @@ const readPersistedJob = (): PersistedJob | null => {
 
 const stopPolling = () => {
   if (pollTimer !== null) {
-    window.clearInterval(pollTimer)
+    scope.clearInterval(pollTimer)
     pollTimer = null
   }
 }
 
 const fireCompleted = (job: XImportJob) => {
+  if (!scope.active()) return
   for (const cb of state.onCompletedCallbacks) {
     try { cb(job) } catch (err) { console.error(err) }
   }
@@ -109,7 +113,7 @@ const pollOnce = async (jobId: string) => {
 const startPolling = (jobId: string) => {
   stopPolling()
   pollOnce(jobId)
-  pollTimer = window.setInterval(() => pollOnce(jobId), POLL_INTERVAL_MS)
+  pollTimer = scope.setInterval(() => pollOnce(jobId), POLL_INTERVAL_MS)
 }
 
 const fetchSource = async (): Promise<XImportSource> => {
@@ -215,16 +219,16 @@ const dismissJob = () => {
 const persistSyncJob = (jobId: string | null, sourceId: number | null) => {
   try {
     if (jobId && sourceId !== null) {
-      localStorage.setItem(SYNC_STORAGE_KEY, JSON.stringify({ jobId, sourceId } satisfies PersistedJob))
+      scope.storage.setItem(SYNC_STORAGE_KEY, JSON.stringify({ jobId, sourceId } satisfies PersistedJob))
     } else {
-      localStorage.removeItem(SYNC_STORAGE_KEY)
+      scope.storage.removeItem(SYNC_STORAGE_KEY)
     }
   } catch { /* ignore */ }
 }
 
 const stopSyncPolling = () => {
   if (syncPollTimer !== null) {
-    window.clearInterval(syncPollTimer)
+    scope.clearInterval(syncPollTimer)
     syncPollTimer = null
   }
 }
@@ -254,7 +258,7 @@ const pollSyncOnce = async (jobId: string) => {
 const startSyncPolling = (jobId: string) => {
   stopSyncPolling()
   pollSyncOnce(jobId)
-  syncPollTimer = window.setInterval(() => pollSyncOnce(jobId), SYNC_POLL_INTERVAL_MS)
+  syncPollTimer = scope.setInterval(() => pollSyncOnce(jobId), SYNC_POLL_INTERVAL_MS)
 }
 
 const startSync = async () => {
@@ -331,7 +335,7 @@ const tryResume = async () => {
 const trySyncResume = async () => {
   let persisted: PersistedJob | null = null
   try {
-    const raw = localStorage.getItem(SYNC_STORAGE_KEY)
+    const raw = scope.storage.getItem(SYNC_STORAGE_KEY)
     if (raw) persisted = JSON.parse(raw) as PersistedJob
   } catch { /* ignore */ }
 
@@ -373,7 +377,7 @@ const ensureResumed = async () => {
   await trySyncResume()
 }
 
-export const xImportStore = {
+return {
   state,
   source: computed(() => state.source),
   stats: computed(() => state.stats),
@@ -410,3 +414,6 @@ export const xImportStore = {
   clearError() { state.errorMessage = '' },
   setError(msg: string) { state.errorMessage = msg },
 }
+
+}
+export const xImportStore = desktopScopedStore(createStore)

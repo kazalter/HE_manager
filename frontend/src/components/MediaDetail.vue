@@ -23,6 +23,9 @@ import { useMediaKeyboard } from '../composables/useMediaKeyboard'
 import { nextVideo } from '../utils/videoSequence'
 
 const sessionHeaders = authHeaders(), openedIdentity = authIdentity()
+if (desktopBridge) sessionHeaders['X-HE-Media-Session'] = crypto.randomUUID()
+let mutationRevision = 0
+const fieldRevision = new Map<string, number>()
 const props = defineProps<{
   initialMedia: Media
   allMedia: Media[]
@@ -37,6 +40,7 @@ const emit = defineEmits<{
   discarded: [record: DiscardRecord]
 }>()
 
+const desktopPlayer = ref<InstanceType<typeof DesktopVideoPlayer> | null>(null)
 const currentMedia = ref<Media>(props.initialMedia)
 const currentPage = ref(0)
 const totalMangaPages = ref<number | null>(null)
@@ -159,21 +163,23 @@ const updateMedia = async (
   payload: Partial<Pick<Media, 'duration' | 'favorite' | 'rating' | 'view_status' | 'progress' | 'title' | 'source_url' | 'source_site'>>,
   mediaId = currentMedia.value.id,
 ) => {
-  const res = await axios.patch(`${API_BASE_URL}/media/${mediaId}`, payload, { headers: sessionHeaders })
   if (authIdentity() !== openedIdentity) return
-  if (currentMedia.value.id === mediaId) {
-    if (payload.progress !== undefined) {
-      // A newer local position may already be queued while this PATCH was in flight.
-      applyMediaPatch({ ...res.data, progress: currentMedia.value.progress,
-        duration: currentMedia.value.duration, view_status: currentMedia.value.view_status })
-    } else {
-      applyMediaPatch(res.data)
-    }
-  } else {
-    // A progress request may finish after playback already moved to another item.
-    // Keep the parent list fresh without replacing the newly selected media.
-    emit('updated', { ...res.data })
+  const revision = ++mutationRevision
+  for (const field of Object.keys(payload)) fieldRevision.set(field, revision)
+  const res = await axios.patch(`${API_BASE_URL}/media/${mediaId}`, payload, { headers: sessionHeaders })
+  if (authIdentity() !== openedIdentity || viewerDisposed || currentMedia.value.id !== mediaId) return
+  // Metadata responses contain the whole DTO, including possibly older progress.
+  // Apply only this mutation's fields, and only while their local intent is current.
+  const accepted = Object.fromEntries(Object.keys(payload)
+    .filter(field => fieldRevision.get(field) === revision && field in res.data)
+    .filter(field => field !== 'progress' && field !== 'duration' || currentMedia.value.progress === payload.progress)
+    .map(field => [field, res.data[field]]))
+  if (payload.progress !== undefined && fieldRevision.get('progress') === revision &&
+      currentMedia.value.progress === payload.progress && res.data.view_status) {
+    accepted.view_status = res.data.view_status
   }
+  Object.assign(currentMedia.value, accepted)
+  emit('updated', { ...currentMedia.value })
 }
 
 const setRating = async (score: number) => {
@@ -225,9 +231,11 @@ const navigateMedia = async (direction: -1 | 1) => {
 
   const target = props.allMedia[targetIndex]
   if (!target) return
-  if (isVideo.value) void saveVideoProgress(true)
-  currentMedia.value = target
-  currentPage.value = 0
+  if (isVideo.value) {
+    if (desktopBridge) desktopPlayer.value?.flushProgress()
+    else void saveVideoProgress(true)
+  }
+  if (!desktopBridge) { currentMedia.value = target; currentPage.value = 0 }
   emit('navigate', target)
 }
 
@@ -258,8 +266,7 @@ const handleVideoSequenceEnded = () => {
   if (playMode.value === 'order' || playMode.value === 'shuffle') {
     const next = nextVideo(props.allMedia, currentMedia.value.id, playMode.value)
     if (!next) return
-    currentMedia.value = next
-    currentPage.value = 0
+    if (!desktopBridge) { currentMedia.value = next; currentPage.value = 0 }
     emit('navigate', next)
   }
 }
@@ -291,7 +298,7 @@ const imageDimensions = computed(() => imagePages.value.map(item => item.width &
 const selectImagePage = (page: number) => {
   const target = imagePages.value[page]
   if (!target || target.id === currentMedia.value.id) return
-  currentMedia.value = target
+  if (!desktopBridge) currentMedia.value = target
   emit('navigate', target)
 }
 const setReaderPage = (page: number) => {
@@ -384,7 +391,8 @@ const {
 
 let lastDesktopSave = 0
 let desktopEnded = false
-const desktopProgress = (position: number, duration: number, ended: boolean, force = false) => {
+const desktopProgress = (position: number, duration: number, ended: boolean, force = false, sourceUrl?: string) => {
+  if (authIdentity() !== openedIdentity || sourceUrl !== videoUrl.value) return
   if (!Number.isFinite(position) || position < 0 || !isVideo.value) return
   const progress = Math.floor(position)
   const savedDuration = Number.isFinite(duration) && duration >= 1 ? Math.floor(duration) : undefined
@@ -480,8 +488,7 @@ const advanceAutomatically = async () => {
       }
       const next = props.allMedia[nextIndex]
       if (next) {
-        currentMedia.value = next
-        currentPage.value = 0
+        if (!desktopBridge) { currentMedia.value = next; currentPage.value = 0 }
         emit('navigate', next)
       } else {
         isAutoAdvancing.value = false
@@ -769,7 +776,7 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
             </div>
           </div>
 
-          <DesktopVideoPlayer v-else-if="isVideo && desktopBridge" :url="videoUrl" :title="currentMedia.title" :start="currentMedia.progress || 0" @progress="desktopProgress" />
+          <DesktopVideoPlayer ref="desktopPlayer" v-else-if="isVideo && desktopBridge" :url="videoUrl" :title="currentMedia.title" :start="currentMedia.progress || 0" @progress="desktopProgress" />
 
           <VideoPlayer v-else-if="isVideo" :cover-url="coverUrl" @ready="setArtContainer" />
 

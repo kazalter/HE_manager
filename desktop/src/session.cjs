@@ -1,4 +1,6 @@
 const { randomUUID } = require('node:crypto');
+const { MediaQueue } = require('./media-queue.cjs');
+const { setTimeout: delay } = require('node:timers/promises');
 const { serverUrl, mediaRequest, API_PATH } = require('./policy.cjs');
 class SessionError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -12,7 +14,7 @@ function userValue(value) {
 class DesktopSession {
   #token = ''; #user = null; #generation = randomUUID(); #cancel = new AbortController();
   #revision = 0; #opened = new Set();
-  #operation = 0; #save = Promise.resolve(); #cleanup = Promise.resolve(); #writes = new Map();
+  #operation = 0; #save = Promise.resolve(); #cleanup = Promise.resolve(); #writes = new MediaQueue();
   constructor({ server = '', store, fetch: fetcher = fetch, onInvalidate = () => {}, onChange = () => {} }) {
     this.server = server ? serverUrl(server) : ''; this.store = store; this.fetch = fetcher;
     this.onInvalidate = onInvalidate; this.onChange = onChange; this.restoring = false; this.hasUsers = true; this.error = ''; this.persisted = false;
@@ -153,30 +155,98 @@ class DesktopSession {
     if (parsed.protocol !== 'he:' || parsed.host !== 'app' || parsed.username || parsed.password || !API_PATH.test(parsed.pathname) || parsed.pathname.startsWith('/auth') || parsed.searchParams.has('token') || parsed.hash) throw new SessionError(400, '不允许的服务器请求');
     const pathname = parsed.pathname + parsed.search;
     const headers = new Headers(options.headers);
-    for (const name of ['authorization', 'cookie', 'host', 'origin', 'referer', 'connection', 'accept-encoding', 'x-he-generation']) headers.delete(name);
+    const scene = headers.get('x-he-media-session') || '';
+    for (const name of ['authorization', 'cookie', 'host', 'origin', 'referer', 'connection', 'accept-encoding', 'content-length', 'x-he-generation', 'x-he-media-session']) headers.delete(name);
     headers.set('Authorization', 'Bearer ' + identity.token);
-    const execute = async (writing) => {
+    const method = (options.method || 'GET').toUpperCase();
+    const media = /^\/media\/(\d+)$/.exec(parsed.pathname);
+    const writing = method === 'PATCH' && !!media;
+    const opening = method === 'GET' && !!media;
+    const execute = async (body = options.body, signal) => {
       this.#current(generation);
-      const response = await this.#send(identity.server, pathname, { ...options, headers, signal: writing ? undefined : options.signal }, writing ? undefined : identity.signal);
-      if (generation !== this.#generation) { await response.body?.cancel(); throw stale(); }
-      if (response.status === 401) {
-        await this.expire(generation);
-      }
-      if ((options.method || 'GET').toUpperCase() === 'GET' && /^\/media\/\d+$/.test(parsed.pathname) && response.ok) {
-        const media = await response.clone().json(); this.#current(generation);
-        if (Number.isSafeInteger(media.id)) this.#opened.add(media.id);
-      }
+      const response = await this.#send(identity.server, pathname, { ...options, body, headers,
+        signal: signal || (writing ? undefined : options.signal) }, writing ? undefined : identity.signal);
+      if (generation !== this.#generation || signal?.aborted) { await response.body?.cancel(); throw stale(); }
+      if (response.status === 401 && !writing && !opening) await this.expire(generation);
       return response;
     };
-    const media = /^\/media\/(\d+)$/.exec(parsed.pathname);
-    if (options.method?.toUpperCase() !== 'PATCH' || !media) return execute(false);
-    // The lock survives identity changes. Queued old writes are discarded at dispatch;
-    // the old in-flight write retains its old server/token and drains before a new one.
-    const key = identity.server + '\0' + media[1], previous = this.#writes.get(key) || Promise.resolve();
-    const current = previous.catch(() => {}).then(() => execute(true));
-    this.#writes.set(key, current);
-    current.finally(() => { if (this.#writes.get(key) === current) this.#writes.delete(key); }).catch(() => {});
-    return current;
+    if (!writing && !opening) return execute();
+    let payload;
+    if (writing && options.body !== undefined) {
+      try {
+        const text = typeof options.body === 'string' ? options.body :
+          options.body instanceof ArrayBuffer ? Buffer.from(options.body).toString('utf8') :
+          ArrayBuffer.isView(options.body) ? Buffer.from(options.body.buffer, options.body.byteOffset, options.body.byteLength).toString('utf8') : '';
+        payload = JSON.parse(text);
+      } catch { /* Invalid JSON is rejected by the server. */ }
+    }
+    const progress = payload && typeof payload === 'object' && !Array.isArray(payload) &&
+      Object.hasOwn(payload, 'progress') && Object.keys(payload).every(key => ['progress', 'duration'].includes(key));
+    const packet = await this.#writes.enqueue(identity.server + '\0' + media[1], {
+      kind: opening ? 'open' : progress ? 'progress' : 'metadata', scope: generation + '\0' + scene,
+      run: async isLatest => {
+        this.#current(generation);
+        if (opening && options.signal?.aborted) throw stale();
+        const timeout = new AbortController();
+        // Headers and the finite JSON body are bounded; media/SSE bodies use the streaming path above.
+        const signal = AbortSignal.any([timeout.signal, ...(opening ? [identity.signal, ...(options.signal ? [options.signal] : [])] : [])]);
+        let timer;
+        const expired = new Promise((_, reject) => {
+          timer = setTimeout(() => { timeout.abort(); reject(new SessionError(503, '保存或读取作品超时，请重试')); }, 30000);
+          timer.unref?.();
+        });
+        const collect = async response => {
+          const chunks = []; let size = 0;
+          const reader = response.body?.getReader();
+          const cancel = () => { void reader?.cancel().catch(() => {}); };
+          signal.addEventListener('abort', cancel, { once: true });
+          try {
+            if (reader) while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (signal.aborted) throw stale();
+              size += value.byteLength;
+              if (size > 4 * 1024 * 1024) throw new SessionError(502, '作品响应过大');
+              chunks.push(Buffer.from(value));
+            }
+          } catch (error) { cancel(); throw error; }
+          finally { signal.removeEventListener('abort', cancel); }
+          if (signal.aborted) throw stale();
+          const bytes = Buffer.concat(chunks);
+          let data;
+          try { data = JSON.parse(bytes.toString('utf8')); } catch { /* Keep the original HTTP response. */ }
+          return { status: response.status, statusText: response.statusText, headers: [...response.headers], bytes, data };
+        };
+        const operation = async () => {
+          let result = await collect(await execute(options.body, signal));
+          if (result.status >= 200 && result.status < 300) {
+            this.#current(generation);
+            if (opening && result.data?.id === Number(media[1])) this.#opened.add(result.data.id);
+            // A zero page is a real reading intent. Keep both compatibility writes
+            // under this lock; a later page/open makes an old repair obsolete.
+            if (progress && payload.progress === 0 && result.data?.media_type === 'manga' && result.data.page_count > 1) {
+              for (let attempt = 0; attempt < 3; ++attempt) {
+                if (!isLatest() || signal.aborted || generation !== this.#generation) break;
+                try {
+                  const repaired = await collect(await execute(JSON.stringify({ view_status: 'viewing' }), signal));
+                  if (repaired.status < 500) { result = repaired; break; }
+                  if (attempt === 2) result = repaired;
+                } catch (error) { if (attempt === 2 || signal.aborted || generation !== this.#generation) throw error; }
+                if (attempt < 2 && isLatest()) await delay(250 * (attempt + 1), undefined, { signal });
+              }
+            }
+          }
+          if (result.status === 401) await this.expire(generation);
+          else this.#current(generation);
+          return result;
+        };
+        try { return await Promise.race([operation(), expired]); }
+        finally { clearTimeout(timer); }
+      },
+    });
+    // Coalesced callers each own a body; never share a consumed Response stream.
+    return new Response([204, 205, 304].includes(packet.status) ? null : packet.bytes,
+      { status: packet.status, statusText: packet.statusText, headers: packet.headers });
   }
 }
 module.exports = { DesktopSession, SessionError };

@@ -1,8 +1,11 @@
 import { computed, reactive } from 'vue'
-import axios from 'axios'
 import { API_BASE_URL } from '../config'
 import type { ExternalDownloadJob } from '../types'
 
+import { desktopScopedStore, type StoreScope } from './desktopScopedStore'
+
+function createStore(scope: StoreScope) {
+const axios = scope.http
 // Parallel to externalDownloadStore (WNACG). Same generic job poll/cancel
 // endpoints (`/external/downloads/{id}`), only the start endpoint differs
 // (`/external/asmr/downloads`). "pages" in the shared job schema = audio
@@ -31,23 +34,24 @@ const isFinalStatus = (status: string) => ['completed', 'failed', 'canceled'].in
 
 const persistJobId = (jobId: string | null) => {
   try {
-    if (jobId) localStorage.setItem(STORAGE_KEY, jobId)
-    else localStorage.removeItem(STORAGE_KEY)
+    if (jobId) scope.storage.setItem(STORAGE_KEY, jobId)
+    else scope.storage.removeItem(STORAGE_KEY)
   } catch { /* ignore */ }
 }
 
 const readPersistedJobId = (): string | null => {
-  try { return localStorage.getItem(STORAGE_KEY) } catch { return null }
+  try { return scope.storage.getItem(STORAGE_KEY) } catch { return null }
 }
 
 const stopPolling = () => {
   if (pollTimer !== null) {
-    window.clearInterval(pollTimer)
+    scope.clearInterval(pollTimer)
     pollTimer = null
   }
 }
 
 const fireCompleted = (job: ExternalDownloadJob) => {
+  if (!scope.active()) return
   for (const cb of state.onCompletedCallbacks) {
     try { cb(job) } catch (err) { console.error(err) }
   }
@@ -79,7 +83,7 @@ const pollOnce = async (jobId: string) => {
 const startPolling = (jobId: string) => {
   stopPolling()
   pollOnce(jobId)
-  pollTimer = window.setInterval(() => pollOnce(jobId), POLL_INTERVAL_MS)
+  pollTimer = scope.setInterval(() => pollOnce(jobId), POLL_INTERVAL_MS)
 }
 
 const startDownload = async (itemIds: number[], downloadRootPath: string) => {
@@ -151,7 +155,7 @@ const ensureResumed = () => {
   tryResume()
 }
 
-export const asmrDownloadStore = {
+return {
   state,
   job: computed(() => state.job),
   inProgress: computed(() => state.inProgress),
@@ -177,3 +181,6 @@ export const asmrDownloadStore = {
   ensureResumed,
   clearError() { state.errorMessage = '' },
 }
+
+}
+export const asmrDownloadStore = desktopScopedStore(createStore)
