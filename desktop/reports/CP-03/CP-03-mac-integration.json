@@ -1,0 +1,582 @@
+{
+  "phase": "CP-03",
+  "status": "partial-pass",
+  "platform": "darwin",
+  "packaged": true,
+  "checks": {
+    "directConnectivity": true,
+    "loginAndLibrary": true,
+    "desktopAuthentication": true,
+    "continueWatching": true,
+    "minimumContent": true,
+    "libraryAppearance": true,
+    "systemAppearance": true,
+    "emptySearch": true,
+    "videoLoading": true,
+    "embeddedVideo": true,
+    "videoEnhancement": true,
+    "keyboardSettings": true,
+    "seek": true,
+    "sameSessionFullscreen": true,
+    "viewerClose": true,
+    "readerControlsFit": true,
+    "readerModesAndZoom": true,
+    "enhancementFeedback": true,
+    "readerOpened": true,
+    "videoErrorAndRetry": true
+  },
+  "screenshots": [
+    "CP-03-mac-d-library-light-1280.png",
+    "CP-03-mac-d-library-light-1024.png",
+    "CP-03-mac-d-library-dark-1280.png",
+    "CP-03-mac-d-library-dark-1024.png",
+    "CP-03-mac-d-video-loading.png",
+    "CP-03-mac-d-video-dark-1280.png",
+    "CP-03-mac-d-video-dark-1024.png",
+    "CP-03-mac-d-reader-double-dark-1024.png",
+    "CP-03-mac-d-reader-scroll-dark-1024.png",
+    "CP-03-mac-d-reader-dark-1280.png",
+    "CP-03-mac-d-reader-dark-1024.png",
+    "CP-03-mac-d-reader-enhancement-feedback.png",
+    "CP-03-mac-d-video-light-1280.png",
+    "CP-03-mac-d-video-light-1024.png",
+    "CP-03-mac-d-reader-light-1280.png",
+    "CP-03-mac-d-reader-light-1024.png",
+    "CP-03-mac-d-video-error.png"
+  ],
+  "layouts": [
+    {
+      "scene": "library",
+      "mode": "light",
+      "width": 1280,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "scene": "library",
+      "mode": "light",
+      "width": 1024,
+      "height": 640,
+      "overflow": false
+    },
+    {
+      "scene": "library",
+      "mode": "dark",
+      "width": 1280,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "scene": "library",
+      "mode": "dark",
+      "width": 1024,
+      "height": 640,
+      "overflow": false
+    },
+    {
+      "scene": "video",
+      "mode": "dark",
+      "width": 1280,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "scene": "video",
+      "mode": "dark",
+      "width": 1024,
+      "height": 640,
+      "overflow": false
+    },
+    {
+      "scene": "reader",
+      "mode": "dark",
+      "width": 1280,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "scene": "reader",
+      "mode": "dark",
+      "width": 1024,
+      "height": 640,
+      "overflow": false
+    },
+    {
+      "scene": "video",
+      "mode": "light",
+      "width": 1280,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "scene": "video",
+      "mode": "light",
+      "width": 1024,
+      "height": 640,
+      "overflow": false
+    },
+    {
+      "scene": "reader",
+      "mode": "light",
+      "width": 1280,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "scene": "reader",
+      "mode": "light",
+      "width": 1024,
+      "height": 640,
+      "overflow": false
+    }
+  ],
+  "sourceSha256": {
+    "main.cjs": "dd8de2d5b577a2d5014ef4345d3402dce21b3d2d31472786ff5ecf5aeeaad0a1",
+    "embedded-player.cjs": "832cd7da3242432f718fbd8fc8ae43cecc7e9d396a1e9bb57679be3d03a3ab77",
+    "preload.cjs": "4a04c1d0bfe42e1b0d9a64901b321091e4f45473486682becd09f706848a39b2",
+    "ui-selftest.cjs": "3732bedd08d04b56cbde100431787e2d37a3031aba43f3e2e7072a7b11f7d1a7",
+    "session.cjs": "5125683fb83d6da828bec3a2f1d23805c4ffbf1c98456a96908cd23bf247d63b",
+    "credential-store.cjs": "ede6e98ba05b556c219e46e53274922fbbd1e63f5264ecb3b7871dc54d4c54b4",
+    "policy.cjs": "ef9925873c7e7eadb2244e06c04cb1ed408ea0969a4e2d531f38afa63d9cfc66",
+    "images.cjs": "b051c1848226ced84faf38d9ca46fe6cdc845213162dab55c740334a84f0c527"
+  },
+  "version": "0.3.0",
+  "electron": "44.8.0",
+  "uiSha256": {
+    "app-icons/he-180.png": "a8a21a323117abf1e1b1335b71fd0f3f9bfded0b6354d9f4aa39a7b0f91541c4",
+    "app-icons/he-192.png": "0493c8d75227b49d0f7e1bb40ef3081da87c9577260de1365c1ccfe360d0c0eb",
+    "app-icons/he-512.png": "7cf06e0768770ca1d3191cc4993d415639d80078774d7a0cf5b496b18ab2ce59",
+    "app-icons/he-maskable-512.png": "7cf06e0768770ca1d3191cc4993d415639d80078774d7a0cf5b496b18ab2ce59",
+    "app-icons/he.svg": "02dccd9882b87e270871e0de2ce48aa9cbda0254df7ab149f407391883174b2b",
+    "assets/_plugin-vue_export-helper-DAAOZMkq.js": "27e87fe62aa760227b7529576953d8314891fd2aec28e0a3f03aece406f2d7d7",
+    "assets/artplayer-BhDQXST_.js": "6070ba92141ea9d434772a45d0dc1f1d00c23df2d74c7e834ef55b651d9b91ca",
+    "assets/AssistantView-0Vsh1cnz.css": "fdff26d2586a2c49bc3723b45eda2b9b0ea73abc6b1366b474c810e9ccee9a58",
+    "assets/AssistantView-cQyvZyu5.js": "e7099b59289562a8d5602c2d2bcac41baf57289c374c0bcd798985c607a569bd",
+    "assets/asyncComponents-D4av8o2L.js": "6902228a64482c70b092bb09c5cedc7ca18911041a7f5c30d3ae7509c1598ce0",
+    "assets/audioPlaybackStore-DZF0qEqI.js": "2df693fbe2153b8fe851ddbd0a2563ed5d0bb5b0fb28d9df2b9aef5950c5f78d",
+    "assets/AudioPlayer-BGppmxgw.js": "39fd4316583aed31d5087d25de7c3710ff194c3bc2bdb6f958028519e892b5ef",
+    "assets/AudioPlayer-D_qgo3E_.css": "939c42777e4c0da17cd8cdeb107e6d6a191580fcdc2006934784df6340ee992c",
+    "assets/auth-DwSSpaXX.js": "b0cfcef2aaa927253e6a9f58d022dc9b6a4f2b1266804330cf82369a456c4479",
+    "assets/Bd2SpineView-BFGFDAY0.js": "da66284f59c419fd2c6a90ba4e957bb11c1fd936a2822702e0846e46b0020df5",
+    "assets/Bd2SpineView-h6J9uggk.css": "1e400654004f2473e1dbfe4211d68d3610a2de65c93478049e91f85ce95d6776",
+    "assets/ColorModeSelect-BPyDs3Ki.js": "83afd205d73f5da916911c9df16d51d953697109cf8bc01681a49d692320993b",
+    "assets/config-Cj5WTowE.js": "60b9e1ff78872dde21d9cf3739d08172b6d46caeb39f5ee718a9bbc90797c739",
+    "assets/CreatorsView-CDajDRBD.js": "af679d09d3439f89a5eafc4b804aef05408256dcc036de83493c5ed32a252868",
+    "assets/DedupView-DIfcNIYV.js": "c14da90521ffa0b59a75f6db5f5b258429319fc03a5e8d1c6c9d73b6fe160220",
+    "assets/desktopScopedStore-Ba0IudlQ.js": "2a0047c39fb22a1687b1b79b4ae99bdfb858679890f73852a58426462c4c5749",
+    "assets/discardApi-CwUD4P0W.js": "f3fe8e9eee1fc5459684bb6ce97e4626ba9549aa30293b213908a3238ee05169",
+    "assets/DiscardContentDialog-BXwygjdz.js": "3a3d1f6c107bab12b141c12fee44bba3200dbba4337af0c7bf521ef6353fe02f",
+    "assets/DiscardedView-CGtSH_jq.js": "726c08c02b7b217d6a4b117cb861d1c0b161c0c400986dc1f1e5874b49595118",
+    "assets/DownloadsView-CCwnxj9v.js": "03f337f576eb768c8e2ca568a0b48312742170846146a510b5d9082f307e474f",
+    "assets/DownloadsView-DRbuknqZ.css": "6f247cec264738d7f130ba43c1f46d5024592e4e07a620ae5ff1ac1f994e2e78",
+    "assets/EmbedSpineView-BARGduzd.js": "44682d1b9fde3431c73409fc8652975cb3171f397ca378a510327fe3428c2e94",
+    "assets/EmbedSpineView-BVKvaPhS.css": "367cfdba6b05f9aaa368b8aaec99c4a12337db98bbd8e36bb8c5f0d4093c4746",
+    "assets/ExternalFavoritesView-CfuRvgtd.js": "0aa6bbc875ff0f0f39a61b6af44d4c39feef6b89ab28b397156aedd3264bacc3",
+    "assets/ExternalFavoritesView-DjMKxjoY.css": "f90fecb2ec120402d9b3a56a76e04adf4d689ea382ed31243e26e3722ba88c6e",
+    "assets/index-DGCQBzzk.js": "e2f088a2f92751a896a0cbd3619f4538f4bfb445072fbf103813e177c8bf02b1",
+    "assets/index-DyjK6YGV.css": "b322f23a54685572ac69d725ab3b5b129c53852f5491bf66324711a51f9cf41a",
+    "assets/inter-latin-wght-normal-Dx4kXJAl.woff2": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+    "assets/lucide-icons-DDDay-u-.js": "38e6fc67d65de110cbb74b1009373037da7707619a586f7892baa3adc04c444e",
+    "assets/MangaRecommendView-BCtG3i2E.js": "81956855c00d784d4c92da25b3a421b1b7a8e2c897b7faba92de3dbc99185428",
+    "assets/media-placeholder-BE0xZWKB.js": "24400c3b45c521ba24ff53b5c8994eb70daf5f428a0f7170c1cc7151af2c408c",
+    "assets/media-placeholder-D6AyOhIP.svg": "5d292f3b051479328e5289adb2577661d3951fbfd7480a8e5e7a5dee45889a6b",
+    "assets/MediaCard-B6emRPQn.js": "94e8ea92539279dec6c3b3e6ae2de5a39e6477a46b1e26534a0ec18839a6e068",
+    "assets/MediaCard-DUzfBGHk.css": "11d52be45c3848c6fe0f3c5b3d3ebd8efcafbdadb46e9c33bd08f077f1d1031f",
+    "assets/MoreView-C3jDelnM.js": "a4062ddb862fb315cefd986b2600b98dbc253dff59feee21e262844676457191",
+    "assets/PaginationControl-8sXHDjs1.js": "13f3f30ddc47566c201eeb3321ab4b00f86c07b603b6ed4b1d0a901a9a403892",
+    "assets/PaginationControl-Cy7Yr0bi.css": "f9548072fc6ec34ffcdc045abfb4ecdd3fe3bd7daafe49a3b7aaf241fb296485",
+    "assets/PawchiveDownloads-BfzTZd1l.js": "de078b36496022217e4b5633e951814eafc5158784859146ae3e2244db5a454f",
+    "assets/preload-helper-qlgyTAkD.js": "0c88c6aaef07b19239a2eac9faef82584f9e733114f85dc190e98dcea60b1753",
+    "assets/rolldown-runtime-lhHHWwHU.js": "a526d1bb3288ef04d001028843220a24b0867a4edf8c685b69506d6525af36ff",
+    "assets/SettingsView-3hag0-mQ.css": "002dd27dff8c50161e22b97be5e24b373dba5ca884cf5634ce08952c246ed92e",
+    "assets/SettingsView-CVTPfMeG.js": "6c71495b1039579b4f7ac5c4e9d495efd8c2e0c060377f746d58189b7b245f80",
+    "assets/spine-player-Ci7d0mHH.js": "1e565affbb903fa2d8b6f40c7726ae7f88c7fcb4bda8c03438a2c880eb87c3ba",
+    "assets/spine-player-DA1bLauS.css": "3683eea212eeac14a258a4c0904b9c5dd4a739f343437c14120014030633f087",
+    "assets/StatsView-CRXEGB_d.js": "6a26de66276cf1518eb052236110da1d16d16ba54304b4c8c6511011ff9f092e",
+    "assets/StatsView-LTP7yO93.css": "bbe4f66eb4d8eac2a979a6e366daea6a8dd52ec8ac27dbc0977a72eea46d1fa4",
+    "assets/TagsView-B0HnfnTO.css": "c41ddbb8bb5270f5063dfe8ba4ac19c87ff01698fab547c401f4d5b7432bb02f",
+    "assets/TagsView-ClZaicrE.js": "7450466a1ab3090be5afc3a4438148d5e201c89049828a1cba3d0cb1ebfb4f86",
+    "assets/ThemeSelect-CsBCCoPX.js": "8b074707bfcd5feaf8ab752c33838eb9517aa23c6c72d2bb8d471ad44c81b62a",
+    "assets/ui-CEw8T23S.css": "4a5d49cb315a5eaaf4d34b20f34e84d26fbf17e2e4d45af089d64cc77e0e7673",
+    "assets/ui-hvf9nLez.js": "3e19d9c4f69895f0170561a7daf5854b96a2934c0632115c7f217ce40f96ef42",
+    "assets/useCompactViewport-yLrTYAPb.js": "1cb0a508bfb2048ca014d661c889a975ff1b2a0d48db86533d765565e692d7cc",
+    "assets/useImageViewerZoom-DaDLMNKC.js": "d3cf814d97a5ccb528dbba5c1f1e8a0d95d7e5701fa142551885b766b6990ca3",
+    "assets/UsersView-CNy29yfq.js": "41c58d822c3c34cb85adf5419057583f7d97b573fc929687196ded2040835098",
+    "assets/vendor-core-933TFPAm.js": "e2a78c0a46ee0020fc65d5958218ae33631f916c841648c033c16b055bb29f21",
+    "assets/VerifiedMediaDetail-Cf3ywYAD.css": "f32364dcc5f55ff14a2ca3cc5b16022c30f9011d87f40a28d3fcb718e8417a3f",
+    "assets/VerifiedMediaDetail-xPJ1Ewto.js": "750494da102d235d551f6b164bbb19dc87028c7524b78079a5da60588f6d9c78",
+    "favicon.png": "558d30d5f6e169c8369694b1e70b1e62b66c4c90655528007d37b4cee954aa05",
+    "favicon.svg": "61bc9a161de58248288e6905425d7180f0624c2865007b97d763fdac12043a66",
+    "icons.svg": "b45fa506195cfcdef406ba9f0c77b36ddc1a7c224040926ec70abc2fdea7b93a",
+    "index.html": "32e270de025b81a4cb02de573b0588f24a6efcefb8517c9e5393b9981231c24f",
+    "logo.png": "558d30d5f6e169c8369694b1e70b1e62b66c4c90655528007d37b4cee954aa05",
+    "manifest.webmanifest": "d0b9fcde9d1243f840b4a949b777502b8a5786e9099d588885f9d46d1c789002",
+    "theme-init.js": "ef8ccfe269ff32cbff85594704bc43e637ae09a852d9dcf9b035a3c793182c5b",
+    "version.json": "3d99edd0667f96f2ed4a1ea19063afc96c063a2e93b891d0f9816a5630b55929"
+  },
+  "nativeBuild": {
+    "platform": "darwin-arm64",
+    "electron": "44.8.0",
+    "nodeAPI": 8,
+    "minimumMacOS": "15.0",
+    "compiler": "Apple clang version 21.0.0 (clang-2100.3.34.2)",
+    "sourceSha256": {
+      "embedded.cpp": "363d222860175a5ee6e8369356eccd9679cd557f5e1ec2f1121dc6ae5bf95586",
+      "surface.h": "8ba5ccc8555e797a641fb20e7f3df22f937b9ec19fd9d2cc48cc06ef5cbc2176",
+      "header-lock.json": "6c22449a6775118927c9a0266f392c2bac6579570547b54ad62589c22403517b",
+      "build-macos.py": "55ece82f8b601edfca2c5cfda9ac99d5196287fec7b540c9de37120eb8766703"
+    },
+    "addonSha256": "218deb899916dfbf0b8086a3fbe39f94e24b0e6a6a42ff608a7fda77ff930d61"
+  },
+  "nativeSha256": "218deb899916dfbf0b8086a3fbe39f94e24b0e6a6a42ff608a7fda77ff930d61",
+  "librarySha256": "907b745dd5b8329ef8f420f330180fc4f15df184e982a8e983f2ba8243aba1ad",
+  "authentication": {
+    "persistent": true,
+    "noPageToken": true,
+    "encryptedFile": true,
+    "systemRoundTrip": true,
+    "scopedResources": true
+  },
+  "minimumContent": {
+    "width": 1024,
+    "height": 640
+  },
+  "shaderModes": [
+    {
+      "mode": "efficiency",
+      "passes": "upload frame (naive)\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes\n(remainder pass) + color conversion\nuser shader: Anime4K-v4.0-De-Ring-Compute-Statistics (rgb)\nuser shader: Anime4K-v4.0-De-Ring-Compute-Statistics (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-3x1x1x56 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x1x1x56 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Depth-to-Space (rgb)\nuser shader: Anime4K-v3.2-AutoDownscalePre-x4 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x1x1x56 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Depth-to-Space (rgb)\n(remainder pass)\nuser shader: Anime4K-v4.0-De-Ring-Clamp (rgb)\n(remainder pass)\nscale=bilinear (rgb) + output to screen\ndrawing osd\nredraw cached frame\ndrawing osd\n",
+      "sourceLoads": 1,
+      "hwdec": "videotoolbox-copy"
+    },
+    {
+      "mode": "quality",
+      "passes": "upload frame (naive)\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes\n(remainder pass) + color conversion\nuser shader: Anime4K-v4.0-De-Ring-Compute-Statistics (rgb)\nuser shader: Anime4K-v4.0-De-Ring-Compute-Statistics (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-3x1x1x112 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x1x1x112 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x1x1x112 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x1x1x112 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Depth-to-Space (rgb)\nuser shader: Anime4K-v3.2-AutoDownscalePre-x4 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x1x1x56 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Depth-to-Space (rgb)\n(remainder pass)\nuser shader: Anime4K-v4.0-De-Ring-Clamp (rgb)\n(remainder pass)\nscale=bilinear (rgb) + output to screen\ndrawing osd\nredraw cached frame\ndrawing osd\n",
+      "sourceLoads": 1,
+      "hwdec": "videotoolbox-copy"
+    },
+    {
+      "mode": "off",
+      "passes": "upload frame (naive)\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes + color conversion\nscale=lanczos (rgb)\nlanczos second pass + output to screen\ndrawing osd\nredraw cached frame\ndrawing osd\n",
+      "sourceLoads": 1,
+      "hwdec": "videotoolbox-copy"
+    }
+  ],
+  "seek": {
+    "before": 5.583,
+    "target": 20,
+    "after": 20
+  },
+  "video": {
+    "hwdec": "videotoolbox-copy",
+    "tracks": [
+      {
+        "id": 1,
+        "type": "audio",
+        "title": "",
+        "language": "eng",
+        "selected": false
+      },
+      {
+        "id": 2,
+        "type": "audio",
+        "title": "",
+        "language": "jpn",
+        "selected": true
+      },
+      {
+        "id": 1,
+        "type": "sub",
+        "title": "",
+        "language": "eng",
+        "selected": false
+      },
+      {
+        "id": 2,
+        "type": "sub",
+        "title": "",
+        "language": "jpn",
+        "selected": true
+      }
+    ],
+    "position": 20,
+    "sourceLoads": 1,
+    "speed": 1.25
+  },
+  "videoResizes": [
+    {
+      "width": 1280,
+      "height": 800,
+      "previous": 74,
+      "beforeCanvas": {
+        "width": 1024,
+        "height": 547,
+        "pixels": [
+          2048,
+          1094
+        ],
+        "frames": 74,
+        "hidden": false
+      },
+      "nativeBefore": {
+        "ready": true,
+        "stopped": false,
+        "paused": true,
+        "ended": false,
+        "position": 20,
+        "duration": 30.021,
+        "error": "",
+        "hwdec": "videotoolbox-copy",
+        "version": "mpv v0.41.0",
+        "passes": "upload frame (naive)\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes + color conversion\nscale=lanczos (rgb)\nlanczos second pass + output to screen\ndrawing osd\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes + color conversion\nscale=lanczos (rgb)\nlanczos second pass + output to screen\ndrawing osd\n",
+        "aid": "2",
+        "sid": "2",
+        "speed": 1.25,
+        "buffering": false,
+        "tracks": [
+          {
+            "id": 1,
+            "type": "audio",
+            "title": "",
+            "language": "eng",
+            "selected": false
+          },
+          {
+            "id": 2,
+            "type": "audio",
+            "title": "",
+            "language": "jpn",
+            "selected": true
+          },
+          {
+            "id": 1,
+            "type": "sub",
+            "title": "",
+            "language": "eng",
+            "selected": false
+          },
+          {
+            "id": 2,
+            "type": "sub",
+            "title": "",
+            "language": "jpn",
+            "selected": true
+          }
+        ],
+        "apiVersion": 131077,
+        "renderedFrames": 77,
+        "acquiredFrames": 75,
+        "releasedFrames": 75,
+        "sourceLoads": 1,
+        "droppedFrames": 0,
+        "readyFrames": 0,
+        "leases": 0,
+        "surfaces": 2
+      },
+      "requested": {
+        "width": 1840,
+        "height": 1414
+      }
+    },
+    {
+      "width": 1024,
+      "height": 640,
+      "previous": 75,
+      "beforeCanvas": {
+        "width": 920,
+        "height": 707,
+        "pixels": [
+          1840,
+          1414
+        ],
+        "frames": 75,
+        "hidden": false
+      },
+      "nativeBefore": {
+        "ready": true,
+        "stopped": false,
+        "paused": true,
+        "ended": false,
+        "position": 20,
+        "duration": 30.021,
+        "error": "",
+        "hwdec": "videotoolbox-copy",
+        "version": "mpv v0.41.0",
+        "passes": "upload frame (naive)\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes + color conversion\nscale=lanczos (rgb)\nlanczos second pass + output to screen\ndrawing osd\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes + color conversion\nscale=lanczos (rgb)\nlanczos second pass + output to screen\ndrawing osd\n",
+        "aid": "2",
+        "sid": "2",
+        "speed": 1.25,
+        "buffering": false,
+        "tracks": [
+          {
+            "id": 1,
+            "type": "audio",
+            "title": "",
+            "language": "eng",
+            "selected": false
+          },
+          {
+            "id": 2,
+            "type": "audio",
+            "title": "",
+            "language": "jpn",
+            "selected": true
+          },
+          {
+            "id": 1,
+            "type": "sub",
+            "title": "",
+            "language": "eng",
+            "selected": false
+          },
+          {
+            "id": 2,
+            "type": "sub",
+            "title": "",
+            "language": "jpn",
+            "selected": true
+          }
+        ],
+        "apiVersion": 131077,
+        "renderedFrames": 78,
+        "acquiredFrames": 76,
+        "releasedFrames": 76,
+        "sourceLoads": 1,
+        "droppedFrames": 0,
+        "readyFrames": 0,
+        "leases": 0,
+        "surfaces": 2
+      },
+      "requested": {
+        "width": 2048,
+        "height": 1094
+      }
+    },
+    {
+      "width": 1280,
+      "height": 800,
+      "previous": 3,
+      "beforeCanvas": {
+        "width": 1024,
+        "height": 547,
+        "pixels": [
+          2048,
+          1094
+        ],
+        "frames": 3,
+        "hidden": false
+      },
+      "nativeBefore": {
+        "ready": true,
+        "stopped": false,
+        "paused": false,
+        "ended": false,
+        "position": 20,
+        "duration": 30.021,
+        "error": "",
+        "hwdec": "videotoolbox-copy",
+        "version": "mpv v0.41.0",
+        "passes": "",
+        "aid": "1",
+        "sid": "1",
+        "speed": 1,
+        "buffering": false,
+        "tracks": [],
+        "apiVersion": 131077,
+        "renderedFrames": 5,
+        "acquiredFrames": 5,
+        "releasedFrames": 5,
+        "sourceLoads": 1,
+        "droppedFrames": 0,
+        "readyFrames": 0,
+        "leases": 0,
+        "surfaces": 2
+      },
+      "requested": {
+        "width": 1840,
+        "height": 1414
+      }
+    },
+    {
+      "width": 1024,
+      "height": 640,
+      "previous": 5,
+      "beforeCanvas": {
+        "width": 920,
+        "height": 707,
+        "pixels": [
+          1840,
+          1414
+        ],
+        "frames": 5,
+        "hidden": false
+      },
+      "nativeBefore": {
+        "ready": true,
+        "stopped": false,
+        "paused": false,
+        "ended": false,
+        "position": 20,
+        "duration": 30.021,
+        "error": "",
+        "hwdec": "videotoolbox-copy",
+        "version": "mpv v0.41.0",
+        "passes": "upload frame (naive)\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes + color conversion\nscale=lanczos (rgb)\nlanczos second pass + output to screen\ndrawing osd\nredraw cached frame\ndrawing osd\n",
+        "aid": "1",
+        "sid": "1",
+        "speed": 1,
+        "buffering": false,
+        "tracks": [
+          {
+            "id": 1,
+            "type": "audio",
+            "title": "",
+            "language": "eng",
+            "selected": true
+          },
+          {
+            "id": 2,
+            "type": "audio",
+            "title": "",
+            "language": "jpn",
+            "selected": false
+          },
+          {
+            "id": 1,
+            "type": "sub",
+            "title": "",
+            "language": "eng",
+            "selected": true
+          },
+          {
+            "id": 2,
+            "type": "sub",
+            "title": "",
+            "language": "jpn",
+            "selected": false
+          }
+        ],
+        "apiVersion": 131077,
+        "renderedFrames": 6,
+        "acquiredFrames": 6,
+        "releasedFrames": 6,
+        "sourceLoads": 1,
+        "droppedFrames": 0,
+        "readyFrames": 0,
+        "leases": 0,
+        "surfaces": 2
+      },
+      "requested": {
+        "width": 2048,
+        "height": 1094
+      }
+    }
+  ],
+  "closedPlayer": {
+    "stopped": true,
+    "surfaces": 0,
+    "leases": 0,
+    "references": 0
+  },
+  "imageEnhanced": true,
+  "capturedAt": "2026-10-18T04:08:57.295Z"
+}

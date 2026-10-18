@@ -1,0 +1,41 @@
+{
+  "phase": "CP-03",
+  "scope": "Mac packaged authentication and shared media scene checkpoint f5df576; final navigation flush addition, full business/identity matrix and matching final Windows payload still pending",
+  "status": "partial-pass",
+  "sourceRevision": "f5df57630f3cc2d03b3c4ea1f4b96d77a61b4777",
+  "reportSha256": "53f20dad04fc4a2a5ea76008c99210bbc6ae9321c0e925e0250b04dd894e769d",
+  "archive": "HE-Manager-0.3.0-mac-checkpoint-f5df576.zip",
+  "archiveSha256": "1098e97d5fc8c911bc9d028235da3dad1fd282df1f4c0d028d977c52e99cd401",
+  "archiveFiles": 551,
+  "hostFiles": 13,
+  "uiFiles": 70,
+  "checks": 20,
+  "layouts": 12,
+  "screenshots": 17,
+  "sourceSha256": {
+    "baseline.cjs": "077dfbeefb61aeef7d7ef18ddc9ca9d4574f783ae65312de9568df53f491c98b",
+    "credential-store.cjs": "ede6e98ba05b556c219e46e53274922fbbd1e63f5264ecb3b7871dc54d4c54b4",
+    "embedded-player.cjs": "832cd7da3242432f718fbd8fc8ae43cecc7e9d396a1e9bb57679be3d03a3ab77",
+    "images.cjs": "b051c1848226ced84faf38d9ca46fe6cdc845213162dab55c740334a84f0c527",
+    "lifecycle.cjs": "bde04cc72d636f413d5b6adafd1dd6986a70be382b3400d38cb4d85860f25c53",
+    "main.cjs": "dd8de2d5b577a2d5014ef4345d3402dce21b3d2d31472786ff5ecf5aeeaad0a1",
+    "media-queue.cjs": "79d61c0c5cdaeb18cf08c767386f0bf227e5b2a3d88415186101654ac0148ff0",
+    "native-selftest.cjs": "91d9798f91a769cfdfeb8fd11928ecde587b66140bd38c4828eb14dba5fef1fd",
+    "player.cjs": "880d607d1fd9f7c2cdd06a328bdfa4597999c675e7b151697ca6fc87c4ab4811",
+    "policy.cjs": "ef9925873c7e7eadb2244e06c04cb1ed408ea0969a4e2d531f38afa63d9cfc66",
+    "preload.cjs": "4a04c1d0bfe42e1b0d9a64901b321091e4f45473486682becd09f706848a39b2",
+    "session.cjs": "5125683fb83d6da828bec3a2f1d23805c4ffbf1c98456a96908cd23bf247d63b",
+    "ui-selftest.cjs": "3732bedd08d04b56cbde100431787e2d37a3031aba43f3e2e7072a7b11f7d1a7"
+  },
+  "authentication": {
+    "persistent": true,
+    "noPageToken": true,
+    "encryptedFile": true,
+    "systemRoundTrip": true,
+    "scopedResources": true
+  },
+  "nativeSha256": "218deb899916dfbf0b8086a3fbe39f94e24b0e6a6a42ff608a7fda77ff930d61",
+  "librarySha256": "907b745dd5b8329ef8f420f330180fc4f15df184e982a8e983f2ba8243aba1ad",
+  "imageEnhanced": true,
+  "capturedAt": "2026-10-18T04:08:57.295Z"
+}
