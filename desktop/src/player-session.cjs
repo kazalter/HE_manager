@@ -2,10 +2,11 @@
 // Guarantees at most one active playback session across the entire desktop application.
 
 class PlayerSession {
-  constructor({ embeddedPlayer, getWindow = () => null }) {
+  constructor({ embeddedPlayer, getWindow = () => null, onBeforeVideoOpen = () => {} }) {
     if (!embeddedPlayer) throw new Error('EmbeddedPlayer instance is required for PlayerSession');
     this.embeddedPlayer = embeddedPlayer;
     this.getWindow = getWindow;
+    this.onBeforeVideoOpen = onBeforeVideoOpen;
     this.activeKind = 'none'; // 'none' | 'video' | 'audio'
     this.activeMedia = null;
     this.listeners = new Set();
@@ -67,6 +68,7 @@ class PlayerSession {
   }
 
   async openVideo(unused, source, mode, start = 0, title = '') {
+    try { this.onBeforeVideoOpen(); } catch {}
     // Mutual exclusion: stop any active audio session when entering video
     if (this.activeKind === 'audio') {
       this.activeKind = 'none';

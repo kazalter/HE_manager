@@ -312,6 +312,8 @@ def update_media(media_id: int, payload: schemas.MediaUpdate, db: Session = Depe
                 media.view_status = "viewed"
             elif progress > 0:
                 media.view_status = "viewing"
+            elif "view_status" in data:
+                media.view_status = data["view_status"]
             else:
                 media.view_status = "unviewed"
 

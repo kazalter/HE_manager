@@ -567,6 +567,43 @@ class MediaCoreTest(unittest.TestCase):
         finally:
             db.close()
 
+    def test_manga_page_zero_respects_explicit_viewing(self):
+        db = self.Session()
+        try:
+            folder = models.Folder(path="/media", scan_mode="auto")
+            db.add(folder)
+            media = models.Media(
+                folder=folder,
+                title="multipage-manga",
+                relative_path="multipage.cbz",
+                absolute_path="/media/multipage.cbz",
+                media_type="manga",
+                extension=".cbz",
+                file_size=1024,
+                page_count=20,
+                progress=5,
+                view_status="viewing",
+            )
+            db.add(media)
+            db.commit()
+
+            # Normal progress=0 resets to unviewed if view_status not specified
+            updated = media_routes.update_media(media.id, schemas.MediaUpdate(progress=0), db=db)
+            self.assertEqual(updated.progress, 0)
+            self.assertEqual(updated.view_status, "unviewed")
+
+            # But explicit view_status='viewing' alongside progress=0 is respected
+            updated2 = media_routes.update_media(
+                media.id,
+                schemas.MediaUpdate(progress=0, view_status="viewing"),
+                db=db,
+            )
+            self.assertEqual(updated2.progress, 0)
+            self.assertEqual(updated2.view_status, "viewing")
+        finally:
+            db.close()
+
 
 if __name__ == "__main__":
     unittest.main()
+

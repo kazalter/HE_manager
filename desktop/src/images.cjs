@@ -69,14 +69,20 @@ async function readLimited(response, limit = 32 * 1024 * 1024) {
 }
 function run(binary, args, timeout = 120000, signal) {
   return new Promise((resolve, reject) => {
+    const errorForAbort = () => {
+      if (signal?.reason instanceof Error && signal.reason.name !== "AbortError") {
+        return signal.reason;
+      }
+      return new Error("客户端已关闭");
+    };
     if (signal?.aborted) {
-      reject(new Error("客户端已关闭"));
+      reject(errorForAbort());
       return;
     }
     const child = spawn(binary, args, { stdio: "ignore", windowsHide: true });
     const abort = () => {
       child.kill("SIGKILL");
-      reject(new Error("客户端已关闭"));
+      reject(errorForAbort());
     };
     signal?.addEventListener("abort", abort, { once: true });
     const timer = setTimeout(() => {
@@ -104,8 +110,15 @@ class ImageCache {
     this.fetch = options.fetch || fetch;
     this.run = options.run || run;
     this.jobs = new Map();
+    this.controllers = new Map();
     this.tail = Promise.resolve();
     this.allowed = new Set();
+  }
+  cancelPending(reason = "视频播放已开始，已取消图片超分") {
+    for (const controller of this.controllers.values()) {
+      controller.abort(new Error(reason));
+    }
+    this.controllers.clear();
   }
   async prepare(source, mode, binary, models) {
     if (this.abort.signal.aborted)
@@ -175,10 +188,18 @@ class ImageCache {
       return { url: `he://app/__cache/${id}.png`, cached: true, scale };
     } catch {}
     if (!this.jobs.has(id)) {
+      const jobController = new AbortController();
+      this.controllers.set(id, jobController);
+      const jobSignal = AbortSignal.any([this.abort.signal, jobController.signal]);
       const task = this.tail
         .catch(() => {})
         .then(async () => {
-          if (this.abort.signal.aborted) throw new Error("客户端已关闭");
+          if (jobSignal.aborted) {
+            const err = jobSignal.reason instanceof Error && jobSignal.reason.name !== "AbortError"
+              ? jobSignal.reason
+              : new Error("客户端已关闭");
+            throw err;
+          }
           const work = await fs.mkdtemp(path.join(this.directory, "work-"));
           try {
             const input = path.join(work, "input." + extension),
@@ -205,7 +226,7 @@ class ImageCache {
                 "png",
               ],
               120000,
-              this.abort.signal,
+              jobSignal,
             );
             const [outWidth, outHeight] = dimensions(
               await fs.readFile(temporary),
@@ -221,13 +242,19 @@ class ImageCache {
         });
       this.tail = task;
       this.jobs.set(id, task);
-      task.finally(() => this.jobs.delete(id)).catch(() => {});
+      task
+        .finally(() => {
+          this.jobs.delete(id);
+          this.controllers.delete(id);
+        })
+        .catch(() => {});
     }
     await this.jobs.get(id);
     return { url: `he://app/__cache/${id}.png`, cached: false, scale };
   }
   async close() {
-    this.abort.abort();
+    this.abort.abort(new Error("客户端正在退出，请重新打开后重试超分"));
+    this.cancelPending("客户端正在退出，请重新打开后重试超分");
     await this.tail.catch(() => {});
   }
   async trim() {

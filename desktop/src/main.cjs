@@ -57,7 +57,7 @@ if (baselineMode || uiTestConfigPath) {
 let window, cache, settings, settingsFile, session;
 let applicationReady = false;
 const embeddedPlayer = new EmbeddedPlayer({ root, sharedTexture: require('electron').sharedTexture, getWindow: () => window });
-const player = new PlayerSession({ embeddedPlayer, getWindow: () => window });
+const player = new PlayerSession({ embeddedPlayer, getWindow: () => window, onBeforeVideoOpen: () => cache?.cancelPending?.() });
 const legacyPlayer = new Player(path.join(root, "resources/shaders"));
 const { DesktopSession, SessionError } = require('./session.cjs');
 const { CredentialStore } = require('./credential-store.cjs');
@@ -222,6 +222,7 @@ function registerIPC() {
     if (window?._heClosing) throw new Error("窗口正在关闭");
     if (!options || typeof options.url !== "string")
       throw new Error("无效的播放请求");
+    cache?.cancelPending?.();
     const source = session.mediaSource(options.url);
     return player.open(
       null,
@@ -242,6 +243,9 @@ function registerIPC() {
   handle("he:player-session-state", () => player.sessionState());
   handle("he:image", async (options) => {
     if (window?._heClosing) throw new Error("窗口正在关闭");
+    if (player.state.sessionKind === "video" || player.state.running) {
+      throw new Error("视频播放中，已暂停图片超分");
+    }
     if (!options || !["anime", "photo"].includes(options.mode))
       throw new Error("请选择图片超分类型");
     const source = session.mediaSource(options.url);

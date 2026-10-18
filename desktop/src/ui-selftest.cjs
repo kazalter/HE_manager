@@ -7,7 +7,7 @@ const { createHash } = require('node:crypto');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 module.exports = async ({ window, player, session, config, output }) => {
   if (!output) throw new Error('Diagnostic output path is required');
-  const report = { phase: config.phase === 'CP-04' ? 'CP-04' : (config.phase === 'CP-03' ? 'CP-03' : 'CP-02'), status: 'running', platform: process.platform, packaged: app.isPackaged, checks: {}, screenshots: [], layouts: [] };
+  const report = { phase: config.phase || 'CP-05', status: 'running', platform: process.platform, packaged: app.isPackaged, checks: {}, screenshots: [], layouts: [] };
   let stage = 'login';
   const enterStage = (value) => { stage = value; console.log('HE_UI_STAGE ' + value); };
   const evaluate = (script) => window.webContents.executeJavaScript(script);

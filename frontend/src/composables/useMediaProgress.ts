@@ -1,7 +1,7 @@
 import { onBeforeUnmount, ref, watch, type ComputedRef, type Ref } from 'vue'
 import type { Media } from '../types'
 
-type ProgressPatch = Partial<Pick<Media, 'duration' | 'progress'>>
+type ProgressPatch = Partial<Pick<Media, 'duration' | 'progress' | 'view_status'>>
 
 interface MediaProgressOptions {
   media: Ref<Media>
@@ -60,7 +60,7 @@ export function useMediaProgress(options: MediaProgressOptions) {
   }
 
   const saveMangaProgress = async (force = false) => {
-    if (!options.isManga.value || options.visibleMangaOnly && visibleMangaPage === null) return
+    if (!options.isManga.value || (options.visibleMangaOnly && visibleMangaPage === null)) return
     const media = options.media.value
     const maxPage = options.totalMangaPages.value
       ? options.totalMangaPages.value - 1
@@ -72,12 +72,28 @@ export function useMediaProgress(options: MediaProgressOptions) {
     if (!force && progress === lastMangaProgress) return
     lastMangaProgress = progress
 
-    Object.assign(media, { progress, view_status: progress > 0 ? 'viewing' : media.view_status })
+    const isMultiPage = (options.totalMangaPages.value || media.page_count || 1) > 1
+    const targetStatus = maxPage !== null && progress >= maxPage
+      ? 'viewed'
+      : (progress > 0 || (progress === 0 && isMultiPage))
+        ? 'viewing'
+        : media.view_status
+
+    Object.assign(media, { progress, view_status: targetStatus })
     options.emitUpdated({ ...media })
-    try {
+
+    const mediaId = media.id
+    const previous = progressWrites.get(mediaId) ?? Promise.resolve()
+    const write = previous.catch(() => {}).then(async () => {
       await options.updateMedia({ progress })
+    })
+    progressWrites.set(mediaId, write)
+    try {
+      await write
     } catch (err) {
       console.error('Failed to save manga progress:', err)
+    } finally {
+      if (progressWrites.get(mediaId) === write) progressWrites.delete(mediaId)
     }
   }
 
