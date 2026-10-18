@@ -37,6 +37,9 @@ module.exports = async ({ window, player, config, output }) => {
     await sleep(150);
   }
   async function capture(name) {
+    // DOM state can lead the macOS compositor. Wait through a paint before capture.
+    await evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+    await sleep(250);
     const file = `${path.basename(output, '.json')}-${name}.png`;
     await fs.writeFile(path.join(path.dirname(output), file), (await window.webContents.capturePage()).toPNG());
     report.screenshots.push(file);
@@ -194,12 +197,12 @@ module.exports = async ({ window, player, config, output }) => {
     await click(`.he-media-card[data-media-id="${config.mangaId}"]`);
     await wait(() => evaluate('document.querySelector(".he-reader-canvas-page img")?.naturalWidth > 0'), 'Reader did not display its page');
     await click('button[title="双页跨页模式"]');
-    await wait(() => evaluate('document.querySelectorAll(".he-reader-canvas-page img").length === 2'), 'Double-page reader did not display both pages');
+    await wait(() => evaluate(`document.querySelector('button[title="双页跨页模式"]').getAttribute('aria-pressed') === 'true' && document.querySelectorAll('.he-reader-canvas-page img').length === 2 && [...document.querySelectorAll('.he-reader-canvas-page img')].every(img => img.complete && img.naturalWidth > 0)`), 'Double-page reader did not display both pages');
     report.checks.readerControlsFit = await evaluate(`(() => { const bar=document.querySelector('.he-manga-controls'), a=bar.getBoundingClientRect(), b=document.querySelector('.he-manga-zoom').getBoundingClientRect();const separate=a.right<=b.left || a.left>=b.right || a.bottom<=b.top || a.top>=b.bottom;return separate && bar.scrollWidth <= bar.clientWidth+1 && [...bar.querySelectorAll('[aria-label="阅读模式"] span')].every(label => label.getClientRects().length===1); })()`);
     if (!report.checks.readerControlsFit) throw new Error('Reader controls overflow or wrap inside a mode label');
     await capture('reader-double-dark-1024');
     await click('button[title="连续卷轴模式 (条漫)"]');
-    await wait(() => evaluate('document.querySelector(".he-reader-page img")?.naturalWidth > 0'), 'Scroll reader did not display a page');
+    await wait(() => evaluate(`document.querySelector('button[title="连续卷轴模式 (条漫)"]').getAttribute('aria-pressed') === 'true' && document.querySelector('.he-reader-page img')?.naturalWidth > 0`), 'Scroll reader did not display a page');
     await capture('reader-scroll-dark-1024');
     await click('button[title="单页模式"]');
     await click('button[aria-label="放大"]');
