@@ -7,8 +7,8 @@ export interface StoreScope {
   http: Pick<AxiosStatic, 'get' | 'post' | 'patch' | 'delete' | 'isCancel'>
   storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
   active: () => boolean
-  clearInterval: typeof window.clearInterval
-  setInterval: typeof window.setInterval
+  clearInterval: (id?: any) => void
+  setInterval: (handler: TimerHandler, timeout?: number, ...args: any[]) => any
 }
 // Desktop singleton stores get a fresh closure per identity. An old async catch
 // can only change its discarded closure, and its HTTP/storage/timers remain bound
@@ -23,7 +23,7 @@ export function desktopScopedStore<T extends object>(factory: (scope: StoreScope
     if (current.value && next === previous) return
     dispose(); previous = next
     const identity = authIdentity(), server = desktopSession.server, userId = authState.user?.id
-    const controller = new AbortController(), timers = new Set<number>()
+    const controller = new AbortController(), timers = new Set<any>()
     let closed = false
     const active = () => !closed && (!desktopBridge || next === signature())
     const client = desktopBridge ? axios.create({ headers: authHeaders(), timeout: 15000 }) : axios
@@ -44,7 +44,7 @@ export function desktopScopedStore<T extends object>(factory: (scope: StoreScope
       setItem: (key: string, value: string) => { if (active() && (!desktopBridge || !!userId)) localStorage.setItem(keyFor(key), value) },
       removeItem: (key: string) => { if (active() && (!desktopBridge || !!userId)) localStorage.removeItem(keyFor(key)) },
     }
-    const scopedInterval: typeof window.setInterval = (handler, timeout, ...args) => {
+    const scopedInterval: StoreScope['setInterval'] = (handler: TimerHandler, timeout?: number, ...args: any[]) => {
       if (!active()) return 0
       const timer = window.setInterval(() => {
         if (!active()) { window.clearInterval(timer); timers.delete(timer); return }
@@ -53,7 +53,7 @@ export function desktopScopedStore<T extends object>(factory: (scope: StoreScope
       timers.add(timer); return timer
     }
     dispose = () => { closed = true; controller.abort(); for (const timer of timers) window.clearInterval(timer); timers.clear() }
-    const clearInterval: typeof window.clearInterval = timer => { window.clearInterval(timer); if (timer !== undefined) timers.delete(timer) }
+    const clearInterval: StoreScope['clearInterval'] = (timer?: any) => { window.clearInterval(timer); if (timer !== undefined) timers.delete(timer) }
     current.value = factory({ http: Object.assign(client, { isCancel: axios.isCancel }), storage, active, clearInterval, setInterval: scopedInterval })
   }
   refresh()

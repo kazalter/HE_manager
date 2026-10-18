@@ -108,6 +108,8 @@ watch(showControls, (visible) => {
 })
 
 const currentIndex = computed(() => props.allMedia.findIndex(m => m.id === currentMedia.value.id))
+const hasPrevMedia = computed(() => currentIndex.value > 0 || (props.hasAdjacentMediaPage?.(-1) ?? false))
+const hasNextMedia = computed(() => (currentIndex.value >= 0 && currentIndex.value < props.allMedia.length - 1) || (props.hasAdjacentMediaPage?.(1) ?? false))
 const videoProgressPercent = computed(() => {
   if (!isVideo.value || !currentMedia.value.duration || currentMedia.value.progress <= 0) return 0
   return Math.min(100, Math.max(0, Math.round((currentMedia.value.progress / currentMedia.value.duration) * 100)))
@@ -794,7 +796,7 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
             </div>
           </div>
 
-          <DesktopVideoPlayer ref="desktopPlayer" v-else-if="isVideo && desktopBridge" :url="videoUrl" :title="currentMedia.title" :start="currentMedia.progress || 0" @progress="desktopProgress" />
+          <DesktopVideoPlayer ref="desktopPlayer" v-else-if="isVideo && desktopBridge" :url="videoUrl" :title="currentMedia.title" :start="currentMedia.progress || 0" :has-prev="hasPrevMedia" :has-next="hasNextMedia" @prev="prevMedia" @next="nextMedia" @progress="desktopProgress" />
 
           <VideoPlayer v-else-if="isVideo" :cover-url="coverUrl" @ready="setArtContainer" />
 

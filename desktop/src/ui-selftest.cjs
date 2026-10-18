@@ -7,7 +7,7 @@ const { createHash } = require('node:crypto');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 module.exports = async ({ window, player, session, config, output }) => {
   if (!output) throw new Error('Diagnostic output path is required');
-  const report = { phase: config.phase === 'CP-03' ? 'CP-03' : 'CP-02', status: 'running', platform: process.platform, packaged: app.isPackaged, checks: {}, screenshots: [], layouts: [] };
+  const report = { phase: config.phase === 'CP-04' ? 'CP-04' : (config.phase === 'CP-03' ? 'CP-03' : 'CP-02'), status: 'running', platform: process.platform, packaged: app.isPackaged, checks: {}, screenshots: [], layouts: [] };
   let stage = 'login';
   const enterStage = (value) => { stage = value; console.log('HE_UI_STAGE ' + value); };
   const evaluate = (script) => window.webContents.executeJavaScript(script);
@@ -194,6 +194,14 @@ module.exports = async ({ window, player, session, config, output }) => {
       await click('.desktop-video button[aria-label="播放"]');
       await wait(() => !player.state.paused, 'Play input failed');
     }
+    const forwardBefore = player.state.position;
+    await click('.desktop-video button[aria-label="前进十秒"]');
+    await wait(() => player.state.position > forwardBefore + 3 || Math.abs(player.state.position - player.state.duration) < 1, 'Forward 10s did not seek forward');
+    const rewindBefore = player.state.position;
+    await click('.desktop-video button[aria-label="后退十秒"]');
+    await wait(() => player.state.position < rewindBefore - 3 || player.state.position < 5, 'Rewind 10s did not seek backward');
+    await wait(() => evaluate(`!!document.querySelector('.desktop-video button[aria-label="下一项"]')`), 'Next media button missing');
+    await wait(() => evaluate(`!!document.querySelector('.desktop-video button[aria-label="上一项"]')`), 'Prev media button missing');
     await wait(() => evaluate(`!!document.querySelector('.desktop-video button[aria-label="暂停"]')`), 'Pause control missing');
     await click('.desktop-video button[aria-label="暂停"]');
     await wait(() => player.state.paused, 'Pause input failed');
@@ -210,7 +218,8 @@ module.exports = async ({ window, player, session, config, output }) => {
     const after = player.native.state(player.owner);
     report.checks.sameSessionFullscreen = before.sourceLoads === after.sourceLoads && before.aid === after.aid && before.sid === after.sid && before.speed === after.speed && after.paused && Math.abs(before.position - after.position) < 0.1 && before.position < before.duration - 3;
     if (!report.checks.sameSessionFullscreen) throw new Error('Fullscreen changed the playback session');
-    report.video = { hwdec: after.hwdec, tracks: after.tracks, position: after.position, sourceLoads: after.sourceLoads, speed: after.speed };
+    report.video = { hwdec: after.hwdec, tracks: after.tracks, position: after.position, sourceLoads: after.sourceLoads, speed: after.speed, droppedFrames: player.state.droppedFrames || 0 };
+    report.checks.videoControlsAndDroppedFrames = (player.state.droppedFrames || 0) <= 5;
     await captureSizes('video', 'dark');
     const closedOwner = player.owner;
     await key('Escape');
@@ -219,6 +228,38 @@ module.exports = async ({ window, player, session, config, output }) => {
     report.closedPlayer = { stopped: closed.stopped, surfaces: closed.surfaces, leases: closed.leases, references: player.references.size };
     if (!closed.stopped || closed.surfaces || closed.leases || player.references.size) throw new Error('Closing viewer retained native resources');
     report.checks.viewerClose = true;
+    if (config.audioId) {
+      enterStage('audio-playback');
+      await click(`.he-media-card[data-media-id="${config.audioId}"]`);
+      await wait(() => evaluate('!!document.querySelector(".he-audio-panel")'), 'Audio panel missing');
+      await wait(() => evaluate('document.querySelectorAll(".he-audio-tracks button").length >= 2'), 'Audio tracks missing');
+      await capture('audio-panel-dark');
+      await wait(() => evaluate('!!document.querySelector(".he-audio-controls")'), 'Audio controls missing');
+      if (await evaluate('!document.querySelector("audio") || document.querySelector("audio").paused')) {
+        await click('.he-audio-controls button[aria-label="播放"]');
+        await wait(() => evaluate('!document.querySelector("audio")?.paused'), 'Audio did not start playing');
+      }
+      await click('.he-audio-controls button[aria-label="下一首"]');
+      await wait(() => evaluate('document.querySelector(".he-audio-tracks button[aria-current=\\"true\\"]")?.innerText.includes("02")'), 'Audio next track did not advance');
+      await click('button[aria-label="收起播放器，继续播放"]');
+      await wait(() => evaluate('!!document.querySelector(".he-mini-player")'), 'Mini player missing after minimize');
+      await capture('audio-mini-player');
+      const wasPlaying = await evaluate('!document.querySelector("audio")?.paused');
+      if (wasPlaying) {
+        await click('.he-mini-player button[aria-label="暂停音频"]');
+        await wait(() => evaluate('document.querySelector("audio")?.paused'), 'Mini player pause failed');
+        await click('.he-mini-player button[aria-label="播放音频"]');
+        await wait(() => evaluate('!document.querySelector("audio")?.paused'), 'Mini player resume failed');
+      }
+      enterStage('session-mutual-exclusion');
+      await click(`.he-media-card[data-media-id="${config.videoId}"]`);
+      await wait(() => evaluate('Number(document.querySelector(".desktop-video canvas")?.dataset.heVideoFrames) >= 3'), 'Video did not start');
+      await wait(() => evaluate('!document.querySelector(".he-audio-host") || !document.querySelector(".he-mini-player")'), 'Active audio was not stopped by opening video');
+      await key('Escape');
+      await wait(() => !player.state.running && !player.owner, 'Closing video did not release player');
+      report.checks.audioPlaybackAndMiniPlayer = true;
+      report.checks.playerSessionMutualExclusion = true;
+    }
     enterStage('reader');
     await click(`.he-media-card[data-media-id="${config.mangaId}"]`);
     await wait(() => evaluate('document.querySelector(".he-reader-canvas-page img")?.naturalWidth > 0'), 'Reader did not display its page');

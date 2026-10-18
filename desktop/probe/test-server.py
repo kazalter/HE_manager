@@ -64,6 +64,15 @@ if ui_fixtures:
             if index == 2: image.save(thumbnails / 'cp02-landscape.png')
     image.save(fixtures / 'cp02-image.png')
     (fixtures / 'cp02-unreadable.mp4').write_bytes(b'HE synthetic unsupported video fixture\n')
+    import wave
+    album_dir = fixtures / 'cp04-album'
+    album_dir.mkdir(exist_ok=True)
+    for t_name in ['01-intro.wav', '02-theme.wav']:
+        with wave.open(str(album_dir / t_name), 'wb') as wav_out:
+            wav_out.setnchannels(2)
+            wav_out.setsampwidth(2)
+            wav_out.setframerate(44100)
+            wav_out.writeframes(b'\0\0\0\0' * 44100 * 5)
 with SessionLocal() as database:
     user = database.query(models.User).filter_by(username="desktop-probe").first()
     if user is None:
@@ -92,15 +101,19 @@ with SessionLocal() as database:
             ('cp02-manga.zip', '四季手记：单页、双页与卷轴阅读的长标题漫画代表作品', 'manga', 'cp02-portrait.png'),
             ('cp02-image.png', '午后的一张静态图片', 'image', None),
             ('cp02-unreadable.mp4', '无法解码的测试视频 · 重试与返回', 'video', None),
+            ('cp04-album', '星空下的夜曲 · 跨平台桌面音频播放器验收专辑', 'audio', 'cp02-landscape.png'),
         ]:
             file = fixtures / name
             media = database.query(models.Media).filter_by(absolute_path=str(file)).first()
             if media is None:
                 media = models.Media(folder_id=folder.id, absolute_path=str(file), relative_path=name)
                 database.add(media)
-            media.title = title; media.media_type = kind; media.extension = file.suffix
-            media.file_size = file.stat().st_size; media.cover_path = cover
-            media.width = 480; media.height = 720; media.page_count = 4 if kind == 'manga' else None
+            media.title = title; media.media_type = kind; media.extension = file.suffix if file.is_file() else ''
+            media.file_size = file.stat().st_size if file.is_file() else sum(f.stat().st_size for f in file.glob('*'))
+            media.cover_path = cover
+            media.width = 480 if kind != 'audio' else None; media.height = 720 if kind != 'audio' else None
+            media.page_count = 4 if kind == 'manga' else None
+            media.duration = 10 if kind == 'audio' else None
             media.progress = 0; media.view_status = 'unviewed'
         database.commit()
     token = auth.create_access_token(database, user)
@@ -108,8 +121,9 @@ with SessionLocal() as database:
     if ui_fixtures:
         manga = database.query(models.Media).filter_by(absolute_path=str(fixtures / 'cp02-manga.zip')).one()
         unreadable = database.query(models.Media).filter_by(absolute_path=str(fixtures / 'cp02-unreadable.mp4')).one()
+        audio = database.query(models.Media).filter_by(absolute_path=str(fixtures / 'cp04-album')).one()
         config.update(server=f'http://127.0.0.1:{port}', username=user.username, password=ui_password,
-                      videoId=items[0].id, mangaId=manga.id, errorVideoId=unreadable.id, expectVideoLoading=ui_stream_delay > 0)
+                      videoId=items[0].id, mangaId=manga.id, audioId=audio.id, errorVideoId=unreadable.id, expectVideoLoading=ui_stream_delay > 0)
     if ui_fixtures and os.environ.get("HE_PROBE_SESSION_MATRIX") == "1":
         from session_matrix_fixtures import seed
         config.update(seed(database, folder, fixtures))

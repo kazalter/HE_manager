@@ -1,0 +1,1045 @@
+{
+  "phase": "CP-04",
+  "status": "partial-pass",
+  "platform": "darwin",
+  "packaged": true,
+  "checks": {
+    "directConnectivity": true,
+    "loginAndLibrary": true,
+    "desktopAuthentication": true,
+    "continueWatching": true,
+    "minimumContent": true,
+    "libraryAppearance": true,
+    "systemAppearance": true,
+    "emptySearch": true,
+    "embeddedVideo": true,
+    "videoEnhancement": true,
+    "keyboardSettings": true,
+    "seek": true,
+    "sameSessionFullscreen": true,
+    "videoControlsAndDroppedFrames": true,
+    "viewerClose": true,
+    "audioPlaybackAndMiniPlayer": true,
+    "playerSessionMutualExclusion": true,
+    "readerControlsFit": true,
+    "readerModesAndZoom": true,
+    "enhancementFeedback": true,
+    "readerOpened": true,
+    "videoErrorAndRetry": true
+  },
+  "screenshots": [
+    "CP-04-mac-library-light-1280.png",
+    "CP-04-mac-library-light-1024.png",
+    "CP-04-mac-library-dark-1280.png",
+    "CP-04-mac-library-dark-1024.png",
+    "CP-04-mac-video-dark-1280.png",
+    "CP-04-mac-video-dark-1024.png",
+    "CP-04-mac-audio-panel-dark.png",
+    "CP-04-mac-audio-mini-player.png",
+    "CP-04-mac-reader-double-dark-1024.png",
+    "CP-04-mac-reader-scroll-dark-1024.png",
+    "CP-04-mac-reader-dark-1280.png",
+    "CP-04-mac-reader-dark-1024.png",
+    "CP-04-mac-reader-enhancement-feedback.png",
+    "CP-04-mac-video-light-1280.png",
+    "CP-04-mac-video-light-1024.png",
+    "CP-04-mac-reader-light-1280.png",
+    "CP-04-mac-reader-light-1024.png",
+    "CP-04-mac-video-error.png"
+  ],
+  "layouts": [
+    {
+      "scene": "library",
+      "mode": "light",
+      "width": 1280,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "scene": "library",
+      "mode": "light",
+      "width": 1024,
+      "height": 640,
+      "overflow": false
+    },
+    {
+      "scene": "library",
+      "mode": "dark",
+      "width": 1280,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "scene": "library",
+      "mode": "dark",
+      "width": 1024,
+      "height": 640,
+      "overflow": false
+    },
+    {
+      "scene": "video",
+      "mode": "dark",
+      "width": 1280,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "scene": "video",
+      "mode": "dark",
+      "width": 1024,
+      "height": 640,
+      "overflow": false
+    },
+    {
+      "scene": "reader",
+      "mode": "dark",
+      "width": 1280,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "scene": "reader",
+      "mode": "dark",
+      "width": 1024,
+      "height": 640,
+      "overflow": false
+    },
+    {
+      "scene": "video",
+      "mode": "light",
+      "width": 1280,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "scene": "video",
+      "mode": "light",
+      "width": 1024,
+      "height": 640,
+      "overflow": false
+    },
+    {
+      "scene": "reader",
+      "mode": "light",
+      "width": 1280,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "scene": "reader",
+      "mode": "light",
+      "width": 1024,
+      "height": 640,
+      "overflow": false
+    }
+  ],
+  "sourceSha256": {
+    "baseline.cjs": "077dfbeefb61aeef7d7ef18ddc9ca9d4574f783ae65312de9568df53f491c98b",
+    "close-flush.cjs": "d704ed3c70a58f587a17c7b497244740e2fbeaf5399fcb2a9c4cc50ab453a4ef",
+    "credential-store.cjs": "ede6e98ba05b556c219e46e53274922fbbd1e63f5264ecb3b7871dc54d4c54b4",
+    "diagnostic-profile.cjs": "682d5ab8c7c07f668fd050f4db0e55de322fe22e305b5a69d06490c42e1db4e7",
+    "embedded-player.cjs": "832cd7da3242432f718fbd8fc8ae43cecc7e9d396a1e9bb57679be3d03a3ab77",
+    "images.cjs": "b051c1848226ced84faf38d9ca46fe6cdc845213162dab55c740334a84f0c527",
+    "lifecycle.cjs": "bde04cc72d636f413d5b6adafd1dd6986a70be382b3400d38cb4d85860f25c53",
+    "main.cjs": "9d81e0cd6c7c57a513f69bed56a149a5dfeec8c1952bedc48079808e92197b19",
+    "media-queue.cjs": "44ce4a469fff72794ee8b14992c44315ba19ca1f20ba5b988388444a23bbd08b",
+    "native-selftest.cjs": "91d9798f91a769cfdfeb8fd11928ecde587b66140bd38c4828eb14dba5fef1fd",
+    "player-session.cjs": "5daf8d4372b686ff7669b555d32b84bed69097748d42443f44b5b8dd73cfb9ce",
+    "player.cjs": "880d607d1fd9f7c2cdd06a328bdfa4597999c675e7b151697ca6fc87c4ab4811",
+    "policy.cjs": "ef9925873c7e7eadb2244e06c04cb1ed408ea0969a4e2d531f38afa63d9cfc66",
+    "preload.cjs": "23563d1521fdc81cdcd808b7813b826b8629f94b1695605ec854f6ac6e0400bf",
+    "progress-outbox.cjs": "0ff72ae0eef13472846850fd56adbc50189cda65c3b1d86dc89b19cc803cd499",
+    "session.cjs": "53cdc645249b19dcbf580972dcd731115fbef9d6975f78ee7e7aafce118ed5d6",
+    "ui-lifecycle-selftest.cjs": "af8c2ddc4c561aa6b3de70b9a4f673890f74d586da997c5593b06b5685038af4",
+    "ui-selftest.cjs": "5556b95560538af662601fc9d955fe8ead0daeeaf0f06dc7a0233e98cd13913e"
+  },
+  "version": "0.4.0",
+  "electron": "44.8.0",
+  "uiSha256": {
+    "app-icons/he-180.png": "a8a21a323117abf1e1b1335b71fd0f3f9bfded0b6354d9f4aa39a7b0f91541c4",
+    "app-icons/he-192.png": "0493c8d75227b49d0f7e1bb40ef3081da87c9577260de1365c1ccfe360d0c0eb",
+    "app-icons/he-512.png": "7cf06e0768770ca1d3191cc4993d415639d80078774d7a0cf5b496b18ab2ce59",
+    "app-icons/he-maskable-512.png": "7cf06e0768770ca1d3191cc4993d415639d80078774d7a0cf5b496b18ab2ce59",
+    "app-icons/he.svg": "02dccd9882b87e270871e0de2ce48aa9cbda0254df7ab149f407391883174b2b",
+    "assets/_plugin-vue_export-helper-DAAOZMkq.js": "27e87fe62aa760227b7529576953d8314891fd2aec28e0a3f03aece406f2d7d7",
+    "assets/artplayer-BhDQXST_.js": "6070ba92141ea9d434772a45d0dc1f1d00c23df2d74c7e834ef55b651d9b91ca",
+    "assets/AssistantView-0Vsh1cnz.css": "fdff26d2586a2c49bc3723b45eda2b9b0ea73abc6b1366b474c810e9ccee9a58",
+    "assets/AssistantView-Coc-AylH.js": "06c3581037fc1c1eb9873c73b6c0da6170c3969c9ba33344e0500e952a7ebffb",
+    "assets/asyncComponents-BMeUJ9_O.js": "0bd8a40b8bccbaf77a88378671cb090ffb7509689d58e3844664771a1742ceb9",
+    "assets/audioPlaybackStore-DZF0qEqI.js": "2df693fbe2153b8fe851ddbd0a2563ed5d0bb5b0fb28d9df2b9aef5950c5f78d",
+    "assets/AudioPlayer-BV8Wf6Qu.js": "4222a6840b1f4283a32ef4838baed26597526e0012357af25ed1788f4b0bf5d0",
+    "assets/AudioPlayer-DjYls7nJ.css": "d43854e4af284f0d88b6883f22d7b35dc690136df420633cf912f638f6e74d15",
+    "assets/auth-DwSSpaXX.js": "b0cfcef2aaa927253e6a9f58d022dc9b6a4f2b1266804330cf82369a456c4479",
+    "assets/Bd2SpineView-BFGFDAY0.js": "da66284f59c419fd2c6a90ba4e957bb11c1fd936a2822702e0846e46b0020df5",
+    "assets/Bd2SpineView-h6J9uggk.css": "1e400654004f2473e1dbfe4211d68d3610a2de65c93478049e91f85ce95d6776",
+    "assets/ColorModeSelect-BPyDs3Ki.js": "83afd205d73f5da916911c9df16d51d953697109cf8bc01681a49d692320993b",
+    "assets/config-Cj5WTowE.js": "60b9e1ff78872dde21d9cf3739d08172b6d46caeb39f5ee718a9bbc90797c739",
+    "assets/CreatorsView-DTCTsJvU.js": "049a2aa2a0ed37a987cbe0f8fa157837ff91274c60ee0213bf5a0b22fee5e4a1",
+    "assets/DedupView-DIfcNIYV.js": "c14da90521ffa0b59a75f6db5f5b258429319fc03a5e8d1c6c9d73b6fe160220",
+    "assets/desktopScopedStore-Ba0IudlQ.js": "2a0047c39fb22a1687b1b79b4ae99bdfb858679890f73852a58426462c4c5749",
+    "assets/discardApi-CwUD4P0W.js": "f3fe8e9eee1fc5459684bb6ce97e4626ba9549aa30293b213908a3238ee05169",
+    "assets/DiscardContentDialog-BXwygjdz.js": "3a3d1f6c107bab12b141c12fee44bba3200dbba4337af0c7bf521ef6353fe02f",
+    "assets/DiscardedView-CGtSH_jq.js": "726c08c02b7b217d6a4b117cb861d1c0b161c0c400986dc1f1e5874b49595118",
+    "assets/DownloadsView-CCwnxj9v.js": "03f337f576eb768c8e2ca568a0b48312742170846146a510b5d9082f307e474f",
+    "assets/DownloadsView-DRbuknqZ.css": "6f247cec264738d7f130ba43c1f46d5024592e4e07a620ae5ff1ac1f994e2e78",
+    "assets/EmbedSpineView-BARGduzd.js": "44682d1b9fde3431c73409fc8652975cb3171f397ca378a510327fe3428c2e94",
+    "assets/EmbedSpineView-BVKvaPhS.css": "367cfdba6b05f9aaa368b8aaec99c4a12337db98bbd8e36bb8c5f0d4093c4746",
+    "assets/ExternalFavoritesView-D2wdESK2.js": "d473edec02e40d61577c979de4b4d19194c98c45e497e22fc6d6259d1ae2f82b",
+    "assets/ExternalFavoritesView-DjMKxjoY.css": "f90fecb2ec120402d9b3a56a76e04adf4d689ea382ed31243e26e3722ba88c6e",
+    "assets/index-DyjK6YGV.css": "b322f23a54685572ac69d725ab3b5b129c53852f5491bf66324711a51f9cf41a",
+    "assets/index-DyStNiTG.js": "7735608d42a402ab7a2eddac5312d74fdc3f1ca71e24b74a00cda31eac6e01df",
+    "assets/inter-latin-wght-normal-Dx4kXJAl.woff2": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+    "assets/lucide-icons-DDDay-u-.js": "38e6fc67d65de110cbb74b1009373037da7707619a586f7892baa3adc04c444e",
+    "assets/MangaRecommendView-BwEgrxBG.js": "c4652c2a2b01bdcc26ca8c8694f6bb4bab1580d96b2996bdfc29c6026e83f8d1",
+    "assets/media-placeholder-BE0xZWKB.js": "24400c3b45c521ba24ff53b5c8994eb70daf5f428a0f7170c1cc7151af2c408c",
+    "assets/media-placeholder-D6AyOhIP.svg": "5d292f3b051479328e5289adb2577661d3951fbfd7480a8e5e7a5dee45889a6b",
+    "assets/MediaCard-B6emRPQn.js": "94e8ea92539279dec6c3b3e6ae2de5a39e6477a46b1e26534a0ec18839a6e068",
+    "assets/MediaCard-DUzfBGHk.css": "11d52be45c3848c6fe0f3c5b3d3ebd8efcafbdadb46e9c33bd08f077f1d1031f",
+    "assets/MoreView-C3jDelnM.js": "a4062ddb862fb315cefd986b2600b98dbc253dff59feee21e262844676457191",
+    "assets/PaginationControl-8sXHDjs1.js": "13f3f30ddc47566c201eeb3321ab4b00f86c07b603b6ed4b1d0a901a9a403892",
+    "assets/PaginationControl-Cy7Yr0bi.css": "f9548072fc6ec34ffcdc045abfb4ecdd3fe3bd7daafe49a3b7aaf241fb296485",
+    "assets/PawchiveDownloads-BfzTZd1l.js": "de078b36496022217e4b5633e951814eafc5158784859146ae3e2244db5a454f",
+    "assets/preload-helper-qlgyTAkD.js": "0c88c6aaef07b19239a2eac9faef82584f9e733114f85dc190e98dcea60b1753",
+    "assets/rolldown-runtime-lhHHWwHU.js": "a526d1bb3288ef04d001028843220a24b0867a4edf8c685b69506d6525af36ff",
+    "assets/SettingsView-3hag0-mQ.css": "002dd27dff8c50161e22b97be5e24b373dba5ca884cf5634ce08952c246ed92e",
+    "assets/SettingsView-CVTPfMeG.js": "6c71495b1039579b4f7ac5c4e9d495efd8c2e0c060377f746d58189b7b245f80",
+    "assets/spine-player-Ci7d0mHH.js": "1e565affbb903fa2d8b6f40c7726ae7f88c7fcb4bda8c03438a2c880eb87c3ba",
+    "assets/spine-player-DA1bLauS.css": "3683eea212eeac14a258a4c0904b9c5dd4a739f343437c14120014030633f087",
+    "assets/StatsView-CRXEGB_d.js": "6a26de66276cf1518eb052236110da1d16d16ba54304b4c8c6511011ff9f092e",
+    "assets/StatsView-LTP7yO93.css": "bbe4f66eb4d8eac2a979a6e366daea6a8dd52ec8ac27dbc0977a72eea46d1fa4",
+    "assets/TagsView-B0HnfnTO.css": "c41ddbb8bb5270f5063dfe8ba4ac19c87ff01698fab547c401f4d5b7432bb02f",
+    "assets/TagsView-ClZaicrE.js": "7450466a1ab3090be5afc3a4438148d5e201c89049828a1cba3d0cb1ebfb4f86",
+    "assets/ThemeSelect-CsBCCoPX.js": "8b074707bfcd5feaf8ab752c33838eb9517aa23c6c72d2bb8d471ad44c81b62a",
+    "assets/ui-CEw8T23S.css": "4a5d49cb315a5eaaf4d34b20f34e84d26fbf17e2e4d45af089d64cc77e0e7673",
+    "assets/ui-hvf9nLez.js": "3e19d9c4f69895f0170561a7daf5854b96a2934c0632115c7f217ce40f96ef42",
+    "assets/useCompactViewport-yLrTYAPb.js": "1cb0a508bfb2048ca014d661c889a975ff1b2a0d48db86533d765565e692d7cc",
+    "assets/useImageViewerZoom-DaDLMNKC.js": "d3cf814d97a5ccb528dbba5c1f1e8a0d95d7e5701fa142551885b766b6990ca3",
+    "assets/UsersView-CNy29yfq.js": "41c58d822c3c34cb85adf5419057583f7d97b573fc929687196ded2040835098",
+    "assets/vendor-core-933TFPAm.js": "e2a78c0a46ee0020fc65d5958218ae33631f916c841648c033c16b055bb29f21",
+    "assets/VerifiedMediaDetail-BBadA4Qa.js": "e758af9de45df5dbaeb2886de522f2c4531556665fc4870707ca59c3f5fd464e",
+    "assets/VerifiedMediaDetail-DcvwGjnz.css": "2f090066917820486984756661ac4fd94a8693754d12f7a71d7dd1838842cc28",
+    "favicon.svg": "61bc9a161de58248288e6905425d7180f0624c2865007b97d763fdac12043a66",
+    "icons.svg": "b45fa506195cfcdef406ba9f0c77b36ddc1a7c224040926ec70abc2fdea7b93a",
+    "index.html": "d67d81a7205e5595f33afc2500a6620ec89fd1c4d05e91ebac06293e3bc2b04b",
+    "manifest.webmanifest": "d0b9fcde9d1243f840b4a949b777502b8a5786e9099d588885f9d46d1c789002",
+    "theme-init.js": "ef8ccfe269ff32cbff85594704bc43e637ae09a852d9dcf9b035a3c793182c5b",
+    "version.json": "38555a95e952a962b63934ff1347dd6024ad68922050e5afd48fd85e91c806f9"
+  },
+  "nativeBuild": {
+    "platform": "darwin-arm64",
+    "electron": "44.8.0",
+    "nodeAPI": 8,
+    "minimumMacOS": "15.0",
+    "compiler": "Apple clang version 21.0.0 (clang-2100.3.34.2)",
+    "sourceSha256": {
+      "embedded.cpp": "363d222860175a5ee6e8369356eccd9679cd557f5e1ec2f1121dc6ae5bf95586",
+      "surface.h": "8ba5ccc8555e797a641fb20e7f3df22f937b9ec19fd9d2cc48cc06ef5cbc2176",
+      "header-lock.json": "6c22449a6775118927c9a0266f392c2bac6579570547b54ad62589c22403517b",
+      "build-macos.py": "55ece82f8b601edfca2c5cfda9ac99d5196287fec7b540c9de37120eb8766703"
+    },
+    "addonSha256": "218deb899916dfbf0b8086a3fbe39f94e24b0e6a6a42ff608a7fda77ff930d61"
+  },
+  "nativeSha256": "218deb899916dfbf0b8086a3fbe39f94e24b0e6a6a42ff608a7fda77ff930d61",
+  "librarySha256": "907b745dd5b8329ef8f420f330180fc4f15df184e982a8e983f2ba8243aba1ad",
+  "authentication": {
+    "persistent": true,
+    "noPageToken": true,
+    "encryptedFile": true,
+    "systemRoundTrip": true,
+    "scopedResources": true
+  },
+  "minimumContent": {
+    "width": 1024,
+    "height": 640
+  },
+  "shaderModes": [
+    {
+      "mode": "efficiency",
+      "passes": "upload frame (naive)\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes\n(remainder pass) + color conversion\nuser shader: Anime4K-v4.0-De-Ring-Compute-Statistics (rgb)\nuser shader: Anime4K-v4.0-De-Ring-Compute-Statistics (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-3x1x1x56 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x1x1x56 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Depth-to-Space (rgb)\nuser shader: Anime4K-v3.2-AutoDownscalePre-x4 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x1x1x56 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Depth-to-Space (rgb)\n(remainder pass)\nuser shader: Anime4K-v4.0-De-Ring-Clamp (rgb)\n(remainder pass)\nscale=bilinear (rgb) + output to screen\ndrawing osd\nredraw cached frame\ndrawing osd\n",
+      "sourceLoads": 1,
+      "hwdec": "videotoolbox-copy"
+    },
+    {
+      "mode": "quality",
+      "passes": "upload frame (naive)\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes\n(remainder pass) + color conversion\nuser shader: Anime4K-v4.0-De-Ring-Compute-Statistics (rgb)\nuser shader: Anime4K-v4.0-De-Ring-Compute-Statistics (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-3x1x1x112 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x1x1x112 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x1x1x112 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x1x1x112 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Depth-to-Space (rgb)\nuser shader: Anime4K-v3.2-AutoDownscalePre-x4 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x1x1x56 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Depth-to-Space (rgb)\n(remainder pass)\nuser shader: Anime4K-v4.0-De-Ring-Clamp (rgb)\n(remainder pass)\nscale=bilinear (rgb) + output to screen\ndrawing osd\nredraw cached frame\ndrawing osd\n",
+      "sourceLoads": 1,
+      "hwdec": "videotoolbox-copy"
+    },
+    {
+      "mode": "off",
+      "passes": "upload frame (naive)\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes + color conversion\nscale=lanczos (rgb)\nlanczos second pass + output to screen\ndrawing osd\nredraw cached frame\ndrawing osd\n",
+      "sourceLoads": 1,
+      "hwdec": "videotoolbox-copy"
+    }
+  ],
+  "seek": {
+    "before": 5.5,
+    "target": 20,
+    "after": 20
+  },
+  "video": {
+    "hwdec": "videotoolbox-copy",
+    "tracks": [
+      {
+        "id": 1,
+        "type": "audio",
+        "title": "",
+        "language": "eng",
+        "selected": false
+      },
+      {
+        "id": 2,
+        "type": "audio",
+        "title": "",
+        "language": "jpn",
+        "selected": true
+      },
+      {
+        "id": 1,
+        "type": "sub",
+        "title": "",
+        "language": "eng",
+        "selected": false
+      },
+      {
+        "id": 2,
+        "type": "sub",
+        "title": "",
+        "language": "jpn",
+        "selected": true
+      }
+    ],
+    "position": 20,
+    "sourceLoads": 1,
+    "speed": 1.25,
+    "droppedFrames": 0
+  },
+  "videoResizes": [
+    {
+      "width": 1280,
+      "height": 800,
+      "previous": 73,
+      "beforeCanvas": {
+        "width": 1024,
+        "height": 547,
+        "pixels": [
+          2048,
+          1094
+        ],
+        "frames": 73,
+        "hidden": true
+      },
+      "nativeBefore": {
+        "ready": true,
+        "stopped": false,
+        "paused": true,
+        "ended": false,
+        "position": 20,
+        "duration": 30.021,
+        "error": "",
+        "hwdec": "videotoolbox-copy",
+        "version": "mpv v0.41.0",
+        "passes": "upload frame (naive)\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes + color conversion\nscale=lanczos (rgb)\nlanczos second pass + output to screen\ndrawing osd\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes + color conversion\nscale=lanczos (rgb)\nlanczos second pass + output to screen\ndrawing osd\n",
+        "aid": "2",
+        "sid": "2",
+        "speed": 1.25,
+        "buffering": false,
+        "tracks": [
+          {
+            "id": 1,
+            "type": "audio",
+            "title": "",
+            "language": "eng",
+            "selected": false
+          },
+          {
+            "id": 2,
+            "type": "audio",
+            "title": "",
+            "language": "jpn",
+            "selected": true
+          },
+          {
+            "id": 1,
+            "type": "sub",
+            "title": "",
+            "language": "eng",
+            "selected": false
+          },
+          {
+            "id": 2,
+            "type": "sub",
+            "title": "",
+            "language": "jpn",
+            "selected": true
+          }
+        ],
+        "apiVersion": 131077,
+        "renderedFrames": 75,
+        "acquiredFrames": 74,
+        "releasedFrames": 74,
+        "sourceLoads": 1,
+        "droppedFrames": 0,
+        "readyFrames": 0,
+        "leases": 0,
+        "surfaces": 2
+      },
+      "requested": {
+        "width": 1840,
+        "height": 1414
+      }
+    },
+    {
+      "width": 1024,
+      "height": 640,
+      "previous": 74,
+      "beforeCanvas": {
+        "width": 920,
+        "height": 707,
+        "pixels": [
+          1840,
+          1414
+        ],
+        "frames": 74,
+        "hidden": false
+      },
+      "nativeBefore": {
+        "ready": true,
+        "stopped": false,
+        "paused": true,
+        "ended": false,
+        "position": 20,
+        "duration": 30.021,
+        "error": "",
+        "hwdec": "videotoolbox-copy",
+        "version": "mpv v0.41.0",
+        "passes": "upload frame (naive)\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes + color conversion\nscale=lanczos (rgb)\nlanczos second pass + output to screen\ndrawing osd\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes + color conversion\nscale=lanczos (rgb)\nlanczos second pass + output to screen\ndrawing osd\n",
+        "aid": "2",
+        "sid": "2",
+        "speed": 1.25,
+        "buffering": false,
+        "tracks": [
+          {
+            "id": 1,
+            "type": "audio",
+            "title": "",
+            "language": "eng",
+            "selected": false
+          },
+          {
+            "id": 2,
+            "type": "audio",
+            "title": "",
+            "language": "jpn",
+            "selected": true
+          },
+          {
+            "id": 1,
+            "type": "sub",
+            "title": "",
+            "language": "eng",
+            "selected": false
+          },
+          {
+            "id": 2,
+            "type": "sub",
+            "title": "",
+            "language": "jpn",
+            "selected": true
+          }
+        ],
+        "apiVersion": 131077,
+        "renderedFrames": 76,
+        "acquiredFrames": 75,
+        "releasedFrames": 75,
+        "sourceLoads": 1,
+        "droppedFrames": 0,
+        "readyFrames": 0,
+        "leases": 0,
+        "surfaces": 2
+      },
+      "requested": {
+        "width": 2048,
+        "height": 1094
+      }
+    },
+    {
+      "width": 1280,
+      "height": 800,
+      "previous": 3,
+      "beforeCanvas": {
+        "width": 1024,
+        "height": 547,
+        "pixels": [
+          2048,
+          1094
+        ],
+        "frames": 3,
+        "hidden": false
+      },
+      "nativeBefore": {
+        "ready": true,
+        "stopped": false,
+        "paused": false,
+        "ended": false,
+        "position": 20,
+        "duration": 30.021,
+        "error": "",
+        "hwdec": "videotoolbox-copy",
+        "version": "mpv v0.41.0",
+        "passes": "upload frame (naive)\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes + color conversion\nscale=lanczos (rgb)\nlanczos second pass + output to screen\ndrawing osd\nredraw cached frame\ndrawing osd\n",
+        "aid": "1",
+        "sid": "1",
+        "speed": 1,
+        "buffering": false,
+        "tracks": [
+          {
+            "id": 1,
+            "type": "audio",
+            "title": "",
+            "language": "eng",
+            "selected": true
+          },
+          {
+            "id": 2,
+            "type": "audio",
+            "title": "",
+            "language": "jpn",
+            "selected": false
+          },
+          {
+            "id": 1,
+            "type": "sub",
+            "title": "",
+            "language": "eng",
+            "selected": true
+          },
+          {
+            "id": 2,
+            "type": "sub",
+            "title": "",
+            "language": "jpn",
+            "selected": false
+          }
+        ],
+        "apiVersion": 131077,
+        "renderedFrames": 5,
+        "acquiredFrames": 4,
+        "releasedFrames": 4,
+        "sourceLoads": 1,
+        "droppedFrames": 0,
+        "readyFrames": 0,
+        "leases": 0,
+        "surfaces": 2
+      },
+      "requested": {
+        "width": 1840,
+        "height": 1414
+      }
+    },
+    {
+      "width": 1024,
+      "height": 640,
+      "previous": 4,
+      "beforeCanvas": {
+        "width": 920,
+        "height": 707,
+        "pixels": [
+          1840,
+          1414
+        ],
+        "frames": 4,
+        "hidden": false
+      },
+      "nativeBefore": {
+        "ready": true,
+        "stopped": false,
+        "paused": false,
+        "ended": false,
+        "position": 20.25,
+        "duration": 30.021,
+        "error": "",
+        "hwdec": "videotoolbox-copy",
+        "version": "mpv v0.41.0",
+        "passes": "upload frame (naive)\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes + color conversion\nscale=lanczos (rgb)\nlanczos second pass + output to screen\ndrawing osd\nredraw cached frame\ndrawing osd\n",
+        "aid": "1",
+        "sid": "1",
+        "speed": 1,
+        "buffering": false,
+        "tracks": [
+          {
+            "id": 1,
+            "type": "audio",
+            "title": "",
+            "language": "eng",
+            "selected": true
+          },
+          {
+            "id": 2,
+            "type": "audio",
+            "title": "",
+            "language": "jpn",
+            "selected": false
+          },
+          {
+            "id": 1,
+            "type": "sub",
+            "title": "",
+            "language": "eng",
+            "selected": true
+          },
+          {
+            "id": 2,
+            "type": "sub",
+            "title": "",
+            "language": "jpn",
+            "selected": false
+          }
+        ],
+        "apiVersion": 131077,
+        "renderedFrames": 12,
+        "acquiredFrames": 11,
+        "releasedFrames": 11,
+        "sourceLoads": 1,
+        "droppedFrames": 0,
+        "readyFrames": 0,
+        "leases": 0,
+        "surfaces": 2
+      },
+      "requested": {
+        "width": 2048,
+        "height": 1094
+      }
+    }
+  ],
+  "closedPlayer": {
+    "stopped": true,
+    "surfaces": 0,
+    "leases": 0,
+    "references": 0
+  },
+  "imageEnhanced": true,
+  "httpRequests": [
+    {
+      "method": "GET",
+      "path": "/auth/status",
+      "hasBearer": false
+    },
+    {
+      "method": "GET",
+      "path": "/auth/status",
+      "hasBearer": false
+    },
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "hasBearer": false
+    },
+    {
+      "method": "GET",
+      "path": "/media",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/media",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/thumbnails/cp02-landscape.png",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/thumbnails/cp02-portrait.png",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "POST",
+      "path": "/system/recheck-missing",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/media",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/media",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/media/6",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/media/6",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/audio/6/tracks",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/audio/6/track/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/audio/6/track/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/audio/6/track/2",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/media/3",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/manga/3/pages",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/manga/3/page/0",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/manga/3/page/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/manga/3/page/2",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/manga/3/page/0",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/manga/3/page/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/manga/3/page/2",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/manga/3/page/3",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/manga/3/page/3",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/3",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/3",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/3",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/3",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/3",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/media/3",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/manga/3/pages",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/manga/3/page/0",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/manga/3/page/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/manga/3/page/2",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/manga/3/page/0",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/manga/3/page/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/manga/3/page/2",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/manga/3/page/3",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/manga/3/page/3",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/3",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/3",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/3",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/3",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/media/5",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    }
+  ],
+  "capturedAt": "2026-10-18T07:28:29.722Z"
+}

@@ -18,6 +18,15 @@ export interface DesktopPlayback {
   loading: boolean; buffering: boolean; tracks: DesktopTrack[]; aid: string; sid: string
   speed: number; volume: number; generation: number; fullscreen: boolean
 }
+export interface PlayerSessionState {
+  activeKind: 'none' | 'video' | 'audio'
+  activeMedia: { type: string; id?: number; title?: string; url?: string; start?: number } | null
+  videoRunning: boolean
+  videoPaused: boolean
+  videoPosition: number
+  videoDuration: number
+  videoDroppedFrames: number
+}
 export type DesktopVideoAction = 'pause' | 'seek' | 'seek-to' | 'fullscreen' | 'exit-fullscreen' | 'audio-track' | 'subtitle-track' | 'speed' | 'volume'
 export interface DesktopBridge {
   configuration(): Promise<DesktopConfiguration>
@@ -36,6 +45,10 @@ export interface DesktopBridge {
   controlVideo(action: 'seek' | 'seek-to' | 'audio-track' | 'subtitle-track' | 'speed' | 'volume', value: number): Promise<DesktopPlayback>
   videoState(): Promise<DesktopPlayback>
   stopVideo(generation?: string): Promise<void>
+  notifyAudioStart?(options?: { mediaId?: number; title?: string; url?: string; trackIndex?: number }): Promise<void>
+  notifyAudioStop?(): Promise<void>
+  playerSessionState?(): Promise<PlayerSessionState>
+  onPlayerSessionChanged?(callback: (state: PlayerSessionState) => void): () => void
   mountVideoSurface(id: string): void
   unmountVideoSurface(): void
   enhanceImage(value: { url: string; mode: 'anime' | 'photo' }): Promise<{ url: string; cached: boolean; scale: number }>

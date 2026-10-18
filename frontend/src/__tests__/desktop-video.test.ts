@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { reactive } from 'vue'
-const bridge = vi.hoisted(() => ({ openVideo: vi.fn(), videoState: vi.fn(), stopVideo: vi.fn(), controlVideo: vi.fn(), mountVideoSurface: vi.fn(), unmountVideoSurface: vi.fn() }))
+const bridge = vi.hoisted(() => ({ openVideo: vi.fn(), videoState: vi.fn(), stopVideo: vi.fn(), controlVideo: vi.fn(), mountVideoSurface: vi.fn(), unmountVideoSurface: vi.fn(), notifyAudioStop: vi.fn() }))
 vi.mock('../desktop', () => ({ desktopBridge: bridge, desktopState: reactive({ videoMode: 'off', imageMode: 'off' }), setDesktopPreferences: vi.fn() }))
-vi.mock('../stores/audioPlaybackStore', () => ({ audioPlaybackStore: { state: { playing: false }, togglePlay: vi.fn() } }))
+vi.mock('../stores/audioPlaybackStore', () => ({ audioPlaybackStore: { state: { playing: false, media: null }, togglePlay: vi.fn(), stop: vi.fn() } }))
 import DesktopVideoPlayer from '../components/media-detail/DesktopVideoPlayer.vue'
 const playback = (position = 5) => ({ running: true, paused: true, position, duration: 30, droppedFrames: 0, hwdec: 'test', ended: false, mode: 'off', error: '', loading: false, buffering: false, tracks: [{ id: 1, type: 'audio', title: '第一音轨' }, { id: 2, type: 'sub', title: '日文字幕' }], aid: '1', sid: '2', speed: 1, volume: 75, generation: 1, fullscreen: false })
 const wrappers: ReturnType<typeof mount>[] = []
@@ -74,5 +74,24 @@ describe('embedded desktop video UI', () => {
   await retry.trigger('click'); await flushPromises()
   expect(bridge.openVideo).toHaveBeenCalledTimes(2)
   expect(wrapper.text()).not.toContain('视频暂时无法播放')
+ })
+ it('stops active audio session on video open and emits prev and next navigation', async () => {
+  defaults()
+  const { audioPlaybackStore } = await import('../stores/audioPlaybackStore')
+  audioPlaybackStore.state.media = { id: 99, title: '正在播放的音频' } as any
+  const wrapper = mount(DesktopVideoPlayer, {
+    props: { url: '/stream/3', title: '序列测试视频', start: 0, hasPrev: true, hasNext: true },
+    attachTo: document.body,
+  })
+  wrappers.push(wrapper)
+  await flushPromises()
+  expect(audioPlaybackStore.stop).toHaveBeenCalled()
+  expect(bridge.notifyAudioStop).toHaveBeenCalled()
+
+  await wrapper.get('button[aria-label="上一项"]').trigger('click')
+  expect(wrapper.emitted('prev')).toHaveLength(1)
+
+  await wrapper.get('button[aria-label="下一项"]').trigger('click')
+  expect(wrapper.emitted('next')).toHaveLength(1)
  })
 })

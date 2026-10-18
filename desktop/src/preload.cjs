@@ -80,6 +80,15 @@ contextBridge.exposeInMainWorld(
     mountVideoSurface,
     unmountVideoSurface: detachVideoSurface,
     stopVideo: (generation) => invoke("he:video-stop", generation),
+    notifyAudioStart: (options) => invoke("he:audio-start", options),
+    notifyAudioStop: () => invoke("he:audio-stop"),
+    playerSessionState: () => invoke("he:player-session-state"),
+    onPlayerSessionChanged: (callback) => {
+      if (typeof callback !== 'function') throw new Error('无效的会话监听器');
+      const listener = (_event, value) => callback(value);
+      ipcRenderer.on('he:player-session-changed', listener);
+      return () => ipcRenderer.removeListener('he:player-session-changed', listener);
+    },
     enhanceImage: (options) => invoke("he:image", options),
   }),
 );

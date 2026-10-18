@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
-import { Maximize, Minimize, Pause, Play, Settings2, SkipBack, SkipForward, Volume2 } from 'lucide-vue-next'
+import { Maximize, Minimize, Pause, Play, RotateCcw, RotateCw, Settings2, SkipBack, SkipForward, Volume2 } from 'lucide-vue-next'
 import { desktopBridge, desktopState, setDesktopPreferences, type DesktopPlayback, type DesktopVideoAction, type VideoEnhancement } from '../../desktop'
 import { audioPlaybackStore } from '../../stores/audioPlaybackStore'
 import { EmptyState, LoadingState, UiButton, UiIconButton, UiModal, UiSlider, UiToast, controlClass } from '../ui'
-const props = defineProps<{ url: string; title: string; start: number }>()
-const emit = defineEmits<{ progress: [position: number, duration: number, ended: boolean, force?: boolean, sourceUrl?: string] }>()
+const props = defineProps<{ url: string; title: string; start: number; hasPrev?: boolean; hasNext?: boolean }>()
+const emit = defineEmits<{
+  progress: [position: number, duration: number, ended: boolean, force?: boolean, sourceUrl?: string]
+  prev: []
+  next: []
+}>()
 const canvasId = `he-video-${useId()}`
 const state = ref<DesktopPlayback | null>(null), error = ref(''), busy = ref(false), settingsOpen = ref(false)
 const actionError = ref('')
@@ -52,7 +56,8 @@ async function open() {
  flushProgress()
  const current = ++epoch, requestedUrl = props.url
  loadedUrl = ''; busy.value = true; error.value = ''; actionError.value = ''
- if (audioPlaybackStore.state.playing) audioPlaybackStore.togglePlay()
+ if (audioPlaybackStore.state.media) audioPlaybackStore.stop()
+ void Promise.resolve(desktopBridge?.notifyAudioStop?.()).catch(() => {})
  try {
   const next = await desktopBridge!.openVideo({ url: requestedUrl, title: props.title, start: props.start })
   if (!disposed && epoch === current) { state.value = next; loadedUrl = requestedUrl; seekValue.value = next.position }
@@ -110,9 +115,11 @@ onBeforeUnmount(() => {
   <div class="shrink-0 space-y-1 border-t border-line bg-surface px-4 pb-3 pt-2">
    <UiSlider v-model="seekValue" label="播放位置" hide-label :max="state?.duration || 1" :step="0.1" :value-text="`${time(seekValue)} / ${time(state?.duration || 0)}`" :disabled="busy || !state?.duration" @pointerdown="dragging = true" @pointercancel="dragging = false" @commit="seek" />
    <div class="flex min-w-0 items-center gap-2">
+    <UiIconButton v-if="hasPrev !== undefined" label="上一项" :disabled="busy || !hasPrev" @click="$emit('prev')"><SkipBack :size="18" /></UiIconButton>
     <UiIconButton :label="state?.paused ? '播放' : '暂停'" :disabled="busy || !state?.running" @click="control('pause')"><Play v-if="state?.paused" :size="20" /><Pause v-else :size="20" /></UiIconButton>
-    <UiIconButton label="后退十秒" :disabled="busy" @click="control('seek', -10)"><SkipBack :size="18" /></UiIconButton>
-    <UiIconButton label="前进十秒" :disabled="busy" @click="control('seek', 10)"><SkipForward :size="18" /></UiIconButton>
+    <UiIconButton v-if="hasNext !== undefined" label="下一项" :disabled="busy || !hasNext" @click="$emit('next')"><SkipForward :size="18" /></UiIconButton>
+    <UiIconButton label="后退十秒" :disabled="busy" @click="control('seek', -10)"><RotateCcw :size="18" /></UiIconButton>
+    <UiIconButton label="前进十秒" :disabled="busy" @click="control('seek', 10)"><RotateCw :size="18" /></UiIconButton>
     <span class="min-w-0 flex-1 truncate text-meta tabular-nums text-muted">{{ time(state?.position || 0) }} / {{ time(state?.duration || 0) }}</span>
     <span class="hidden text-meta text-subtle lg:block">{{ desktopState.videoMode === 'off' ? '原画' : desktopState.videoMode === 'quality' ? 'Anime4K · 质量' : 'Anime4K · 效率' }}</span>
     <UiIconButton label="播放设置" :pressed="settingsOpen" @click="settingsOpen = true"><Settings2 :size="20" /></UiIconButton>

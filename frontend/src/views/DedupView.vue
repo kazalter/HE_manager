@@ -143,7 +143,7 @@ const scanActive = computed(() => dedupStore.state.scanStarting || (summary.valu
 const coverage = computed(() => summary.value?.total_media
   ? Math.round((summary.value.fingerprinted / summary.value.total_media) * 100) : 0)
 const hasFilters = computed(() => !!dedupStore.state.filterLevel || !!dedupStore.state.filterMediaType || dedupStore.state.filterStatus !== 'pending')
-let pollTimer: ReturnType<typeof window.setTimeout> | undefined
+let pollTimer: any
 let disposed = false
 
 const schedulePoll = () => {

@@ -348,6 +348,7 @@ const syncPositionState = () => {
 const syncSystemPlayback = (playing: boolean) => {
   isPlaying.value = playing
   if (!playing) saveResume(true)
+  else void Promise.resolve(desktopBridge?.notifyAudioStart?.({ mediaId: props.media.id, title: currentTrack.value?.title || props.media.title, url: streamUrl.value, trackIndex: currentIndex.value })).catch(() => {})
   if ('mediaSession' in navigator) navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'
 }
 watch([isPlaying, currentTime, duration, currentTrack], () => {
@@ -404,6 +405,7 @@ onBeforeUnmount(() => {
     audio.pause()
     audio.src = ''
   }
+  void Promise.resolve(desktopBridge?.notifyAudioStop?.()).catch(() => {})
 })
 </script>
 
