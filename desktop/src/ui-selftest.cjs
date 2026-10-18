@@ -38,10 +38,11 @@ module.exports = async ({ window, player, session, config, output }) => {
   }
   async function capture(name) {
     // DOM state can lead the macOS compositor. Wait through a paint before capture.
-    await evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+    await Promise.race([evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))'), sleep(750)]);
     await sleep(250);
     const file = `${path.basename(output, '.json')}-${name}.png`;
-    await fs.writeFile(path.join(path.dirname(output), file), (await window.webContents.capturePage()).toPNG());
+    const page = await Promise.race([window.webContents.capturePage(), sleep(5000).then(() => { throw new Error('Window capture timed out'); })]);
+    await fs.writeFile(path.join(path.dirname(output), file), page.toPNG());
     report.screenshots.push(file);
   }
   async function hashTree(directory) {
@@ -66,8 +67,12 @@ module.exports = async ({ window, player, session, config, output }) => {
   async function captureSizes(scene, mode) {
     for (const [width, height] of [[1280, 800], [1024, 640]]) {
       const previous = await evaluate('Number(document.querySelector(".desktop-video canvas")?.dataset.heVideoFrames) || 0');
+      const beforeCanvas = scene === 'video' ? await evaluate(`(() => {const c=document.querySelector('.desktop-video canvas'), r=c.getBoundingClientRect();return {width:r.width,height:r.height,pixels:[c.width,c.height],frames:Number(c.dataset.heVideoFrames)||0,hidden:document.hidden};})()`) : null;
       const resized = window.getContentSize().join('x') !== `${width}x${height}`;
       window.setContentSize(width, height); await sleep(300);
+      if (scene === 'video') {
+        report.videoResizes ||= []; report.videoResizes.push({ width, height, previous, beforeCanvas, nativeBefore: player.native.state(player.owner), requested: { ...player.size } });
+      }
       if (scene === 'video' && resized) await wait(() => evaluate(`Number(document.querySelector('.desktop-video canvas')?.dataset.heVideoFrames) > ${previous}`), 'Video did not redraw after resizing');
       const dimensions = await evaluate('({width:innerWidth,height:innerHeight,overflow:document.documentElement.scrollWidth>innerWidth+1})');
       if (dimensions.overflow) throw new Error(scene + ' overflows the window');
@@ -259,6 +264,8 @@ module.exports = async ({ window, player, session, config, output }) => {
   } catch (error) {
     report.status = 'failed'; report.stage = stage; report.error = error.message;
     report.playback = player.state;
+    report.nativeFailure = player.owner ? player.native.state(player.owner) : null;
+    report.canvasFailure = await evaluate(`(() => {const c=document.querySelector('.desktop-video canvas'), r=c?.getBoundingClientRect();return {exists:!!c,width:r?.width,height:r?.height,frames:Number(c?.dataset.heVideoFrames)||0,hidden:document.hidden};})()`);
     report.windowMetrics = { size: window.getSize(), contentSize: window.getContentSize(), minimum: window.getMinimumSize(), viewport: await evaluate('({width:innerWidth,height:innerHeight})') };
     try { await capture('failure'); } catch {}
   }
