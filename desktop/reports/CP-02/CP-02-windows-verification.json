@@ -1,14 +1,14 @@
 {
   "phase": "CP-02",
   "status": "partial-pass",
-  "sourceRevision": "60439e852c53c858850e61f810a0caf5c91e5dc3",
+  "sourceRevision": "152db35785c5735736b30c7eb7a59273b577ee77",
   "matrix": [
     {
       "platform": "win32",
       "report": "CP-02-windows.json",
-      "reportSha256": "94fe2b3f78d40fccbc1197de1aab3d084ad53b043c51eae4186b8a456f8e331e",
+      "reportSha256": "b1914477450d02775a880bb119e7427c70f90c75d5e4dd1caf378cfa14e254c1",
       "archive": "HE-Manager-0.2.0-win32-x64.zip",
-      "archiveSha256": "50e740ecef4f311d351d65dd38b2af2fecf439dd307a2d32744f2bc6360730f3",
+      "archiveSha256": "170565a7a16af0f712d7b9499d9e7836282cc2a00902a8a5be3bd0ead204c464",
       "passed": true
     }
   ],

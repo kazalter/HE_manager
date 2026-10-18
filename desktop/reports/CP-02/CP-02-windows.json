@@ -25,23 +25,23 @@
     "videoErrorAndRetry": true
   },
   "screenshots": [
-    "CP-02-windows-i-library-light-1280.png",
-    "CP-02-windows-i-library-light-1024.png",
-    "CP-02-windows-i-library-dark-1280.png",
-    "CP-02-windows-i-library-dark-1024.png",
-    "CP-02-windows-i-video-loading.png",
-    "CP-02-windows-i-video-dark-1280.png",
-    "CP-02-windows-i-video-dark-1024.png",
-    "CP-02-windows-i-reader-double-dark-1024.png",
-    "CP-02-windows-i-reader-scroll-dark-1024.png",
-    "CP-02-windows-i-reader-dark-1280.png",
-    "CP-02-windows-i-reader-dark-1024.png",
-    "CP-02-windows-i-reader-enhancement-feedback.png",
-    "CP-02-windows-i-video-light-1280.png",
-    "CP-02-windows-i-video-light-1024.png",
-    "CP-02-windows-i-reader-light-1280.png",
-    "CP-02-windows-i-reader-light-1024.png",
-    "CP-02-windows-i-video-error.png"
+    "CP-02-windows-j-library-light-1280.png",
+    "CP-02-windows-j-library-light-1024.png",
+    "CP-02-windows-j-library-dark-1280.png",
+    "CP-02-windows-j-library-dark-1024.png",
+    "CP-02-windows-j-video-loading.png",
+    "CP-02-windows-j-video-dark-1280.png",
+    "CP-02-windows-j-video-dark-1024.png",
+    "CP-02-windows-j-reader-double-dark-1024.png",
+    "CP-02-windows-j-reader-scroll-dark-1024.png",
+    "CP-02-windows-j-reader-dark-1280.png",
+    "CP-02-windows-j-reader-dark-1024.png",
+    "CP-02-windows-j-reader-enhancement-feedback.png",
+    "CP-02-windows-j-video-light-1280.png",
+    "CP-02-windows-j-video-light-1024.png",
+    "CP-02-windows-j-reader-light-1280.png",
+    "CP-02-windows-j-reader-light-1024.png",
+    "CP-02-windows-j-video-error.png"
   ],
   "layouts": [
     {
@@ -133,7 +133,7 @@
     "main.cjs": "b38bc6781aeab007aa857c08c00842b89a741c2845e1d4f92d055e639cf5a3d3",
     "embedded-player.cjs": "832cd7da3242432f718fbd8fc8ae43cecc7e9d396a1e9bb57679be3d03a3ab77",
     "preload.cjs": "7ebdccadd11607fd7d03ef144f5aa589b5577a19d07ce039319991d5689bcc01",
-    "ui-selftest.cjs": "339d6923bfb4a6cd3e3161cb686d6c565b88bc468209aaaa75dc36fc064e4fd1"
+    "ui-selftest.cjs": "ce512be9ede9b2bde2d644352265ed5a7ceb154ee329942e6d801e38746927cb"
   },
   "version": "0.2.0",
   "electron": "44.8.0",
@@ -285,7 +285,7 @@
         "selected": true
       }
     ],
-    "position": 20.125,
+    "position": 20.083,
     "sourceLoads": 1,
     "speed": 1.25
   },
@@ -296,5 +296,5 @@
     "references": 0
   },
   "imageEnhanced": true,
-  "capturedAt": "2026-10-17T22:59:09.804Z"
+  "capturedAt": "2026-10-18T02:20:46.469Z"
 }

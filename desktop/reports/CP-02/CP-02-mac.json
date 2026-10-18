@@ -1,0 +1,298 @@
+{
+  "phase": "CP-02",
+  "status": "partial-pass",
+  "platform": "darwin",
+  "packaged": true,
+  "checks": {
+    "directConnectivity": true,
+    "loginAndLibrary": true,
+    "continueWatching": true,
+    "minimumContent": true,
+    "libraryAppearance": true,
+    "systemAppearance": true,
+    "emptySearch": true,
+    "videoLoading": true,
+    "embeddedVideo": true,
+    "videoEnhancement": true,
+    "keyboardSettings": true,
+    "seek": true,
+    "sameSessionFullscreen": true,
+    "viewerClose": true,
+    "readerControlsFit": true,
+    "readerModesAndZoom": true,
+    "enhancementFeedback": true,
+    "readerOpened": true,
+    "videoErrorAndRetry": true
+  },
+  "screenshots": [
+    "CP-02-mac-painted2-library-light-1280.png",
+    "CP-02-mac-painted2-library-light-1024.png",
+    "CP-02-mac-painted2-library-dark-1280.png",
+    "CP-02-mac-painted2-library-dark-1024.png",
+    "CP-02-mac-painted2-video-loading.png",
+    "CP-02-mac-painted2-video-dark-1280.png",
+    "CP-02-mac-painted2-video-dark-1024.png",
+    "CP-02-mac-painted2-reader-double-dark-1024.png",
+    "CP-02-mac-painted2-reader-scroll-dark-1024.png",
+    "CP-02-mac-painted2-reader-dark-1280.png",
+    "CP-02-mac-painted2-reader-dark-1024.png",
+    "CP-02-mac-painted2-reader-enhancement-feedback.png",
+    "CP-02-mac-painted2-video-light-1280.png",
+    "CP-02-mac-painted2-video-light-1024.png",
+    "CP-02-mac-painted2-reader-light-1280.png",
+    "CP-02-mac-painted2-reader-light-1024.png",
+    "CP-02-mac-painted2-video-error.png"
+  ],
+  "layouts": [
+    {
+      "scene": "library",
+      "mode": "light",
+      "width": 1280,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "scene": "library",
+      "mode": "light",
+      "width": 1024,
+      "height": 640,
+      "overflow": false
+    },
+    {
+      "scene": "library",
+      "mode": "dark",
+      "width": 1280,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "scene": "library",
+      "mode": "dark",
+      "width": 1024,
+      "height": 640,
+      "overflow": false
+    },
+    {
+      "scene": "video",
+      "mode": "dark",
+      "width": 1280,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "scene": "video",
+      "mode": "dark",
+      "width": 1024,
+      "height": 640,
+      "overflow": false
+    },
+    {
+      "scene": "reader",
+      "mode": "dark",
+      "width": 1280,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "scene": "reader",
+      "mode": "dark",
+      "width": 1024,
+      "height": 640,
+      "overflow": false
+    },
+    {
+      "scene": "video",
+      "mode": "light",
+      "width": 1280,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "scene": "video",
+      "mode": "light",
+      "width": 1024,
+      "height": 640,
+      "overflow": false
+    },
+    {
+      "scene": "reader",
+      "mode": "light",
+      "width": 1280,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "scene": "reader",
+      "mode": "light",
+      "width": 1024,
+      "height": 640,
+      "overflow": false
+    }
+  ],
+  "sourceSha256": {
+    "main.cjs": "b38bc6781aeab007aa857c08c00842b89a741c2845e1d4f92d055e639cf5a3d3",
+    "embedded-player.cjs": "832cd7da3242432f718fbd8fc8ae43cecc7e9d396a1e9bb57679be3d03a3ab77",
+    "preload.cjs": "7ebdccadd11607fd7d03ef144f5aa589b5577a19d07ce039319991d5689bcc01",
+    "ui-selftest.cjs": "ce512be9ede9b2bde2d644352265ed5a7ceb154ee329942e6d801e38746927cb"
+  },
+  "version": "0.2.0",
+  "electron": "44.8.0",
+  "uiSha256": {
+    "app-icons/he-180.png": "a8a21a323117abf1e1b1335b71fd0f3f9bfded0b6354d9f4aa39a7b0f91541c4",
+    "app-icons/he-192.png": "0493c8d75227b49d0f7e1bb40ef3081da87c9577260de1365c1ccfe360d0c0eb",
+    "app-icons/he-512.png": "7cf06e0768770ca1d3191cc4993d415639d80078774d7a0cf5b496b18ab2ce59",
+    "app-icons/he-maskable-512.png": "7cf06e0768770ca1d3191cc4993d415639d80078774d7a0cf5b496b18ab2ce59",
+    "app-icons/he.svg": "02dccd9882b87e270871e0de2ce48aa9cbda0254df7ab149f407391883174b2b",
+    "assets/_plugin-vue_export-helper-TcpyXLsZ.js": "27e87fe62aa760227b7529576953d8314891fd2aec28e0a3f03aece406f2d7d7",
+    "assets/artplayer-BhDQXST_.js": "6070ba92141ea9d434772a45d0dc1f1d00c23df2d74c7e834ef55b651d9b91ca",
+    "assets/AssistantView-BqkQ9DP1.css": "1cc1a83f03ed6e66473595be2ea9562b3d1886bf8a063ae60b5c2f00c6e178bb",
+    "assets/AssistantView-DsmXi7_p.js": "f57c9a5baff0c940ae0f64cc0e44ba36688c3208b621393813229bdff65d2c79",
+    "assets/asyncComponents-CSy18zUG.js": "ee4487bb5e66ca62c9897cf426185b6517ec764694479826d56ee3b9b8b14186",
+    "assets/audioPlaybackStore-C8GTSyvd.js": "2df693fbe2153b8fe851ddbd0a2563ed5d0bb5b0fb28d9df2b9aef5950c5f78d",
+    "assets/AudioPlayer-D_qgo3E_.css": "939c42777e4c0da17cd8cdeb107e6d6a191580fcdc2006934784df6340ee992c",
+    "assets/AudioPlayer-DUXU2I_2.js": "99328e355ac68e8d99b44bfb30c736224d608f8bce7c1df9d1038da3f0981dc7",
+    "assets/auth-B2ucE9ID.js": "9c72121763030bb95f84b3fe420fbb3a8dd8995d75184de93c9488aa0b4bdb27",
+    "assets/Bd2SpineView--t3KEIpq.js": "ac795daaa8ac66444d8591cb8863e4ad7295549c4fe9d39d7c673a2c43c5919a",
+    "assets/Bd2SpineView-h6J9uggk.css": "1e400654004f2473e1dbfe4211d68d3610a2de65c93478049e91f85ce95d6776",
+    "assets/ColorModeSelect-DOvo1WYS.js": "83afd205d73f5da916911c9df16d51d953697109cf8bc01681a49d692320993b",
+    "assets/config-VhQbkAtF.js": "27ee9ce129c933904ff78214df6965c4508d80c334199fdd9d341ca5b5334f96",
+    "assets/CreatorsView-DoOivBaj.js": "2eac94004f65113f44132d165ce0e401b56e2e50d989861c93764b43d0aa47e8",
+    "assets/DedupView-DUwcSIVN.js": "c17bc39a01def6048072fe40034177b71ac8d39cc8860e4982077101b96907ba",
+    "assets/discardApi-CfXdswNg.js": "6b5fb1e48d21e03e4ef519179c47938784a6d91a57606f8c9c20da53d4469012",
+    "assets/DiscardContentDialog-DTPSWtDB.js": "5d8124d733ef8c9fe6f5a7a317f4d29f06365fd38cba24b8358360c34418012d",
+    "assets/DiscardedView-BsqppEkm.js": "3584f7a5c3fd0d1eda63af7b31929b6e885e859f53ef4332f3a9b849c471ebb3",
+    "assets/DownloadsView-DqCmLr8j.js": "328a6866dd8bbd52ef9ab7035a4eba453bd8033d03ddc1774b36e40719c2448d",
+    "assets/DownloadsView-DRbuknqZ.css": "6f247cec264738d7f130ba43c1f46d5024592e4e07a620ae5ff1ac1f994e2e78",
+    "assets/EmbedSpineView-BVKvaPhS.css": "367cfdba6b05f9aaa368b8aaec99c4a12337db98bbd8e36bb8c5f0d4093c4746",
+    "assets/EmbedSpineView-Dl21vJq-.js": "07da2aa5b63d281d6eb429e8cd17e149b4d874db8ceb4aab0d8663110bd261b0",
+    "assets/ExternalFavoritesView-CvNL6_SV.js": "b17bbf4c4a5ec05d07ce36aea58ddfbf2d2414ce5e0fe6389655c2c529ac1f12",
+    "assets/ExternalFavoritesView-DjMKxjoY.css": "f90fecb2ec120402d9b3a56a76e04adf4d689ea382ed31243e26e3722ba88c6e",
+    "assets/index-6ZmS3JCb.js": "595d2903b06ceaae9cfe3a94128832814ea941e18f0d6f8c50256916d2e40a11",
+    "assets/index-Cp_aMq9O.css": "125e333c46670149da645c59b8e1957483ef41e2977f02ff0451f06fd6102a7d",
+    "assets/inter-latin-wght-normal-Dx4kXJAl.woff2": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+    "assets/lucide-icons-DDDay-u-.js": "38e6fc67d65de110cbb74b1009373037da7707619a586f7892baa3adc04c444e",
+    "assets/MangaRecommendView-BlaGJ38s.js": "8a180dfeb3ed982dcd382067e71be8e2691c84f5fabadd13982fd5e92dfa0bb5",
+    "assets/media-placeholder-BE0xZWKB.js": "24400c3b45c521ba24ff53b5c8994eb70daf5f428a0f7170c1cc7151af2c408c",
+    "assets/media-placeholder-D6AyOhIP.svg": "5d292f3b051479328e5289adb2577661d3951fbfd7480a8e5e7a5dee45889a6b",
+    "assets/MediaCard-Ck9cUBWt.js": "1a7bef1b901705c942258a5f92fffb451e1e23a08b32d0100d99f97301bd2d8e",
+    "assets/MediaCard-DUzfBGHk.css": "11d52be45c3848c6fe0f3c5b3d3ebd8efcafbdadb46e9c33bd08f077f1d1031f",
+    "assets/MediaDetail-BCLxAgrr.css": "193ad69a9664805f88980ab0b0237f999b6b2f3df3487e3e82f4d769d61ef74f",
+    "assets/MediaDetail-WlOTifb6.js": "0df0379e895010e9d20703321d553fcad636745fd98b9d499f580d1380f5810b",
+    "assets/MoreView-CTaHr4Y2.js": "e634eb2846a1800ba8d7f61e2d0cd0717b024b37e17e87f377fe342468870ba8",
+    "assets/PaginationControl-CgJK3Zr5.js": "17316f34e1c65f1e1ddd148ae61c98a1d4bb849d54466d26c3338b8770fe111d",
+    "assets/PaginationControl-Cy7Yr0bi.css": "f9548072fc6ec34ffcdc045abfb4ecdd3fe3bd7daafe49a3b7aaf241fb296485",
+    "assets/PawchiveDownloads-dXFj66xB.js": "62bd3a8e3de9d1266397c61238e6fe25ec7c8543492cfef9ce4eadf62a91ae15",
+    "assets/preload-helper-qlgyTAkD.js": "0c88c6aaef07b19239a2eac9faef82584f9e733114f85dc190e98dcea60b1753",
+    "assets/rolldown-runtime-lhHHWwHU.js": "a526d1bb3288ef04d001028843220a24b0867a4edf8c685b69506d6525af36ff",
+    "assets/SettingsView-3hag0-mQ.css": "002dd27dff8c50161e22b97be5e24b373dba5ca884cf5634ce08952c246ed92e",
+    "assets/SettingsView-BSkv_k8f.js": "d49eb42254542dda6238c507f50872313252ca7da716596d6238dd490025b43b",
+    "assets/spine-player-Ci7d0mHH.js": "1e565affbb903fa2d8b6f40c7726ae7f88c7fcb4bda8c03438a2c880eb87c3ba",
+    "assets/spine-player-DA1bLauS.css": "3683eea212eeac14a258a4c0904b9c5dd4a739f343437c14120014030633f087",
+    "assets/StatsView-Eel8birR.js": "2629e85c057f6ca8bc57db49000d1a4db9afb6690a7ed986956888b6c18c0e16",
+    "assets/StatsView-LTP7yO93.css": "bbe4f66eb4d8eac2a979a6e366daea6a8dd52ec8ac27dbc0977a72eea46d1fa4",
+    "assets/TagsView-B0HnfnTO.css": "c41ddbb8bb5270f5063dfe8ba4ac19c87ff01698fab547c401f4d5b7432bb02f",
+    "assets/TagsView-BGxS6kVe.js": "dc5a18c62cf39b88bda368e2084ee47644fa9f81cfb1bfef24279caf9626a19e",
+    "assets/ThemeSelect-s75k9NI3.js": "925db18ac2167ec51ee85651c9eb9c22be6a01d6a98da68e991f23a3d9c9af88",
+    "assets/ui-CEw8T23S.css": "4a5d49cb315a5eaaf4d34b20f34e84d26fbf17e2e4d45af089d64cc77e0e7673",
+    "assets/ui-CKfnvW8z.js": "a6bd96c3a9aa6bc36a9be7c0925fb29e6f972c7a9fb0aab6e6f6a9cc6dbb37d8",
+    "assets/useCompactViewport-DdEuVrME.js": "897e71f9570cc7958b9931b66c2ffdabbc69b8f1bf67a649b7f8abb0968a558d",
+    "assets/useImageViewerZoom-DaDLMNKC.js": "d3cf814d97a5ccb528dbba5c1f1e8a0d95d7e5701fa142551885b766b6990ca3",
+    "assets/UsersView-fUauuVBU.js": "4eac957417357b24b27196fea6e49133e9673abd81af23aefd6158a1aea9e748",
+    "assets/vendor-core-BXLlhFrQ.js": "13df7c22cf025177fd726a90debb460d6fdb0fbe16543fa5a2c490d8765883a1",
+    "favicon.svg": "61bc9a161de58248288e6905425d7180f0624c2865007b97d763fdac12043a66",
+    "icons.svg": "b45fa506195cfcdef406ba9f0c77b36ddc1a7c224040926ec70abc2fdea7b93a",
+    "index.html": "0ae17bb197448e9fb879d4cb8e3bcf44767773cc2e5967b19728499615ca1ad4",
+    "manifest.webmanifest": "d0b9fcde9d1243f840b4a949b777502b8a5786e9099d588885f9d46d1c789002",
+    "theme-init.js": "ef8ccfe269ff32cbff85594704bc43e637ae09a852d9dcf9b035a3c793182c5b",
+    "version.json": "69b22845f7a7140c036d5550828ca79b2fa4eb49c25e97b7f0d1d6a8adc0e849"
+  },
+  "nativeBuild": {
+    "platform": "darwin-arm64",
+    "electron": "44.8.0",
+    "nodeAPI": 8,
+    "minimumMacOS": "15.0",
+    "compiler": "Apple clang version 21.0.0 (clang-2100.3.34.2)",
+    "sourceSha256": {
+      "embedded.cpp": "363d222860175a5ee6e8369356eccd9679cd557f5e1ec2f1121dc6ae5bf95586",
+      "surface.h": "8ba5ccc8555e797a641fb20e7f3df22f937b9ec19fd9d2cc48cc06ef5cbc2176",
+      "header-lock.json": "6c22449a6775118927c9a0266f392c2bac6579570547b54ad62589c22403517b",
+      "build-macos.py": "55ece82f8b601edfca2c5cfda9ac99d5196287fec7b540c9de37120eb8766703"
+    },
+    "addonSha256": "218deb899916dfbf0b8086a3fbe39f94e24b0e6a6a42ff608a7fda77ff930d61"
+  },
+  "nativeSha256": "218deb899916dfbf0b8086a3fbe39f94e24b0e6a6a42ff608a7fda77ff930d61",
+  "librarySha256": "907b745dd5b8329ef8f420f330180fc4f15df184e982a8e983f2ba8243aba1ad",
+  "minimumContent": {
+    "width": 1024,
+    "height": 640
+  },
+  "shaderModes": [
+    {
+      "mode": "efficiency",
+      "passes": "upload frame (naive)\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes\n(remainder pass) + color conversion\nuser shader: Anime4K-v4.0-De-Ring-Compute-Statistics (rgb)\nuser shader: Anime4K-v4.0-De-Ring-Compute-Statistics (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(M)-Conv-3x1x1x56 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x1x1x56 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Depth-to-Space (rgb)\nuser shader: Anime4K-v3.2-AutoDownscalePre-x4 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x1x1x56 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Depth-to-Space (rgb)\n(remainder pass)\nuser shader: Anime4K-v4.0-De-Ring-Clamp (rgb)\n(remainder pass)\nscale=bilinear (rgb) + output to screen\ndrawing osd\nredraw cached frame\ndrawing osd\n",
+      "sourceLoads": 1,
+      "hwdec": "videotoolbox-copy"
+    },
+    {
+      "mode": "quality",
+      "passes": "upload frame (naive)\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes\n(remainder pass) + color conversion\nuser shader: Anime4K-v4.0-De-Ring-Compute-Statistics (rgb)\nuser shader: Anime4K-v4.0-De-Ring-Compute-Statistics (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v4.0-Restore-CNN-(VL)-Conv-3x1x1x112 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x3x3x16 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x1x1x112 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x1x1x112 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Conv-4x1x1x112 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(VL)-Depth-to-Space (rgb)\nuser shader: Anime4K-v3.2-AutoDownscalePre-x4 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x3 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x3x3x8 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Conv-4x1x1x56 (rgb)\nuser shader: Anime4K-v3.2-Upscale-CNN-x2-(M)-Depth-to-Space (rgb)\n(remainder pass)\nuser shader: Anime4K-v4.0-De-Ring-Clamp (rgb)\n(remainder pass)\nscale=bilinear (rgb) + output to screen\ndrawing osd\nredraw cached frame\ndrawing osd\n",
+      "sourceLoads": 1,
+      "hwdec": "videotoolbox-copy"
+    },
+    {
+      "mode": "off",
+      "passes": "upload frame (naive)\ncscale=lanczos (chroma)\nlanczos second pass\ncombining planes + color conversion\nscale=lanczos (rgb)\nlanczos second pass + output to screen\ndrawing osd\nredraw cached frame\ndrawing osd\n",
+      "sourceLoads": 1,
+      "hwdec": "videotoolbox-copy"
+    }
+  ],
+  "seek": {
+    "before": 5.75,
+    "target": 20,
+    "after": 20
+  },
+  "video": {
+    "hwdec": "videotoolbox-copy",
+    "tracks": [
+      {
+        "id": 1,
+        "type": "audio",
+        "title": "",
+        "language": "eng",
+        "selected": false
+      },
+      {
+        "id": 2,
+        "type": "audio",
+        "title": "",
+        "language": "jpn",
+        "selected": true
+      },
+      {
+        "id": 1,
+        "type": "sub",
+        "title": "",
+        "language": "eng",
+        "selected": false
+      },
+      {
+        "id": 2,
+        "type": "sub",
+        "title": "",
+        "language": "jpn",
+        "selected": true
+      }
+    ],
+    "position": 20,
+    "sourceLoads": 1,
+    "speed": 1.25
+  },
+  "closedPlayer": {
+    "stopped": true,
+    "surfaces": 0,
+    "leases": 0,
+    "references": 0
+  },
+  "imageEnhanced": true,
+  "capturedAt": "2026-10-18T02:19:59.650Z"
+}

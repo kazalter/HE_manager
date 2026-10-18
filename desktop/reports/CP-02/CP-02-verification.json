@@ -1,0 +1,24 @@
+{
+  "phase": "CP-02",
+  "status": "passed",
+  "sourceRevision": "152db35785c5735736b30c7eb7a59273b577ee77",
+  "matrix": [
+    {
+      "platform": "darwin",
+      "report": "CP-02-mac.json",
+      "reportSha256": "78e75a5ba619551cd5d26bb10f88f16fd1aa10604a2b85023f22ab26794a5393",
+      "archive": "HE-Manager-0.2.0-darwin-arm64.zip",
+      "archiveSha256": "950f0a5bf1df164442d597ffd4ff3c79879cf9c76b9ff8145c935ec67da9babf",
+      "passed": true
+    },
+    {
+      "platform": "win32",
+      "report": "CP-02-windows.json",
+      "reportSha256": "b1914477450d02775a880bb119e7427c70f90c75d5e4dd1caf378cfa14e254c1",
+      "archive": "HE-Manager-0.2.0-win32-x64.zip",
+      "archiveSha256": "170565a7a16af0f712d7b9499d9e7836282cc2a00902a8a5be3bd0ead204c464",
+      "passed": true
+    }
+  ],
+  "scope": "Shared UI, theme, representative input and application foundation. CP-03–07 acceptance remains separate."
+}
