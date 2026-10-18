@@ -282,3 +282,20 @@ test('finite detail 401 is buffered before identity cancellation and still clear
   assert.equal(response.status, 401); assert.deepEqual(await response.json(), { detail: 'expired' });
   assert.equal(session.snapshot().user, null);
 });
+
+test('stale response cancellation errors still surface as stale, without touching the new identity', async () => {
+  const pending = deferred(); const { session } = setup(() => pending.promise);
+  const first = await session.login('1', 'pw');
+  const old = session.request('/media', {}, first.generation);
+  const rejected = assert.rejects(old, { status: 409 });
+  await session.login('2', 'pw');
+  pending.resolve({ status: 401, body: { cancel: async () => { throw new DOMException('aborted', 'AbortError'); } } });
+  await rejected; assert.equal(session.snapshot().user.id, 2);
+});
+test('stream 401 returns a readable error after current identity cancellation', async () => {
+  const { session } = setup(() => ({ status: 401, body: { cancel: async () => { throw new DOMException('aborted', 'AbortError'); } } }));
+  const { generation } = await session.login('1', 'pw');
+  const response = await session.request('/stream/7', {}, generation);
+  assert.equal(response.status, 401); assert.equal((await response.json()).detail, '登录已过期，请重新登录');
+  assert.equal(session.snapshot().user, null);
+});

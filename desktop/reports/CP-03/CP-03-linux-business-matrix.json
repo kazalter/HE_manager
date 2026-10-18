@@ -1,0 +1,238 @@
+{
+  "phase": "CP-03",
+  "scope": "Headless DesktopSession over two disposable real FastAPI servers with 69 items and two accounts each; packaged identity UI and OS restart are separate gates",
+  "status": "partial-pass",
+  "node": "v22.23.3",
+  "probeSha256": "682a50a4f09dd2ed3f5db2a286215ab508ce4bb17c5fec121e8b420ca12c2d6b",
+  "checks": {
+    "realPaginationBeyond60": true,
+    "listDoesNotOpenDetails": true,
+    "searchTotalAndPageBound": true,
+    "combinedFiltersUseActualFields": true,
+    "sourceAndNamedTagFilter": true,
+    "ratingOrder": true,
+    "titleOrder": true,
+    "continuationUsesViewingOpened": true,
+    "listCannotAuthorizeNativePlayback": true,
+    "actualDetailUpdatesOpened": true,
+    "favoriteRatingPreserveProgress": true,
+    "singlePageKeepsServerViewed": true,
+    "protectedPageAndCoverRead": true,
+    "prefetchPreservesUnopenedMedia": true,
+    "lateReal401CannotExpireNewAccount": true,
+    "differentAccountHasFreshIdentity": true,
+    "oldAccountResourceIsRejected": true,
+    "offlineReadKeepsIdentity": true,
+    "networkRecoveryUsesCurrentIdentity": true,
+    "switchServerClearsAccount": true,
+    "otherServerDataIsSeparate": true,
+    "offlineRestoreKeepsCipherRecordWithoutUser": true,
+    "retryRestoreVerifiesActualAccount": true,
+    "realCurrent401ClearsAccountAndRecord": true,
+    "noCredentialURLsOrReports": true
+  },
+  "requests": [
+    {
+      "server": "A",
+      "method": "POST",
+      "path": "/auth/login",
+      "credentialInUrl": false,
+      "bearer": false
+    },
+    {
+      "server": "A",
+      "method": "GET",
+      "path": "/media",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "A",
+      "method": "GET",
+      "path": "/media",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "A",
+      "method": "GET",
+      "path": "/media",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "A",
+      "method": "GET",
+      "path": "/media",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "A",
+      "method": "GET",
+      "path": "/media",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "A",
+      "method": "GET",
+      "path": "/media",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "A",
+      "method": "GET",
+      "path": "/media",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "A",
+      "method": "GET",
+      "path": "/media",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "A",
+      "method": "GET",
+      "path": "/media/1",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "A",
+      "method": "PATCH",
+      "path": "/media/1",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "A",
+      "method": "PATCH",
+      "path": "/media/1",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "A",
+      "method": "PATCH",
+      "path": "/media/1",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "A",
+      "method": "GET",
+      "path": "/media/68",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "A",
+      "method": "PATCH",
+      "path": "/media/68",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "A",
+      "method": "GET",
+      "path": "/media",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "A",
+      "method": "GET",
+      "path": "/manga/3/page/0",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "A",
+      "method": "GET",
+      "path": "/thumbnails/cp02-portrait.png",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "A",
+      "method": "GET",
+      "path": "/media",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "A",
+      "method": "GET",
+      "path": "/media",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "A",
+      "method": "POST",
+      "path": "/auth/login",
+      "credentialInUrl": false,
+      "bearer": false
+    },
+    {
+      "server": "A",
+      "method": "GET",
+      "path": "/media",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "B",
+      "method": "GET",
+      "path": "/auth/status",
+      "credentialInUrl": false,
+      "bearer": false
+    },
+    {
+      "server": "B",
+      "method": "POST",
+      "path": "/auth/login",
+      "credentialInUrl": false,
+      "bearer": false
+    },
+    {
+      "server": "B",
+      "method": "GET",
+      "path": "/media",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "B",
+      "method": "GET",
+      "path": "/auth/status",
+      "credentialInUrl": false,
+      "bearer": false
+    },
+    {
+      "server": "B",
+      "method": "GET",
+      "path": "/auth/me",
+      "credentialInUrl": false,
+      "bearer": true
+    },
+    {
+      "server": "B",
+      "method": "GET",
+      "path": "/media",
+      "credentialInUrl": false,
+      "bearer": true
+    }
+  ],
+  "sourceSha256": {
+    "session.cjs": "eb1451c9b3c59c0795846ff73236ab469b08b02a8420720e087bdc7ab549b91d",
+    "credential-store.cjs": "ede6e98ba05b556c219e46e53274922fbbd1e63f5264ecb3b7871dc54d4c54b4",
+    "media-queue.cjs": "79d61c0c5cdaeb18cf08c767386f0bf227e5b2a3d88415186101654ac0148ff0"
+  },
+  "capturedAt": "2026-10-18T04:16:35.808Z"
+}

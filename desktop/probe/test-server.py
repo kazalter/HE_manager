@@ -110,6 +110,9 @@ with SessionLocal() as database:
         unreadable = database.query(models.Media).filter_by(absolute_path=str(fixtures / 'cp02-unreadable.mp4')).one()
         config.update(server=f'http://127.0.0.1:{port}', username=user.username, password=ui_password,
                       videoId=items[0].id, mangaId=manga.id, errorVideoId=unreadable.id, expectVideoLoading=ui_stream_delay > 0)
+    if ui_fixtures and os.environ.get("HE_PROBE_SESSION_MATRIX") == "1":
+        from session_matrix_fixtures import seed
+        config.update(seed(database, folder, fixtures))
     descriptor = os.open(root / "client-access.json", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8") as file:
         json.dump(config, file)

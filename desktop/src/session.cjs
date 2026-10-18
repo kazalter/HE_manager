@@ -166,8 +166,14 @@ class DesktopSession {
       this.#current(generation);
       const response = await this.#send(identity.server, pathname, { ...options, body, headers,
         signal: signal || (writing ? undefined : options.signal) }, writing ? undefined : identity.signal);
-      if (generation !== this.#generation || signal?.aborted) { await response.body?.cancel(); throw stale(); }
-      if (response.status === 401 && !writing && !opening) await this.expire(generation);
+      if (generation !== this.#generation || signal?.aborted) { await response.body?.cancel().catch(() => {}); throw stale(); }
+      if (response.status === 401 && !writing && !opening) {
+        // Invalidation aborts protected streams, including this response body.
+        // Return a finite public error before cancelling the current identity.
+        await response.body?.cancel().catch(() => {});
+        await this.expire(generation);
+        return Response.json({ detail: '登录已过期，请重新登录' }, { status: 401 });
+      }
       return response;
     };
     if (!writing && !opening) return execute();

@@ -1,0 +1,51 @@
+{
+  "phase": "CP-03",
+  "scope": "Two isolated synthetic FastAPI services; no production data or credential mounts",
+  "image": "sha256:4c23048d67de005e68f71ba55d27eb7da8f1090f6ce90650fcfa891dae592fda",
+  "fixtures": [
+    {
+      "label": "A",
+      "container": "6b6fab5a313a5f4431a43be031a573aaeeb1601f2bd47c7b20c83660bd99d27c",
+      "port": 18013,
+      "bind": "127.0.0.1",
+      "accounts": 2,
+      "mediaItems": 69,
+      "mounts": [
+        {
+          "destination": "/probe-data",
+          "source": "/tmp/he-cp03-matrix-02sf8rfx/A",
+          "readOnly": false
+        },
+        {
+          "destination": "/probe-src",
+          "source": "/tmp/he-cp03-test-xkwh5tub/source",
+          "readOnly": true
+        }
+      ]
+    },
+    {
+      "label": "B",
+      "container": "8b56598b727d3ea0dd47a9da4d2a3e71824c19d3b84da046a57bacfc641f34e5",
+      "port": 18014,
+      "bind": "127.0.0.1",
+      "accounts": 2,
+      "mediaItems": 69,
+      "mounts": [
+        {
+          "destination": "/probe-data",
+          "source": "/tmp/he-cp03-matrix-02sf8rfx/B",
+          "readOnly": false
+        },
+        {
+          "destination": "/probe-src",
+          "source": "/tmp/he-cp03-test-xkwh5tub/source",
+          "readOnly": true
+        }
+      ]
+    }
+  ],
+  "seedSha256": {
+    "test-server.py": "de01607aae545b4909b98681ca360b4cf0bad7911b879046930ea844721e6d58",
+    "session_matrix_fixtures.py": "072d7e5c28af95751bdc6d7d4055085131cdfc44f006fc1792fe03e8ee793d05"
+  }
+}
