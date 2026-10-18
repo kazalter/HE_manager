@@ -1,0 +1,82 @@
+[
+  {
+    "path": "/stream/1",
+    "method": "GET",
+    "range": "bytes=0-",
+    "hasBearer": true,
+    "status": 206,
+    "contentRange": "bytes 0-3514784/3514785"
+  },
+  {
+    "path": "/stream/1",
+    "method": "GET",
+    "range": "bytes=3514685-",
+    "hasBearer": true,
+    "status": 206,
+    "contentRange": "bytes 3514685-3514784/3514785"
+  },
+  {
+    "path": "/stream/1",
+    "method": "GET",
+    "range": "bytes=1345-",
+    "hasBearer": true,
+    "status": 206,
+    "contentRange": "bytes 1345-3514784/3514785"
+  },
+  {
+    "path": "/stream/1",
+    "method": "GET",
+    "range": "bytes=1345-",
+    "hasBearer": true,
+    "status": 206,
+    "contentRange": "bytes 1345-3514784/3514785"
+  },
+  {
+    "path": "/stream/1",
+    "method": "GET",
+    "range": "bytes=1345-",
+    "hasBearer": true,
+    "status": 206,
+    "contentRange": "bytes 1345-3514784/3514785"
+  },
+  {
+    "path": "/stream/1",
+    "method": "GET",
+    "range": "bytes=0-",
+    "hasBearer": true,
+    "status": 206,
+    "contentRange": "bytes 0-3514784/3514785"
+  },
+  {
+    "path": "/stream/1",
+    "method": "GET",
+    "range": "bytes=3514685-",
+    "hasBearer": true,
+    "status": 206,
+    "contentRange": "bytes 3514685-3514784/3514785"
+  },
+  {
+    "path": "/stream/1",
+    "method": "GET",
+    "range": "bytes=577743-",
+    "hasBearer": true,
+    "status": 206,
+    "contentRange": "bytes 577743-3514784/3514785"
+  },
+  {
+    "path": "/stream/5",
+    "method": "GET",
+    "range": "bytes=0-",
+    "hasBearer": true,
+    "status": 206,
+    "contentRange": "bytes 0-38/39"
+  },
+  {
+    "path": "/stream/5",
+    "method": "GET",
+    "range": "bytes=0-",
+    "hasBearer": true,
+    "status": 206,
+    "contentRange": "bytes 0-38/39"
+  }
+]

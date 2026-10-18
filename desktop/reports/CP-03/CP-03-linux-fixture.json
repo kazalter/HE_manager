@@ -1,0 +1,21 @@
+{
+  "phase": "CP-03",
+  "scope": "Disposable Linux FastAPI fixture for desktop validation",
+  "sourceRevision": "82512118175fd9c10a34a3881780024da4abe7a8",
+  "container": "a3175ea3259bb09622110283058c4656b709c1c4101dc46c87a278fa19dd54e8",
+  "image": "sha256:4c23048d67de005e68f71ba55d27eb7da8f1090f6ce90650fcfa891dae592fda",
+  "containerUser": "1000:1000",
+  "bind": "127.0.0.1:18011",
+  "mounts": [
+    {
+      "destination": "/probe-data",
+      "writable": true
+    },
+    {
+      "destination": "/probe-src",
+      "writable": false
+    }
+  ],
+  "data": "Synthetic media and separate SQLite database",
+  "productionVolumesMounted": false
+}

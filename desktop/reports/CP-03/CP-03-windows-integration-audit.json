@@ -1,0 +1,18 @@
+{
+  "phase": "CP-03",
+  "scope": "Windows packaged auth and CP-02 scene regression against isolated Linux FastAPI; full CP-03 acceptance pending",
+  "status": "partial-pass",
+  "sourceRevision": "a23ef491ab35414d7fd097b4ba74f916c6201381",
+  "reportSha256": "4f8656d22f6747d29ce2b99588a28066431931bdacf4dac4644e6bd726253155",
+  "archive": "HE-Manager-0.3.0-win32-x64.zip",
+  "archiveSha256": "cf88b5fedabc4b21abd64e1f5a04d6ae9a2dc7cbbc49b251769559aca230e546",
+  "uiFiles": 67,
+  "checks": 20,
+  "layouts": 12,
+  "screenshots": 17,
+  "credentialEncryption": {
+    "version": 2,
+    "scheme": "async",
+    "writtenAt": "2026-10-18T03:39:05.8553729Z"
+  }
+}

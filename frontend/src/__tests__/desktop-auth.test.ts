@@ -45,4 +45,11 @@ describe('desktop renderer authentication', () => {
   await login('account-1', 'pw')
   expect(authIdentity()).toBe('newer'); expect(authState.user?.id).toBe(2)
  })
+ it('keeps unverified restore state out of the library and returns to a usable login after failure', () => {
+  host.listener!({ ...state('restoring', 20, null), restoring: true })
+  expect(authState.ready).toBe(false); expect(authState.user).toBeNull()
+  host.listener!({ ...state('restoring', 21, null), restoring: false, error: '无法连接服务器' })
+  expect(authState.ready).toBe(true); expect(authState.user).toBeNull(); expect(authState.error).toBe('无法连接服务器')
+ })
+
 })

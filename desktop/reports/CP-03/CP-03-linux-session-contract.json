@@ -1,0 +1,63 @@
+{
+  "phase": "CP-03",
+  "scope": "Headless session service against the disposable real FastAPI backend; host/renderer integration and OS encryption pending",
+  "status": "partial-pass",
+  "node": "v26.9.0",
+  "checks": {
+    "loginSnapshotHasNoCredential": true,
+    "pagedList": true,
+    "actualOpen": true,
+    "narrowPatch": true,
+    "protectedRange": true,
+    "range416KeepsLogin": true,
+    "localLogout": true,
+    "serverLogout": true
+  },
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "bearer": false
+    },
+    {
+      "method": "GET",
+      "path": "/media",
+      "bearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/media/1",
+      "bearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "bearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "bearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/stream/1",
+      "bearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/stream/1",
+      "bearer": true
+    },
+    {
+      "method": "POST",
+      "path": "/auth/logout",
+      "bearer": true
+    }
+  ],
+  "sourceSha256": {
+    "session.cjs": "263ce647e4036250133914cc4efe07eca9bea8ca19065824369fb34556316d0a",
+    "credential-store.cjs": "ede6e98ba05b556c219e46e53274922fbbd1e63f5264ecb3b7871dc54d4c54b4"
+  },
+  "capturedAt": "2026-10-18T03:43:24.134Z"
+}
