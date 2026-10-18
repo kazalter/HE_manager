@@ -49,4 +49,4 @@
 | 产物文件 | 平台与架构 | SHA-256 Checksum |
 | --- | --- | --- |
 | `HE-Manager-1.0.0-darwin-arm64.zip` | macOS Apple Silicon (arm64) | `18c998e991e3a511d0cdfe0da27936fc923032eaa5b67a7066e65992a5ac75a9` |
-| `HE-Manager-1.0.0-win32-x64.zip` | Windows 11 (x64) | 待 Windows 端打包同步生成 |
+| `HE-Manager-1.0.0-win32-x64.zip` | Windows 11 (x64) | `bca188209696414904306621b2b7ffd3f43393387d861e2876611c56668d81e9` |
