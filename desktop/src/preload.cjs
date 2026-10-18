@@ -48,6 +48,16 @@ contextBridge.exposeInMainWorld(
   "heDesktop",
   Object.freeze({
     configuration: () => invoke("he:configuration"),
+    authentication: () => invoke('he:authentication'),
+    login: (value) => invoke('he:login', value),
+    logout: () => invoke('he:logout'),
+    restoreLogin: () => invoke('he:restore-login'),
+    onSessionChanged: (callback) => {
+      if (typeof callback !== 'function') throw new Error('无效的会话监听器');
+      const listener = (_event, value) => callback(value);
+      ipcRenderer.on('he:session-changed', listener);
+      return () => ipcRenderer.removeListener('he:session-changed', listener);
+    },
     connect: (server) => invoke("he:connect", server),
     chooseEngine: (kind) => invoke("he:choose-engine", kind),
     setPreferences: (value) => invoke("he:preferences", value),
@@ -57,7 +67,7 @@ contextBridge.exposeInMainWorld(
     videoState: () => invoke("he:video-state"),
     mountVideoSurface,
     unmountVideoSurface: detachVideoSurface,
-    stopVideo: () => invoke("he:video-stop"),
+    stopVideo: (generation) => invoke("he:video-stop", generation),
     enhanceImage: (options) => invoke("he:image", options),
   }),
 );

@@ -4,7 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, LayoutGrid, List, Rows3, Search, SlidersHorizontal, Star, Tag as TagIcon, TriangleAlert, Trash2, X } from 'lucide-vue-next'
 import { API_BASE_URL, thumbnailUrl } from '../config'
-import { authState } from '../auth'
+import { authHeaders, authIdentity, authState } from '../auth'
+import { desktopBridge } from '../desktop'
 import mediaPlaceholderUrl from '../assets/media-placeholder.svg?no-inline'
 import type { Media, Tag } from '../types'
 import DiscardContentDialog from '../components/DiscardContentDialog.vue'
@@ -13,7 +14,7 @@ import MediaCard from '../components/MediaCard.vue'
 import MediaViewCard from '../components/MediaViewCard.vue'
 import { AsyncMediaDetail as MediaDetail } from '../components/asyncComponents'
 import PaginationControl from '../components/PaginationControl.vue'
-import { EmptyState, PageHeader, SectionHeader, UiButton, UiIconButton, UiInput, UiSegmented, UiSkeleton, buttonClass, controlClass, iconButtonClass, menuItemClass, popoverClass, type SegmentedOption } from '../components/ui'
+import { EmptyState, PageHeader, SectionHeader, UiButton, UiIconButton, UiInput, UiSegmented, UiSkeleton, LoadingState, UiToast, buttonClass, controlClass, iconButtonClass, menuItemClass, popoverClass, type SegmentedOption } from '../components/ui'
 import { useCompactViewport } from '../composables/useCompactViewport'
 const compact = useCompactViewport()
 const filterPanelRef = ref<HTMLElement | null>(null)
@@ -29,7 +30,7 @@ const mediaList = ref<Media[]>([])
 const continueMedia = ref<Media[]>([])
 const tags = ref<Tag[]>([])
 const loading = ref(true)
-const mediaError = ref('')
+const mediaError = ref(''), openingMedia = ref(false), openingError = ref('')
 const discardTarget = ref<DiscardTarget | null>(null)
 const discardNotice = ref('')
 const afterDiscard = async (record: DiscardRecord) => {
@@ -170,7 +171,7 @@ const continueTitle = computed(() =>
 
 const recentlyOpened = computed(() => {
   return [...continueMedia.value]
-    .filter(item => !hiddenContinueIds.value.has(item.id) && (item.last_opened_at || progressPercent(item) > 0))
+    .filter(item => (!desktopBridge || item.view_status === 'viewing') && !hiddenContinueIds.value.has(item.id) && (item.last_opened_at || progressPercent(item) > 0))
     .sort((a, b) => {
       const timeA = a.last_opened_at ? new Date(a.last_opened_at).getTime() : 0
       const timeB = b.last_opened_at ? new Date(b.last_opened_at).getTime() : 0
@@ -179,7 +180,7 @@ const recentlyOpened = computed(() => {
     .slice(0, 8)
 })
 
-const pageSize = 36
+const pageSize = desktopBridge ? 60 : 36
 const totalItems = ref(0)
 const containerRef = ref<HTMLElement | null>(null)
 
@@ -197,6 +198,13 @@ const viewerLastPage = ref(currentPage.value)
 const viewerPageLoading = ref(false)
 let hasCompletedInitialFetch = false
 let mediaRequestId = 0
+let disposed = false, detailRequestId = 0
+const controllers = new Map<string, AbortController>()
+const requestScope = (name: string) => {
+  controllers.get(name)?.abort()
+  const controller = new AbortController(); controllers.set(name, controller)
+  return { signal: controller.signal, headers: authHeaders() }
+}
 let viewerPageRequestId = 0
 
 const syncPageQuery = (page: number, replace = false) => {
@@ -318,34 +326,40 @@ watch(tagDropdownOpen, async (open) => {
 })
 
 const fetchTags = async () => {
+  if (disposed) return
+  const scope = requestScope('tags'), identity = authIdentity()
   try {
-    const res = await axios.get(`${API_BASE_URL}/tags`)
-    tags.value = res.data
+    const res = await axios.get(`${API_BASE_URL}/tags`, scope)
+    if (!disposed && !scope.signal.aborted && identity === authIdentity()) tags.value = res.data
   } catch (err) {
-    console.error('Failed to fetch tags:', err)
+    if (!axios.isCancel(err)) console.error('Failed to fetch tags:', err)
   }
 }
 
 const fetchContinueMedia = async () => {
+  if (disposed) return
+  const scope = requestScope('continue'), identity = authIdentity()
   try {
     const res = await axios.get<Media[]>(`${API_BASE_URL}/media`, {
-      params: { media_type: props.mediaType, sort: 'opened', limit: 12, offset: 0 },
+      ...scope, params: { media_type: props.mediaType, sort: 'opened', ...(desktopBridge ? { view_status: 'viewing' } : {}), limit: 12, offset: 0 },
     })
-    continueMedia.value = res.data
+    if (!disposed && !scope.signal.aborted && identity === authIdentity()) continueMedia.value = res.data
   } catch (err) {
-    console.error('Failed to fetch continue-watching media:', err)
-    continueMedia.value = []
+    if (!disposed && !scope.signal.aborted && identity === authIdentity()) continueMedia.value = []
+    if (!axios.isCancel(err)) console.error('Failed to fetch continue-watching media:', err)
   }
 }
 
 const fetchMedia = async (scrollBehavior: ScrollBehavior = 'auto') => {
+  if (disposed) return
+  const scope = requestScope('list'), identity = authIdentity()
   const requestId = ++mediaRequestId
   if (hasCompletedInitialFetch && scrollBehavior !== 'auto') scrollToTop(scrollBehavior)
   loading.value = true
   mediaError.value = ''
   try {
-    const res = await axios.get<Media[]>(`${API_BASE_URL}/media`, { params: mediaParamsForPage(currentPage.value) })
-    if (requestId !== mediaRequestId) return
+    const res = await axios.get<Media[]>(`${API_BASE_URL}/media`, { ...scope, params: mediaParamsForPage(currentPage.value) })
+    if (disposed || scope.signal.aborted || identity !== authIdentity() || requestId !== mediaRequestId) return
 
     const headerTotal = Number(res.headers['x-total-count'])
     totalItems.value = Number.isSafeInteger(headerTotal) && headerTotal >= 0
@@ -361,7 +375,7 @@ const fetchMedia = async (scrollBehavior: ScrollBehavior = 'auto') => {
     }
     mediaList.value = res.data
   } catch (err: any) {
-    if (requestId !== mediaRequestId) return
+    if (disposed || scope.signal.aborted || identity !== authIdentity() || requestId !== mediaRequestId) return
     console.error('Failed to fetch media:', err)
     mediaList.value = []
     totalItems.value = 0
@@ -372,7 +386,7 @@ const fetchMedia = async (scrollBehavior: ScrollBehavior = 'auto') => {
         ? '当前账号没有权限读取媒体列表。'
         : '无法加载媒体列表，请检查后端连接。'
   } finally {
-    if (requestId === mediaRequestId) {
+    if (!disposed && requestId === mediaRequestId) {
       loading.value = false
       hasCompletedInitialFetch = true
       await nextTick()
@@ -387,13 +401,15 @@ const hasAdjacentViewerPage = (direction: -1 | 1) => {
 }
 
 const loadAdjacentViewerPage = async (direction: -1 | 1) => {
+  if (disposed) return false
+  const scope = requestScope('adjacent'), identity = authIdentity()
   if (viewerPageLoading.value || !hasAdjacentViewerPage(direction)) return false
   const targetPage = direction < 0 ? viewerFirstPage.value - 1 : viewerLastPage.value + 1
   const requestId = ++viewerPageRequestId
   viewerPageLoading.value = true
   try {
-    const res = await axios.get<Media[]>(`${API_BASE_URL}/media`, { params: mediaParamsForPage(targetPage) })
-    if (requestId !== viewerPageRequestId) return false
+    const res = await axios.get<Media[]>(`${API_BASE_URL}/media`, { ...scope, params: mediaParamsForPage(targetPage) })
+    if (disposed || scope.signal.aborted || identity !== authIdentity() || requestId !== viewerPageRequestId) return false
     const headerTotal = Number(res.headers['x-total-count'])
     if (Number.isSafeInteger(headerTotal) && headerTotal >= 0) totalItems.value = headerTotal
     if (res.data.length === 0) {
@@ -445,7 +461,7 @@ const updateMediaInList = (media: Media) => {
 
 const openMedia = (media: Media, replace = false) => {
   if (!replace || viewerMediaList.value.length === 0) resetViewerMediaList(media)
-  selectedMedia.value = media
+  selectedMedia.value = null
   const location = {
     path: route.path,
     query: {
@@ -462,6 +478,7 @@ const openMedia = (media: Media, replace = false) => {
 }
 
 const closeMedia = () => {
+  ++detailRequestId; controllers.get('detail')?.abort(); openingMedia.value = false
   selectedMedia.value = null
   resetViewerMediaList()
   const query = { ...route.query }
@@ -470,27 +487,28 @@ const closeMedia = () => {
 }
 
 const syncSelectedMediaFromRoute = async () => {
-  const mediaId = Number(route.query.media)
-  if (!mediaId) {
-    selectedMedia.value = null
+  const mediaId = Number(route.query.media), requestId = ++detailRequestId
+  controllers.get('detail')?.abort()
+  if (!Number.isSafeInteger(mediaId) || mediaId < 1) {
+    selectedMedia.value = null; openingMedia.value = false
     return
   }
-
   if (selectedMedia.value?.id === mediaId) return
-
-  const localMedia = mediaList.value.find(item => item.id === mediaId)
-  if (localMedia) {
-    resetViewerMediaList(localMedia)
-    selectedMedia.value = localMedia
-    return
-  }
-
+  const scope = requestScope('detail'), identity = authIdentity()
+  selectedMedia.value = null; openingMedia.value = true; openingError.value = ''
   try {
-    const res = await axios.get(`${API_BASE_URL}/media/${mediaId}`)
+    // The detail route marks last_opened_at. Only an explicit viewer navigation reaches it.
+    const res = await axios.get<Media>(`${API_BASE_URL}/media/${mediaId}`, scope)
+    if (disposed || scope.signal.aborted || identity !== authIdentity() || requestId !== detailRequestId || Number(route.query.media) !== mediaId) return
+    if (!viewerMediaList.value.some(item => item.id === mediaId)) resetViewerMediaList(res.data)
     selectedMedia.value = res.data
-    resetViewerMediaList(res.data)
-  } catch (err) {
-    console.error('Failed to fetch selected media:', err)
+    updateMediaInList(res.data)
+  } catch (err: any) {
+    if (disposed || scope.signal.aborted || identity !== authIdentity() || requestId !== detailRequestId || axios.isCancel(err)) return
+    openingError.value = err.response?.status === 404 ? '作品已不存在，请刷新媒体库。' : err.response?.status === 401 ? '登录状态已失效，请重新登录。' : '无法打开作品，请检查连接后重试。'
+    closeMedia()
+  } finally {
+    if (!disposed && requestId === detailRequestId) openingMedia.value = false
   }
 }
 
@@ -557,6 +575,8 @@ watch(() => route.query.media, () => {
 
 const onGlobalMediaUpdated = (event: Event) => updateMediaInList((event as CustomEvent<Media>).detail)
 onUnmounted(() => {
+  disposed = true; ++mediaRequestId; ++detailRequestId; ++viewerPageRequestId
+  for (const controller of controllers.values()) controller.abort()
   window.removeEventListener('he:media-updated', onGlobalMediaUpdated)
   window.clearTimeout(searchTimer)
   document.removeEventListener('pointerdown', handleTagOutsidePointer)
@@ -901,6 +921,12 @@ onMounted(async () => {
       </div>
     </div>
 
+    <Teleport to="body">
+      <div v-if="openingMedia" class="fixed inset-0 z-[230] grid place-items-center bg-background/95" @keydown.esc="closeMedia">
+        <div class="text-center"><LoadingState label="正在打开作品" description="正在验证登录与作品信息。" /><UiButton autofocus @click="closeMedia">取消</UiButton></div>
+      </div>
+      <UiToast v-if="openingError" :message="openingError" urgent overlay class="fixed bottom-6 left-1/2 z-[240] max-w-[90%] -translate-x-1/2" />
+    </Teleport>
     <DiscardContentDialog v-model:target="discardTarget" @discarded="afterDiscard" />
     <MediaDetail
       v-if="selectedMedia"

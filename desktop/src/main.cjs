@@ -6,13 +6,13 @@ const {
   ipcMain,
   dialog,
   Menu,
+  safeStorage,
 } = require("electron");
 const path = require("node:path"),
   fs = require("node:fs/promises"),
   { pathToFileURL } = require("node:url");
 const {
     serverUrl,
-    mediaRequest,
     staticPath,
     API_PATH,
     allowPermission,
@@ -55,10 +55,21 @@ if (baselineMode || uiTestConfigPath) {
     app.exit(1);
   }, uiTestConfigPath ? 180000 : 60000).unref();
 }
-let window, cache, settings, settingsFile;
+let window, cache, settings, settingsFile, session;
 let applicationReady = false;
 const player = new EmbeddedPlayer({ root, sharedTexture: require('electron').sharedTexture, getWindow: () => window });
 const legacyPlayer = new Player(path.join(root, "resources/shaders"));
+const { DesktopSession, SessionError } = require('./session.cjs');
+const { CredentialStore } = require('./credential-store.cjs');
+function createImageCache() {
+  const generation = session.snapshot().generation;
+  return new ImageCache(path.join(app.getPath('userData'), 'image-cache'), { fetch: async (url, options) => {
+    const identity = session.identity(generation);
+    const response = await fetch(url, { ...options, signal: AbortSignal.any([identity.signal, options.signal]) });
+    if (response.status === 401) await session.expire(generation);
+    return response;
+  } });
+}
 const defaults = {
   server: "",
   videoMode: "off",
@@ -146,21 +157,18 @@ function registerIPC() {
   ipcMain.on('he:video-size', (event, value) => { if (trusted(event)) player.resize(value); });
   handle("he:configuration", configuration);
   handle("he:connect", async (value) => {
-    const server = serverUrl(value);
-    const response = await fetch(server + "/auth/status", {
-      redirect: "error",
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!response.ok) throw new Error("连接失败，请检查地址与端口");
-    const data = await response.json();
-    if (typeof data.has_users !== "boolean")
-      throw new Error("这个地址不是 HE Manager 服务");
-    await player.stop();
-    settings.server = server;
+    const state = await session.connect(value);
+    settings.server = state.server;
     await saveSettings();
-    cache.allowed.clear();
     return configuration();
   });
+  handle('he:authentication', () => session.snapshot());
+  handle('he:login', (value) => {
+    if (!value || typeof value !== 'object') throw new Error('请输入用户名和密码');
+    return session.login(value.username, value.password, value.bootstrap === true);
+  });
+  handle('he:logout', () => session.logout());
+  handle('he:restore-login', () => session.restore());
   handle("he:choose-engine", async (kind) => {
     if (!["mpv", "image"].includes(kind)) throw new Error("未知的引擎类型");
     const result = await dialog.showOpenDialog(window, {
@@ -201,7 +209,7 @@ function registerIPC() {
   handle("he:video-open", async (options) => {
     if (!options || typeof options.url !== "string")
       throw new Error("无效的播放请求");
-    const source = mediaRequest(settings.server, options.url);
+    const source = session.mediaSource(options.url);
     return player.open(
       null,
       source,
@@ -212,18 +220,20 @@ function registerIPC() {
   });
   handle("he:video-control", (action, value) => player.control(action, value));
   handle("he:video-state", () => ({ ...player.state }));
-  handle("he:video-stop", () => player.stop());
+  handle("he:video-stop", (generation) => {
+    if (generation && generation !== session.snapshot().generation) return;
+    return player.stop();
+  });
   handle("he:image", async (options) => {
     if (!options || !["anime", "photo"].includes(options.mode))
       throw new Error("请选择图片超分类型");
+    const source = session.mediaSource(options.url);
     const binary = await engine("image");
     if (!binary) throw new Error("未找到图片超分引擎，请在桌面设置中选择引擎");
-    return cache.prepare(
-      mediaRequest(settings.server, options.url),
-      options.mode,
-      binary,
-      path.join(path.dirname(binary), "models"),
-    );
+    session.identity(source.generation);
+    const result = await cache.prepare(source, options.mode, binary, path.join(path.dirname(binary), "models"));
+    session.identity(source.generation);
+    return { ...result, url: result.url + '?he_session=' + encodeURIComponent(source.generation) };
   });
 }
 async function protocolHandler(request) {
@@ -243,35 +253,23 @@ async function protocolHandler(request) {
         "<!doctype html><title>HE Manager fullscreen test</title><h1>Fullscreen self-test</h1>",
         { headers: { "content-type": "text/html; charset=utf-8" } },
       );
-    if (url.pathname.startsWith("/__cache/"))
+    if (url.pathname.startsWith("/__cache/")) {
+      session.identity(url.searchParams.get('he_session'));
       return net.fetch(pathToFileURL(cache.file(url.pathname.slice(9))).href);
+    }
     if (API_PATH.test(url.pathname)) {
       if (!settings.server)
         return Response.json({ detail: "请先配置服务器地址" }, { status: 503 });
       operation = 'proxy-headers';
       const headers = new Headers(request.headers);
-      for (const key of [
-        "host",
-        "origin",
-        "referer",
-        "connection",
-        "accept-encoding",
-        "cookie",
-      ])
-        headers.delete(key);
-      const options = {
-        method: request.method,
-        headers,
-        redirect: "manual",
-        signal: request.signal,
-      };
-      if (!["GET", "HEAD"].includes(request.method))
-        options.body = await request.arrayBuffer();
+      const generation = headers.get('x-he-generation') || url.searchParams.get('he_session');
+      if (headers.has('x-he-generation') && url.searchParams.has('he_session') && headers.get('x-he-generation') !== url.searchParams.get('he_session')) throw new SessionError(409, '资源会话已改变');
+      url.searchParams.delete('he_session');
+      if (/^\/manga\/\d+\/page\/\d+$/.test(url.pathname)) url.searchParams.set('track_progress', 'false');
+      const options = { method: request.method, headers, signal: request.signal };
+      if (!["GET", "HEAD"].includes(request.method)) options.body = await request.arrayBuffer();
       operation = 'proxy-fetch';
-      const response = await fetch(
-        settings.server + url.pathname + url.search,
-        options,
-      );
+      const response = await session.request(url.pathname + url.search, options, generation);
       diagnosticStage(`proxy-status-${request.method}-${url.pathname}-${response.status}`);
       if (response.status >= 300 && response.status < 400) {
         await response.body?.cancel();
@@ -309,8 +307,8 @@ async function protocolHandler(request) {
   } catch (error) {
     diagnosticStage(`protocol-error-${operation}-${error.name}-${error.cause?.code || error.code || 'none'}`);
     return Response.json(
-      { detail: "读取失败，请检查服务器连接或本地文件" },
-      { status: 502 },
+      { detail: error instanceof SessionError ? error.message : "读取失败，请检查服务器连接或本地文件" },
+      { status: error instanceof SessionError ? error.status : 502 },
     );
   }
 }
@@ -420,7 +418,17 @@ app.whenReady().then(async () => {
   const uiTestConfig = uiTestConfigPath ? JSON.parse(await fs.readFile(uiTestConfigPath, 'utf8')) : null;
   if (uiTestConfig) { settings.server = serverUrl(uiTestConfig.server); player.volume = 0; }
   diagnosticStage('config-loaded');
-  cache = new ImageCache(path.join(app.getPath("userData"), "image-cache"));
+  session = new DesktopSession({
+    server: settings.server,
+    store: new CredentialStore(path.join(app.getPath('userData'), 'desktop-login.json'), safeStorage),
+    onChange: (state) => { if (window && !window.isDestroyed()) window.webContents.send('he:session-changed', state); },
+    onInvalidate: async () => {
+      const previous = cache; previous?.allowed.clear(); cache = createImageCache();
+      await Promise.all([previous?.close(), player.stop()]);
+    },
+  });
+  cache = createImageCache();
+  await session.restore();
   protocol.handle("he", protocolHandler);
   registerIPC();
   diagnosticStage('services-registered');
@@ -454,7 +462,7 @@ app.whenReady().then(async () => {
     await createWindow();
     diagnosticStage('selftest-start');
     let passed = false;
-    try { passed = await require('./ui-selftest.cjs')({ window, player, config: uiTestConfig, output: process.env.HE_DESKTOP_TEST_OUTPUT }); }
+    try { passed = await require('./ui-selftest.cjs')({ window, player, session, config: uiTestConfig, output: process.env.HE_DESKTOP_TEST_OUTPUT }); }
     finally { await player.stop(); await cache.close(); }
     app.exit(passed ? 0 : 1);
     return;

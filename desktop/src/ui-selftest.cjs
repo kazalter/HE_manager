@@ -5,9 +5,9 @@ const path = require('node:path');
 const { app, nativeTheme } = require('electron');
 const { createHash } = require('node:crypto');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-module.exports = async ({ window, player, config, output }) => {
+module.exports = async ({ window, player, session, config, output }) => {
   if (!output) throw new Error('Diagnostic output path is required');
-  const report = { phase: 'CP-02', status: 'running', platform: process.platform, packaged: app.isPackaged, checks: {}, screenshots: [], layouts: [] };
+  const report = { phase: config.phase === 'CP-03' ? 'CP-03' : 'CP-02', status: 'running', platform: process.platform, packaged: app.isPackaged, checks: {}, screenshots: [], layouts: [] };
   let stage = 'login';
   const enterStage = (value) => { stage = value; console.log('HE_UI_STAGE ' + value); };
   const evaluate = (script) => window.webContents.executeJavaScript(script);
@@ -78,7 +78,7 @@ module.exports = async ({ window, player, config, output }) => {
   try {
     await fs.mkdir(path.dirname(output), { recursive: true });
     report.sourceSha256 = {};
-    for (const name of ['main.cjs', 'embedded-player.cjs', 'preload.cjs', 'ui-selftest.cjs']) report.sourceSha256[name] = createHash('sha256').update(await fs.readFile(path.join(__dirname, name))).digest('hex');
+    for (const name of ['main.cjs', 'embedded-player.cjs', 'preload.cjs', 'ui-selftest.cjs', 'session.cjs', 'credential-store.cjs', 'policy.cjs', 'images.cjs']) report.sourceSha256[name] = createHash('sha256').update(await fs.readFile(path.join(__dirname, name))).digest('hex');
     const root = path.resolve(__dirname, '..');
     report.version = app.getVersion(); report.electron = process.versions.electron;
     report.uiSha256 = await hashTree(path.join(root, 'ui'));
@@ -93,6 +93,19 @@ module.exports = async ({ window, player, config, output }) => {
     await click('.he-auth-view button[type="submit"]');
     await wait(() => evaluate('document.querySelectorAll(".he-media-card").length >= 4'), 'Authenticated library missing');
     report.checks.loginAndLibrary = true;
+    const authentication = session.snapshot();
+    const credential = session.identity(authentication.generation).token;
+    const encryptedFile = await fs.readFile(path.join(app.getPath('userData'), 'desktop-login.json'), 'utf8');
+    const storedCredential = JSON.parse(encryptedFile);
+    report.authentication = {
+      persistent: authentication.persistent,
+      noPageToken: await evaluate("!localStorage.getItem('he_manager_token')") && !JSON.stringify(authentication).includes(credential),
+      encryptedFile: storedCredential.version === 1 && typeof storedCredential.encrypted === 'string' && !encryptedFile.includes(credential),
+      systemRoundTrip: await session.store.load(session.server) === credential,
+      scopedResources: await evaluate(`[...document.querySelectorAll('img[src]')].filter(img => ['thumbnails','stream','manga'].includes(new URL(img.src).pathname.split('/')[1])).every(img => new URL(img.src).searchParams.get('he_session') === ${JSON.stringify(authentication.generation)} && !new URL(img.src).searchParams.has('token'))`),
+    };
+    if (!Object.values(report.authentication).every(Boolean)) throw new Error('Desktop authentication integration failed');
+    report.checks.desktopAuthentication = true;
     await wait(() => evaluate(`!!document.querySelector('section[aria-label="继续观看"] button')`), 'Continue-watching fixture is missing; reseed the disposable test server before each run');
     report.checks.continueWatching = true;
     enterStage('library-appearance');

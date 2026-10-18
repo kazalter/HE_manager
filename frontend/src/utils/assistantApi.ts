@@ -1,4 +1,4 @@
-import { authState, expireAuth } from '../auth'
+import { authHeaders, authIdentity, expireAuth } from '../auth'
 import { API_BASE_URL } from '../config'
 import type { Media } from '../types'
 import type {
@@ -42,15 +42,15 @@ export function utcTime(value: string) {
   return Date.parse(/[zZ]$|[+-]\d{2}:\d{2}$/.test(value) ? value : value + 'Z')
 }
 function headers() {
-  if (!authState.token)
+  if (!authIdentity())
     throw new AssistantApiError(401, 'assistant_login_required')
   return {
-    Authorization: 'Bearer ' + authState.token,
+    ...authHeaders(),
     'Content-Type': 'application/json',
   }
 }
 async function check(response: Response, token: string) {
-  if (response.status === 401 && authState.token === token) expireAuth()
+  if (response.status === 401 && authIdentity() === token) expireAuth()
   if (!response.ok) {
     let code = response.status === 409 ? 'assistant_conflict' : 'assistant_unavailable'
     const reader = response.body?.getReader()
@@ -78,7 +78,7 @@ async function json<T>(
   body?: unknown,
   opts: RequestOptions = {},
 ): Promise<T> {
-  const token = authState.token,
+  const token = authIdentity(),
     controller = new AbortController()
   const abort = () => controller.abort()
   opts.signal?.addEventListener('abort', abort, { once: true })
@@ -210,7 +210,7 @@ export async function subscribeRun(
   onEvent: (event: AssistantEvent) => void,
   lastEventId?: string,
 ): Promise<void> {
-  const token = authState.token
+  const token = authIdentity()
   const requestHeaders: Record<string, string> = headers()
   requestHeaders.Accept = 'text/event-stream'
   if (lastEventId && /^[0-9]{1,20}$/.test(lastEventId))
@@ -272,7 +272,7 @@ export async function subscribeRun(
       if (next <= cursor) return
       cursor = next
     }
-    if (!signal.aborted && authState.token === token) onEvent(event)
+    if (!signal.aborted && authIdentity() === token) onEvent(event)
   }
   try {
     while (true) {
@@ -334,7 +334,7 @@ export const getMediaCards = (ids: number[], opts: RequestOptions = {}) =>
 export function notifyApprovalChanged() { window.dispatchEvent(new Event('he-assistant-approval-changed')) }
 export async function fetchPreview(path: string, signal: AbortSignal) {
   if (!/^\/assistant\/media\/\d+\/preview(?:\?page_index=\d+)?$/.test(path)) throw new AssistantApiError(400)
-  const token = authState.token
+  const token = authIdentity()
   const response = await fetch(API_BASE_URL + path, { headers: headers(), signal, cache: 'no-store', credentials: 'omit', redirect: 'error' })
   await check(response, token)
   const type = response.headers.get('content-type')?.split(';')[0] || ''
@@ -344,6 +344,6 @@ export async function fetchPreview(path: string, signal: AbortSignal) {
   try {
     while (true) { const { value, done } = await reader.read(); if (done) break; size += value.length; if (size > 9 * 1024 * 1024) throw new AssistantApiError(413); chunks.push(value) }
   } finally { await reader.cancel(); reader.releaseLock() }
-  if (token !== authState.token) throw new AssistantApiError(401)
+  if (token !== authIdentity()) throw new AssistantApiError(401)
   return new Blob(chunks as BlobPart[], { type })
 }

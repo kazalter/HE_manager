@@ -1,3 +1,4 @@
+import type { User } from './types'
 /** Page-facing capabilities. Native modules, file paths and texture handles stay in the host. */
 export type VideoEnhancement = 'off' | 'efficiency' | 'quality'
 export type ImageEnhancement = 'off' | 'anime' | 'photo'
@@ -5,6 +6,10 @@ export interface DesktopConfiguration {
   server: string; videoMode: VideoEnhancement; imageMode: ImageEnhancement
   platform: string; arch: string; version: string; mpv: boolean; image: boolean
   videoPresentation: 'embedded'
+}
+export interface DesktopSessionSnapshot {
+  server: string; generation: string; revision: number; user: User | null
+  hasUsers: boolean; error: string; persistent: boolean
 }
 export interface DesktopTrack { id: number; type: 'audio' | 'sub'; title: string; language: string; selected: boolean }
 export interface DesktopPlayback {
@@ -16,6 +21,11 @@ export interface DesktopPlayback {
 export type DesktopVideoAction = 'pause' | 'seek' | 'seek-to' | 'fullscreen' | 'exit-fullscreen' | 'audio-track' | 'subtitle-track' | 'speed' | 'volume'
 export interface DesktopBridge {
   configuration(): Promise<DesktopConfiguration>
+  authentication(): Promise<DesktopSessionSnapshot>
+  login(value: { username: string; password: string; bootstrap?: boolean }): Promise<DesktopSessionSnapshot>
+  logout(): Promise<DesktopSessionSnapshot>
+  restoreLogin(): Promise<DesktopSessionSnapshot>
+  onSessionChanged(callback: (snapshot: DesktopSessionSnapshot) => void): () => void
   connect(server: string): Promise<DesktopConfiguration>
   chooseEngine(kind: 'mpv' | 'image'): Promise<DesktopConfiguration>
   setPreferences(value: { videoMode: VideoEnhancement; imageMode: ImageEnhancement }): Promise<DesktopConfiguration>
@@ -23,7 +33,7 @@ export interface DesktopBridge {
   controlVideo(action: 'pause' | 'fullscreen' | 'exit-fullscreen'): Promise<DesktopPlayback>
   controlVideo(action: 'seek' | 'seek-to' | 'audio-track' | 'subtitle-track' | 'speed' | 'volume', value: number): Promise<DesktopPlayback>
   videoState(): Promise<DesktopPlayback>
-  stopVideo(): Promise<void>
+  stopVideo(generation?: string): Promise<void>
   mountVideoSurface(id: string): void
   unmountVideoSurface(): void
   enhanceImage(value: { url: string; mode: 'anime' | 'photo' }): Promise<{ url: string; cached: boolean; scale: number }>

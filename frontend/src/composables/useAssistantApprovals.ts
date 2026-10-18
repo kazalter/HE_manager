@@ -1,12 +1,12 @@
 import { ref, watch, onScopeDispose } from 'vue'
-import { authState } from '../auth'
+import { authIdentity, authState } from '../auth'
 import { listApprovals, assistantErrorText } from '../utils/assistantApi'
 import type { ProposalDTO } from '../types/assistant'
 export function useAssistantApprovals() {
   const items = ref<ProposalDTO[]>([]), pendingCount = ref(0), tab = ref<'pending' | 'history'>('pending'), busy = ref(false), error = ref(''), hasMore = ref(false)
   let generation = 0, alive = true, request = new AbortController()
   async function refresh(append = false) {
-    if (!alive || !authState.token || !authState.user?.is_admin) return
+    if (!alive || !authIdentity() || !authState.user?.is_admin) return
     const current = ++generation; request.abort(); request = new AbortController(); busy.value = true; error.value = ''
     const offset = append ? items.value.length : 0
     try {
@@ -30,7 +30,7 @@ export function useAssistantApprovals() {
   const changed = () => { void refresh() }
   const timer = setInterval(changed, 15000)
   window.addEventListener('he-assistant-approval-changed', changed)
-  watch(() => [authState.token, authState.user?.id, authState.user?.is_admin], () => { generation++; request.abort(); items.value = []; pendingCount.value = 0; hasMore.value = false; busy.value = false; error.value = ''; void refresh() }, { immediate: true })
+  watch(() => [authIdentity(), authState.user?.id, authState.user?.is_admin], () => { generation++; request.abort(); items.value = []; pendingCount.value = 0; hasMore.value = false; busy.value = false; error.value = ''; void refresh() }, { immediate: true })
   watch(tab, changed)
   onScopeDispose(dispose)
   return { items, pendingCount, tab, busy, error, hasMore, refresh, loadMore: () => refresh(true), dispose }

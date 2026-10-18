@@ -1,5 +1,5 @@
 import { computed, onScopeDispose, ref, watch } from 'vue'
-import { authState } from '../auth'
+import { authIdentity, authState } from '../auth'
 import * as defaultApi from '../utils/assistantApi'
 import type {
   AssistantEvent,
@@ -50,7 +50,7 @@ export function useAssistantChat(api: Api = defaultApi) {
     moreSessions = ref(false),
     moreProposals = ref(false)
   const allowed = computed(
-    () => !!authState.token && !!authState.user?.is_admin,
+    () => !!authIdentity() && !!authState.user?.is_admin,
   )
   const active = computed(
     () =>
@@ -516,7 +516,7 @@ export function useAssistantChat(api: Api = defaultApi) {
     }
   }
   watch(
-    () => [authState.token, authState.user?.id, authState.user?.is_admin],
+    () => [authIdentity(), authState.user?.id, authState.user?.is_admin],
     () => {
       invalidate()
       sessions.value = []

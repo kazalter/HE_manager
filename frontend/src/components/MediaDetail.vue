@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import axios from 'axios'
 import { Maximize, Minimize, Trash2, X, FileQuestion, RefreshCw, PanelRightClose, PanelRightOpen, Pause, Play, Loader2 } from 'lucide-vue-next'
 import { API_BASE_URL, STREAM_URL, authUrl, thumbnailUrl } from '../config'
-import { authState } from '../auth'
+import { authHeaders, authIdentity, authState } from '../auth'
 import DiscardContentDialog from './DiscardContentDialog.vue'
 import type { DiscardRecord, DiscardTarget } from '../utils/discardApi'
 import type { Media } from '../types'
@@ -22,6 +22,7 @@ import { useVideoPlayback } from '../composables/useVideoPlayback'
 import { useMediaKeyboard } from '../composables/useMediaKeyboard'
 import { nextVideo } from '../utils/videoSequence'
 
+const sessionHeaders = authHeaders(), openedIdentity = authIdentity()
 const props = defineProps<{
   initialMedia: Media
   allMedia: Media[]
@@ -158,7 +159,8 @@ const updateMedia = async (
   payload: Partial<Pick<Media, 'duration' | 'favorite' | 'rating' | 'view_status' | 'progress' | 'title' | 'source_url' | 'source_site'>>,
   mediaId = currentMedia.value.id,
 ) => {
-  const res = await axios.patch(`${API_BASE_URL}/media/${mediaId}`, payload)
+  const res = await axios.patch(`${API_BASE_URL}/media/${mediaId}`, payload, { headers: sessionHeaders })
+  if (authIdentity() !== openedIdentity) return
   if (currentMedia.value.id === mediaId) {
     if (payload.progress !== undefined) {
       // A newer local position may already be queued while this PATCH was in flight.

@@ -1,5 +1,5 @@
 const { randomUUID } = require('node:crypto');
-const { serverUrl, API_PATH } = require('./policy.cjs');
+const { serverUrl, mediaRequest, API_PATH } = require('./policy.cjs');
 class SessionError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
@@ -11,16 +11,17 @@ function userValue(value) {
 // This object belongs to main. snapshot() is the only page-facing representation.
 class DesktopSession {
   #token = ''; #user = null; #generation = randomUUID(); #cancel = new AbortController();
+  #revision = 0; #opened = new Set();
   #operation = 0; #save = Promise.resolve(); #cleanup = Promise.resolve(); #writes = new Map();
   constructor({ server = '', store, fetch: fetcher = fetch, onInvalidate = () => {}, onChange = () => {} }) {
     this.server = server ? serverUrl(server) : ''; this.store = store; this.fetch = fetcher;
     this.onInvalidate = onInvalidate; this.onChange = onChange; this.hasUsers = true; this.error = ''; this.persisted = false;
   }
   snapshot() {
-    return { server: this.server, generation: this.#generation, user: this.#user ? { ...this.#user } : null,
+    return { server: this.server, generation: this.#generation, revision: this.#revision, user: this.#user ? { ...this.#user } : null,
       hasUsers: this.hasUsers, error: this.error, persistent: this.persisted };
   }
-  #publish() { this.onChange(this.snapshot()); }
+  #publish() { ++this.#revision; this.onChange(this.snapshot()); }
   #persist() {
     const server = this.server, token = this.#token;
     this.#save = this.#save.catch(() => {}).then(async () => {
@@ -31,17 +32,19 @@ class DesktopSession {
   }
   #invalidate(reason) {
     this.#cancel.abort(); this.#cancel = new AbortController(); this.#generation = randomUUID();
-    this.#token = ''; this.#user = null; this.error = ''; this.persisted = false;
+    this.#token = ''; this.#user = null; this.#opened.clear(); this.error = reason === 'expired' ? '登录已过期，请重新登录' : ''; this.persisted = false;
     this.#cleanup = this.#cleanup.catch(() => {}).then(() => this.onInvalidate(reason));
     this.#publish();
   }
   #current(generation) { if (generation !== this.#generation) throw stale(); }
   async #send(server, route, options = {}, signal) {
-    try { return await this.fetch(server + route, { ...options, redirect: 'error', signal: AbortSignal.any([AbortSignal.timeout(15000), ...(signal ? [signal] : [])]) }); }
-    catch (error) {
-      if (signal?.aborted) throw stale();
-      throw new SessionError(503, error.name === 'TimeoutError' ? '连接服务器超时，请重试' : '无法连接服务器，请检查网络');
-    }
+    const timeout = new AbortController();
+    const timer = setTimeout(() => timeout.abort(), 15000); timer.unref?.();
+    try { return await this.fetch(server + route, { ...options, redirect: 'error', signal: AbortSignal.any([timeout.signal, ...(signal ? [signal] : []), ...(options.signal ? [options.signal] : [])]) }); }
+    catch {
+      if (signal?.aborted || options.signal?.aborted) throw stale();
+      throw new SessionError(503, timeout.signal.aborted ? '连接服务器超时，请重试' : '无法连接服务器，请检查网络');
+    } finally { clearTimeout(timer); } // Bound headers, not the lifetime of audio/SSE response bodies.
   }
   async #status(server, signal) {
     const response = await this.#send(server, '/auth/status', {}, signal);
@@ -125,6 +128,25 @@ class DesktopSession {
     if (!this.#user || !this.#token) throw new SessionError(401, '请先登录');
     return { server: this.server, userId: this.#user.id, generation, token: this.#token, signal: this.#cancel.signal };
   }
+  async expire(generation) {
+    if (generation !== this.#generation) return;
+    this.#invalidate('expired'); await this.#persist(); await this.#cleanup;
+  }
+  mediaSource(value) {
+    const url = new URL(value, 'he://app');
+    if (url.searchParams.has('token')) throw new SessionError(400, '媒体地址不能包含登录凭据');
+    const generation = url.searchParams.get('he_session');
+    const identity = this.identity(generation);
+    url.searchParams.delete('he_session');
+    const source = mediaRequest(identity.server, url.href);
+    const pathname = new URL(source.url).pathname.slice(new URL(identity.server).pathname.replace(/\/$/, '').length);
+    const mediaId = /^\/(?:stream|manga)\/(\d+)/.exec(pathname)?.[1];
+    if (mediaId && !this.#opened.has(Number(mediaId))) throw new SessionError(403, '请先打开并验证作品');
+    if (/^\/manga\/\d+\/page\/\d+$/.test(pathname)) {
+      const target = new URL(source.url); target.searchParams.set('track_progress', 'false'); source.url = target.href;
+    }
+    return { ...source, token: identity.token, headers: { Authorization: 'Bearer ' + identity.token }, generation };
+  }
   async request(route, options = {}, generation) {
     const identity = this.identity(generation), parsed = new URL(route, 'he://app');
     if (parsed.protocol !== 'he:' || parsed.host !== 'app' || parsed.username || parsed.password || !API_PATH.test(parsed.pathname) || parsed.pathname.startsWith('/auth') || parsed.searchParams.has('token') || parsed.hash) throw new SessionError(400, '不允许的服务器请求');
@@ -134,10 +156,14 @@ class DesktopSession {
     headers.set('Authorization', 'Bearer ' + identity.token);
     const execute = async (writing) => {
       this.#current(generation);
-      const response = await this.#send(identity.server, pathname, { ...options, headers }, writing ? undefined : identity.signal);
+      const response = await this.#send(identity.server, pathname, { ...options, headers, signal: writing ? undefined : options.signal }, writing ? undefined : identity.signal);
       if (generation !== this.#generation) { await response.body?.cancel(); throw stale(); }
       if (response.status === 401) {
-        this.#invalidate('expired'); await this.#persist(); await this.#cleanup;
+        await this.expire(generation);
+      }
+      if ((options.method || 'GET').toUpperCase() === 'GET' && /^\/media\/\d+$/.test(parsed.pathname) && response.ok) {
+        const media = await response.clone().json(); this.#current(generation);
+        if (Number.isSafeInteger(media.id)) this.#opened.add(media.id);
       }
       return response;
     };

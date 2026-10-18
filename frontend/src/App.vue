@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { authState, logout } from './auth'
 import { ChevronUp } from 'lucide-vue-next'
-import { desktopBridge } from './desktop'
+import { desktopBridge, desktopSession } from './desktop'
 import DesktopToolbar from './components/DesktopToolbar.vue'
 import Sidebar from './components/Sidebar.vue'
 import MobileNavigation from './components/MobileNavigation.vue'
@@ -17,7 +17,12 @@ const compact = useCompactViewport()
 useStandaloneViewport()
 const desktopCollapsed = ref(localStorage.getItem('he_sidebar_collapsed') === 'true')
 watch(desktopCollapsed, value => localStorage.setItem('he_sidebar_collapsed', String(value)))
-const route = useRoute()
+const route = useRoute(), router = useRouter()
+watch(() => desktopSession.generation, () => {
+  audioPlaybackStore.stop()
+  const query = { ...route.query }; delete query.media
+  if (route.query.media) void router.replace({ path: route.path, query })
+})
 const mainScrollRef = ref<HTMLElement | null>(null)
 const showBackToTop = ref(false)
 const isEmbed = computed(() => route.path.endsWith('/embed') || route.query.embed === 'true')
@@ -52,7 +57,7 @@ onBeforeUnmount(() => { window.removeEventListener('he:content-ready', onContent
 <template>
   <DesktopToolbar v-if="desktopBridge" />
   <AuthView v-if="authState.ready && !authState.user" :has-users="authState.hasUsers" :startup-error="authState.error" />
-  <div v-else-if="authState.ready" class="he-app-shell w-full bg-background text-ink font-sans relative overflow-hidden flex" :class="{ 'he-compact-shell': compact && !isEmbed, 'he-has-mini': audioPlaybackStore.state.media && !audioPlaybackStore.state.expanded }">
+  <div v-else-if="authState.ready" :key="desktopBridge ? desktopSession.generation : undefined" class="he-app-shell w-full bg-background text-ink font-sans relative overflow-hidden flex" :class="{ 'he-compact-shell': compact && !isEmbed, 'he-has-mini': audioPlaybackStore.state.media && !audioPlaybackStore.state.expanded }">
     <a href="#he-main-content" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-accent focus:px-4 focus:py-3 focus:text-on-accent">跳转到主要内容</a>
     <div v-if="!isEmbed" class="he-ambient" aria-hidden="true"></div>
     <Sidebar v-if="!isEmbed && !compact" v-model:collapsed="desktopCollapsed" class="shrink-0 relative z-40" :user="authState.user" @logout="logout" />

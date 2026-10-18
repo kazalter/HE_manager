@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import ColorModeToggle from '../components/ColorModeToggle.vue'
 import { computed, ref } from 'vue'
-import { bootstrapAdmin, login } from '../auth'
+import { bootstrapAdmin, login, retryAuth } from '../auth'
 import UiButton from '../components/ui/UiButton.vue'
 import { controlClass, fieldLabelClass } from '../components/ui/classes'
 
@@ -12,7 +12,8 @@ const props = defineProps<{
 
 const username = ref('')
 const password = ref('')
-const loading = ref(false)
+const loading = ref(false), retrying = ref(false)
+const retry = async () => { retrying.value = true; try { await retryAuth() } finally { retrying.value = false } }
 const errorMessage = ref('')
 
 const modeText = computed(() => props.hasUsers ? '登录' : '创建管理员')
@@ -30,7 +31,7 @@ const submit = async () => {
       await bootstrapAdmin(username.value.trim(), password.value)
     }
   } catch (err: any) {
-    errorMessage.value = err.response?.data?.detail || `${modeText.value}失败`
+    errorMessage.value = err.response?.data?.detail || err.message || `${modeText.value}失败`
   } finally {
     loading.value = false
   }
@@ -60,6 +61,7 @@ const submit = async () => {
 
       <div v-if="startupError" role="status" class="rounded-lg border border-warning/25 bg-warning/10 px-3.5 py-3 text-meta leading-relaxed text-warning">
         {{ startupError }}
+        <UiButton class="mt-3" size="sm" :loading="retrying" @click="retry">重新检查连接</UiButton>
       </div>
 
       <div class="space-y-4">

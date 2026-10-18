@@ -3,7 +3,7 @@ import { onBeforeUnmount, ref, watch } from 'vue'
 import axios from 'axios'
 import { ArchiveX, RefreshCw } from 'lucide-vue-next'
 import { API_BASE_URL } from '../config'
-import { authState } from '../auth'
+import { authIdentity } from '../auth'
 import { EmptyState, PageHeader, UiBadge, UiButton, UiInput, UiModal } from '../components/ui'
 import PaginationControl from '../components/PaginationControl.vue'
 import { formatBytes, type DiscardRecord } from '../utils/discardApi'
@@ -18,7 +18,7 @@ const load = async () => {
 }
 watch(page, () => void load())
 watch(search, () => { clearTimeout(timer); timer = setTimeout(() => { if (page.value !== 1) page.value = 1; else void load() }, 300) })
-watch(() => authState.token, () => { generation++; items.value = []; allow.value = null })
+watch(() => authIdentity(), () => { generation++; items.value = []; allow.value = null })
 onBeforeUnmount(() => { generation++; clearTimeout(timer) })
 void load()
 const action = async (row: DiscardRecord, name: 'retry' | 'allow-download') => {

@@ -13,7 +13,7 @@ import {
   ShieldCheck,
   Loader2,
 } from 'lucide-vue-next'
-import { authState } from '../auth'
+import { authIdentity, authState } from '../auth'
 import { API_BASE_URL } from '../config'
 import { PageHeader, UiButton, UiCard } from '../components/ui'
 import ChatMessages from '../components/assistant/ChatMessages.vue'
@@ -35,7 +35,7 @@ const approvalOpen = ref(false), capabilities = ref<CapabilitiesDTO | null>(null
 let capabilityRequest = new AbortController()
 async function loadCapabilities() {
   capabilityRequest.abort(); capabilityRequest = new AbortController(); const request = capabilityRequest
-  if (!authState.token || !authState.user?.is_admin) return
+  if (!authIdentity() || !authState.user?.is_admin) return
   try {
     const value = await getCapabilities({ signal: request.signal })
     if (!request.signal.aborted && Array.isArray(value?.file_roots)) capabilities.value = value
@@ -179,13 +179,13 @@ function key(event: KeyboardEvent) {
   }
 }
 async function openMedia(id: number) {
-  const token = authState.token
+  const token = authIdentity()
   mediaError.value = ''
   try {
     const response = await axios.get(API_BASE_URL + '/media/' + id)
-    if (alive && authState.token === token) selectedMedia.value = response.data
+    if (alive && authIdentity() === token) selectedMedia.value = response.data
   } catch {
-    if (alive && authState.token === token)
+    if (alive && authIdentity() === token)
       mediaError.value = '媒体暂不可用，请返回媒体库核实。'
   }
 }
@@ -201,7 +201,7 @@ onMounted(() => {
   window.addEventListener('resize', keepComposerVisible)
 })
 watch(
-  () => [authState.token, authState.user?.id, authState.user?.is_admin],
+  () => [authIdentity(), authState.user?.id, authState.user?.is_admin],
   () => {
     capabilityRequest.abort(); capabilities.value = null; approvalOpen.value = false; void loadCapabilities()
     draft.value = ''

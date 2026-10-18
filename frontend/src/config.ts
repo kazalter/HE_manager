@@ -1,11 +1,18 @@
+import { desktopBridge, desktopSession } from './desktop'
 const configuredApiBase = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
 
-export const API_BASE_URL = configuredApiBase;
+export const API_BASE_URL = desktopBridge ? '' : configuredApiBase;
 export const THUMBNAIL_URL = `${API_BASE_URL}/thumbnails`;
 export const STREAM_URL = `${API_BASE_URL}/stream`;
 export const AUTH_TOKEN_STORAGE_KEY = 'he_manager_token';
 
 export function authUrl(url: string): string {
+    if (desktopBridge) {
+        const parsed = new URL(url, 'he://app/');
+        parsed.searchParams.delete('token');
+        if (parsed.protocol === 'he:' && parsed.host === 'app') parsed.searchParams.set('he_session', desktopSession.generation);
+        return parsed.toString();
+    }
     const token = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || '';
     if (!token) return url;
     const parsed = new URL(url, window.location.href);

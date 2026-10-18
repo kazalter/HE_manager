@@ -131,3 +131,20 @@ test('credential file contains ciphertext, is server-bound, and an ordered logou
     assert.equal(await store.save('https://he.example', 'never-plaintext'), false); await assert.rejects(fs.access(file));
   } finally { await fs.rm(directory, { recursive: true, force: true }); }
 });
+test('native media is admitted only after actual detail verification in the current identity', async () => {
+  const { session } = setup(() => json({ id: 7 }));
+  const state = await session.login('1', 'pw');
+  const resource = 'he://app/manga/7/page/0?track_progress=true&he_session=' + state.generation;
+  assert.throws(() => session.mediaSource(resource), { status: 403 });
+  await session.request('/media?limit=60&offset=0', {}, state.generation);
+  assert.throws(() => session.mediaSource(resource), { status: 403 }, 'listing/preloading never admits a native open');
+  await session.request('/media/7', {}, state.generation);
+  const source = session.mediaSource(resource);
+  assert.equal(new URL(source.url).searchParams.get('track_progress'), 'false');
+  assert.equal(new URL(source.url).searchParams.has('he_session'), false);
+  assert.equal(source.headers.Authorization, 'Bearer opaque-secret-1');
+  assert.throws(() => session.mediaSource(resource + '&token=leaked'), { status: 400 });
+  await session.logout(); const next = await session.login('2', 'pw');
+  assert.throws(() => session.mediaSource(resource), { status: 409 });
+  assert.throws(() => session.mediaSource('he://app/stream/7?he_session=' + next.generation), { status: 403 });
+});

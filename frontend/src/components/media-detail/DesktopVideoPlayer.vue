@@ -71,7 +71,8 @@ onBeforeUnmount(() => {
  disposed = true; epoch++; clearTimeout(timer)
  if (state.value?.running && loadedUrl === props.url) emit('progress', state.value.position, state.value.duration, state.value.ended, true)
  desktopBridge!.unmountVideoSurface()
- void desktopBridge!.stopVideo().catch(() => {})
+ const generation = new URL(props.url, 'he://app').searchParams.get('he_session')
+ void (generation ? desktopBridge!.stopVideo(generation) : desktopBridge!.stopVideo()).catch(() => {})
 })
 </script>
 <template>

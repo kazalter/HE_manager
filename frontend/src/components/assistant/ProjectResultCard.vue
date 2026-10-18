@@ -2,7 +2,7 @@
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { UiButton, UiCard } from '../ui'
 import { fetchPreview, assistantErrorText } from '../../utils/assistantApi'
-import { authState } from '../../auth'
+import { authIdentity } from '../../auth'
 import type { ToolResultDTO } from '../../types/assistant'
 const props = defineProps<{ results: ToolResultDTO[] }>()
 const labels: Record<string, string> = { list_directory: '目录文件', read_text: '文件内容', get_media_preview: '媒体预览', list_creators: '作者', get_creator_detail: '作者资料', list_tasks: '后台任务', get_task_detail: '任务状态', read_logs: '运行日志', get_project_status: '存储与备份', get_project_settings: '项目设置' }
@@ -30,7 +30,7 @@ async function open(call: ToolResultDTO) {
   finally { if (alive && !controller.signal.aborted) busy.value = '' }
 }
 watch(() => props.results, reset)
-watch(() => authState.token, reset)
+watch(() => authIdentity(), reset)
 onBeforeUnmount(() => { alive = false; reset() })
 </script>
 <template>

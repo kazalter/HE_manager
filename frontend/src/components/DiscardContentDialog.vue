@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Trash2 } from 'lucide-vue-next'
-import { authState } from '../auth'
+import { authIdentity } from '../auth'
 import { audioPlaybackStore } from '../stores/audioPlaybackStore'
 import { UiButton, UiModal, UiSpinner } from './ui'
 import { executeDiscard, formatBytes, previewDiscard, type DiscardPreview, type DiscardRecord, type DiscardTarget } from '../utils/discardApi'
@@ -27,7 +27,7 @@ const load = async () => {
   finally { if (mine === generation) loading.value = false }
 }
 watch(target, () => void load(), { immediate: true })
-watch(() => authState.token, () => { generation++; controller?.abort(); target.value = null })
+watch(() => authIdentity(), () => { generation++; controller?.abort(); target.value = null })
 onBeforeUnmount(() => { generation++; controller?.abort() })
 const confirm = async () => {
   if (!target.value || !preview.value || busy.value || !acknowledged.value) return
