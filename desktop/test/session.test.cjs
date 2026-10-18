@@ -148,3 +148,28 @@ test('native media is admitted only after actual detail verification in the curr
   assert.throws(() => session.mediaSource(resource), { status: 409 });
   assert.throws(() => session.mediaSource('he://app/stream/7?he_session=' + next.generation), { status: 403 });
 });
+test('OS encryption uses async methods and a new profile does not query Keychain', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'he-async-vault-'));
+  const availability = deferred(); let requests = 0;
+  const cipher = {
+    isAsyncEncryptionAvailable: () => { requests++; return availability.promise; },
+    encryptStringAsync: async token => Buffer.from('cipher:' + token),
+    decryptStringAsync: async bytes => ({ result: bytes.toString().slice(7), shouldReEncrypt: false }),
+    isEncryptionAvailable: () => { throw new Error('Synchronous OS access must not run'); },
+    encryptString: () => { throw new Error('Synchronous encryption must not run'); },
+  };
+  try {
+    const store = new CredentialStore(path.join(directory, 'login.json'), cipher);
+    assert.equal(await store.load('https://he.example'), ''); assert.equal(requests, 0);
+    const save = store.save('https://he.example', 'test-private'); await tick(); assert.equal(requests, 1);
+    availability.resolve(true); await save;
+    assert.equal(await store.load('https://he.example'), 'test-private');
+    assert.equal(JSON.parse(await fs.readFile(store.file, 'utf8')).scheme, 'async');
+    await store.save('https://he.example', '');
+  } finally { await fs.rm(directory, { recursive: true, force: true }); }
+});
+test('restore exposes a recoverable terminal state if host cleanup fails', async () => {
+  const { session } = setup();
+  session.onInvalidate = async () => { throw new Error('Host cleanup failed'); };
+  const state = await session.restore(); assert.equal(state.restoring, false); assert.equal(state.user, null); assert.ok(state.error);
+});

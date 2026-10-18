@@ -9,7 +9,7 @@ vi.mock('../desktop', async () => {
 import { authIdentity, authState, initAuth, login, logout } from '../auth'
 import { desktopSession } from '../desktop'
 import { authUrl } from '../config'
-const state = (generation = 'session-a', revision = 1, id: number | null = 1): DesktopSessionSnapshot => ({ server: 'https://he.example', generation, revision, hasUsers: true, persistent: true, error: '', user: id ? { id, username: 'account-' + id, is_admin: false, is_active: true, created_at: '' } : null })
+const state = (generation = 'session-a', revision = 1, id: number | null = 1): DesktopSessionSnapshot => ({ server: 'https://he.example', generation, revision, hasUsers: true, persistent: true, restoring: false, error: '', user: id ? { id, username: 'account-' + id, is_admin: false, is_active: true, created_at: '' } : null })
 beforeEach(async () => {
  vi.clearAllMocks(); localStorage.clear(); desktopSession.revision = -1; authState.user = null; authState.token = ''
  host.onSessionChanged.mockImplementation(callback => { host.listener = callback; return () => {} })

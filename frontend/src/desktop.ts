@@ -3,7 +3,7 @@ import type { DesktopBridge, DesktopConfiguration, DesktopSessionSnapshot, Video
 export type { DesktopBridge, DesktopConfiguration, DesktopPlayback, DesktopTrack, DesktopVideoAction, VideoEnhancement, ImageEnhancement } from './desktop-contract'
 declare global { interface Window { heDesktop?: DesktopBridge } }
 export const desktopBridge = window.heDesktop
-export const desktopSession = reactive<DesktopSessionSnapshot>({ server: '', generation: '', revision: -1, user: null, hasUsers: true, error: '', persistent: false })
+export const desktopSession = reactive<DesktopSessionSnapshot>({ server: '', generation: '', revision: -1, user: null, hasUsers: true, error: '', persistent: false, restoring: false })
 export const desktopState = reactive<DesktopConfiguration>({ server: '', videoMode: 'off', imageMode: 'off', platform: '', arch: '', version: '', mpv: false, image: false, videoPresentation: 'embedded' })
 export async function initDesktop() {
  if (desktopBridge) {

@@ -9,7 +9,7 @@ export interface DesktopConfiguration {
 }
 export interface DesktopSessionSnapshot {
   server: string; generation: string; revision: number; user: User | null
-  hasUsers: boolean; error: string; persistent: boolean
+  hasUsers: boolean; error: string; persistent: boolean; restoring: boolean
 }
 export interface DesktopTrack { id: number; type: 'audio' | 'sub'; title: string; language: string; selected: boolean }
 export interface DesktopPlayback {

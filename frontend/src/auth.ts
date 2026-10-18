@@ -24,6 +24,7 @@ let listening = false
 function applyDesktopSession(value: DesktopSessionSnapshot) {
   if (value.revision < desktopSession.revision) return
   Object.assign(desktopSession, value)
+  authState.ready = !value.restoring
   authState.token = ''; authState.user = value.user; authState.hasUsers = value.hasUsers; authState.error = value.error
 }
 
@@ -85,7 +86,7 @@ export const initAuth = async () => {
     if (!listening) { desktopBridge.onSessionChanged(applyDesktopSession); listening = true }
     try { applyDesktopSession(await desktopBridge.authentication()) }
     catch { authState.user = null; authState.error = '无法检查登录状态，请重新连接服务器。' }
-    authState.ready = true
+    authState.ready = !desktopSession.restoring
     return
   }
   applyToken(authState.token)

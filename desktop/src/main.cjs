@@ -428,7 +428,7 @@ app.whenReady().then(async () => {
     },
   });
   cache = createImageCache();
-  await session.restore();
+  void session.restore().catch(() => {});
   protocol.handle("he", protocolHandler);
   registerIPC();
   diagnosticStage('services-registered');

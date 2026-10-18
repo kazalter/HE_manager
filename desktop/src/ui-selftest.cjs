@@ -105,7 +105,7 @@ module.exports = async ({ window, player, session, config, output }) => {
     report.authentication = {
       persistent: authentication.persistent,
       noPageToken: await evaluate("!localStorage.getItem('he_manager_token')") && !JSON.stringify(authentication).includes(credential),
-      encryptedFile: storedCredential.version === 1 && typeof storedCredential.encrypted === 'string' && !encryptedFile.includes(credential),
+      encryptedFile: storedCredential.version === 2 && typeof storedCredential.encrypted === 'string' && !encryptedFile.includes(credential),
       systemRoundTrip: await session.store.load(session.server) === credential,
       scopedResources: await evaluate(`[...document.querySelectorAll('img[src]')].filter(img => ['thumbnails','stream','manga'].includes(new URL(img.src).pathname.split('/')[1])).every(img => new URL(img.src).searchParams.get('he_session') === ${JSON.stringify(authentication.generation)} && !new URL(img.src).searchParams.has('token'))`),
     };

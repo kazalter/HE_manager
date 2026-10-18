@@ -15,11 +15,11 @@ class DesktopSession {
   #operation = 0; #save = Promise.resolve(); #cleanup = Promise.resolve(); #writes = new Map();
   constructor({ server = '', store, fetch: fetcher = fetch, onInvalidate = () => {}, onChange = () => {} }) {
     this.server = server ? serverUrl(server) : ''; this.store = store; this.fetch = fetcher;
-    this.onInvalidate = onInvalidate; this.onChange = onChange; this.hasUsers = true; this.error = ''; this.persisted = false;
+    this.onInvalidate = onInvalidate; this.onChange = onChange; this.restoring = false; this.hasUsers = true; this.error = ''; this.persisted = false;
   }
   snapshot() {
     return { server: this.server, generation: this.#generation, revision: this.#revision, user: this.#user ? { ...this.#user } : null,
-      hasUsers: this.hasUsers, error: this.error, persistent: this.persisted };
+      hasUsers: this.hasUsers, error: this.error, persistent: this.persisted, restoring: this.restoring };
   }
   #publish() { ++this.#revision; this.onChange(this.snapshot()); }
   #persist() {
@@ -32,7 +32,7 @@ class DesktopSession {
   }
   #invalidate(reason) {
     this.#cancel.abort(); this.#cancel = new AbortController(); this.#generation = randomUUID();
-    this.#token = ''; this.#user = null; this.#opened.clear(); this.error = reason === 'expired' ? '登录已过期，请重新登录' : ''; this.persisted = false;
+    this.#token = ''; this.#user = null; this.#opened.clear(); this.restoring = reason === 'restore'; this.error = reason === 'expired' ? '登录已过期，请重新登录' : ''; this.persisted = false;
     this.#cleanup = this.#cleanup.catch(() => {}).then(() => this.onInvalidate(reason));
     this.#publish();
   }
@@ -65,24 +65,25 @@ class DesktopSession {
   async restore() {
     const operation = ++this.#operation;
     this.#invalidate('restore'); const generation = this.#generation;
-    await this.#cleanup; this.#current(generation);
-    if (!this.server) return this.snapshot();
-    const token = await this.store.load(this.server);
-    this.#current(generation);
-    if (operation !== this.#operation) throw stale();
     try {
-      this.hasUsers = await this.#status(this.server, this.#cancel.signal);
-      this.#current(generation);
-      if (token) {
-        const response = await this.#send(this.server, '/auth/me', { headers: { Authorization: 'Bearer ' + token } }, this.#cancel.signal);
+      await this.#cleanup; this.#current(generation);
+      if (this.server) {
+        const token = await this.store.load(this.server);
         this.#current(generation);
-        if (response.status === 401) {
-          await response.body?.cancel(); await this.store.save(this.server, '');
-        } else if (!response.ok) {
-          await response.body?.cancel(); throw new SessionError(response.status, '无法验证登录状态，请重试');
-        } else {
-          const user = userValue(await response.json()); this.#current(generation);
-          this.#token = token; this.#user = user; this.persisted = true;
+        if (operation !== this.#operation) throw stale();
+        this.hasUsers = await this.#status(this.server, this.#cancel.signal);
+        this.#current(generation);
+        if (token) {
+          const response = await this.#send(this.server, '/auth/me', { headers: { Authorization: 'Bearer ' + token } }, this.#cancel.signal);
+          this.#current(generation);
+          if (response.status === 401) {
+            await response.body?.cancel(); await this.store.save(this.server, '');
+          } else if (!response.ok) {
+            await response.body?.cancel(); throw new SessionError(response.status, '无法验证登录状态，请重试');
+          } else {
+            const user = userValue(await response.json()); this.#current(generation);
+            this.#token = token; this.#user = user; this.persisted = true;
+          }
         }
       }
       this.error = '';
@@ -91,7 +92,7 @@ class DesktopSession {
       // A network outage does not delete the encrypted login; no cached identity is admitted.
       this.error = error instanceof SessionError ? error.message : '无法验证登录状态，请重试';
     }
-    this.#publish(); return this.snapshot();
+    this.restoring = false; this.#publish(); return this.snapshot();
   }
   async login(username, password, bootstrap = false) {
     if (!this.server) throw new SessionError(503, '请先连接 HE Manager 服务器');
