@@ -1,0 +1,144 @@
+{
+  "phase": "CP-03",
+  "scope": "Headless session service against the disposable real FastAPI backend; host/renderer integration and OS encryption pending",
+  "status": "partial-pass",
+  "node": "v22.23.3",
+  "checks": {
+    "loginSnapshotHasNoCredential": true,
+    "pagedList": true,
+    "actualOpen": true,
+    "narrowPatch": true,
+    "protectedRange": true,
+    "range416KeepsLogin": true,
+    "zeroPageCompatibility": true,
+    "lastPageAuthoritative": true,
+    "reopenedLatestProgress": true,
+    "prefetchDoesNotChangeProgress": true,
+    "zeroWritesOrdered": true,
+    "localLogout": true,
+    "serverLogout": true
+  },
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "bearer": false
+    },
+    {
+      "method": "GET",
+      "path": "/media",
+      "bearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/media/1",
+      "bearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "bearer": true,
+      "fields": [
+        "favorite"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "bearer": true,
+      "fields": [
+        "favorite"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/stream/1",
+      "bearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/stream/1",
+      "bearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/media/3",
+      "bearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/3",
+      "bearer": true,
+      "fields": [
+        "progress"
+      ],
+      "progress": 0
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/3",
+      "bearer": true,
+      "fields": [
+        "view_status"
+      ],
+      "viewStatus": "viewing"
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/3",
+      "bearer": true,
+      "fields": [
+        "progress"
+      ],
+      "progress": 3
+    },
+    {
+      "method": "GET",
+      "path": "/media/3",
+      "bearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/media/3",
+      "bearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/3",
+      "bearer": true,
+      "fields": [
+        "progress"
+      ],
+      "progress": 0
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/3",
+      "bearer": true,
+      "fields": [
+        "view_status"
+      ],
+      "viewStatus": "viewing"
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/3",
+      "bearer": true,
+      "fields": [
+        "view_status"
+      ],
+      "viewStatus": "viewing"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/logout",
+      "bearer": true
+    }
+  ],
+  "sourceSha256": {
+    "session.cjs": "5125683fb83d6da828bec3a2f1d23805c4ffbf1c98456a96908cd23bf247d63b",
+    "credential-store.cjs": "ede6e98ba05b556c219e46e53274922fbbd1e63f5264ecb3b7871dc54d4c54b4",
+    "media-queue.cjs": "79d61c0c5cdaeb18cf08c767386f0bf227e5b2a3d88415186101654ac0148ff0"
+  },
+  "capturedAt": "2026-10-18T04:02:45.074Z"
+}

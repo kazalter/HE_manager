@@ -1,8 +1,11 @@
 import { computed, reactive } from 'vue'
-import axios from 'axios'
 import { API_BASE_URL } from '../config'
 import type { ExternalDownloadJob } from '../types'
 
+import { desktopScopedStore, type StoreScope } from './desktopScopedStore'
+
+function createStore(scope: StoreScope) {
+const axios = scope.http
 const STORAGE_KEY = 'he-manager:external-download-job-id'
 const POLL_INTERVAL_MS = 1200
 
@@ -26,14 +29,14 @@ const isFinalStatus = (status: string) => ['completed', 'failed', 'canceled'].in
 
 const persistJobId = (jobId: string | null) => {
   try {
-    if (jobId) localStorage.setItem(STORAGE_KEY, jobId)
-    else localStorage.removeItem(STORAGE_KEY)
+    if (jobId) scope.storage.setItem(STORAGE_KEY, jobId)
+    else scope.storage.removeItem(STORAGE_KEY)
   } catch { /* ignore */ }
 }
 
 const readPersistedJobId = (): string | null => {
   try {
-    return localStorage.getItem(STORAGE_KEY)
+    return scope.storage.getItem(STORAGE_KEY)
   } catch {
     return null
   }
@@ -41,12 +44,13 @@ const readPersistedJobId = (): string | null => {
 
 const stopPolling = () => {
   if (pollTimer !== null) {
-    window.clearInterval(pollTimer)
+    scope.clearInterval(pollTimer)
     pollTimer = null
   }
 }
 
 const fireCompleted = (job: ExternalDownloadJob) => {
+  if (!scope.active()) return
   for (const cb of state.onCompletedCallbacks) {
     try { cb(job) } catch (err) { console.error(err) }
   }
@@ -81,7 +85,7 @@ const pollOnce = async (jobId: string) => {
 const startPolling = (jobId: string) => {
   stopPolling()
   pollOnce(jobId)
-  pollTimer = window.setInterval(() => pollOnce(jobId), POLL_INTERVAL_MS)
+  pollTimer = scope.setInterval(() => pollOnce(jobId), POLL_INTERVAL_MS)
 }
 
 const startDownload = async (itemIds: number[], downloadRootPath: string) => {
@@ -166,7 +170,7 @@ const ensureResumed = () => {
   tryResume()
 }
 
-export const externalDownloadStore = {
+return {
   state,
   job: computed(() => state.job),
   inProgress: computed(() => state.inProgress),
@@ -200,3 +204,6 @@ export const externalDownloadStore = {
   clearError() { state.errorMessage = '' },
   setError(msg: string) { state.errorMessage = msg },
 }
+
+}
+export const externalDownloadStore = desktopScopedStore(createStore)

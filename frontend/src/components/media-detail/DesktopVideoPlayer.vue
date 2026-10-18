@@ -5,7 +5,7 @@ import { desktopBridge, desktopState, setDesktopPreferences, type DesktopPlaybac
 import { audioPlaybackStore } from '../../stores/audioPlaybackStore'
 import { EmptyState, LoadingState, UiButton, UiIconButton, UiModal, UiSlider, UiToast, controlClass } from '../ui'
 const props = defineProps<{ url: string; title: string; start: number }>()
-const emit = defineEmits<{ progress: [position: number, duration: number, ended: boolean, force?: boolean] }>()
+const emit = defineEmits<{ progress: [position: number, duration: number, ended: boolean, force?: boolean, sourceUrl?: string] }>()
 const canvasId = `he-video-${useId()}`
 const state = ref<DesktopPlayback | null>(null), error = ref(''), busy = ref(false), settingsOpen = ref(false)
 const actionError = ref('')
@@ -28,12 +28,16 @@ async function poll() {
    state.value = next
    if (!dragging.value) seekValue.value = next.position
    if (!volumeDragging.value) volume.value = next.volume
-   if (next.running && !busy.value && loadedUrl === props.url) emit('progress', next.position, next.duration, next.ended)
+   if (next.running && !busy.value && loadedUrl === props.url) emit('progress', next.position, next.duration, next.ended, false, url)
   }
  } catch { /* A transient IPC failure does not create a second player. */ }
  if (!disposed) timer = setTimeout(poll, 200)
 }
+function flushProgress() {
+ if (state.value?.running && loadedUrl && !busy.value) emit('progress', state.value.position, state.value.duration, state.value.ended, true, loadedUrl)
+}
 async function open() {
+ flushProgress()
  const current = ++epoch, requestedUrl = props.url
  loadedUrl = ''; busy.value = true; error.value = ''; actionError.value = ''
  if (audioPlaybackStore.state.playing) audioPlaybackStore.togglePlay()
@@ -47,8 +51,12 @@ async function open() {
 async function control(action: DesktopVideoAction, value?: number) {
  actionError.value = ''
  try {
-  if (action === 'pause' || action === 'fullscreen' || action === 'exit-fullscreen') await desktopBridge!.controlVideo(action)
-  else await desktopBridge!.controlVideo(action, value ?? NaN)
+  const next = action === 'pause' || action === 'fullscreen' || action === 'exit-fullscreen'
+   ? await desktopBridge!.controlVideo(action) : await desktopBridge!.controlVideo(action, value ?? NaN)
+  if (!disposed && loadedUrl === props.url && next.generation === state.value?.generation) {
+   state.value = next
+   if (action === 'pause') flushProgress()
+  }
  }
  catch (failure: unknown) { actionError.value = failure instanceof Error ? failure.message : '播放操作失败，请重试。' }
 }
@@ -69,7 +77,7 @@ watch(() => props.url, () => { settingsOpen.value = false; void open() }, { imme
 onMounted(() => { desktopBridge!.mountVideoSurface(canvasId); void poll() })
 onBeforeUnmount(() => {
  disposed = true; epoch++; clearTimeout(timer)
- if (state.value?.running && loadedUrl === props.url) emit('progress', state.value.position, state.value.duration, state.value.ended, true)
+ flushProgress()
  desktopBridge!.unmountVideoSurface()
  const generation = new URL(props.url, 'he://app').searchParams.get('he_session')
  void (generation ? desktopBridge!.stopVideo(generation) : desktopBridge!.stopVideo()).catch(() => {})

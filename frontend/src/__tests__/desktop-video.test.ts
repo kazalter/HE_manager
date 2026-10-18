@@ -28,7 +28,15 @@ describe('embedded desktop video UI', () => {
   wrapper.unmount(); wrappers.splice(0)
   expect(bridge.unmountVideoSurface).toHaveBeenCalledOnce()
   expect(bridge.stopVideo).toHaveBeenCalledOnce()
-  expect(wrapper.emitted('progress')?.at(-1)).toEqual([12, 30, false, true])
+  expect(wrapper.emitted('progress')?.at(-1)).toEqual([12, 30, false, true, '/stream/2'])
+ })
+ it('flushes a switched-away position under its old source URL, then closes with the new source', async () => {
+  defaults(); bridge.videoState.mockResolvedValue(playback(7)); bridge.openVideo.mockResolvedValueOnce(playback(7)).mockResolvedValueOnce({ ...playback(15), generation: 2 })
+  const wrapper = create(); await flushPromises()
+  await wrapper.setProps({ url: '/stream/2' }); await flushPromises()
+  expect(wrapper.emitted('progress')).toContainEqual([7, 30, false, true, '/stream/1'])
+  wrapper.unmount(); wrappers.splice(0)
+  expect(wrapper.emitted('progress')?.at(-1)).toEqual([15, 30, false, true, '/stream/2'])
  })
  it('shows actual tracks, applies subtitle off, and closes its settings on Escape', async () => {
   defaults(); const wrapper = create(); await flushPromises()

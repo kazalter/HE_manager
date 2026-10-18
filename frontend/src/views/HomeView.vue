@@ -931,6 +931,7 @@ onMounted(async () => {
     <MediaDetail
       v-if="selectedMedia"
       :initial-media="selectedMedia"
+      :verified-for-open="true"
       :all-media="viewerMediaList"
       :has-adjacent-media-page="hasAdjacentViewerPage"
       :load-adjacent-media-page="loadAdjacentViewerPage"
