@@ -1,0 +1,133 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { DesktopSession } = require('../src/session.cjs');
+const { CredentialStore } = require('../src/credential-store.cjs');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const os = require('node:os');
+const { createCipheriv, createDecipheriv, randomBytes } = require('node:crypto');
+const user = (id = 1) => ({ id, username: 'account-' + id, is_admin: false, created_at: '2026-10-18' });
+const json = (data, status = 200) => Response.json(data, { status });
+const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
+const tick = () => new Promise(resolve => setImmediate(resolve));
+function setup(handler = () => json([])) {
+  const calls = [], saved = [];
+  const session = new DesktopSession({ server: 'https://he.example', store: { load: async () => '', save: async (server, token) => { saved.push({ server, token }); return !!token; } }, fetch: async (url, options) => {
+    calls.push({ url, options });
+    if (url.endsWith('/auth/status')) return json({ has_users: true });
+    if (url.endsWith('/auth/login')) { const { username } = JSON.parse(options.body); const id = Number(username); return json({ access_token: 'opaque-secret-' + id, user: user(id) }); }
+    if (url.endsWith('/auth/logout')) return json({});
+    return handler(url, options);
+  } });
+  return { session, calls, saved };
+}
+test('desktop login keeps the opaque credential out of public snapshots and captures host headers', async () => {
+  let requestHeaders;
+  const { session, saved } = setup((_url, options) => { requestHeaders = options.headers; return new Response(null, { status: 416, headers: { 'Content-Range': 'bytes */30' } }); });
+  const state = await session.login('1', 'private-password');
+  assert.equal(state.user.id, 1); assert.equal(state.persistent, true);
+  assert.ok(!JSON.stringify(state).includes('opaque-secret')); assert.ok(!JSON.stringify(state).includes('private-password'));
+  const response = await session.request('/stream/3', { headers: { Range: 'bytes=99-', Authorization: 'Bearer injected', Cookie: 'injected', 'X-HE-Generation': state.generation } }, state.generation);
+  assert.equal(response.status, 416); assert.equal(response.headers.get('Content-Range'), 'bytes */30');
+  assert.equal(requestHeaders.get('Authorization'), 'Bearer opaque-secret-1');
+  assert.equal(requestHeaders.get('Range'), 'bytes=99-'); assert.equal(requestHeaders.get('Cookie'), null);
+  assert.equal(requestHeaders.get('X-HE-Generation'), null); assert.equal(session.snapshot().user.id, 1);
+  assert.equal(saved.at(-1).token, 'opaque-secret-1');
+  for (const route of ['https://evil.example/media', '//evil.example/media', '/auth/login', '/stream/3?token=secret']) await assert.rejects(session.request(route, {}, state.generation), { status: 400 });
+});
+test('a late old 401 cannot expire a new login, and old generation requests never retarget', async () => {
+  const pending = deferred(); const { session, calls } = setup(() => pending.promise);
+  const first = await session.login('1', 'pw');
+  const old = session.request('/media', {}, first.generation); const oldResult = assert.rejects(old, { status: 409 });
+  const second = await session.login('2', 'pw');
+  pending.resolve(json({ detail: 'old unauthorized' }, 401)); await oldResult;
+  assert.equal(session.snapshot().user.id, 2);
+  assert.equal(calls.find(item => item.url.endsWith('/media')).options.headers.get('Authorization'), 'Bearer opaque-secret-1');
+  const count = calls.length;
+  await assert.rejects(session.request('/media', {}, first.generation), { status: 409 });
+  assert.equal(calls.length, count); assert.notEqual(first.generation, second.generation);
+});
+test('same server/media writes remain serialized across account changes and discard unsent old intents', async () => {
+  const pending = deferred(), writes = [];
+  const { session } = setup((url, options) => {
+    writes.push({ url, token: options.headers.get('Authorization'), body: JSON.parse(options.body) });
+    return writes.length === 1 ? pending.promise : json({});
+  });
+  const first = await session.login('1', 'pw');
+  const old = session.request('/media/9', { method: 'PATCH', body: '{"progress":10}' }, first.generation);
+  const oldResult = assert.rejects(old, { status: 409 }); await tick();
+  const queued = session.request('/media/9', { method: 'PATCH', body: '{"progress":11}' }, first.generation);
+  const queuedResult = assert.rejects(queued, { status: 409 });
+  const second = await session.login('2', 'pw');
+  const current = session.request('/media/9', { method: 'PATCH', body: '{"progress":20}' }, second.generation);
+  await tick(); assert.equal(writes.length, 1, 'new account must wait for old in-flight write');
+  pending.resolve(json({})); await Promise.all([oldResult, queuedResult, current]);
+  assert.deepEqual(writes.map(item => [item.token, item.body.progress]), [['Bearer opaque-secret-1', 10], ['Bearer opaque-secret-2', 20]]);
+});
+test('401 clears only current authorization and notifies host cleanup; 503 keeps the authorized identity', async () => {
+  let status = 503; const cleanups = [];
+  const { session, saved } = setup(() => json({}, status)); session.onInvalidate = reason => cleanups.push(reason);
+  const state = await session.login('1', 'pw');
+  assert.equal((await session.request('/media', {}, state.generation)).status, 503);
+  assert.equal(session.snapshot().user.id, 1);
+  status = 401; assert.equal((await session.request('/media', {}, state.generation)).status, 401);
+  assert.equal(session.snapshot().user, null); assert.equal(saved.at(-1).token, ''); assert.equal(cleanups.at(-1), 'expired');
+});
+test('server switch clears authorization, cancels the old signal and rejects stale media resources', async () => {
+  const { session, saved } = setup(); const first = await session.login('1', 'pw'); const identity = session.identity(first.generation);
+  const state = await session.connect('https://other.example/');
+  assert.equal(state.server, 'https://other.example'); assert.equal(state.user, null); assert.equal(identity.signal.aborted, true);
+  assert.equal(saved.at(-1).token, ''); assert.equal(saved.at(-1).server, state.server);
+  assert.throws(() => session.identity(first.generation), { status: 409 });
+});
+test('offline restore retains encrypted credential without admitting an unverified cached user', async () => {
+  const { session, saved } = setup(); let online = false;
+  session.store.load = async () => 'still-private';
+  session.fetch = async url => {
+    if (!online) throw new Error('offline');
+    return url.endsWith('/auth/status') ? json({ has_users: true }) : json(user(3));
+  };
+  const offline = await session.restore(); assert.equal(offline.user, null); assert.ok(offline.error); assert.equal(saved.length, 0);
+  online = true; const restored = await session.restore(); assert.equal(restored.user.id, 3); assert.equal(restored.persistent, true);
+  assert.ok(!JSON.stringify(restored).includes('still-private'));
+});
+test('offline logout removes local login and never revokes a concurrent new identity', async () => {
+  const { session, saved } = setup(); await session.login('1', 'pw');
+  const pending = deferred(), revoked = [];
+  const original = session.fetch;
+  session.fetch = async (url, options) => {
+    if (url.endsWith('/auth/logout')) { revoked.push(options.headers.Authorization); return pending.promise; }
+    return original(url, options);
+  };
+  const logout = session.logout(); assert.equal(session.snapshot().user, null);
+  await tick(); assert.equal(saved.at(-1).token, '');
+  await session.login('2', 'pw'); pending.resolve(json({})); await logout;
+  assert.equal(session.snapshot().user.id, 2); assert.deepEqual(revoked, ['Bearer opaque-secret-1']);
+});
+test('overlapping login responses cannot resurrect the earlier account', async () => {
+  const { session } = setup(); const first = deferred(), second = deferred(); let count = 0;
+  session.fetch = async () => (++count === 1 ? first.promise : second.promise);
+  const one = session.login('1', 'pw'); const firstResult = assert.rejects(one, { status: 409 }); await tick();
+  const two = session.login('2', 'pw'); await tick();
+  second.resolve(json({ access_token: 'opaque-second', user: user(2) })); await two;
+  first.resolve(json({ access_token: 'opaque-first', user: user(1) })); await firstResult;
+  assert.equal(session.snapshot().user.id, 2);
+});
+test('credential file contains ciphertext, is server-bound, and an ordered logout cannot be overwritten', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'he-vault-test-')), file = path.join(directory, 'login.json');
+  const key = randomBytes(32), iv = randomBytes(16);
+  const cipher = { isEncryptionAvailable: () => true,
+    encryptString: value => { const c = createCipheriv('aes-256-cbc', key, iv); return Buffer.concat([c.update(value, 'utf8'), c.final()]); },
+    decryptString: value => { const c = createDecipheriv('aes-256-cbc', key, iv); return Buffer.concat([c.update(value), c.final()]).toString(); } };
+  try {
+    const store = new CredentialStore(file, cipher);
+    await store.save('https://he.example', 'opaque-file-secret');
+    assert.ok(!(await fs.readFile(file, 'utf8')).includes('opaque-file-secret'));
+    assert.equal(await store.load('https://he.example'), 'opaque-file-secret'); assert.equal(await store.load('https://other.example'), '');
+    if (process.platform !== 'win32') assert.equal((await fs.stat(file)).mode & 0o777, 0o600);
+    await Promise.all([store.save('https://he.example', 'older-login'), store.save('https://he.example', '')]);
+    await assert.rejects(fs.access(file));
+    cipher.isEncryptionAvailable = () => false;
+    assert.equal(await store.save('https://he.example', 'never-plaintext'), false); await assert.rejects(fs.access(file));
+  } finally { await fs.rm(directory, { recursive: true, force: true }); }
+});
