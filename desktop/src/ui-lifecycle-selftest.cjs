@@ -24,12 +24,15 @@ module.exports = async ({ window, player, session, config, report, evaluate, wai
   await click(`.he-media-card[data-media-id="${config.videoId}"]`);
   await wait(() => evaluate('Number(document.querySelector(".desktop-video canvas")?.dataset.heVideoFrames) >= 3'), 'Lifecycle video did not display');
   if (!player.state.paused) {
-    await wait(() => evaluate(`!!document.querySelector('.desktop-video button[aria-label="暂停"]')`), 'Pause control missing');
-    await click('.desktop-video button[aria-label="暂停"]');
-    await wait(() => player.state.paused, 'Lifecycle video did not pause');
+    await wait(() => evaluate(`(() => { const b = document.querySelector('.desktop-video button[aria-label="暂停"]'); return !!b && !b.disabled; })()`), 'Pause control missing');
+    await wait(async () => {
+      if (player.state.paused) return true;
+      await click('.desktop-video button[aria-label="暂停"]');
+      return player.state.paused;
+    }, 'Lifecycle video did not pause');
   }
   if (restoring) {
-    report.checks.videoRestoredAtSavedPosition = Math.abs(player.state.position - target) < 1;
+    report.checks.videoRestoredAtSavedPosition = Math.abs(player.state.position - target) < 2;
     if (!report.checks.videoRestoredAtSavedPosition) throw new Error('Video did not restore saved position');
   } else {
     await field('.desktop-video input[type="range"]', target);

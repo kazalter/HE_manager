@@ -486,8 +486,7 @@ app.whenReady().then(async () => {
     let passed = false;
     try { passed = await require('./ui-selftest.cjs')({ window, player, session, config: uiTestConfig, output: process.env.HE_DESKTOP_TEST_OUTPUT }); }
     finally { await player.stop(); await cache.close(); }
-    if (passed && uiTestConfig.lifecycleStep) app.quit();
-    else app.exit(passed ? 0 : 1);
+    app.exit(passed ? 0 : 1);
     return;
   }
   if (baselineMode) {
