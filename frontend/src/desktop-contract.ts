@@ -52,4 +52,8 @@ export interface DesktopBridge {
   mountVideoSurface(id: string): void
   unmountVideoSurface(): void
   enhanceImage(value: { url: string; mode: 'anime' | 'photo' }): Promise<{ url: string; cached: boolean; scale: number }>
+  isFullscreen?(): Promise<boolean>
+  toggleFullscreen?(): Promise<boolean>
+  exitFullscreen?(): Promise<boolean>
 }
+

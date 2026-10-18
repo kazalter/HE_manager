@@ -90,5 +90,8 @@ contextBridge.exposeInMainWorld(
       return () => ipcRenderer.removeListener('he:player-session-changed', listener);
     },
     enhanceImage: (options) => invoke("he:image", options),
+    isFullscreen: () => invoke("he:is-fullscreen"),
+    toggleFullscreen: () => invoke("he:toggle-fullscreen"),
+    exitFullscreen: () => invoke("he:exit-fullscreen"),
   }),
 );

@@ -95,3 +95,22 @@ test('GPU discovery failure leaves an idle player that can be retried', async ()
   assert.equal(player.state.error, '');
   await player.stop();
 });
+
+test('fullscreen controls toggle and exit fullscreen window state', async () => {
+  let isFull = false;
+  const { player, sessions } = fixture();
+  player.getWindow = () => ({
+    isDestroyed: () => false,
+    webContents: { mainFrame: {}, send() {} },
+    isFullScreen: () => isFull,
+    setFullScreen(val) { isFull = Boolean(val); },
+  });
+  await player.open(null, { url: 'http://media/1' }, 'off');
+  assert.equal(isFull, false);
+  await player.control('fullscreen');
+  assert.equal(isFull, true);
+  await player.control('exit-fullscreen');
+  assert.equal(isFull, false);
+  await player.stop();
+});
+

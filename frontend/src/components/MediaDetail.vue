@@ -562,6 +562,20 @@ const handleKeydown = (e: KeyboardEvent) => {
   }
 
   if (e.key === 'Escape') {
+    if (desktopBridge?.isFullscreen && desktopBridge?.exitFullscreen) {
+      const isFullscreen = desktopBridge.isFullscreen
+      const exitFullscreen = desktopBridge.exitFullscreen
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      void isFullscreen().then(async isFull => {
+        if (isFull) {
+          await exitFullscreen()
+          return
+        }
+        emit('close')
+      }).catch(() => emit('close'))
+      return
+    }
     if (isVideo.value && desktopBridge) {
       const bridge = desktopBridge
       e.preventDefault()
@@ -582,6 +596,15 @@ const handleKeydown = (e: KeyboardEvent) => {
     emit('close')
     e.preventDefault()
     e.stopImmediatePropagation()
+  }
+
+  if (e.key === 'F11') {
+    if (desktopBridge?.toggleFullscreen) {
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      void desktopBridge.toggleFullscreen().catch(() => {})
+      return
+    }
   }
 
   if (e.key === 'ArrowRight') {

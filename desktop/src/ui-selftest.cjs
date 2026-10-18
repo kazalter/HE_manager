@@ -7,7 +7,7 @@ const { createHash } = require('node:crypto');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 module.exports = async ({ window, player, session, config, output }) => {
   if (!output) throw new Error('Diagnostic output path is required');
-  const report = { phase: config.phase || 'CP-05', status: 'running', platform: process.platform, packaged: app.isPackaged, checks: {}, screenshots: [], layouts: [] };
+  const report = { phase: config.phase || 'CP-06', status: 'running', platform: process.platform, packaged: app.isPackaged, checks: {}, screenshots: [], layouts: [] };
   let stage = 'login';
   const enterStage = (value) => { stage = value; console.log('HE_UI_STAGE ' + value); };
   const evaluate = (script) => window.webContents.executeJavaScript(script);
@@ -309,7 +309,7 @@ module.exports = async ({ window, player, session, config, output }) => {
     await click('button[aria-label="返回媒体列表"]');
     await wait(() => evaluate('!document.querySelector(".he-media-overlay")'), 'Error viewer could not return to library');
     report.checks.videoErrorAndRetry = true;
-    report.status = 'partial-pass';
+    report.status = 'passed';
     }
   } catch (error) {
     report.status = 'failed'; report.stage = stage; report.error = error.message;

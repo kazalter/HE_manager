@@ -7,6 +7,7 @@ const {
   dialog,
   Menu,
   safeStorage,
+  screen,
 } = require("electron");
 const path = require("node:path"),
   fs = require("node:fs/promises"),
@@ -256,6 +257,21 @@ function registerIPC() {
     session.identity(source.generation);
     return { ...result, url: result.url + '?he_session=' + encodeURIComponent(source.generation) };
   });
+  handle("he:is-fullscreen", () => Boolean(window && !window.isDestroyed() && (window.isFullScreen() || window._heFullscreen)));
+  handle("he:toggle-fullscreen", () => {
+    if (window && !window.isDestroyed()) {
+      const target = !(window.isFullScreen() || window._heFullscreen);
+      window.setFullScreen(target);
+      return target;
+    }
+    return false;
+  });
+  handle("he:exit-fullscreen", () => {
+    if (window && !window.isDestroyed() && (window.isFullScreen() || window._heFullscreen)) {
+      window.setFullScreen(false);
+    }
+    return false;
+  });
 }
 async function protocolHandler(request) {
   const url = new URL(request.url);
@@ -365,6 +381,33 @@ async function createWindow(test = false) {
       if (outer.some((size, index) => size < minimum[index])) ownerWindow.setSize(Math.max(outer[0], minimum[0]), Math.max(outer[1], minimum[1]));
     } finally { adjustingMinimum = false; }
   }
+  function ensureWindowInVisibleBounds() {
+    if (ownerWindow.isDestroyed() || ownerWindow.isFullScreen() || ownerWindow._heFullscreen) return;
+    const bounds = ownerWindow.getBounds();
+    const displays = screen.getAllDisplays();
+    const visible = displays.some((display) => {
+      const area = display.workArea;
+      return (
+        bounds.x + bounds.width > area.x + 50 &&
+        bounds.x < area.x + area.width - 50 &&
+        bounds.y + bounds.height > area.y + 50 &&
+        bounds.y < area.y + area.height - 50
+      );
+    });
+    if (!visible) {
+      const primary = screen.getPrimaryDisplay().workArea;
+      ownerWindow.setPosition(
+        Math.max(primary.x, Math.min(primary.x + primary.width - bounds.width, bounds.x)),
+        Math.max(primary.y, Math.min(primary.y + primary.height - bounds.height, bounds.y))
+      );
+    }
+  }
+  const onDisplayChange = () => {
+    syncMinimumContent();
+    ensureWindowInVisibleBounds();
+  };
+  screen.on('display-metrics-changed', onDisplayChange);
+  screen.on('display-removed', onDisplayChange);
   // Native menus can attach after the first load on Windows. Recompute from
   // the current content area when the chrome or display metrics settle.
   ownerWindow.on('resize', syncMinimumContent);
@@ -410,6 +453,8 @@ async function createWindow(test = false) {
     }).finally(() => { if (!ownerWindow.isDestroyed()) ownerWindow.destroy(); });
   });
   window.on("closed", () => {
+    screen.removeListener('display-metrics-changed', onDisplayChange);
+    screen.removeListener('display-removed', onDisplayChange);
     window = null;
   });
   diagnosticStage('load-window');
@@ -463,26 +508,71 @@ app.whenReady().then(async () => {
   protocol.handle("he", protocolHandler);
   registerIPC();
   diagnosticStage('services-registered');
+  const isMac = process.platform === "darwin";
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
-      { label: "HE Manager", submenu: [{ role: "about" }, { role: "quit" }] },
+      ...(isMac
+        ? [
+            {
+              label: app.name,
+              submenu: [
+                { role: "about" },
+                { type: "separator" },
+                { role: "services" },
+                { type: "separator" },
+                { role: "hide" },
+                { role: "hideOthers" },
+                { role: "unhide" },
+                { type: "separator" },
+                { role: "quit" },
+              ],
+            },
+          ]
+        : [
+            {
+              label: "文件",
+              submenu: [{ role: "quit", label: "退出" }],
+            },
+          ]),
       {
         label: "编辑",
         submenu: [
-          { role: "undo" },
-          { role: "redo" },
-          { role: "copy" },
-          { role: "paste" },
-          { role: "selectAll" },
+          { role: "undo", label: "撤销" },
+          { role: "redo", label: "重做" },
+          { type: "separator" },
+          { role: "cut", label: "剪切" },
+          { role: "copy", label: "复制" },
+          { role: "paste", label: "粘贴" },
+          { role: "selectAll", label: "全选" },
+        ],
+      },
+      {
+        label: "视图",
+        submenu: [
+          { role: "reload", label: "重新加载" },
+          { role: "forceReload", label: "强制重新加载" },
+          { role: "toggleDevTools", label: "开发者工具" },
+          { type: "separator" },
+          { role: "resetZoom", label: "实际大小" },
+          { role: "zoomIn", label: "放大" },
+          { role: "zoomOut", label: "缩小" },
+          { type: "separator" },
+          { role: "togglefullscreen", label: "全屏" },
         ],
       },
       {
         label: "窗口",
         submenu: [
-          { role: "minimize" },
-          { role: "zoom" },
-          { role: "reload" },
-          { role: "toggleDevTools" },
+          { role: "minimize", label: "最小化" },
+          { role: "zoom", label: "缩放" },
+          ...(isMac
+            ? [
+                { type: "separator" },
+                { role: "front", label: "前置所有窗口" },
+                { type: "separator" },
+                { role: "window", label: "窗口" },
+              ]
+            : [{ type: "separator" }, { role: "close", label: "关闭" }]),
         ],
       },
     ]),
