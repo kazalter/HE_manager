@@ -1,0 +1,17 @@
+{
+  "status": "passed",
+  "platform": "darwin",
+  "version": "1.0.1",
+  "sourceModules": 19,
+  "uiFiles": 70,
+  "installedFiles": 557,
+  "archive": "HE-Manager-1.0.1-darwin-arm64.zip",
+  "archiveSha256": "0e4d21e345dec06c4adf33fea5b3b3e6ba0c929bb56512a049c8ac77d1ee6b99",
+  "checks": {
+    "testedUiAndHostMatchArchive": true,
+    "everyArchiveEntryMatchesTestedSignedApp": true,
+    "nativeModuleMatches": true,
+    "libmpvMatches": true,
+    "codeSignatureVerified": true
+  }
+}

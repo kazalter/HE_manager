@@ -17,6 +17,7 @@ const {
     staticPath,
     API_PATH,
     allowPermission,
+    allowScreenshotDownload,
   } = require("./policy.cjs"),
   { Player } = require("./player.cjs"),
   { EmbeddedPlayer } = require("./embedded-player.cjs"),
@@ -441,9 +442,14 @@ async function createWindow(test = false) {
         details.requestingUrl || origin || wc.getURL(),
       ),
   );
-  window.webContents.session.on("will-download", (event) =>
-    event.preventDefault(),
-  );
+  const downloadSession = ownerWindow.webContents.session;
+  const onDownload = (event, item, contents) => {
+    if (contents !== ownerWindow.webContents || !allowScreenshotDownload(item.getURL(), item.getMimeType(), item.getTotalBytes())) {
+      event.preventDefault(); return;
+    }
+    item.setSaveDialogOptions({ title: '保存视频截图', defaultPath: path.join(app.getPath('pictures'), path.basename(item.getFilename())) });
+  };
+  downloadSession.on('will-download', onDownload);
   window.on('close', (event) => {
     if (ownerWindow._heClosing) return;
     event.preventDefault(); ownerWindow._heClosing = true;
@@ -453,6 +459,7 @@ async function createWindow(test = false) {
     }).finally(() => { if (!ownerWindow.isDestroyed()) ownerWindow.destroy(); });
   });
   window.on("closed", () => {
+    downloadSession.removeListener('will-download', onDownload);
     screen.removeListener('display-metrics-changed', onDisplayChange);
     screen.removeListener('display-removed', onDisplayChange);
     window = null;

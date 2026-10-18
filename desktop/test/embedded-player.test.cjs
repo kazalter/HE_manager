@@ -114,3 +114,18 @@ test('fullscreen controls toggle and exit fullscreen window state', async () => 
   await player.stop();
 });
 
+
+test('aspect ratio validates input, applies to mpv and resets for a new source', async () => {
+  const { player, sessions } = fixture();
+  await player.open(null, { url: 'http://media/1' }, 'off');
+  await assert.rejects(player.control('aspect-ratio', NaN));
+  await assert.rejects(player.control('aspect-ratio', 999));
+  await player.control('aspect-ratio', 4 / 3);
+  assert.deepEqual(sessions[0].command.args, ['set', 'video-aspect-override', String(4 / 3)]);
+  assert.equal(player.state.aspectRatio, 4 / 3);
+  await player.control('aspect-ratio', 0);
+  assert.deepEqual(sessions[0].command.args, ['set', 'video-aspect-override', '-1']);
+  await player.open(null, { url: 'http://media/2' }, 'off');
+  assert.equal(player.state.aspectRatio, 0);
+  await player.stop();
+});

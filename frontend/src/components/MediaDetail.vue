@@ -42,6 +42,7 @@ const emit = defineEmits<{
 }>()
 
 const desktopPlayer = ref<InstanceType<typeof DesktopVideoPlayer> | null>(null)
+const desktopControlsVisible = ref(true), desktopFullscreen = ref(false)
 const currentMedia = ref<Media>(props.initialMedia)
 const currentPage = ref(0)
 const totalMangaPages = ref<number | null>(null)
@@ -83,6 +84,8 @@ const {
   toggleFullscreen,
 } = useMediaOverlayControls(isManga, isImage)
 
+const viewerFullscreen = computed(() => isFullscreen.value || (isVideo.value && desktopFullscreen.value))
+const viewerControlsVisible = computed(() => isVideo.value && desktopBridge ? desktopControlsVisible.value : showControls.value)
 const overlayHeader = ref<HTMLElement | null>(null)
 const isHeaderPointerOver = ref(false)
 const isHeaderFocusWithin = ref(false)
@@ -91,8 +94,8 @@ const setHeaderPointerOver = (over: boolean) => {
   isHeaderPointerOver.value = over
   syncHeaderInteraction()
 }
-const onHeaderFocusIn = () => {
-  isHeaderFocusWithin.value = true
+const onHeaderFocusIn = (event: FocusEvent) => {
+  isHeaderFocusWithin.value = !desktopBridge || (event.target as HTMLElement).matches(':focus-visible')
   syncHeaderInteraction()
 }
 const onHeaderFocusOut = (event: FocusEvent) => {
@@ -271,6 +274,7 @@ const recheckMedia = async () => {
 const removeMissingMedia = () => { discardTarget.value = { kind: 'media', target_id: currentMedia.value.id } }
 
 const handleVideoSequenceEnded = () => {
+  if (desktopBridge && playMode.value === 'loop') { void desktopPlayer.value?.restart(); return }
   if (playMode.value === 'order' || playMode.value === 'shuffle') {
     const next = nextVideo(props.allMedia, currentMedia.value.id, playMode.value)
     if (!next) return
@@ -391,6 +395,7 @@ watch(
 
 const {
   playMode,
+  togglePlayMode,
   setArtContainer,
   beginVideoLongPress,
   finishVideoLongPress,
@@ -695,7 +700,7 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
     <div v-if="!isAudio || currentMedia.is_missing" role="dialog" aria-modal="true" :aria-label="currentMedia.title" class="he-media-overlay fixed inset-0 z-[200] flex items-center justify-center">
       <div class="absolute inset-0 bg-black/80" @click="emit('close')"></div>
 
-      <div class="he-media-layout relative flex h-full w-full overflow-hidden bg-black" :class="{ 'is-video': isVideo, 'show-mobile-metadata': compact && showMetadataPanel }">
+      <div class="he-media-layout relative flex h-full w-full overflow-hidden bg-black" :class="{ 'is-video': isVideo, 'is-desktop-video': isVideo && !!desktopBridge, 'show-mobile-metadata': compact && showMetadataPanel }">
         <section class="relative flex min-w-0 flex-1 flex-col bg-black">
           <header
             ref="overlayHeader"
@@ -703,11 +708,12 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
             @mouseleave="setHeaderPointerOver(false)"
             @focusin="onHeaderFocusIn"
             @focusout="onHeaderFocusOut"
+            @mousemove="desktopPlayer?.revealControls()"
             :class="isAudio
               ? 'relative shrink-0 border-b border-white/10 bg-black opacity-100 translate-y-0'
               : [
                   'absolute inset-x-0 top-0 bg-gradient-to-b from-black/75 via-black/35 to-transparent',
-                  showControls || (isAutoAdvancing && !clickOnlyViewerControls)
+                  viewerControlsVisible || (isAutoAdvancing && !clickOnlyViewerControls)
                     ? 'opacity-100 translate-y-0'
                     : clickOnlyViewerControls
                       ? 'opacity-0 -translate-y-3 pointer-events-none'
@@ -761,7 +767,7 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
                 <span class="mx-0.5 h-5 w-px bg-white/15" aria-hidden="true"></span>
               </div>
               <button
-                v-if="!isFullscreen && !(compact && isVideo)"
+                v-if="!viewerFullscreen && !(compact && isVideo)"
                 type="button"
                 class="he-chrome-btn w-9 text-white/80 hover:bg-white/10 hover:text-white pointer-coarse:w-11"
                 :class="showMetadataPanel ? 'bg-white/10 text-white' : ''"
@@ -819,7 +825,7 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
             </div>
           </div>
 
-          <DesktopVideoPlayer ref="desktopPlayer" v-else-if="isVideo && desktopBridge" :url="videoUrl" :title="currentMedia.title" :start="currentMedia.progress || 0" :has-prev="hasPrevMedia" :has-next="hasNextMedia" @prev="prevMedia" @next="nextMedia" @progress="desktopProgress" />
+          <DesktopVideoPlayer ref="desktopPlayer" v-else-if="isVideo && desktopBridge" :url="videoUrl" :title="currentMedia.title" :start="currentMedia.progress || 0" :has-prev="hasPrevMedia" :has-next="hasNextMedia" @prev="prevMedia" @next="nextMedia" :play-mode="playMode" :header-active="isHeaderPointerOver || isHeaderFocusWithin" @cycle-mode="togglePlayMode" @chrome="desktopControlsVisible = $event" @fullscreen-change="desktopFullscreen = $event" @progress="desktopProgress" />
 
           <VideoPlayer v-else-if="isVideo" :cover-url="coverUrl" @ready="setArtContainer" />
 
@@ -848,7 +854,7 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
           />
 
           <MetadataPanel
-            v-if="isVideo && compact && !currentMedia.is_missing"
+            v-if="isVideo && compact && !viewerFullscreen && !currentMedia.is_missing"
             inline
             :media="currentMedia"
             :cover-url="coverUrl"
@@ -863,7 +869,7 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
             @remove-tag="removeTag"
           />
 
-          <div v-if="isVideo && !compact" class="video-summary min-[1100px]:hidden shrink-0 border-t border-line bg-background px-6 py-4">
+          <div v-if="isVideo && !compact && !viewerFullscreen" class="video-summary min-[1100px]:hidden shrink-0 border-t border-line bg-background px-6 py-4">
             <h3 class="truncate text-heading font-semibold text-ink" :title="currentMedia.title">{{ currentMedia.title }}</h3>
             <p class="mt-1 flex flex-wrap items-center gap-x-2 text-meta text-subtle tabular-nums">
               <span>{{ mediaTypeLabel }}</span>
@@ -882,7 +888,7 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
 
         <button v-if="compact && showMetadataPanel && showControls" type="button" class="he-metadata-scrim" aria-label="关闭媒体信息背景" tabindex="-1" @click="toggleMetadataPanel"></button>
         <MetadataPanel
-          v-if="!isFullscreen && showMetadataPanel && !(compact && isVideo) && (showControls || (!isManga && !isImage))"
+          v-if="!viewerFullscreen && showMetadataPanel && !(compact && isVideo) && (showControls || (!isManga && !isImage))"
           :media="currentMedia"
           :cover-url="coverUrl"
           :media-type-label="mediaTypeLabel"
@@ -938,4 +944,6 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
 @media (max-height: 650px) {
   .video-summary { display: none; }
 }
+.he-media-layout.is-desktop-video .he-viewer-header { position: absolute; background: linear-gradient(rgb(0 0 0 / .75), transparent); }
+.he-media-layout.is-desktop-video :deep(.he-video-stage) { flex: 1 1 0; aspect-ratio: auto; }
 </style>

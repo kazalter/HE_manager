@@ -389,6 +389,7 @@ export function useVideoPlayback(options: VideoPlaybackOptions) {
 
   return {
     playMode,
+    togglePlayMode,
     setArtContainer,
     beginVideoLongPress,
     finishVideoLongPress,

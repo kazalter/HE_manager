@@ -1,0 +1,17 @@
+{
+  "status": "passed",
+  "platform": "win32",
+  "version": "1.0.1",
+  "sourceModules": 19,
+  "uiFiles": 70,
+  "installedFiles": 210,
+  "archive": "HE-Manager-1.0.1-win32-x64.zip",
+  "archiveSha256": "92bc115ef5db506db0d24a9491057be9298daad378f69d24bc408f8604630ef6",
+  "checks": {
+    "testedHostMatchesSource": true,
+    "testedUiMatchesBuild": true,
+    "everyArchiveEntryMatchesTestedInstallation": true,
+    "nativeModuleMatches": true,
+    "libmpvMatches": true
+  }
+}

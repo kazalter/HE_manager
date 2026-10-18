@@ -84,3 +84,16 @@ test("only the bundled app can request fullscreen; other permissions stay denied
   ])
     assert.equal(allowPermission(permission, "he://app/"), false);
 });
+
+test('only bounded PNG blobs from the application can be saved as screenshots', () => {
+  const { allowScreenshotDownload } = require('../src/policy.cjs');
+  assert.equal(allowScreenshotDownload('blob:he://app/0123-abcd', 'image/png', 1024), true);
+  for (const [url, mime, size] of [
+    ['https://example.test/frame.png', 'image/png', 1024],
+    ['blob:https://example.test/123', 'image/png', 1024],
+    ['blob:he://app.evil/123', 'image/png', 1024],
+    ['blob:he://app/123', 'application/octet-stream', 1024],
+    ['blob:he://app/123', 'image/png', 65 * 1024 * 1024],
+    ['blob:he://app/123', 'image/png', NaN],
+  ]) assert.equal(allowScreenshotDownload(url, mime, size), false);
+});

@@ -1,0 +1,334 @@
+{
+  "phase": "Player-UI-1.0.1",
+  "status": "passed",
+  "platform": "darwin",
+  "packaged": true,
+  "checks": {
+    "directConnectivity": true,
+    "loginAndLibrary": true,
+    "desktopAuthentication": true,
+    "playerLoopSameSession": true,
+    "screenshotDownload": true,
+    "playerChrome": true,
+    "playerControls": true
+  },
+  "screenshots": [
+    "mac-ui-result-controls-visible.png",
+    "mac-ui-result-controls-1024.png",
+    "mac-ui-result-controls-1280.png",
+    "mac-ui-result-settings.png",
+    "mac-ui-result-fullscreen-paused.png",
+    "mac-ui-result-fullscreen-hidden.png",
+    "mac-ui-result-fullscreen-revealed.png"
+  ],
+  "layouts": [
+    {
+      "scene": "player",
+      "width": 1024,
+      "height": 640,
+      "controlsFit": true
+    },
+    {
+      "scene": "player",
+      "width": 1280,
+      "height": 800,
+      "controlsFit": true
+    }
+  ],
+  "sourceSha256": {
+    "baseline.cjs": "077dfbeefb61aeef7d7ef18ddc9ca9d4574f783ae65312de9568df53f491c98b",
+    "close-flush.cjs": "d704ed3c70a58f587a17c7b497244740e2fbeaf5399fcb2a9c4cc50ab453a4ef",
+    "credential-store.cjs": "ede6e98ba05b556c219e46e53274922fbbd1e63f5264ecb3b7871dc54d4c54b4",
+    "diagnostic-profile.cjs": "682d5ab8c7c07f668fd050f4db0e55de322fe22e305b5a69d06490c42e1db4e7",
+    "embedded-player.cjs": "41e06e89d0f93bc081ee729fb9cb7554f9bc6c8b0369b07c03a43942f8413259",
+    "images.cjs": "9298c01d0cb61832b0c07edae000ee3beab0d3d6b4c247fcad5336bb976c9291",
+    "lifecycle.cjs": "bde04cc72d636f413d5b6adafd1dd6986a70be382b3400d38cb4d85860f25c53",
+    "main.cjs": "5ee2054c628358d53c7c990f74481b43b1af08f85b438ea3cec9603abe352fd8",
+    "media-queue.cjs": "44ce4a469fff72794ee8b14992c44315ba19ca1f20ba5b988388444a23bbd08b",
+    "native-selftest.cjs": "91d9798f91a769cfdfeb8fd11928ecde587b66140bd38c4828eb14dba5fef1fd",
+    "player-session.cjs": "958b65e3ed9a81e4afd823d27874a4d8867802aaf7d4e0b86a09502018adff19",
+    "player.cjs": "880d607d1fd9f7c2cdd06a328bdfa4597999c675e7b151697ca6fc87c4ab4811",
+    "policy.cjs": "f838dad4668cc054194f78d62c62df934f43fab9ee1c0267828bfb513f9b01f3",
+    "preload.cjs": "dcf146a133ae8d7df2e323b2a76563b0ca9994beb445ef231fc41c1d0f1c9a20",
+    "progress-outbox.cjs": "0ff72ae0eef13472846850fd56adbc50189cda65c3b1d86dc89b19cc803cd499",
+    "session.cjs": "53cdc645249b19dcbf580972dcd731115fbef9d6975f78ee7e7aafce118ed5d6",
+    "ui-lifecycle-selftest.cjs": "af8c2ddc4c561aa6b3de70b9a4f673890f74d586da997c5593b06b5685038af4",
+    "ui-player-selftest.cjs": "3f2338d86f18af5d345bcf060f3aa1e19dd3e4efb197b76380881bf3c37a5c68",
+    "ui-selftest.cjs": "22b4b1873db847243d656898deab00a94919617b09810ee781326971dcd85556"
+  },
+  "version": "1.0.1",
+  "electron": "44.8.0",
+  "uiSha256": {
+    "app-icons/he-180.png": "a8a21a323117abf1e1b1335b71fd0f3f9bfded0b6354d9f4aa39a7b0f91541c4",
+    "app-icons/he-192.png": "0493c8d75227b49d0f7e1bb40ef3081da87c9577260de1365c1ccfe360d0c0eb",
+    "app-icons/he-512.png": "7cf06e0768770ca1d3191cc4993d415639d80078774d7a0cf5b496b18ab2ce59",
+    "app-icons/he-maskable-512.png": "7cf06e0768770ca1d3191cc4993d415639d80078774d7a0cf5b496b18ab2ce59",
+    "app-icons/he.svg": "02dccd9882b87e270871e0de2ce48aa9cbda0254df7ab149f407391883174b2b",
+    "assets/_plugin-vue_export-helper-DAAOZMkq.js": "27e87fe62aa760227b7529576953d8314891fd2aec28e0a3f03aece406f2d7d7",
+    "assets/artplayer-BhDQXST_.js": "6070ba92141ea9d434772a45d0dc1f1d00c23df2d74c7e834ef55b651d9b91ca",
+    "assets/AssistantView-0Vsh1cnz.css": "fdff26d2586a2c49bc3723b45eda2b9b0ea73abc6b1366b474c810e9ccee9a58",
+    "assets/AssistantView-DyZLgJQT.js": "2633cd65d202ab3deb15fa733ed10193b0e47b0a25e099d6f305646261a2abc1",
+    "assets/asyncComponents-DAIJR0rY.js": "4bfca91e722b632eaf1d5fe34cd4ac90531486facf60ead685066ef19a064a4f",
+    "assets/audioPlaybackStore-G_aDA0df.js": "47ad31b40b244ed547eacf124136f6712ad9acd7bc3c2212c9bc012960d091cf",
+    "assets/AudioPlayer-C3AmQIv0.js": "74d87accc3bd0093f65c694ec2828771c80c5cbc2f305457f4e88c829ece1d08",
+    "assets/AudioPlayer-DjYls7nJ.css": "d43854e4af284f0d88b6883f22d7b35dc690136df420633cf912f638f6e74d15",
+    "assets/auth-BoBSMsPn.js": "62ced839f8b3bc98a3b61423be63cb78a70efe2217792569edfd549e65ab487c",
+    "assets/Bd2SpineView-D96Myedq.js": "37de9aa4746334e22d3f4b1752afb0986575529abeeb74770bf9374190fdae7e",
+    "assets/Bd2SpineView-h6J9uggk.css": "1e400654004f2473e1dbfe4211d68d3610a2de65c93478049e91f85ce95d6776",
+    "assets/ColorModeSelect-Bcc5ZJLa.js": "59eb2bb6ae38dfc0e8e993d93d4c81b2e7d5c6a97c86dfdf9bec82a8b5ae5777",
+    "assets/config-DSxBuEdL.js": "bee09dd7516435fb682cad118a790b40ce09c7f1407b1b80e2adc44e3b535c56",
+    "assets/CreatorsView-BnV0YWk3.js": "60246b11aeb01ebe7a5d45f5970220528da5c8621a3b991d1834b21cc825f94f",
+    "assets/DedupView-DoA1zg12.js": "11730bc99397792920dae085cf1116a047d21b5ab9738b055f46f555ce7ca775",
+    "assets/desktopScopedStore-B9IICEcH.js": "4f240f4a3dae6d4dfab4cb26838c0a66ca9bdcab9a3942c9dd6a48d53dc2ec3b",
+    "assets/discardApi-C6u28JWw.js": "54cdef25ccbb004a2ec94cbf2b56ea3f12a328a220b8ca9934296adb99ae8703",
+    "assets/DiscardContentDialog-CE-ywWMq.js": "96b9979d4e37ce0e17ee455cfa5bf1f0a87e394029e6843e30dc3c938d0c8b85",
+    "assets/DiscardedView-JIQq3txW.js": "820b6901b796d2baf98da60d19b5ca518f72b3e6d4b5d4c3edca450828ac498c",
+    "assets/DownloadsView-DRbuknqZ.css": "6f247cec264738d7f130ba43c1f46d5024592e4e07a620ae5ff1ac1f994e2e78",
+    "assets/DownloadsView-OI-vYQ7O.js": "32bce8a3a7d4e783f3262e3f3722baf7d4d1433792e544e3c873eab7e45b8e40",
+    "assets/EmbedSpineView-BVKvaPhS.css": "367cfdba6b05f9aaa368b8aaec99c4a12337db98bbd8e36bb8c5f0d4093c4746",
+    "assets/EmbedSpineView-C3K265AV.js": "64d978e6af570583ee65b185f273ce0508adda2c5e7db95d8f76c2a8ea8802a1",
+    "assets/ExternalFavoritesView-BbdHSGDG.js": "2496d436942efd3e850d6ca73803c307822126438b3279352c4b9c41c42bb33a",
+    "assets/ExternalFavoritesView-DjMKxjoY.css": "f90fecb2ec120402d9b3a56a76e04adf4d689ea382ed31243e26e3722ba88c6e",
+    "assets/index-BenrYfY2.js": "e38716b6bc0c9a0eb9e7985e2d1f5c00ccd738c519106f4a07111f15150582b0",
+    "assets/index-CF_qosNY.css": "451a41d73d6a4c497632db116703db407d93091de1298d7fed0a996e17fbb207",
+    "assets/inter-latin-wght-normal-Dx4kXJAl.woff2": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+    "assets/lucide-icons-C4HUleis.js": "9b71904fbfda6bf432599da36e3a007a32c30a7ba0a1354a895013d7ac22d2b8",
+    "assets/MangaRecommendView-BmKEnVoN.js": "be66eec564cae2807de6eda25f91ce523b4ec5f3fb23500e3092677cdbdaf41c",
+    "assets/media-placeholder-BE0xZWKB.js": "24400c3b45c521ba24ff53b5c8994eb70daf5f428a0f7170c1cc7151af2c408c",
+    "assets/media-placeholder-D6AyOhIP.svg": "5d292f3b051479328e5289adb2577661d3951fbfd7480a8e5e7a5dee45889a6b",
+    "assets/MediaCard-CtfKUmmv.js": "b53df0eefc4e06b483efb70b555758ae976043f5bf1b997a81d40558d483f194",
+    "assets/MediaCard-DUzfBGHk.css": "11d52be45c3848c6fe0f3c5b3d3ebd8efcafbdadb46e9c33bd08f077f1d1031f",
+    "assets/MoreView-BF_akiUq.js": "44ccd9f43e99eba40c19776bd019d62ff90a127f0b283eacfcc5f4d7009c335f",
+    "assets/PaginationControl-Ba5FgzMK.js": "9060167a141c2f7e34025bd8b44cc0d40ff80a79ef6b978aae69b6e2720d0c64",
+    "assets/PaginationControl-Cy7Yr0bi.css": "f9548072fc6ec34ffcdc045abfb4ecdd3fe3bd7daafe49a3b7aaf241fb296485",
+    "assets/PawchiveDownloads-TRHojAfE.js": "a07290ba707499a2cbea2eb0adc82a73d5387ac99d0aa201ea6bbce0b4717263",
+    "assets/preload-helper-qlgyTAkD.js": "0c88c6aaef07b19239a2eac9faef82584f9e733114f85dc190e98dcea60b1753",
+    "assets/rolldown-runtime-lhHHWwHU.js": "a526d1bb3288ef04d001028843220a24b0867a4edf8c685b69506d6525af36ff",
+    "assets/SettingsView-3hag0-mQ.css": "002dd27dff8c50161e22b97be5e24b373dba5ca884cf5634ce08952c246ed92e",
+    "assets/SettingsView-YMbYGpK4.js": "daeb093211326a2fc62358a57114caf76a5e8090460caf5cb009fdea6b56811b",
+    "assets/spine-player-Ci7d0mHH.js": "1e565affbb903fa2d8b6f40c7726ae7f88c7fcb4bda8c03438a2c880eb87c3ba",
+    "assets/spine-player-DA1bLauS.css": "3683eea212eeac14a258a4c0904b9c5dd4a739f343437c14120014030633f087",
+    "assets/StatsView-CZGVuSYc.js": "fa222a8a8dfb3905c063199076c7ed8df928b579240ef10e279324dd5bc3a439",
+    "assets/StatsView-LTP7yO93.css": "bbe4f66eb4d8eac2a979a6e366daea6a8dd52ec8ac27dbc0977a72eea46d1fa4",
+    "assets/TagsView-B0HnfnTO.css": "c41ddbb8bb5270f5063dfe8ba4ac19c87ff01698fab547c401f4d5b7432bb02f",
+    "assets/TagsView-cTNnOu98.js": "befba53fe633754b88110ff967e6d37926dd90291da5e31be3eff57119c988a3",
+    "assets/ThemeSelect-oESqtx12.js": "316ae0b14f3739551e18be84e71ac1c21b8e3bba8b17456389c9b98bf7b9519f",
+    "assets/ui-CEw8T23S.css": "4a5d49cb315a5eaaf4d34b20f34e84d26fbf17e2e4d45af089d64cc77e0e7673",
+    "assets/ui-wZMUWFXC.js": "48e4c2a20a026a08a7acccb1e158fe52a2353bc1e7d405285ec02bfa18fdbba8",
+    "assets/useCompactViewport-UtcMKN2G.js": "a5d70176ee6c1620a8966410c0efe8e459e137ce322a778dc07b44b9de254b68",
+    "assets/useImageViewerZoom-0q_9UxDG.js": "b53d5087a25611ed301f768dcd056f7885de20192affb6a95926896ef49a3a60",
+    "assets/UsersView-COYubGt3.js": "e8fadd22a0c702c2ac912ed533a8641581ca140e9b03ea5da9ceac1700caa951",
+    "assets/vendor-core-Jmp8nOdf.js": "c2cd2071b038206619319cd2d9a880f057a1fa6b3dc13d9aea2d2bc477c161e4",
+    "assets/VerifiedMediaDetail-CMoZPczI.css": "5ef39179163dc6574950db6c878e287574ccde62414babd5eb350ee453d4e48a",
+    "assets/VerifiedMediaDetail-x9xk7TXn.js": "150f30d74fb8345abb8f8f55711b9f9599ebe7f97c1e5cbfd5a113c696bfc569",
+    "favicon.png": "558d30d5f6e169c8369694b1e70b1e62b66c4c90655528007d37b4cee954aa05",
+    "favicon.svg": "61bc9a161de58248288e6905425d7180f0624c2865007b97d763fdac12043a66",
+    "icons.svg": "b45fa506195cfcdef406ba9f0c77b36ddc1a7c224040926ec70abc2fdea7b93a",
+    "index.html": "08801fb95384e86d7cda2ac240864d014f18f438af4d3bc407b2b04ae6964537",
+    "logo.png": "558d30d5f6e169c8369694b1e70b1e62b66c4c90655528007d37b4cee954aa05",
+    "manifest.webmanifest": "d0b9fcde9d1243f840b4a949b777502b8a5786e9099d588885f9d46d1c789002",
+    "theme-init.js": "ef8ccfe269ff32cbff85594704bc43e637ae09a852d9dcf9b035a3c793182c5b",
+    "version.json": "3b664b90ea15312bd1b883a69c166cf9627520043bfdf8a9c061c43165ea3ad4"
+  },
+  "nativeBuild": {
+    "platform": "darwin-arm64",
+    "electron": "44.8.0",
+    "nodeAPI": 8,
+    "minimumMacOS": "15.0",
+    "compiler": "Apple clang version 21.0.0 (clang-2100.3.34.2)",
+    "sourceSha256": {
+      "embedded.cpp": "363d222860175a5ee6e8369356eccd9679cd557f5e1ec2f1121dc6ae5bf95586",
+      "surface.h": "8ba5ccc8555e797a641fb20e7f3df22f937b9ec19fd9d2cc48cc06ef5cbc2176",
+      "header-lock.json": "6c22449a6775118927c9a0266f392c2bac6579570547b54ad62589c22403517b",
+      "build-macos.py": "55ece82f8b601edfca2c5cfda9ac99d5196287fec7b540c9de37120eb8766703"
+    },
+    "addonSha256": "218deb899916dfbf0b8086a3fbe39f94e24b0e6a6a42ff608a7fda77ff930d61"
+  },
+  "nativeSha256": "218deb899916dfbf0b8086a3fbe39f94e24b0e6a6a42ff608a7fda77ff930d61",
+  "librarySha256": "907b745dd5b8329ef8f420f330180fc4f15df184e982a8e983f2ba8243aba1ad",
+  "authentication": {
+    "persistent": true,
+    "noPageToken": true,
+    "encryptedFile": true,
+    "systemRoundTrip": true,
+    "scopedResources": true
+  },
+  "testScheduling": "background-throttling-disabled-for-window-capture",
+  "settingsExit": {
+    "keys": [
+      {
+        "key": "Escape",
+        "target": "SECTION",
+        "modal": true
+      }
+    ],
+    "modal": true,
+    "active": "BUTTON",
+    "hidden": false
+  },
+  "hiddenChrome": {
+    "controls": "0",
+    "header": "0",
+    "inert": true,
+    "cursor": "none"
+  },
+  "closedPlayer": {
+    "stopped": true,
+    "surfaces": 0,
+    "leases": 0,
+    "references": 0
+  },
+  "httpRequests": [
+    {
+      "method": "GET",
+      "path": "/auth/status",
+      "hasBearer": false
+    },
+    {
+      "method": "GET",
+      "path": "/auth/status",
+      "hasBearer": false
+    },
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "hasBearer": false
+    },
+    {
+      "method": "GET",
+      "path": "/media",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/media",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/thumbnails/cp02-landscape.png",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/thumbnails/cp02-portrait.png",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "POST",
+      "path": "/system/recheck-missing",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "GET",
+      "path": "/tags",
+      "hasBearer": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/media/1",
+      "hasBearer": true
+    }
+  ],
+  "capturedAt": "2026-10-18T12:29:49.055Z"
+}

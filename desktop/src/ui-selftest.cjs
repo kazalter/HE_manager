@@ -115,7 +115,11 @@ module.exports = async ({ window, player, session, config, output }) => {
     };
     if (!Object.values(report.authentication).every(Boolean)) throw new Error('Desktop authentication integration failed');
     report.checks.desktopAuthentication = true;
-    if (config.lifecycleStep) {
+    if (config.playerUiOnly) {
+      enterStage('player-ui');
+      await require('./ui-player-selftest.cjs')({ window, player, config, report, evaluate, wait, click, field, capture, key, output });
+      report.status = 'passed';
+    } else if (config.lifecycleStep) {
       await require('./ui-lifecycle-selftest.cjs')({ window, player, session, config, report, evaluate, wait, click, field, capture, enterStage });
       report.status = 'partial-pass';
     } else {
@@ -165,7 +169,7 @@ module.exports = async ({ window, player, session, config, output }) => {
     report.shaderModes = [];
     for (const mode of ['efficiency', 'quality', 'off']) {
       const frames = player.native.state(player.owner).renderedFrames;
-      await evaluate(`(() => {const field=document.querySelectorAll('.ui-modal select')[3];field.value=${JSON.stringify(mode)};field.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+      await evaluate(`(() => {const field=document.querySelector('.ui-modal select[aria-label="画面增强"]');field.value=${JSON.stringify(mode)};field.dispatchEvent(new Event('change',{bubbles:true}));})()`);
       const matches = (passes) => mode === 'off' ? !/Anime4K/i.test(passes)
         : mode === 'quality' ? /Restore-CNN-\(VL\)/i.test(passes)
           : /Restore-CNN-\(M\)/i.test(passes) && !/Restore-CNN-\(VL\)/i.test(passes);

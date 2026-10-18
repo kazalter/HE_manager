@@ -16,6 +16,7 @@ export interface DesktopPlayback {
   running: boolean; paused: boolean; position: number; duration: number; droppedFrames: number
   hwdec: string; ended: boolean; mode: VideoEnhancement; error: string
   loading: boolean; buffering: boolean; tracks: DesktopTrack[]; aid: string; sid: string
+  aspectRatio?: number
   speed: number; volume: number; generation: number; fullscreen: boolean
 }
 export interface PlayerSessionState {
@@ -27,7 +28,7 @@ export interface PlayerSessionState {
   videoDuration: number
   videoDroppedFrames: number
 }
-export type DesktopVideoAction = 'pause' | 'seek' | 'seek-to' | 'fullscreen' | 'exit-fullscreen' | 'audio-track' | 'subtitle-track' | 'speed' | 'volume'
+export type DesktopVideoAction = 'pause' | 'seek' | 'seek-to' | 'fullscreen' | 'exit-fullscreen' | 'audio-track' | 'subtitle-track' | 'speed' | 'volume' | 'aspect-ratio'
 export interface DesktopBridge {
   configuration(): Promise<DesktopConfiguration>
   authentication(): Promise<DesktopSessionSnapshot>
@@ -42,7 +43,7 @@ export interface DesktopBridge {
   setPreferences(value: { videoMode: VideoEnhancement; imageMode: ImageEnhancement }): Promise<DesktopConfiguration>
   openVideo(value: { url: string; start: number; title: string }): Promise<DesktopPlayback>
   controlVideo(action: 'pause' | 'fullscreen' | 'exit-fullscreen'): Promise<DesktopPlayback>
-  controlVideo(action: 'seek' | 'seek-to' | 'audio-track' | 'subtitle-track' | 'speed' | 'volume', value: number): Promise<DesktopPlayback>
+  controlVideo(action: 'seek' | 'seek-to' | 'audio-track' | 'subtitle-track' | 'speed' | 'volume' | 'aspect-ratio', value: number): Promise<DesktopPlayback>
   videoState(): Promise<DesktopPlayback>
   stopVideo(generation?: string): Promise<void>
   notifyAudioStart?(options?: { mediaId?: number; title?: string; url?: string; trackIndex?: number }): Promise<void>

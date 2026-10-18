@@ -90,7 +90,12 @@ function allowPermission(permission, frameUrl) {
     return false;
   }
 }
+function allowScreenshotDownload(url, mime, bytes) {
+  return typeof url === 'string' && /^blob:he:\/\/app\/[a-z0-9-]+$/i.test(url)
+    && mime === 'image/png' && Number.isFinite(bytes) && bytes >= 0 && bytes <= 64 * 1024 * 1024;
+}
 module.exports = {
+  allowScreenshotDownload,
   serverUrl,
   mediaRequest,
   staticPath,

@@ -1,4 +1,4 @@
-# HE Manager 跨平台桌面客户端 (v1.0.0 正式发布版)
+# HE Manager 跨平台桌面客户端 (v1.0.1)
 
 HE Manager 跨平台桌面客户端，基于 **Vue 3 + TypeScript + Vite + Tailwind + Electron** 架构构建，专为 macOS Apple Silicon (arm64) 与 Windows 11 (x64) 双平台设计。
 
@@ -17,6 +17,7 @@ HE Manager 跨平台桌面客户端，基于 **Vue 3 + TypeScript + Vite + Tailw
   - 上一项 / 下一项媒体快速切换；
   - 音轨与字幕通道切换、0.5x～2.0x 倍速调节；
   - 音量调节与静音控制。
+- **Web 风格控制层**：闲置自动隐藏，鼠标移动唤回，暂停/调节时保持可见；提供四种播放模式、直接音量/倍速、画面比例与 PNG 截图保存。
 - **Anime4K 着色器实时增强**：原画（off）、效率（efficiency）、质量（quality）三档切换。
 - **掉帧率核验**：典型 1080p / 4K 播放维持 0 丢帧，资源占用可控。
 
@@ -74,6 +75,8 @@ HE Manager 跨平台桌面客户端，基于 **Vue 3 + TypeScript + Vite + Tailw
 | 全屏切换 | `F11` (Win) / `Ctrl+Cmd+F` (Mac) | 视频、漫画阅读、全应用 |
 | 快进 10 秒 / 下一页 | `→` (方向右键) | 视频 / 漫画 |
 | 快退 10 秒 / 上一页 | `←` (方向左键) | 视频 / 漫画 |
+| 静音切换 / 音量 | M / ↑、↓ | 视频画布聚焦时 |
+| 视频全屏切换 | F | 视频画布聚焦时 |
 | 放大画面 | `+` / `Ctrl + 滚轮向上` | 漫画阅读器 / 图片查看 |
 | 缩小画面 | `-` / `Ctrl + 滚轮向下` | 漫画阅读器 / 图片查看 |
 | 重置缩放 / 适应屏幕 | `0` / 双击画面 | 漫画阅读器 / 图片查看 |
@@ -107,15 +110,16 @@ npm run build:ui
 ```sh
 # 打包 macOS Apple Silicon (arm64)
 npm run package -- darwin
-./scripts/sign-macos.sh desktop/release/HE-Manager-1.0.0-darwin-arm64.zip
+bash scripts/sign-macos.sh "release/HE Manager-darwin-arm64/HE Manager.app"
+python3 scripts/archive.py "release/HE Manager-darwin-arm64" "release/HE-Manager-1.0.1-darwin-arm64.zip" darwin
 
 # 打包 Windows (x64)
 npm run package -- win32
 ```
 
 产物输出于 `desktop/release/`：
-- `HE-Manager-1.0.0-darwin-arm64.zip`
-- `HE-Manager-1.0.0-win32-x64.zip`
+- `HE-Manager-1.0.1-darwin-arm64.zip`
+- `HE-Manager-1.0.1-win32-x64.zip`
 
 ---
 
@@ -129,3 +133,5 @@ npm run package -- win32
 - CP-05 阅读与超分：[`reports/CP-05-complete.md`](reports/CP-05-complete.md)
 - CP-06～07 平台收敛与最终交付：[`reports/CP-06-07-complete.md`](reports/CP-06-07-complete.md)
 
+
+- v1.0.1 播放器 UI 对齐：[验收记录](reports/player-ui-1.0.1.md)

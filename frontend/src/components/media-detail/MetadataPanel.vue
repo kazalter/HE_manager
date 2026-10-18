@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
 import { Plus, Star, X } from 'lucide-vue-next'
+import { desktopBridge } from '../../desktop'
 import { API_BASE_URL } from '../../config'
 import type { Media, Tag } from '../../types'
 import { buttonClass, controlClass, iconButtonClass, menuItemClass, popoverClass } from '../ui'
@@ -247,7 +248,7 @@ const onTagInputBlur = () => {
       <p class="mb-1 font-medium text-muted">快捷播放</p>
       <p>
         <kbd class="he-kbd">←</kbd> / <kbd class="he-kbd">→</kbd>
-        短按跳转 10 秒，长按快退 / 2× 快进
+        <template v-if="desktopBridge">跳转 10 秒 · 空格/K 播放暂停</template><template v-else>短按跳转 10 秒，长按快退 / 2× 快进</template>
       </p>
     </section>
   </aside>

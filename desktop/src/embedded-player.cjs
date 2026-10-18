@@ -4,7 +4,7 @@ const { shaderFiles } = require('./policy.cjs');
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const idle = () => ({ running: false, paused: true, position: 0, duration: 0, droppedFrames: 0,
   hwdec: '', ended: false, mode: 'off', error: '', loading: false, buffering: false,
-  tracks: [], aid: '', sid: '', speed: 1, volume: 75, generation: 0, fullscreen: false });
+  tracks: [], aid: '', sid: '', speed: 1, volume: 75, generation: 0, aspectRatio: 0, fullscreen: false });
 
 class EmbeddedPlayer {
   constructor({ root, sharedTexture, getWindow, native, platform = process.platform, arch = process.arch }) {
@@ -132,6 +132,10 @@ class EmbeddedPlayer {
     } else if (action === 'speed') {
       if (![0.5, 0.75, 1, 1.25, 1.5, 2].includes(value)) throw new Error('无效的播放速度。');
       command = ['set', 'speed', String(value)];
+    } else if (action === 'aspect-ratio') {
+      if (![0, 16 / 9, 4 / 3].includes(value)) throw new Error('无效的画面比例。');
+      this.snapshot.aspectRatio = value;
+      command = ['set', 'video-aspect-override', value === 0 ? '-1' : String(value)];
     } else if (action === 'volume') {
       if (!Number.isFinite(value) || value < 0 || value > 100) throw new Error('无效的音量。');
       this.volume = value; this.snapshot.volume = value; command = ['set', 'volume', String(value)];
