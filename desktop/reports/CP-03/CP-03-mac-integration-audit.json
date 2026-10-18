@@ -1,31 +1,35 @@
 {
   "phase": "CP-03",
-  "scope": "Mac packaged authentication and shared media scene checkpoint f5df576; final navigation flush addition, full business/identity matrix and matching final Windows payload still pending",
-  "status": "partial-pass",
-  "sourceRevision": "f5df57630f3cc2d03b3c4ea1f4b96d77a61b4777",
-  "reportSha256": "53f20dad04fc4a2a5ea76008c99210bbc6ae9321c0e925e0250b04dd894e769d",
-  "archive": "HE-Manager-0.3.0-mac-checkpoint-f5df576.zip",
-  "archiveSha256": "1098e97d5fc8c911bc9d028235da3dad1fd282df1f4c0d028d977c52e99cd401",
-  "archiveFiles": 551,
-  "hostFiles": 13,
-  "uiFiles": 70,
+  "scope": "Mac packaged authentication, media scenes, normal-close flush and restored login verified against isolated Linux fixture",
+  "status": "passed",
+  "sourceRevision": "6bef11cfcb7e0be8ca83d09a7fcbe84d85834b95",
+  "reportSha256": "5a5f57438eb667fdfc03a24a76219fffba8cdf14f180c609fe4f8cb89f186202",
+  "archive": "HE-Manager-0.3.0-darwin-arm64.zip",
+  "archiveSha256": "b3b574954d9526b7c8880d116ef61e11d107e60db4cb4ffc03580a20bebf9f45",
+  "archiveFiles": 579,
+  "hostFiles": 17,
+  "uiFiles": 92,
   "checks": 20,
   "layouts": 12,
   "screenshots": 17,
   "sourceSha256": {
     "baseline.cjs": "077dfbeefb61aeef7d7ef18ddc9ca9d4574f783ae65312de9568df53f491c98b",
+    "close-flush.cjs": "d704ed3c70a58f587a17c7b497244740e2fbeaf5399fcb2a9c4cc50ab453a4ef",
     "credential-store.cjs": "ede6e98ba05b556c219e46e53274922fbbd1e63f5264ecb3b7871dc54d4c54b4",
+    "diagnostic-profile.cjs": "682d5ab8c7c07f668fd050f4db0e55de322fe22e305b5a69d06490c42e1db4e7",
     "embedded-player.cjs": "832cd7da3242432f718fbd8fc8ae43cecc7e9d396a1e9bb57679be3d03a3ab77",
     "images.cjs": "b051c1848226ced84faf38d9ca46fe6cdc845213162dab55c740334a84f0c527",
     "lifecycle.cjs": "bde04cc72d636f413d5b6adafd1dd6986a70be382b3400d38cb4d85860f25c53",
-    "main.cjs": "dd8de2d5b577a2d5014ef4345d3402dce21b3d2d31472786ff5ecf5aeeaad0a1",
-    "media-queue.cjs": "79d61c0c5cdaeb18cf08c767386f0bf227e5b2a3d88415186101654ac0148ff0",
+    "main.cjs": "f0e225d6d4e0650a5df966f1a423345700909131b356cbc7db88bbd4dd5f4c7a",
+    "media-queue.cjs": "44ce4a469fff72794ee8b14992c44315ba19ca1f20ba5b988388444a23bbd08b",
     "native-selftest.cjs": "91d9798f91a769cfdfeb8fd11928ecde587b66140bd38c4828eb14dba5fef1fd",
     "player.cjs": "880d607d1fd9f7c2cdd06a328bdfa4597999c675e7b151697ca6fc87c4ab4811",
     "policy.cjs": "ef9925873c7e7eadb2244e06c04cb1ed408ea0969a4e2d531f38afa63d9cfc66",
-    "preload.cjs": "4a04c1d0bfe42e1b0d9a64901b321091e4f45473486682becd09f706848a39b2",
-    "session.cjs": "5125683fb83d6da828bec3a2f1d23805c4ffbf1c98456a96908cd23bf247d63b",
-    "ui-selftest.cjs": "3732bedd08d04b56cbde100431787e2d37a3031aba43f3e2e7072a7b11f7d1a7"
+    "preload.cjs": "13e1261138591eef0f35ff7ddf184b0503ce033af994eab814eef2ca176e5f79",
+    "progress-outbox.cjs": "0ff72ae0eef13472846850fd56adbc50189cda65c3b1d86dc89b19cc803cd499",
+    "session.cjs": "53cdc645249b19dcbf580972dcd731115fbef9d6975f78ee7e7aafce118ed5d6",
+    "ui-lifecycle-selftest.cjs": "af8c2ddc4c561aa6b3de70b9a4f673890f74d586da997c5593b06b5685038af4",
+    "ui-selftest.cjs": "3887bd9dcf6649d0563bb446256210ecc8f4f4ec8f9190b08681cda6b9a80d28"
   },
   "authentication": {
     "persistent": true,
@@ -34,8 +38,15 @@
     "systemRoundTrip": true,
     "scopedResources": true
   },
+  "lifecycle": {
+    "closeSavedPosition": true,
+    "closeReleasedResources": true,
+    "closeRetainedLogin": true,
+    "restoredWithoutSubmission": true,
+    "restoredVideoPosition": true
+  },
   "nativeSha256": "218deb899916dfbf0b8086a3fbe39f94e24b0e6a6a42ff608a7fda77ff930d61",
   "librarySha256": "907b745dd5b8329ef8f420f330180fc4f15df184e982a8e983f2ba8243aba1ad",
   "imageEnhanced": true,
-  "capturedAt": "2026-10-18T04:08:57.295Z"
+  "capturedAt": "2026-10-18T05:33:37.793Z"
 }

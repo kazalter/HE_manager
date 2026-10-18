@@ -1,18 +1,34 @@
 {
   "phase": "CP-03",
-  "scope": "Windows packaged auth and CP-02 scene regression against isolated Linux FastAPI; full CP-03 acceptance pending",
-  "status": "partial-pass",
-  "sourceRevision": "a23ef491ab35414d7fd097b4ba74f916c6201381",
-  "reportSha256": "4f8656d22f6747d29ce2b99588a28066431931bdacf4dac4644e6bd726253155",
+  "scope": "Windows packaged authentication, media scenes, normal-close flush and restored login verified against isolated Linux fixture",
+  "status": "passed",
+  "sourceRevision": "6bef11cfcb7e0be8ca83d09a7fcbe84d85834b95",
+  "reportSha256": "5d657c79a795bde83a62b854e4a2ad06e7e31b3688a9d61875f546b38a61d6fb",
   "archive": "HE-Manager-0.3.0-win32-x64.zip",
-  "archiveSha256": "cf88b5fedabc4b21abd64e1f5a04d6ae9a2dc7cbbc49b251769559aca230e546",
-  "uiFiles": 67,
+  "archiveSha256": "984315db0bc6b5bad3bba6688910f099ac4a20254d5cda19be98517db594ede9",
+  "archiveFiles": 230,
+  "hostFiles": 17,
+  "uiFiles": 92,
   "checks": 20,
   "layouts": 12,
   "screenshots": 17,
   "credentialEncryption": {
     "version": 2,
     "scheme": "async",
-    "writtenAt": "2026-10-18T03:39:05.8553729Z"
+    "writtenAt": "2026-10-18T05:25:35.889Z"
+  },
+  "authentication": {
+    "persistent": true,
+    "noPageToken": true,
+    "encryptedFile": true,
+    "systemRoundTrip": true,
+    "scopedResources": true
+  },
+  "lifecycle": {
+    "closeSavedPosition": true,
+    "closeReleasedResources": true,
+    "closeRetainedLogin": true,
+    "restoredWithoutSubmission": true,
+    "restoredVideoPosition": true
   }
 }

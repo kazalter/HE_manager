@@ -1,0 +1,24 @@
+{
+  "phase": "CP-03",
+  "status": "passed",
+  "sourceRevision": "6bef11cfcb7e0be8ca83d09a7fcbe84d85834b95",
+  "matrix": [
+    {
+      "platform": "darwin",
+      "report": "CP-03-mac-integration.json",
+      "reportSha256": "5a5f57438eb667fdfc03a24a76219fffba8cdf14f180c609fe4f8cb89f186202",
+      "archive": "HE-Manager-0.3.0-darwin-arm64.zip",
+      "archiveSha256": "b3b574954d9526b7c8880d116ef61e11d107e60db4cb4ffc03580a20bebf9f45",
+      "passed": true
+    },
+    {
+      "platform": "win32",
+      "report": "CP-03-windows-integration.json",
+      "reportSha256": "5d657c79a795bde83a62b854e4a2ad06e7e31b3688a9d61875f546b38a61d6fb",
+      "archive": "HE-Manager-0.3.0-win32-x64.zip",
+      "archiveSha256": "984315db0bc6b5bad3bba6688910f099ac4a20254d5cda19be98517db594ede9",
+      "passed": true
+    }
+  ],
+  "scope": "Main-process authentication, credential store, media scenes, navigation flush and lifecycle persistence on macOS and Windows."
+}
