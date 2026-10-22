@@ -273,18 +273,29 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                             file_hash = hashlib.md5(file_path.encode()).hexdigest()[:12]
                             thumb_name = f"thumb_v_{file_hash}_{datetime.now().timestamp()}.jpg"
                             thumb_path = os.path.join(thumbnail_dir, thumb_name)
-                            cover_result = get_video_thumbnail(file_path, thumb_path, thumbnail_enabled, thumbnail_interval)
-                            if cover_result:
-                                media.cover_path = thumb_name
-                                media.cover_time_ms = cover_result.get("cover_time_ms")
-                                media.cover_source = cover_result.get("cover_source")
+                            # Preview failures must not prevent the video itself
+                            # from entering the library. The cover helper returns
+                            # a (success, time_ms, source) tuple, not a mapping.
+                            try:
+                                success, time_ms, source = get_video_thumbnail(file_path, thumb_path)
+                                if success:
+                                    media.cover_path = thumb_name
+                                    media.cover_time_ms = time_ms
+                                    media.cover_source = source
+                            except Exception:
+                                logger.warning("Error generating cover for %s", file_path, exc_info=True)
 
-                            sprite_name = f"sprite_v_{file_hash}.jpg"
-                            vtt_name = f"sprite_v_{file_hash}.vtt"
-                            sprite_path = os.path.join(thumbnail_dir, sprite_name)
-                            vtt_path = os.path.join(thumbnail_dir, vtt_name)
-                            if metadata["duration"] and metadata["duration"] > 0:
-                                generate_sprite_vtt(file_path, sprite_path, vtt_path, metadata["duration"])
+                            if thumbnail_enabled and media.cover_path and metadata["duration"] and metadata["duration"] > 0:
+                                # Web playback and thumbnail cleanup both derive
+                                # preview names from the cover's extensionless base.
+                                preview_base = os.path.splitext(thumb_name)[0]
+                                try:
+                                    generate_sprite_vtt(
+                                        file_path, preview_base, thumbnail_dir,
+                                        interval=thumbnail_interval,
+                                    )
+                                except Exception:
+                                    logger.warning("Error generating preview for %s", file_path, exc_info=True)
 
                         elif target_type == 'manga':
                             page_count = count_manga_pages(file_path, ext)
