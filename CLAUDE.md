@@ -5,8 +5,8 @@ Claude/Antigravity/Codex 都按 `AGENTS.md` 工作；不要在这里维护第二
 ## 必读
 
 1. 先读 `AGENTS.md`。
-2. 当前优化任务和执行顺序只看 `PLAN.md`。
-3. `FEATURE_PLANS.md` 记录功能现状，`CODE_REVIEW_PLAN.md` 是历史结构审查归档。
+2. 功能现状与运行方式以 `README.md`、对应子项目 README 和当前代码为准。
+3. 用户明确提出的目标优先；除非用户明确要求，不要创建或恢复全局计划文件。
 
 ## 额外提醒
 

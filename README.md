@@ -16,7 +16,7 @@ HE Manager 是一个可自托管的个人多媒体库。它索引保存在本机
 
 ## Hermes 媒体库管家（可选）
 
-管理员网页聊天可查询、推荐并提出资料或扫描建议；实际修改需要在 HE 建议卡确认。使用独立 Hermes、私有 MCP 与工具服务，每位管理员独立 profile。部署、初始化、验收、密钥轮换与回滚见 [运维指南](docs/hermes-operations.md)，实施证据见 [阶段计划](docs/superpowers/plans/2026-10-10-hermes-media-steward.md)。默认开关关闭，完成门禁后启用。
+管理员网页聊天可查询、推荐并提出资料或扫描建议；实际修改需要在 HE 建议卡确认。使用独立 Hermes、私有 MCP 与工具服务，每位管理员独立 profile。部署、初始化、验收、密钥轮换与回滚见 [运维指南](docs/hermes-operations.md)。默认开关关闭，完成门禁后启用。
 
 ## 技术组成
 
@@ -135,4 +135,3 @@ he-server.ps1             Windows 后端服务启动脚本
 
 - [Pawchive 运维文档](docs/pawchive-operations.md)
 - [Pawchive API 契约](docs/pawchive-api-contract.md)
-- [功能状态与后续计划](FEATURE_PLANS.md) · [当前计划](PLAN.md)

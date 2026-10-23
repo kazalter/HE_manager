@@ -1,1 +1,0 @@
-FRONTEND_PLAN.md
