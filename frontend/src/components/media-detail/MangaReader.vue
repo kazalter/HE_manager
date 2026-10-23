@@ -23,6 +23,7 @@ import { API_BASE_URL, authUrl } from '../../config'
 import type { Media } from '../../types'
 import { useImageViewerZoom } from '../../composables/useImageViewerZoom'
 import { useReaderImageBuffer } from '../../composables/useReaderImageBuffer'
+import { readerImageWindow } from '../../utils/readerImageWindow'
 
 export type MangaReadMode = 'single' | 'double' | 'webtoon'
 
@@ -98,6 +99,8 @@ let webtoonTouchX = 0
 let webtoonTouchY = 0
 let webtoonTouchActive = false
 let suppressWebtoonClick = false
+let scrollDirection: -1 | 1 = 1
+let lastWebtoonScrollTop = 0
 
 const {
   scale: zoomScale,
@@ -386,6 +389,8 @@ const onWebtoonScroll = () => {
     const containerTop = container.scrollTop + container.clientHeight / 2
     const children = container.children
     if (!children.length) return
+    if (container.scrollTop !== lastWebtoonScrollTop) scrollDirection = container.scrollTop > lastWebtoonScrollTop ? 1 : -1
+    lastWebtoonScrollTop = container.scrollTop
     let low = 0
     let high = children.length - 1
     while (low < high) {
@@ -395,6 +400,8 @@ const onWebtoonScroll = () => {
       else high = mid
     }
     if (container.scrollTop + container.clientHeight >= container.scrollHeight - 2) low = children.length - 1
+    // Warm the actual viewport before waiting for parent/router progress updates.
+    preloadAdjacentPages(low, true)
     if (low !== props.currentPage) {
       // Scrolling reports progress; it must not trigger the page-navigation watcher.
       scrollReportedPage = low
@@ -412,6 +419,8 @@ const scrollWebtoonToPage = (page: number) => {
   window.clearTimeout(programmaticScrollTimer)
   // Only move the reader. scrollIntoView can also move the surrounding overlay.
   container.scrollTo({ top: el.offsetTop, behavior: 'auto' })
+  lastWebtoonScrollTop = container.scrollTop
+  preloadAdjacentPages(page, true)
   programmaticScrollTimer = window.setTimeout(() => {
     isProgrammaticScroll = false
   }, 100)
@@ -461,11 +470,13 @@ const imageBuffer = useReaderImageBuffer(update => {
   if (anchor) {
     void nextTick(() => {
       if (webtoonContainerRef.value === anchor.container && anchor.element.isConnected) {
-        anchor.container.scrollTop += anchor.element.offsetTop - anchor.top
+        const delta = anchor.element.offsetTop - anchor.top
+        if (delta) anchor.container.scrollTop += delta
       }
       pendingAnchor = null
+      preloadAdjacentPages()
     })
-  }
+  } else void nextTick(() => preloadAdjacentPages())
 })
 const pageDimensionsFor = (page: number): [number, number] => {
   const dimensions = props.pageDimensions[page]
@@ -473,14 +484,40 @@ const pageDimensionsFor = (page: number): [number, number] => {
   const state = imageBuffer.states.get(pageUrlFor(page))
   return state?.width && state.height ? [state.width, state.height] : [2, 3]
 }
-const pageReady = (page: number) => imageBuffer.states.get(pageUrlFor(page))?.status === 'ready'
+const pageReady = (page: number) => imageBuffer.isDecoded(pageUrlFor(page))
+const pageResident = (page: number) => imageBuffer.isResident(pageUrlFor(page))
 const pageFailed = (page: number) => imageBuffer.states.get(pageUrlFor(page))?.status === 'error'
-const preloadAdjacentPages = () => {
-  if (!props.totalPages) return
-  const page = props.currentPage
-  // Six pages ahead, two behind; prioritize the visible spread before speculation.
-  const indices = [page, page + 1, page + 2, page - 1, page + 3, page + 4, page - 2, page + 5, page + 6]
-  imageBuffer.requestWindow(indices.filter(p => p >= 0 && p < props.totalPages!).map(pageUrlFor), readMode.value === 'single' ? 1 : 2)
+const pageAtOffset = (container: HTMLDivElement, offset: number) => {
+  let low = 0, high = container.children.length - 1
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2), element = container.children[mid] as HTMLElement
+    if (element.offsetTop + element.offsetHeight < offset) low = mid + 1
+    else high = mid
+  }
+  return low
+}
+const preloadAdjacentPages = (page = props.currentPage, fromViewport = false) => {
+  if (!props.totalPages || authIdentity() !== openedIdentity) return
+  let first = page, last = readMode.value === 'double' ? Math.min(page + 1, props.totalPages - 1) : page
+  const container = webtoonContainerRef.value
+  if (readMode.value === 'webtoon' && container?.clientHeight && (container.children[0] as HTMLElement | undefined)?.offsetHeight) {
+    const visibleFirst = pageAtOffset(container, container.scrollTop)
+    const visibleLast = pageAtOffset(container, container.scrollTop + container.clientHeight - 1)
+    if (fromViewport || (page >= visibleFirst && page <= visibleLast)) { first = visibleFirst; last = visibleLast }
+  }
+  const planned = readerImageWindow(props.totalPages, first, last, scrollDirection, page => {
+    const size = props.pageDimensions[page]
+    if (size?.[0] && size?.[1]) return size
+    const state = imageBuffer.states.get(pageUrlFor(page))
+    return state?.width && state.height ? [state.width, state.height] : null
+  })
+  imageBuffer.requestWindow(planned.indices.map(pageUrlFor), planned.visibleCount)
+}
+const onWebtoonImageLoad = async (event: Event) => {
+  const image = event.target as HTMLImageElement
+  // Prepare the displayed DOM image as well as the retained preloader bitmap.
+  try { await image.decode() } catch { /* A loaded image remains usable without decode(). */ }
+  if (image.isConnected) scheduleVisiblePage()
 }
 // Decoder/prefetch readiness alone never advances desktop reading progress.
 // Observe the actual displayed image after a paint, including cache hits.
@@ -528,7 +565,7 @@ function scheduleVisiblePage() {
 watch([() => props.currentPage, readMode, () => props.totalPages,
   () => canvasPages.value.map(page => displayPageUrlFor(page)).join('|')], () => { void nextTick(scheduleVisiblePage) }, { immediate: true })
 
-watch(() => [props.totalPages, readMode.value, props.imagePages?.map(item => item.id).join(',')], preloadAdjacentPages)
+watch(() => [props.totalPages, readMode.value, props.imagePages?.map(item => item.id).join(',')], () => { preloadAdjacentPages(); void nextTick(() => preloadAdjacentPages()) })
 watch(() => props.showControls, visible => { if (!visible) showShortcutGuide.value = false })
 defineExpose({ nextPage, previousPage, stepSize, flushVisiblePage: reportVisiblePage })
 
@@ -554,6 +591,7 @@ watch(() => props.totalPages, (total, previousTotal) => {
 watch(() => props.media.id, () => {
   if (props.imagePages) return
   imageBuffer.clear()
+  scrollDirection = 1; lastWebtoonScrollTop = 0
   preloadAdjacentPages()
   scrollReportedPage = null
   hoverThumbIndex.value = -1
@@ -572,6 +610,8 @@ watch(isStripOpen, (open) => {
 
 onMounted(() => {
   updateStripWidth()
+  preloadAdjacentPages()
+  window.addEventListener('resize', onReaderViewportResize, { passive: true })
   window.addEventListener('resize', updateStripWidth, { passive: true })
   window.addEventListener('resize', scheduleVisiblePage, { passive: true })
   document.addEventListener('visibilitychange', scheduleVisiblePage)
@@ -583,6 +623,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', scheduleVisiblePage)
   document.removeEventListener('visibilitychange', scheduleVisiblePage)
   imageBuffer.dispose()
+  window.removeEventListener('resize', onReaderViewportResize)
   window.removeEventListener('mousemove', onDragMove)
   window.removeEventListener('mouseup', onDragEnd)
   window.removeEventListener('resize', updateStripWidth)
@@ -596,6 +637,7 @@ onBeforeUnmount(() => {
     stripResizeObserver = null
   }
 })
+function onReaderViewportResize() { preloadAdjacentPages() }
 </script>
 
 <template>
@@ -645,13 +687,13 @@ onBeforeUnmount(() => {
           :aria-busy="!pageReady(pageIndex) && !pageFailed(pageIndex)"
         >
           <img
-            v-if="pageReady(pageIndex)"
+            v-if="pageResident(pageIndex)"
             :src="displayPageUrlFor(pageIndex)"
-            @load="scheduleVisiblePage"
+            @load="onWebtoonImageLoad"
             :width="pageDimensionsFor(pageIndex)[0]"
             :height="pageDimensionsFor(pageIndex)[1]"
             loading="eager"
-            decoding="sync"
+            decoding="async"
             class="w-full h-full object-contain block rounded-sm"
             :alt="imagePages?.[pageIndex]?.title || `第 ${pageIndex + 1} 页`"
           />
