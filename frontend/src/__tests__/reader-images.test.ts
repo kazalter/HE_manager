@@ -125,6 +125,22 @@ const finishImage = async (index: number) => {
 }
 
 describe('canvas reader loading feedback', () => {
+  it('uses new cache identities for manga pages and strip thumbnails', async () => {
+    const wrapper = mountCanvasReader(false)
+    await wrapper.setProps({ showControls: true })
+    const pageUrl = ControlledImage.instances[0]!.src
+    expect(new URL(pageUrl, 'http://localhost').searchParams.get('page_set')).toBe('2')
+    await finishImage(0)
+    expect(wrapper.get('.he-reader-canvas-page img').attributes('src')).toBe(pageUrl)
+    const thumbs = wrapper.findAll('.he-manga-strip img')
+    expect(thumbs.length).toBeGreaterThan(0)
+    for (const thumb of thumbs) {
+      const url = new URL(thumb.attributes('src')!, 'http://localhost')
+      expect(url.searchParams.get('thumbnail')).toBe('true')
+      expect(url.searchParams.get('page_set')).toBe('2')
+    }
+  })
+
   it('replaces the old image with loading feedback until the next image has decoded', async () => {
     const wrapper = mountCanvasReader()
     expect(wrapper.text()).toContain('正在加载第 1 张')

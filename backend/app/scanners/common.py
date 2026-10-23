@@ -3,15 +3,12 @@ import threading
 from typing import Optional
 
 from ..dedup import normalize as dedup_normalize
+from ..media_files import IMAGE_EXTENSIONS, SKIP_FOLDERS, is_manga_page
 
 # Supported extensions
 VIDEO_EXTENSIONS = {'.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm', '.flv', '.ts', '.m4v'}
 MANGA_EXTENSIONS = {'.zip', '.cbz'}
-IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.avif'}
 AUDIO_EXTENSIONS = {'.mp3', '.wav', '.flac', '.m4a', '.aac', '.ogg', '.opus'}
-
-# Folders to skip (case-insensitive)
-SKIP_FOLDERS = {'mask', 'result', 'inpainted', '.thumbnails', '.he_cover', 'node_modules', '.git', '.vite'}
 
 # Thumbnail extraction and sprite/VTT generation both decode video. Sharing one
 # semaphore caps their combined CPU and disk pressure instead of limiting each
@@ -68,7 +65,7 @@ def should_skip_dir(path: str) -> bool:
 
 
 def has_image_file(files: list[str]) -> bool:
-    return any(os.path.splitext(file)[1].lower() in IMAGE_EXTENSIONS for file in files)
+    return any(is_manga_page(file) for file in files)
 
 
 def media_type_for_extension(scan_mode: str, ext: str) -> Optional[str]:

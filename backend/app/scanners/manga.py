@@ -1,9 +1,8 @@
 import logging
-import os
 import zipfile
 from PIL import Image
 
-from .common import IMAGE_EXTENSIONS, SKIP_FOLDERS
+from ..media_files import archive_image_files, directory_image_files, manga_image_files
 
 logger = logging.getLogger(__name__)
 
@@ -18,16 +17,8 @@ def get_image_metadata(image_path: str) -> dict:
 
 
 def count_manga_pages(manga_path: str, extension: str) -> int | None:
-    image_exts = {'.jpg', '.jpeg', '.png', '.webp', '.bmp'}
     try:
-        if extension == ".dir":
-            count = 0
-            for _, dirs, files in os.walk(manga_path):
-                dirs[:] = [d for d in dirs if d.lower() not in SKIP_FOLDERS]
-                count += sum(1 for file in files if any(file.lower().endswith(ext) for ext in image_exts))
-            return count
-        with zipfile.ZipFile(manga_path, 'r') as z:
-            return sum(1 for f in z.namelist() if any(f.lower().endswith(ext) for ext in image_exts))
+        return len(manga_image_files(manga_path, extension))
     except Exception as e:
         logger.warning("Error counting manga pages for %s: %s", manga_path, e)
     return None
@@ -36,10 +27,9 @@ def count_manga_pages(manga_path: str, extension: str) -> int | None:
 def get_manga_thumbnail(manga_path: str, thumb_path: str) -> bool:
     try:
         with zipfile.ZipFile(manga_path, 'r') as z:
-            images = sorted([f for f in z.namelist() if any(f.lower().endswith(ext) for ext in IMAGE_EXTENSIONS)])
+            images = archive_image_files(z)
             if images:
-                with z.open(images[0]) as f:
-                    img = Image.open(f)
+                with z.open(images[0]) as f, Image.open(f) as img:
                     if img.mode in ('RGBA', 'P'):
                         img = img.convert('RGB')
                     img.thumbnail((400, 600))
@@ -65,15 +55,13 @@ def get_image_thumbnail(image_path: str, thumb_path: str) -> bool:
 
 def get_folder_thumbnail(folder_path: str, thumb_path: str) -> bool:
     try:
-        image_exts = {'.jpg', '.jpeg', '.png', '.webp', '.bmp'}
-        files = sorted([f for f in os.listdir(folder_path) if any(f.lower().endswith(ext) for ext in image_exts)])
+        files = directory_image_files(folder_path)
         if files:
-            img_path = os.path.join(folder_path, files[0])
-            img = Image.open(img_path)
-            if img.mode in ('RGBA', 'P'):
-                img = img.convert('RGB')
-            img.thumbnail((400, 600))
-            img.save(thumb_path, "JPEG")
+            with Image.open(files[0]) as img:
+                if img.mode in ('RGBA', 'P'):
+                    img = img.convert('RGB')
+                img.thumbnail((400, 600))
+                img.save(thumb_path, "JPEG")
             return True
     except Exception as e:
         logger.warning("Error generating folder thumbnail for %s: %s", folder_path, e)

@@ -603,7 +603,9 @@ def get_manga_page(
         media.missing_since = None
         db.commit()
 
-    thumb_path = os.path.join(THUMBNAIL_DIR, f"manga_page_{media.id}_{page_index}.jpg") if thumbnail else None
+    # v2 excludes auxiliary images, so old page-index thumbnails may point at
+    # a different image. Keep the media-id prefix for existing cleanup logic.
+    thumb_path = os.path.join(THUMBNAIL_DIR, f"manga_page_{media.id}_{page_index}_v2.jpg") if thumbnail else None
     if thumbnail and thumb_path and os.path.exists(thumb_path):
         return FileResponse(
             thumb_path,
