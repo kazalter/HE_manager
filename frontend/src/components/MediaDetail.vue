@@ -82,6 +82,7 @@ const {
   setControlsHover,
   handleViewerClick,
   handleViewerDoubleClick,
+  hideViewerControls,
   toggleFullscreen,
 } = useMediaOverlayControls(isManga, isImage)
 
@@ -877,6 +878,7 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
             @load-more="loadImageBatch(1)"
             @viewer-click="handleViewerClick"
             @viewer-double-click="handleViewerDoubleClick"
+            @hide-controls="hideViewerControls"
             @controls-hover="setControlsHover"
           />
 

@@ -67,7 +67,7 @@ it('reports the largest displayed server index for an RTL spread and ignores an 
 it('uses the webtoon viewport middle, but submits the last visible page at the document bottom', async () => {
   localStorage.setItem('he_manga_read_mode', 'webtoon')
   const wrapper = create(); for (let index = 0; index < 4; index++) await finish(index)
-  const pages = wrapper.findAll('.he-reader-page'), container = pages[0]!.element.parentElement!
+  const pages = wrapper.findAll('.he-reader-page'), container = wrapper.find({ ref: 'webtoonContainerRef' }).element as HTMLElement
   rectangle(container, () => box())
   Object.defineProperties(container, { clientHeight: { value: 600, configurable: true }, scrollHeight: { value: 1150, configurable: true } })
   pages.forEach((page, index) => {

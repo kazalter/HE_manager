@@ -116,7 +116,7 @@ it('warms all viewport edges before offscreen pages even when several short imag
   await flushPromises(); vi.advanceTimersByTime(110)
   const viewport = wrapper.find({ ref: 'webtoonContainerRef' }), container = viewport.element as HTMLElement
   Object.defineProperties(container, { clientHeight: { value: 900 }, scrollHeight: { value: 6000 } })
-  Array.from(container.children).forEach((child, index) => {
+  Array.from(container.querySelectorAll('.he-reader-page')).forEach((child, index) => {
     Object.defineProperties(child, { offsetTop: { value: index * 300 }, offsetHeight: { value: 300 } })
   })
   container.scrollTop = 1501

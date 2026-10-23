@@ -104,6 +104,19 @@ describe('useMediaOverlayControls composable', () => {
     wrapper.unmount()
   })
 
+  it('hides reader UI on pinch and cancels a pending tap that could reopen it', () => {
+    const { wrapper, controls } = createControls(true)
+    controls.showControls.value = false
+    controls.handleViewerClick()
+    controls.hideViewerControls()
+    vi.advanceTimersByTime(500)
+    expect(controls.showControls.value).toBe(false)
+    controls.handleViewerClick()
+    vi.advanceTimersByTime(240)
+    expect(controls.showControls.value).toBe(true)
+    wrapper.unmount()
+  })
+
   it.each(['manga', 'image'])('preserves hidden %s controls across mobile viewport resizes and hover events', kind => {
     vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: false } as MediaQueryList)
     const { wrapper, controls } = createControls(kind === 'manga', kind === 'image')

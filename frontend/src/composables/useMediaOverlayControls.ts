@@ -18,6 +18,14 @@ export function useMediaOverlayControls(
     controlTimer = undefined
   }
 
+  const hideViewerControls = () => {
+    clearTimer()
+    window.clearTimeout(viewerClickTimer)
+    viewerClickTimer = undefined
+    isHoveringControls.value = false
+    showControls.value = false
+  }
+
   const startAutoHideTimer = (delay = 3500) => {
     clearTimer()
     if (isHoveringControls.value) return
@@ -55,8 +63,7 @@ export function useMediaOverlayControls(
     }
     clearTimer()
     if (showControls.value) {
-      showControls.value = false
-      isHoveringControls.value = false
+      hideViewerControls()
       return
     }
     showControls.value = true
@@ -141,6 +148,7 @@ export function useMediaOverlayControls(
     resetTimer,
     handleViewerClick,
     handleViewerDoubleClick,
+    hideViewerControls,
     toggleFullscreen,
   }
 }

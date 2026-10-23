@@ -24,6 +24,8 @@ import type { Media } from '../../types'
 import { useImageViewerZoom } from '../../composables/useImageViewerZoom'
 import { useReaderImageBuffer } from '../../composables/useReaderImageBuffer'
 import { readerImageWindow } from '../../utils/readerImageWindow'
+import { useWebtoonZoom } from '../../composables/useWebtoonZoom'
+import { useCompactViewport } from '../../composables/useCompactViewport'
 
 export type MangaReadMode = 'single' | 'double' | 'webtoon'
 
@@ -46,6 +48,7 @@ const emit = defineEmits<{
   visiblePage: [mediaId: number, page: number]
   viewerClick: []
   viewerDoubleClick: []
+  hideControls: []
   controlsHover: [hovering: boolean]
   boundary: [direction: -1 | 1]
   loadMore: []
@@ -76,6 +79,9 @@ const isStripOpen = computed(() => !props.imagePages && (props.showControls || !
 const thumbStripRef = ref<HTMLDivElement | null>(null)
 const imageContainerRef = ref<HTMLDivElement | null>(null)
 const webtoonContainerRef = ref<HTMLDivElement | null>(null)
+const webtoonContentRef = ref<HTMLDivElement | null>(null)
+const webtoonZoom = useWebtoonZoom(webtoonContainerRef, webtoonContentRef)
+const compactViewport = useCompactViewport()
 const thumbStripScroll = ref(0)
 const stripContainerWidth = ref(800)
 let stripResizeObserver: ResizeObserver | null = null
@@ -115,8 +121,13 @@ const {
   handleZoomWheel,
   onMouseDown: onZoomMouseDown,
   wasDragging: wasZoomDragging,
-  onTouchStart, onTouchMove, onTouchEnd, wasTouchGesture,
+  onTouchStart: onCanvasTouchStart, onTouchMove, onTouchEnd, wasTouchGesture,
 } = useImageViewerZoom(imageContainerRef, { onSwipe: direction => { if ((direction === 1) !== isRtl.value) nextPage(); else previousPage() } })
+const showZoomControls = computed(() => props.showControls || (isZoomed.value && (!compactViewport.value || !!desktopBridge)))
+const hideControlsForPinch = (event: TouchEvent) => {
+  if (event.touches.length > 1 && compactViewport.value && !desktopBridge) emit('hideControls')
+}
+const onTouchStart = (event: TouchEvent) => { hideControlsForPinch(event); onCanvasTouchStart(event) }
 
 const THUMB_W = 110
 const THUMB_H = 148
@@ -180,6 +191,7 @@ const nextPage = () => {
 }
 
 const setReadMode = (mode: MangaReadMode) => {
+  webtoonZoom.reset()
   readMode.value = mode
   localStorage.setItem(modeKey, mode)
   resetZoom()
@@ -387,8 +399,8 @@ const onWebtoonScroll = () => {
     const container = webtoonContainerRef.value
     if (!container || !props.totalPages) return
     const containerTop = container.scrollTop + container.clientHeight / 2
-    const children = container.children
-    if (!children.length) return
+    const children = webtoonContentRef.value?.children
+    if (!children?.length) return
     if (container.scrollTop !== lastWebtoonScrollTop) scrollDirection = container.scrollTop > lastWebtoonScrollTop ? 1 : -1
     lastWebtoonScrollTop = container.scrollTop
     let low = 0
@@ -396,13 +408,13 @@ const onWebtoonScroll = () => {
     while (low < high) {
       const mid = Math.floor((low + high) / 2)
       const el = children[mid] as HTMLElement
-      if (el.offsetTop + el.offsetHeight < containerTop) low = mid + 1
+      if ((el.offsetTop + el.offsetHeight) * webtoonZoom.scale.value < containerTop) low = mid + 1
       else high = mid
     }
     if (container.scrollTop + container.clientHeight >= container.scrollHeight - 2) low = children.length - 1
     // Warm the actual viewport before waiting for parent/router progress updates.
     preloadAdjacentPages(low, true)
-    if (low !== props.currentPage) {
+    if (!webtoonZoom.isInteracting.value && low !== props.currentPage) {
       // Scrolling reports progress; it must not trigger the page-navigation watcher.
       scrollReportedPage = low
       emit('update:currentPage', low)
@@ -413,12 +425,12 @@ const onWebtoonScroll = () => {
 const scrollWebtoonToPage = (page: number) => {
   if (readMode.value !== 'webtoon') return
   const container = webtoonContainerRef.value
-  const el = container?.children[page] as HTMLElement | undefined
+  const el = webtoonContentRef.value?.children[page] as HTMLElement | undefined
   if (!container || !el) return
   isProgrammaticScroll = true
   window.clearTimeout(programmaticScrollTimer)
   // Only move the reader. scrollIntoView can also move the surrounding overlay.
-  container.scrollTo({ top: el.offsetTop, behavior: 'auto' })
+  container.scrollTo({ top: el.offsetTop * webtoonZoom.scale.value, behavior: 'auto' })
   lastWebtoonScrollTop = container.scrollTop
   preloadAdjacentPages(page, true)
   programmaticScrollTimer = window.setTimeout(() => {
@@ -428,6 +440,8 @@ const scrollWebtoonToPage = (page: number) => {
 
 // Observe native scrolling without preventing it or invoking paged-mode swipes.
 const onWebtoonTouchStart = (event: TouchEvent) => {
+  hideControlsForPinch(event)
+  webtoonZoom.onTouchStart(event)
   if (!webtoonTouchActive) {
     suppressWebtoonClick = false
     webtoonTouchX = event.touches[0]?.clientX ?? 0
@@ -437,17 +451,23 @@ const onWebtoonTouchStart = (event: TouchEvent) => {
   if (event.touches.length !== 1) suppressWebtoonClick = true
 }
 const onWebtoonTouchMove = (event: TouchEvent) => {
+  webtoonZoom.onTouchMove(event)
   const touch = event.touches[0]
   if (event.touches.length !== 1 || (touch && Math.hypot(touch.clientX - webtoonTouchX, touch.clientY - webtoonTouchY) > 8)) {
     suppressWebtoonClick = true
   }
 }
 const onWebtoonTouchEnd = (event: TouchEvent) => {
+  webtoonZoom.onTouchEnd(event)
   const touch = event.changedTouches[0]
   if (event.type === 'touchcancel' || (touch && Math.hypot(touch.clientX - webtoonTouchX, touch.clientY - webtoonTouchY) > 8)) {
     suppressWebtoonClick = true
   }
   webtoonTouchActive = event.touches.length > 0
+  if (!webtoonTouchActive) void nextTick(onWebtoonScroll)
+}
+const onWebtoonGesture = (event: Event) => {
+  if (compactViewport.value && !desktopBridge) event.preventDefault()
 }
 const onViewerClick = () => {
   if (readMode.value === 'webtoon' && suppressWebtoonClick) {
@@ -462,21 +482,23 @@ const onViewerClick = () => {
 let pendingAnchor: { container: HTMLDivElement; element: HTMLElement; top: number } | null = null
 const imageBuffer = useReaderImageBuffer(update => {
   const container = webtoonContainerRef.value
-  const element = container?.children[props.currentPage] as HTMLElement | undefined
+  const element = webtoonContentRef.value?.children[props.currentPage] as HTMLElement | undefined
   const anchor = !pendingAnchor && container && element && container.scrollTop > 0
     ? { container, element, top: element.offsetTop } : null
   if (anchor) pendingAnchor = anchor
   update()
   if (anchor) {
-    void nextTick(() => {
-      if (webtoonContainerRef.value === anchor.container && anchor.element.isConnected) {
-        const delta = anchor.element.offsetTop - anchor.top
+    void nextTick(async () => {
+      webtoonZoom.measure()
+      await nextTick()
+      if (!webtoonZoom.isInteracting.value && webtoonContainerRef.value === anchor.container && anchor.element.isConnected) {
+        const delta = (anchor.element.offsetTop - anchor.top) * webtoonZoom.scale.value
         if (delta) anchor.container.scrollTop += delta
       }
       pendingAnchor = null
       preloadAdjacentPages()
     })
-  } else void nextTick(() => preloadAdjacentPages())
+  } else void nextTick(() => { webtoonZoom.measure(); preloadAdjacentPages() })
 })
 const pageDimensionsFor = (page: number): [number, number] => {
   const dimensions = props.pageDimensions[page]
@@ -487,11 +509,12 @@ const pageDimensionsFor = (page: number): [number, number] => {
 const pageReady = (page: number) => imageBuffer.isDecoded(pageUrlFor(page))
 const pageResident = (page: number) => imageBuffer.isResident(pageUrlFor(page))
 const pageFailed = (page: number) => imageBuffer.states.get(pageUrlFor(page))?.status === 'error'
-const pageAtOffset = (container: HTMLDivElement, offset: number) => {
-  let low = 0, high = container.children.length - 1
+const pageAtOffset = (offset: number) => {
+  const children = webtoonContentRef.value!.children
+  let low = 0, high = children.length - 1
   while (low < high) {
-    const mid = Math.floor((low + high) / 2), element = container.children[mid] as HTMLElement
-    if (element.offsetTop + element.offsetHeight < offset) low = mid + 1
+    const mid = Math.floor((low + high) / 2), element = children[mid] as HTMLElement
+    if ((element.offsetTop + element.offsetHeight) * webtoonZoom.scale.value < offset) low = mid + 1
     else high = mid
   }
   return low
@@ -500,9 +523,9 @@ const preloadAdjacentPages = (page = props.currentPage, fromViewport = false) =>
   if (!props.totalPages || authIdentity() !== openedIdentity) return
   let first = page, last = readMode.value === 'double' ? Math.min(page + 1, props.totalPages - 1) : page
   const container = webtoonContainerRef.value
-  if (readMode.value === 'webtoon' && container?.clientHeight && (container.children[0] as HTMLElement | undefined)?.offsetHeight) {
-    const visibleFirst = pageAtOffset(container, container.scrollTop)
-    const visibleLast = pageAtOffset(container, container.scrollTop + container.clientHeight - 1)
+  if (readMode.value === 'webtoon' && container?.clientHeight && (webtoonContentRef.value?.children[0] as HTMLElement | undefined)?.offsetHeight) {
+    const visibleFirst = pageAtOffset(container.scrollTop)
+    const visibleLast = pageAtOffset(container.scrollTop + container.clientHeight - 1)
     if (fromViewport || (page >= visibleFirst && page <= visibleLast)) { first = visibleFirst; last = visibleLast }
   }
   const planned = readerImageWindow(props.totalPages, first, last, scrollDirection, page => {
@@ -669,40 +692,46 @@ function onReaderViewportResize() { preloadAdjacentPages() }
       <div
         v-if="readMode === 'webtoon'"
         ref="webtoonContainerRef"
-        style="overflow-anchor: none"
-        class="w-full h-full overflow-y-auto custom-scrollbar flex flex-col items-center py-6 px-2 select-none"
+        style="overflow-anchor: none; overscroll-behavior: contain"
+        :style="{ touchAction: webtoonZoom.scale.value > 1 ? 'none' : 'pan-y' }"
+        class="he-webtoon-viewport w-full h-full overflow-y-auto overflow-x-hidden custom-scrollbar select-none"
         @scroll="onWebtoonScroll"
-        @touchstart.passive="onWebtoonTouchStart"
-        @touchmove.passive="onWebtoonTouchMove"
-        @touchend.passive="onWebtoonTouchEnd"
-        @touchcancel.passive="onWebtoonTouchEnd"
+        @touchstart="onWebtoonTouchStart"
+        @touchmove="onWebtoonTouchMove"
+        @touchend="onWebtoonTouchEnd"
+        @touchcancel="onWebtoonTouchEnd"
+        @gesturestart="onWebtoonGesture" @gesturechange="onWebtoonGesture"
       >
-        <div
-          v-for="pageIndex in totalPagesList"
-          :key="imagePages?.[pageIndex]?.id ?? pageIndex"
-          :id="`webtoon-page-${pageIndex}`"
-          :data-page="pageIndex"
-          class="he-reader-page w-full max-w-[840px] shrink-0 my-1 relative group bg-white/5"
-          :style="{ aspectRatio: `${pageDimensionsFor(pageIndex)[0]} / ${pageDimensionsFor(pageIndex)[1]}` }"
-          :aria-busy="!pageReady(pageIndex) && !pageFailed(pageIndex)"
-        >
-          <img
-            v-if="pageResident(pageIndex)"
-            :src="displayPageUrlFor(pageIndex)"
-            @load="onWebtoonImageLoad"
-            :width="pageDimensionsFor(pageIndex)[0]"
-            :height="pageDimensionsFor(pageIndex)[1]"
-            loading="eager"
-            decoding="async"
-            class="w-full h-full object-contain block rounded-sm"
-            :alt="imagePages?.[pageIndex]?.title || `第 ${pageIndex + 1} 页`"
-          />
-          <div v-else-if="pageFailed(pageIndex)" class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-meta text-white/60" role="status">
-            <span>图片加载失败</span>
-            <button type="button" class="h-10 rounded-lg bg-white/10 px-4 text-body font-medium text-white transition-colors hover:bg-white/15 focus-ring pointer-coarse:h-11" @click.stop="imageBuffer.retry(pageUrlFor(pageIndex))">重新加载</button>
-          </div>
-          <div v-if="showControls" class="pointer-events-none absolute right-2 top-2 inline-flex h-6 items-center rounded-md bg-black/60 px-1.5 text-caption font-medium tabular-nums text-white/90 opacity-0 transition-opacity group-hover:opacity-100">
-            {{ pageIndex + 1 }} / {{ totalPages }}
+        <div class="he-webtoon-space relative w-full" :style="webtoonZoom.spaceStyle.value">
+          <div ref="webtoonContentRef" class="he-webtoon-content relative w-full flex flex-col items-center py-6 px-2" :style="webtoonZoom.contentStyle.value">
+            <div
+              v-for="pageIndex in totalPagesList"
+              :key="imagePages?.[pageIndex]?.id ?? pageIndex"
+              :id="`webtoon-page-${pageIndex}`"
+              :data-page="pageIndex"
+              class="he-reader-page w-full max-w-[840px] shrink-0 my-1 relative group bg-white/5"
+              :style="{ aspectRatio: `${pageDimensionsFor(pageIndex)[0]} / ${pageDimensionsFor(pageIndex)[1]}` }"
+              :aria-busy="!pageReady(pageIndex) && !pageFailed(pageIndex)"
+            >
+              <img
+                v-if="pageResident(pageIndex)"
+                :src="displayPageUrlFor(pageIndex)"
+                @load="onWebtoonImageLoad"
+                :width="pageDimensionsFor(pageIndex)[0]"
+                :height="pageDimensionsFor(pageIndex)[1]"
+                loading="eager"
+                decoding="async"
+                class="w-full h-full object-contain block rounded-sm"
+                :alt="imagePages?.[pageIndex]?.title || `第 ${pageIndex + 1} 页`"
+              />
+              <div v-else-if="pageFailed(pageIndex)" class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-meta text-white/60" role="status">
+                <span>图片加载失败</span>
+                <button type="button" class="h-10 rounded-lg bg-white/10 px-4 text-body font-medium text-white transition-colors hover:bg-white/15 focus-ring pointer-coarse:h-11" @click.stop="imageBuffer.retry(pageUrlFor(pageIndex))">重新加载</button>
+              </div>
+              <div v-if="showControls" class="pointer-events-none absolute right-2 top-2 inline-flex h-6 items-center rounded-md bg-black/60 px-1.5 text-caption font-medium tabular-nums text-white/90 opacity-0 transition-opacity group-hover:opacity-100">
+                {{ pageIndex + 1 }} / {{ totalPages }}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -940,15 +969,15 @@ function onReaderViewportResize() { preloadAdjacentPages() }
       <!-- Zoom Controls Floating Pill (Single / Double Mode) -->
       <div
         v-if="readMode !== 'webtoon'"
-        :class="showControls || isZoomed
+        :class="showZoomControls
           ? 'opacity-100'
           : 'opacity-0 pointer-events-none'"
-        :inert="!showControls && !isZoomed"
+        :inert="!showZoomControls"
         class="he-manga-zoom absolute right-6 z-20 flex select-none items-center gap-0.5 rounded-2xl bg-black/75 p-1 text-white/80 ring-1 ring-inset ring-white/10 transition-[transform,opacity] duration-200 ease-out"
         :style="{
           top: desktopBridge ? '84px' : undefined,
           bottom: desktopBridge ? 'auto' : 'calc(12px + env(safe-area-inset-bottom))',
-          transform: `translate3d(0, ${desktopBridge ? (showControls ? '0px' : '-12px') : isStripOpen ? 'calc(-184px - env(safe-area-inset-bottom))' : (showControls || isZoomed ? '0px' : '12px')}, 0)`,
+          transform: `translate3d(0, ${desktopBridge ? (showControls ? '0px' : '-12px') : isStripOpen ? 'calc(-184px - env(safe-area-inset-bottom))' : (showZoomControls ? '0px' : '12px')}, 0)`,
         }"
         style="will-change: transform, opacity;"
         @click.stop

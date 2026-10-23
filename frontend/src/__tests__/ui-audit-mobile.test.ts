@@ -118,7 +118,7 @@ describe('MangaReader mobile webtoon mode and controls', () => {
     expect(container).toBeTruthy()
 
     // Mock children offsetTop/offsetHeight for realistic layout
-    Array.from(container.children).forEach((child, idx) => {
+    Array.from(container.querySelectorAll('.he-reader-page')).forEach((child, idx) => {
       Object.defineProperty(child, 'offsetTop', { value: idx * 1200, configurable: true })
       Object.defineProperty(child, 'offsetHeight', { value: 1200, configurable: true })
     })
@@ -142,9 +142,10 @@ describe('MangaReader mobile webtoon mode and controls', () => {
     expect(currentPageReported).toBe(4)
   })
 
-  it('keeps zoom controls pill visible and interactive when zoomed in even if controls are hidden', async () => {
-    localStorage.setItem('he_manga_read_mode', 'single')
-    localStorage.setItem('he_manga_read_mode_mobile', 'single')
+  it.each(['single', 'double'])('keeps mobile %s zoom controls hidden until explicitly opened', async mode => {
+    window.innerWidth = 390
+    localStorage.setItem('he_manga_read_mode', mode)
+    localStorage.setItem('he_manga_read_mode_mobile', mode)
 
     const wrapper = mount(MangaReader, {
       props: {
@@ -169,13 +170,34 @@ describe('MangaReader mobile webtoon mode and controls', () => {
     // Reach the hidden controls through the actual canvas pinch handlers.
     const canvas = wrapper.find({ ref: 'imageContainerRef' })
     await canvas.trigger('touchstart', { touches: [{ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 100 }] })
+    expect(wrapper.emitted('hideControls')).toEqual([[]])
     await canvas.trigger('touchmove', { touches: [{ clientX: 50, clientY: 100 }, { clientX: 250, clientY: 100 }] })
+    await canvas.trigger('touchend', { touches: [], changedTouches: [{ clientX: 50, clientY: 100 }, { clientX: 250, clientY: 100 }] })
+    expect(zoomPill.classes()).toContain('opacity-0')
+    expect(zoomPill.attributes('inert')).toBeDefined()
+    await wrapper.setProps({ showControls: true })
     expect(zoomPill.classes()).toContain('opacity-100')
-    expect(zoomPill.attributes('inert')).toBeUndefined()
     expect(zoomPill.text()).toContain('200%')
     await zoomPill.get('button[aria-label="适应屏幕"]').trigger('click')
     expect(zoomPill.text()).toContain('100%')
+    await wrapper.setProps({ showControls: false })
     expect(zoomPill.attributes('inert')).toBeDefined()
+  })
+
+  it('retains visible zoom controls for a zoomed desktop viewport', async () => {
+    window.innerWidth = 1280
+    localStorage.setItem('he_manga_read_mode', 'single')
+    const wrapper = mount(MangaReader, { props: {
+      media: sampleMangaMedia, currentPage: 0, totalPages: 3, pageDimensions: [],
+      showControls: false, clickOnlyControls: true, progressText: '', progressPercent: 0,
+    } })
+    wrappers.push(wrapper)
+    const canvas = wrapper.find({ ref: 'imageContainerRef' })
+    await canvas.trigger('touchstart', { touches: [{ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 100 }] })
+    await canvas.trigger('touchmove', { touches: [{ clientX: 50, clientY: 100 }, { clientX: 250, clientY: 100 }] })
+    expect(wrapper.get('.he-manga-zoom').classes()).toContain('opacity-100')
+    expect(wrapper.get('.he-manga-zoom').attributes('inert')).toBeUndefined()
+    expect(wrapper.emitted('hideControls')).toBeUndefined()
   })
 
 })

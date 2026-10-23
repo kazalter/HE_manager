@@ -28,13 +28,13 @@ export function useImageViewerZoom(
   let dragDistance = 0
   let hasDragged = false
 
-  const isZoomed = computed(() => scale.value > 1.01)
+  const isZoomed = computed(() => scale.value > 1.0001)
   const zoomPercent = computed(() => Math.round(scale.value * 100))
 
   const clampTranslation = (tx: number, ty: number, currentScale: number, rect?: DOMRect) => {
     const container = containerRef.value
     const r = rect || container?.getBoundingClientRect()
-    if (!r || currentScale <= 1.01) {
+    if (!r || currentScale <= 1) {
       translateX.value = 0
       translateY.value = 0
       return
@@ -46,9 +46,9 @@ export function useImageViewerZoom(
   }
 
   const setScale = (newScale: number, centerClientX?: number, centerClientY?: number) => {
-    const targetScale = Math.min(maxScale, Math.max(minScale, Number(newScale.toFixed(2))))
-    if (targetScale <= 1.01) {
-      scale.value = 1
+    const targetScale = Math.min(maxScale, Math.max(minScale, newScale))
+    if (targetScale <= 1) {
+      scale.value = targetScale
       translateX.value = 0
       translateY.value = 0
       hasDragged = false
@@ -97,14 +97,15 @@ export function useImageViewerZoom(
   const handleZoomWheel = (event: WheelEvent) => {
     event.preventDefault()
     // deltaY < 0 means scroll up (zoom in), deltaY > 0 means scroll down (zoom out)
-    const factor = event.deltaY < 0 ? 1.15 : 0.87
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? (containerRef.value?.clientHeight || 800) : 1
+    const factor = Math.exp(-event.deltaY * unit * 0.002)
     setScale(scale.value * factor, event.clientX, event.clientY)
   }
 
   const onMouseDown = (event: MouseEvent) => {
     dragDistance = 0
     hasDragged = false
-    if (scale.value <= 1.01 || event.button !== 0) return
+    if (scale.value <= 1 || event.button !== 0) return
     isMouseDown = true
     isPanning.value = true
     startX = event.clientX
@@ -135,7 +136,7 @@ export function useImageViewerZoom(
   }
 
   const wasDragging = () => {
-    if (scale.value <= 1.01) {
+    if (scale.value <= 1) {
       hasDragged = false
       dragDistance = 0
       return false
@@ -147,7 +148,8 @@ export function useImageViewerZoom(
   }
 
   let pinchDistance = 0
-  let pinchScale = 1
+  let pinchX = 0, pinchY = 0
+  let touchRect: DOMRect | undefined
   let touchX = 0, touchY = 0, touchTx = 0, touchTy = 0
   let multipleTouches = false
   let hadMultipleTouches = false
@@ -159,10 +161,14 @@ export function useImageViewerZoom(
       touchX = event.touches[0]!.clientX; touchY = event.touches[0]!.clientY
       touchTx = translateX.value; touchTy = translateY.value
       multipleTouches = false; hadMultipleTouches = false; suppressTouchClick = false
+      touchRect = containerRef.value?.getBoundingClientRect()
       isPanning.value = isZoomed.value
     } else {
       multipleTouches = true; hadMultipleTouches = true; suppressTouchClick = true
-      pinchDistance = distance(event.touches); pinchScale = scale.value
+      pinchDistance = distance(event.touches)
+      pinchX = (event.touches[0]!.clientX + event.touches[1]!.clientX) / 2
+      pinchY = (event.touches[0]!.clientY + event.touches[1]!.clientY) / 2
+      touchRect = containerRef.value?.getBoundingClientRect()
       isPanning.value = true
       if (event.cancelable) event.preventDefault()
     }
@@ -172,12 +178,25 @@ export function useImageViewerZoom(
       if (event.cancelable) event.preventDefault()
       const x = (event.touches[0]!.clientX + event.touches[1]!.clientX) / 2
       const y = (event.touches[0]!.clientY + event.touches[1]!.clientY) / 2
-      setScale(pinchScale * distance(event.touches) / pinchDistance, x, y)
-    } else if (event.touches.length === 1 && isZoomed.value && !multipleTouches) {
-      if (event.cancelable) event.preventDefault()
+      const nextDistance = distance(event.touches)
+      const targetScale = Math.min(maxScale, Math.max(minScale, scale.value * nextDistance / pinchDistance))
+      const ratio = targetScale / scale.value
+      const cx = touchRect ? touchRect.left + touchRect.width / 2 : x
+      const cy = touchRect ? touchRect.top + touchRect.height / 2 : y
+      const tx = x - cx - (pinchX - cx - translateX.value) * ratio
+      const ty = y - cy - (pinchY - cy - translateY.value) * ratio
+      scale.value = targetScale
+      clampTranslation(tx, ty, targetScale, touchRect)
+      // Rebase every sample, including at the limits, so reversing the fingers
+      // responds immediately rather than working through accumulated overshoot.
+      pinchDistance = Math.max(1, nextDistance); pinchX = x; pinchY = y
+    } else if (event.touches.length === 1 && !multipleTouches) {
       const dx = event.touches[0]!.clientX - touchX, dy = event.touches[0]!.clientY - touchY
       if (Math.hypot(dx, dy) > 8) suppressTouchClick = true
-      clampTranslation(touchTx + dx, touchTy + dy, scale.value)
+      if (isZoomed.value) {
+        if (event.cancelable) event.preventDefault()
+        clampTranslation(touchTx + dx, touchTy + dy, scale.value, touchRect)
+      }
     }
   }
   const onTouchEnd = (event: TouchEvent) => {

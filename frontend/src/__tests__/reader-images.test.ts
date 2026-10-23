@@ -305,7 +305,7 @@ describe('continuous reading without interruptions', () => {
     Object.defineProperties(container, {
       clientHeight: { value: 600 }, scrollHeight: { value: 9000 },
     })
-    Array.from(container.children).forEach((child, index) => {
+    Array.from(container.querySelectorAll('.he-reader-page')).forEach((child, index) => {
       Object.defineProperties(child, { offsetTop: { value: index * 1000 }, offsetHeight: { value: 1000 } })
     })
     const scrollTo = vi.spyOn(container, 'scrollTo')

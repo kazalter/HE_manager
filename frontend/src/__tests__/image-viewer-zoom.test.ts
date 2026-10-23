@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { defineComponent, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { useImageViewerZoom } from '../composables/useImageViewerZoom'
@@ -133,6 +133,33 @@ describe('useImageViewerZoom composable', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: '0' }))
     expect(zoom.scale.value).toBe(1)
 
+    wrapper.unmount()
+  })
+
+  it('keeps sub-percent pinch changes and follows a moving two-finger midpoint', () => {
+    const { wrapper, zoom, containerRef } = createTestViewer()
+    const rect = { left: 0, top: 0, width: 400, height: 600 } as DOMRect
+    const bounds = vi.spyOn(containerRef.value!, 'getBoundingClientRect').mockReturnValue(rect)
+    const touch = (points: number[][]) => ({ touches: points.map(([clientX, clientY]) => ({ clientX, clientY })), cancelable: true, preventDefault: vi.fn() }) as unknown as TouchEvent
+    zoom.setScale(2)
+    zoom.onTouchStart(touch([[150, 250], [250, 250]]))
+    zoom.onTouchMove(touch([[170, 270], [270, 270]]))
+    expect(zoom.translateX.value).toBeCloseTo(20)
+    expect(zoom.translateY.value).toBeCloseTo(20)
+    zoom.onTouchMove(touch([[170, 270], [270.1, 270]]))
+    expect(zoom.scale.value).toBeCloseTo(2.002, 6)
+    expect(bounds).toHaveBeenCalledTimes(2) // setScale and gesture start, no layout reads per move.
+    wrapper.unmount()
+  })
+
+  it('clamps during the pinch and responds immediately after reversing at the minimum', () => {
+    const { wrapper, zoom } = createTestViewer()
+    const touch = (points: number[][]) => ({ touches: points.map(([clientX, clientY]) => ({ clientX, clientY })), cancelable: true, preventDefault: vi.fn() }) as unknown as TouchEvent
+    zoom.onTouchStart(touch([[100, 100], [300, 100]]))
+    zoom.onTouchMove(touch([[190, 100], [210, 100]]))
+    expect(zoom.scale.value).toBe(1)
+    zoom.onTouchMove(touch([[185, 100], [215, 100]]))
+    expect(zoom.scale.value).toBe(1.5)
     wrapper.unmount()
   })
 })
