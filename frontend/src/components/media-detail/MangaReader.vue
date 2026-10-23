@@ -120,9 +120,11 @@ const WHEEL_INTERVAL_MS = 320
 
 const stepSize = computed(() => (readMode.value === 'double' ? 2 : 1))
 
+// Page selection v2 excludes auxiliary images. Do not reuse browser caches
+// populated when the same page index could still refer to a hidden cover.
 const pageUrlFor = (page: number) => props.imagePages
   ? authUrl(`${API_BASE_URL}/stream/${props.imagePages[page]?.id}`)
-  : authUrl(`${API_BASE_URL}/manga/${props.media.id}/page/${page}?track_progress=false`)
+  : authUrl(`${API_BASE_URL}/manga/${props.media.id}/page/${page}?track_progress=false&page_set=2`)
 const canvasPages = computed(() => {
   const pages = [props.currentPage]
   if (readMode.value === 'double' && (props.totalPages === null || props.currentPage + 1 < props.totalPages)) {
@@ -133,7 +135,7 @@ const canvasPages = computed(() => {
 const desktopImages = useDesktopImageEnhancement(() => canvasPages.value.filter(page => page >= 0 && (props.totalPages === null || page < props.totalPages)).map(pageUrlFor))
 const displayPageUrlFor = (page: number) => desktopImages.displayUrl(pageUrlFor(page))
 const pageLabel = (page: number) => `第 ${page + 1} ${props.imagePages ? '张' : '页'}`
-const thumbnailUrl = (page: number) => authUrl(`${API_BASE_URL}/manga/${props.media.id}/page/${page}?thumbnail=true&track_progress=false`)
+const thumbnailUrl = (page: number) => authUrl(`${API_BASE_URL}/manga/${props.media.id}/page/${page}?thumbnail=true&track_progress=false&page_set=2`)
 
 const totalPagesList = computed(() => {
   if (!props.totalPages) return []

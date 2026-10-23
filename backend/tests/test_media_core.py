@@ -544,7 +544,7 @@ class MediaCoreTest(unittest.TestCase):
                     self.assertEqual(res.headers.get("Cache-Control"), "public, max-age=604800, immutable")
                     self.assertEqual(res.media_type, "image/jpeg")
 
-                    expected_thumb = os.path.join(tmp_thumb, f"manga_page_{media.id}_0.jpg")
+                    expected_thumb = os.path.join(tmp_thumb, f"manga_page_{media.id}_0_v2.jpg")
                     self.assertTrue(os.path.exists(expected_thumb))
 
                     # Verify thumbnail image dimensions
