@@ -93,6 +93,22 @@ describe('Sidebar /downloads navigation entrance', () => {
 })
 
 describe('MangaReader mobile webtoon mode and controls', () => {
+  it('registers ordinary webtoon touch observers as passive so scrolling does not wait for them', () => {
+    window.innerWidth = 390
+    localStorage.setItem('he_manga_read_mode_mobile', 'webtoon')
+    const listeners = vi.spyOn(HTMLElement.prototype, 'addEventListener')
+    const wrapper = mount(MangaReader, { props: {
+      media: sampleMangaMedia, currentPage: 0, totalPages: 3, pageDimensions: [],
+      showControls: false, clickOnlyControls: true, progressText: '', progressPercent: 0,
+    } })
+    wrappers.push(wrapper)
+    const viewport = wrapper.get('.he-webtoon-viewport').element
+    const touches = listeners.mock.calls.filter(([type], index) =>
+      listeners.mock.contexts[index] === viewport && type.startsWith('touch'))
+    expect(touches.map(([type]) => type).sort()).toEqual(['touchcancel', 'touchend', 'touchmove', 'touchstart'])
+    for (const [, , options] of touches) expect(options).toMatchObject({ passive: true })
+  })
+
   it('correctly reports final page completion when scrolling to bottom on mobile web', async () => {
     localStorage.setItem('he_manga_read_mode', 'webtoon')
     localStorage.setItem('he_manga_read_mode_mobile', 'webtoon')

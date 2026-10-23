@@ -1,6 +1,6 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch, type Ref } from 'vue'
 
-/** Content-only pinch zoom; native one-finger scrolling remains intact at 1x. */
+/** Only a pinch owns scrolling; independent one-finger gestures stay native. */
 export function useWebtoonZoom(viewport: Ref<HTMLDivElement | null>, content: Ref<HTMLDivElement | null>) {
   const scale = ref(1), translateX = ref(0), contentHeight = ref(0), isInteracting = ref(false)
   let previousDistance = 0, previousX = 0, previousY = 0
@@ -9,13 +9,25 @@ export function useWebtoonZoom(viewport: Ref<HTMLDivElement | null>, content: Re
   let rect: DOMRect | undefined, pendingScroll: number | null = null
   let revision = 0, disposed = false
   let observer: ResizeObserver | undefined
+  let activeTarget: HTMLDivElement | null = null
+  const stopBlockingMoves = () => {
+    activeTarget?.removeEventListener('touchmove', onTouchMove)
+    activeTarget = null
+  }
+  const startBlockingMoves = () => {
+    stopBlockingMoves()
+    activeTarget = viewport.value
+    activeTarget?.addEventListener('touchmove', onTouchMove, { passive: false })
+  }
   const measure = () => { contentHeight.value = content.value?.offsetHeight || 0 }
-  watch(content, element => {
+  // At 1x the column stays in normal flow, without a measured height shim.
+  watch([content, () => scale.value > 1], ([element, zoomed]) => {
     observer?.disconnect(); observer = undefined
-    if (!element) { contentHeight.value = 0; return }
+    if (!element || !zoomed) return
     measure()
     if (typeof ResizeObserver !== 'undefined') { observer = new ResizeObserver(measure); observer.observe(element) }
   }, { flush: 'post' })
+  watch(viewport, stopBlockingMoves, { flush: 'sync' })
   const clampX = (x: number, zoom: number) => Math.max((viewport.value?.clientWidth || 0) * (1 - zoom), Math.min(0, x))
   const setScroll = (top: number) => {
     if (!viewport.value) { pendingScroll = null; revision++; return }
@@ -40,16 +52,29 @@ export function useWebtoonZoom(viewport: Ref<HTMLDivElement | null>, content: Re
     panScroll = pendingScroll ?? viewport.value?.scrollTop ?? 0
   }
   const onTouchStart = (event: TouchEvent) => {
-    rect = viewport.value?.getBoundingClientRect(); measure()
     if (event.touches.length >= 2) {
+      rect = viewport.value?.getBoundingClientRect(); measure()
       gesturePinched = true
       const point = midpoint(event.touches)
       previousDistance = Math.max(1, point.distance); previousX = point.x; previousY = point.y
       isInteracting.value = true
-      if (event.cancelable) event.preventDefault()
-    } else if (event.touches[0]) { gesturePinched = false; startPan(event.touches[0]); isInteracting.value = scale.value > 1 }
+      // touchstart itself is passive. Only moves during this pinch can block
+      // native scrolling; remove this listener as soon as all fingers lift.
+      startBlockingMoves()
+    } else if (event.touches[0]) {
+      gesturePinched = false; isInteracting.value = false
+      stopBlockingMoves()
+      if (scale.value > 1) startPan(event.touches[0])
+    }
   }
   const onTouchMove = (event: TouchEvent) => {
+    if (!gesturePinched) {
+      // Native pan-y retains vertical inertia even when the column is enlarged.
+      if (scale.value > 1 && event.touches.length === 1) {
+        translateX.value = clampX(panTx + event.touches[0]!.clientX - panX, scale.value)
+      }
+      return
+    }
     if (!viewport.value || !rect) return
     if (event.touches.length >= 2 && previousDistance) {
       if (event.cancelable) event.preventDefault()
@@ -62,29 +87,32 @@ export function useWebtoonZoom(viewport: Ref<HTMLDivElement | null>, content: Re
       scale.value = nextScale
       setScroll(nextTop)
       previousDistance = Math.max(1, point.distance); previousX = point.x; previousY = point.y
-    } else if (event.touches.length === 1 && (scale.value > 1 || gesturePinched)) {
+    } else if (event.touches.length === 1) {
       if (event.cancelable) event.preventDefault()
       translateX.value = clampX(panTx + event.touches[0]!.clientX - panX, scale.value)
       setScroll(panScroll - (event.touches[0]!.clientY - panY))
     }
   }
+  // The permanently installed move observer must never cancel native scrolling.
+  const onPassiveTouchMove = (event: TouchEvent) => { if (!gesturePinched) onTouchMove(event) }
   const onTouchEnd = (event: TouchEvent) => {
     if (event.type !== 'touchcancel' && event.touches.length >= 2) { onTouchStart(event); return }
     previousDistance = 0
-    isInteracting.value = event.type !== 'touchcancel' && event.touches.length > 0 && (scale.value > 1 || gesturePinched)
+    isInteracting.value = event.type !== 'touchcancel' && event.touches.length > 0 && gesturePinched
     if (event.touches[0]) startPan(event.touches[0])
-    if (!event.touches.length || event.type === 'touchcancel') gesturePinched = false
+    if (!event.touches.length || event.type === 'touchcancel') { gesturePinched = false; stopBlockingMoves() }
   }
   const reset = () => {
     const top = (pendingScroll ?? viewport.value?.scrollTop ?? 0) / scale.value
     scale.value = 1; translateX.value = 0; previousDistance = 0; isInteracting.value = false; gesturePinched = false
+    stopBlockingMoves()
     setScroll(top)
   }
-  onBeforeUnmount(() => { disposed = true; revision++; observer?.disconnect() })
-  return { scale, translateX, contentHeight, isInteracting, measure, reset, onTouchStart, onTouchMove, onTouchEnd,
-    spaceStyle: computed(() => ({ height: contentHeight.value ? `${contentHeight.value * scale.value}px` : undefined })),
+  onBeforeUnmount(() => { disposed = true; revision++; observer?.disconnect(); stopBlockingMoves() })
+  return { scale, translateX, contentHeight, isInteracting, measure, reset, onTouchStart, onTouchMove, onPassiveTouchMove, onTouchEnd,
+    spaceStyle: computed(() => ({ height: scale.value > 1 && contentHeight.value ? `${contentHeight.value * scale.value}px` : undefined })),
     contentStyle: computed(() => ({
-      position: contentHeight.value ? 'absolute' as const : 'relative' as const,
+      position: scale.value > 1 && contentHeight.value ? 'absolute' as const : 'relative' as const,
       transformOrigin: 'top left',
       transform: scale.value === 1 ? undefined : `translate3d(${translateX.value}px, 0, 0) scale(${scale.value})`,
     })),

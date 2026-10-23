@@ -451,7 +451,7 @@ const onWebtoonTouchStart = (event: TouchEvent) => {
   if (event.touches.length !== 1) suppressWebtoonClick = true
 }
 const onWebtoonTouchMove = (event: TouchEvent) => {
-  webtoonZoom.onTouchMove(event)
+  webtoonZoom.onPassiveTouchMove(event)
   const touch = event.touches[0]
   if (event.touches.length !== 1 || (touch && Math.hypot(touch.clientX - webtoonTouchX, touch.clientY - webtoonTouchY) > 8)) {
     suppressWebtoonClick = true
@@ -692,14 +692,13 @@ function onReaderViewportResize() { preloadAdjacentPages() }
       <div
         v-if="readMode === 'webtoon'"
         ref="webtoonContainerRef"
-        style="overflow-anchor: none; overscroll-behavior: contain"
-        :style="{ touchAction: webtoonZoom.scale.value > 1 ? 'none' : 'pan-y' }"
+        style="overflow-anchor: none; overscroll-behavior: contain; touch-action: pan-y"
         class="he-webtoon-viewport w-full h-full overflow-y-auto overflow-x-hidden custom-scrollbar select-none"
         @scroll="onWebtoonScroll"
-        @touchstart="onWebtoonTouchStart"
-        @touchmove="onWebtoonTouchMove"
-        @touchend="onWebtoonTouchEnd"
-        @touchcancel="onWebtoonTouchEnd"
+        @touchstart.passive="onWebtoonTouchStart"
+        @touchmove.passive="onWebtoonTouchMove"
+        @touchend.passive="onWebtoonTouchEnd"
+        @touchcancel.passive="onWebtoonTouchEnd"
         @gesturestart="onWebtoonGesture" @gesturechange="onWebtoonGesture"
       >
         <div class="he-webtoon-space relative w-full" :style="webtoonZoom.spaceStyle.value">

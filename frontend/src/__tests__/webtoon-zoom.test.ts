@@ -11,12 +11,12 @@ const touch = (points: number[][], type = 'touchmove') => ({
 function create() {
   const viewport = document.createElement('div'), content = document.createElement('div')
   Object.defineProperties(viewport, { clientWidth: { value: 400 }, clientHeight: { value: 600 } })
-  Object.defineProperty(content, 'offsetHeight', { value: 5000 })
+  Object.defineProperty(content, 'offsetHeight', { get: () => 5000, configurable: true })
   vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 400, height: 600 } as DOMRect)
   viewport.scrollTop = 1000
   let zoom!: ReturnType<typeof useWebtoonZoom>
   wrapper = mount(defineComponent({ setup() { zoom = useWebtoonZoom(ref(viewport), ref(content)); return () => null } }))
-  return { zoom, viewport }
+  return { zoom, viewport, content }
 }
 
 it('clamps to 100% while fingers are still down, with no change or rebound on release', async () => {
@@ -62,6 +62,51 @@ it('keeps normal one-finger scrolling native and reverses immediately after reac
   zoom.onTouchMove(touch([[190, 300], [210, 300]]))
   zoom.onTouchMove(touch([[185, 300], [215, 300]])); await nextTick()
   expect(zoom.scale.value).toBe(1.5)
+})
+
+it('does no zoom layout reads or scroll writes during normal one-finger reading', async () => {
+  const { zoom, viewport, content } = create()
+  const height = vi.spyOn(content, 'offsetHeight', 'get')
+  const scroll = vi.spyOn(viewport, 'scrollTop', 'set')
+  zoom.onTouchStart(touch([[100, 300]], 'touchstart'))
+  zoom.onPassiveTouchMove(touch([[100, 200]]))
+  zoom.onTouchEnd(touch([], 'touchend')); await nextTick()
+  expect(viewport.getBoundingClientRect).not.toHaveBeenCalled()
+  expect(height).not.toHaveBeenCalled()
+  expect(scroll).not.toHaveBeenCalled()
+  expect(zoom.spaceStyle.value.height).toBeUndefined()
+  expect(zoom.contentStyle.value.position).toBe('relative')
+})
+
+it('only installs a blocking move listener during a pinch, and cleans it up on end or unmount', async () => {
+  const { zoom, viewport } = create()
+  const add = vi.spyOn(viewport, 'addEventListener'), remove = vi.spyOn(viewport, 'removeEventListener')
+  zoom.onTouchStart(touch([[100, 300]], 'touchstart'))
+  expect(add).not.toHaveBeenCalled()
+  const pinch = touch([[100, 300], [300, 300]], 'touchstart')
+  zoom.onTouchStart(pinch)
+  expect(pinch.preventDefault).not.toHaveBeenCalled()
+  expect(add).toHaveBeenCalledWith('touchmove', zoom.onTouchMove, { passive: false })
+  zoom.onTouchEnd(touch([], 'touchend'))
+  expect(remove).toHaveBeenCalledWith('touchmove', zoom.onTouchMove)
+  zoom.onTouchStart(pinch)
+  remove.mockClear()
+  wrapper!.unmount(); wrapper = undefined
+  expect(remove).toHaveBeenCalledWith('touchmove', zoom.onTouchMove)
+})
+
+it('preserves native vertical scrolling on a new one-finger gesture while zoomed', async () => {
+  const { zoom, viewport } = create()
+  zoom.onTouchStart(touch([[100, 300], [300, 300]], 'touchstart'))
+  zoom.onTouchMove(touch([[0, 300], [400, 300]])); await nextTick()
+  zoom.onTouchEnd(touch([], 'touchend'))
+  const top = viewport.scrollTop, move = touch([[220, 200]])
+  zoom.onTouchStart(touch([[200, 300]], 'touchstart'))
+  zoom.onPassiveTouchMove(move); await nextTick()
+  expect(move.preventDefault).not.toHaveBeenCalled()
+  expect(viewport.scrollTop).toBe(top)
+  expect(zoom.translateX.value).toBe(-180)
+  expect(zoom.isInteracting.value).toBe(false)
 })
 
 it('cancels pending scroll writes when the reader closes', async () => {
