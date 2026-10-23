@@ -41,7 +41,7 @@ const applyToken = (token: string) => {
 
 export const expireAuth = () => {
   if (desktopBridge) { void desktopBridge.logout().then(applyDesktopSession); return }
-  applyToken(''); authState.user = null
+  authEpoch++; applyToken(''); authState.user = null; authState.ready = true
 }
 
 axios.interceptors.request.use(config => {
@@ -70,87 +70,117 @@ axios.interceptors.response.use(
     }
     const url = String(error?.config?.url || '')
     if (error?.response?.status === 401 && !url.includes('/auth/login')) {
-      applyToken('')
-      authState.user = null
+      const headers = error?.config?.headers
+      const reqAuth = headers ? (typeof headers.get === 'function' ? headers.get('Authorization') : headers.Authorization || headers.authorization) : undefined
+      const currentAuth = authState.token ? `Bearer ${authState.token}` : ''
+      if (!reqAuth || !currentAuth || reqAuth === currentAuth) {
+        applyToken('')
+        authState.user = null
+      }
     }
     return Promise.reject(error)
   },
 )
 
+let authEpoch = 0
+
 export const initAuth = async () => {
+  const epoch = ++authEpoch
   authState.ready = false
   authState.error = ''
   if (desktopBridge) {
     localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY)
     delete axios.defaults.headers.common.Authorization
     if (!listening) { desktopBridge.onSessionChanged(applyDesktopSession); listening = true }
-    try { applyDesktopSession(await desktopBridge.authentication()) }
-    catch { authState.user = null; authState.error = '无法检查登录状态，请重新连接服务器。' }
-    authState.ready = !desktopSession.restoring
-    return
-  }
-  applyToken(authState.token)
-  try {
-    const status = await axios.get(`${API_BASE_URL}/auth/status`, { timeout: 5000 })
-    authState.hasUsers = Boolean(status.data.has_users)
-  } catch (err: any) {
-    applyToken('')
-    authState.user = null
-    authState.error = err.code === 'ECONNABORTED'
-      ? '连接后端超时，请确认 HE Manager 服务正在运行。'
-      : '无法连接后端，请确认 HE Manager 服务正在运行。'
-    authState.ready = true
-    return
-  }
-
-  if (authState.token) {
     try {
-      const me = await axios.get(`${API_BASE_URL}/auth/me`, { timeout: 5000 })
-      authState.user = me.data
-    } catch (err: any) {
-      applyToken('')
-      authState.user = null
-      if (err.response?.status !== 401) {
-        authState.error = err.code === 'ECONNABORTED'
-          ? '连接后端超时，请确认 HE Manager 服务正在运行。'
-          : '无法连接后端，请确认 HE Manager 服务正在运行。'
+      const session = await desktopBridge.authentication()
+      if (epoch === authEpoch) applyDesktopSession(session)
+    } catch {
+      if (epoch === authEpoch) {
+        authState.user = null
+        authState.error = '无法检查登录状态，请重新连接服务器。'
       }
     }
+    if (epoch === authEpoch) authState.ready = !desktopSession.restoring
+    return
   }
 
-  authState.ready = true
+  const token = authState.token || localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || ''
+  applyToken(token)
+  const current = () => epoch === authEpoch && authState.token === token
+  const connectionError = (err: any) => err.code === 'ECONNABORTED'
+    ? '连接后端超时，请确认 HE Manager 服务正在运行。'
+    : '无法连接后端，请确认 HE Manager 服务正在运行。'
+  try {
+    const status = await axios.get(`${API_BASE_URL}/auth/status`, { timeout: 5000 })
+    if (!current()) return
+    authState.hasUsers = Boolean(status.data.has_users)
+    if (token) {
+      try {
+        const me = await axios.get(`${API_BASE_URL}/auth/me`, { timeout: 5000 })
+        if (current()) authState.user = me.data
+      } catch (err: any) {
+        if (epoch !== authEpoch) return
+        // The response interceptor can already have cleared this token on 401.
+        if (!current() && !(err.response?.status === 401 && !authState.token)) return
+        authState.user = null
+        if (err.response?.status === 401) applyToken('')
+        else authState.error = connectionError(err)
+      }
+    } else {
+      authState.user = null
+    }
+  } catch (err: any) {
+    if (current()) {
+      authState.user = null
+      authState.error = connectionError(err)
+    }
+  } finally {
+    if (epoch === authEpoch) authState.ready = true
+  }
 }
 
 export const login = async (username: string, password: string) => {
   if (desktopBridge) { applyDesktopSession(await desktopBridge.login({ username, password })); return }
   const res = await axios.post(`${API_BASE_URL}/auth/login`, { username, password })
+  authEpoch++
   applyToken(res.data.access_token)
   authState.user = res.data.user
   authState.hasUsers = true
+  authState.ready = true
+  authState.error = ''
 }
 
 export const bootstrapAdmin = async (username: string, password: string) => {
   if (desktopBridge) { applyDesktopSession(await desktopBridge.login({ username, password, bootstrap: true })); return }
   const res = await axios.post(`${API_BASE_URL}/auth/bootstrap`, { username, password, is_admin: true })
+  authEpoch++
   applyToken(res.data.access_token)
   authState.user = res.data.user
   authState.hasUsers = true
+  authState.ready = true
+  authState.error = ''
 }
 
 export const logout = async () => {
+  const epoch = ++authEpoch
   if (desktopBridge) { applyDesktopSession(await desktopBridge.logout()); return }
   try {
     if (authState.token) await axios.post(`${API_BASE_URL}/auth/logout`, {})
   } catch {
     // Best-effort server-side revocation; local logout should always work.
   }
+  if (epoch !== authEpoch) return
   applyToken('')
   authState.user = null
+  authState.ready = true
+  authState.error = ''
   try {
     const status = await axios.get(`${API_BASE_URL}/auth/status`, { timeout: 5000 })
+    if (epoch !== authEpoch) return
     authState.hasUsers = Boolean(status.data.has_users)
-    authState.error = ''
   } catch (err: any) {
+    if (epoch !== authEpoch) return
     authState.hasUsers = true
     authState.error = err.code === 'ECONNABORTED'
       ? '连接后端超时，请确认 HE Manager 服务正在运行。'

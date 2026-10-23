@@ -88,6 +88,10 @@ export function useImageViewerZoom(
     isMouseDown = false
     hasDragged = false
     dragDistance = 0
+    multipleTouches = false
+    hadMultipleTouches = false
+    suppressTouchClick = false
+    pinchDistance = 0
   }
 
   const handleZoomWheel = (event: WheelEvent) => {
@@ -146,6 +150,7 @@ export function useImageViewerZoom(
   let pinchScale = 1
   let touchX = 0, touchY = 0, touchTx = 0, touchTy = 0
   let multipleTouches = false
+  let hadMultipleTouches = false
   let suppressTouchClick = false
   const distance = (touches: TouchList) => Math.hypot(touches[0]!.clientX - touches[1]!.clientX, touches[0]!.clientY - touches[1]!.clientY)
   const onTouchStart = (event: TouchEvent) => {
@@ -153,10 +158,10 @@ export function useImageViewerZoom(
     if (event.touches.length === 1) {
       touchX = event.touches[0]!.clientX; touchY = event.touches[0]!.clientY
       touchTx = translateX.value; touchTy = translateY.value
-      multipleTouches = false; suppressTouchClick = false
+      multipleTouches = false; hadMultipleTouches = false; suppressTouchClick = false
       isPanning.value = isZoomed.value
     } else {
-      multipleTouches = true; suppressTouchClick = true
+      multipleTouches = true; hadMultipleTouches = true; suppressTouchClick = true
       pinchDistance = distance(event.touches); pinchScale = scale.value
       isPanning.value = true
       if (event.cancelable) event.preventDefault()
@@ -177,8 +182,25 @@ export function useImageViewerZoom(
   }
   const onTouchEnd = (event: TouchEvent) => {
     isPanning.value = false
-    if (event.type === 'touchcancel') { suppressTouchClick = true; multipleTouches = true; return }
-    if (event.touches.length || multipleTouches || isZoomed.value || !event.changedTouches.length) return
+    if (event.type === 'touchcancel') {
+      suppressTouchClick = true; hadMultipleTouches = true
+      multipleTouches = false; pinchDistance = 0
+      return
+    }
+    if (event.touches.length === 1 && multipleTouches) {
+      touchX = event.touches[0]!.clientX; touchY = event.touches[0]!.clientY
+      touchTx = translateX.value; touchTy = translateY.value
+      multipleTouches = false
+      isPanning.value = isZoomed.value
+      return
+    }
+    if (event.touches.length === 0) {
+      multipleTouches = false
+      pinchDistance = 0
+    }
+    // A pinch remains a multi-touch gesture until every finger is released,
+    // even after one finger continues panning or the scale returns to 1x.
+    if (event.touches.length || hadMultipleTouches || isZoomed.value || !event.changedTouches.length) return
     const dx = event.changedTouches[0]!.clientX - touchX, dy = event.changedTouches[0]!.clientY - touchY
     if (Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
       suppressTouchClick = true

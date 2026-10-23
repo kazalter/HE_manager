@@ -49,6 +49,7 @@ const showFilters = ref(false)
 const refreshSpinning = ref(false)
 const copiedMediaId = ref<number | null>(null)
 const confirmDeletePair = ref<DuplicateCandidatePair | null>(null)
+const deletingFile = ref(false)
 const deleteTrigger = ref<HTMLElement | null>(null)
 const deleteModalOpen = computed({
   get: () => !!confirmDeletePair.value,
@@ -252,11 +253,34 @@ const onBatchNotDuplicate = async () => {
 }
 
 const copyPath = async (media: DedupMediaSummary) => {
-  await navigator.clipboard.writeText(media.display_path)
-  copiedMediaId.value = media.id
-  window.setTimeout(() => {
-    if (copiedMediaId.value === media.id) copiedMediaId.value = null
-  }, 1200)
+  const previousFocus = document.activeElement as HTMLElement | null
+  let textarea: HTMLTextAreaElement | undefined
+  try {
+    let copied = false
+    if (navigator?.clipboard?.writeText) {
+      try { await navigator.clipboard.writeText(media.display_path); copied = true } catch { /* Try the HTTP-compatible fallback. */ }
+    }
+    if (!copied) {
+      textarea = document.createElement('textarea')
+      textarea.value = media.display_path
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      copied = document.execCommand('copy')
+    }
+    if (!copied) throw new Error('Clipboard unavailable')
+    copiedMediaId.value = media.id
+    window.setTimeout(() => {
+      if (copiedMediaId.value === media.id) copiedMediaId.value = null
+    }, 1200)
+  } catch {
+    copiedMediaId.value = null
+    dedupStore.state.errorMessage = '复制失败，请选择路径文字手动复制。'
+  } finally {
+    textarea?.remove()
+    previousFocus?.focus?.()
+  }
 }
 
 const askDeleteFile = (pair: DuplicateCandidatePair, event: MouseEvent) => {
@@ -270,13 +294,16 @@ const closeDeleteModal = () => {
 }
 
 const onDeleteConfirmed = async () => {
-  if (!confirmDeletePair.value) return
+  if (!confirmDeletePair.value || deletingFile.value) return
   const pair = confirmDeletePair.value
+  deletingFile.value = true
   try {
     await dedupStore.deleteMediaFile(pair.candidate.id)
     closeDeleteModal()
   } catch {
     // Keep the modal open so the user can read the page-level error and retry/cancel.
+  } finally {
+    deletingFile.value = false
   }
 }
 
@@ -625,8 +652,8 @@ onBeforeUnmount(() => {
         <p class="mt-1.5 text-meta text-muted tabular-nums">{{ formatSize(confirmDeletePair.candidate.file_size) }} · {{ typeMeta(confirmDeletePair.candidate.media_type).label }}</p>
       </div>
       <template #footer>
-        <UiButton variant="ghost" autofocus @click="closeDeleteModal">取消</UiButton>
-        <UiButton variant="danger" @click="onDeleteConfirmed">
+        <UiButton variant="ghost" autofocus :disabled="deletingFile" @click="closeDeleteModal">取消</UiButton>
+        <UiButton variant="danger" :loading="deletingFile" :disabled="deletingFile" @click="onDeleteConfirmed">
           <template #icon><Trash2 :size="16" aria-hidden="true" /></template>
           确认永久删除
         </UiButton>

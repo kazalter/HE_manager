@@ -52,8 +52,8 @@ const handleMainScroll = (event: Event) => { showBackToTop.value = (event.target
 const scrollToTop = () => mainScrollRef.value?.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
 const retryProgress = () => { void desktopBridge?.retryProgress().catch(() => {}) }
 const pauseAudioForVideo = (event: Event) => { if (event.target instanceof HTMLVideoElement && audioPlaybackStore.state.playing) audioPlaybackStore.togglePlay() }
-onMounted(() => { window.addEventListener('online', retryProgress); window.addEventListener('he:content-ready', onContentReady); document.addEventListener('play', pauseAudioForVideo, true) })
-onBeforeUnmount(() => { window.removeEventListener('online', retryProgress); window.removeEventListener('he:content-ready', onContentReady); document.removeEventListener('play', pauseAudioForVideo, true) })
+onMounted(() => { window.addEventListener('online', retryProgress); window.addEventListener('he:content-ready', onContentReady); window.addEventListener('he:scroll-top', scrollToTop); document.addEventListener('play', pauseAudioForVideo, true) })
+onBeforeUnmount(() => { window.removeEventListener('online', retryProgress); window.removeEventListener('he:content-ready', onContentReady); window.removeEventListener('he:scroll-top', scrollToTop); document.removeEventListener('play', pauseAudioForVideo, true) })
 </script>
 <template>
   <DesktopToolbar v-if="desktopBridge" />
@@ -67,7 +67,7 @@ onBeforeUnmount(() => { window.removeEventListener('online', retryProgress); win
       <div v-if="!isEmbed" class="h-8 w-full"></div>
     </main>
     <MobileNavigation v-if="compact && !isEmbed" :inert="audioPlaybackStore.state.expanded || !!route.query.media" /><GlobalAudioPlayer v-if="!isEmbed" /><AppUpdateNotice v-if="!isEmbed" />
-    <button v-if="showBackToTop && !isEmbed && !route.query.media" type="button" @click="scrollToTop" class="he-back-top fixed right-6 z-30 size-11 rounded-full border border-line-strong bg-surface-3 text-muted shadow-pop flex items-center justify-center transition-colors duration-150 hover:text-ink focus-ring" aria-label="返回顶部"><ChevronUp :size="20" aria-hidden="true" /></button>
+    <button v-if="showBackToTop && !isEmbed && !route.query.media && !audioPlaybackStore.state.expanded" type="button" @click="scrollToTop" class="he-back-top fixed right-6 z-30 size-11 rounded-full border border-line-strong bg-surface-3 text-muted shadow-pop flex items-center justify-center transition-colors duration-150 hover:text-ink focus-ring" aria-label="返回顶部"><ChevronUp :size="20" aria-hidden="true" /></button>
   </div>
   <div v-else class="he-app-shell bg-background text-subtle text-body flex items-center justify-center">正在检查登录状态</div>
 </template>

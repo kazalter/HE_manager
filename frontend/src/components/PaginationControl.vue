@@ -33,8 +33,12 @@ const inputValid = computed(() => (
   && inputPage.value >= 1
   && inputPage.value <= props.pageCount
 ))
-const rangeStart = computed(() => props.totalItems ? (props.page - 1) * props.pageSize + 1 : 0)
-const rangeEnd = computed(() => Math.min(props.totalItems, props.page * props.pageSize))
+const rangeStart = computed(() => {
+  if (!props.totalItems || props.page < 1) return 0
+  const start = (props.page - 1) * props.pageSize + 1
+  return Math.min(start, props.totalItems)
+})
+const rangeEnd = computed(() => Math.min(props.totalItems, Math.max(0, props.page * props.pageSize)))
 
 watch(() => props.page, page => {
   pageInput.value = String(page)
@@ -55,9 +59,12 @@ const togglePanel = () => {
 
 const choosePage = (page: number) => {
   if (props.disabled || page < 1 || page > props.pageCount) return
+  const wasOpen = open.value
   open.value = false
   if (page !== props.page) emit('change', page)
-  nextTick(() => triggerRef.value?.focus())
+  if (wasOpen) {
+    nextTick(() => triggerRef.value?.focus())
+  }
 }
 
 const submitJump = () => {
@@ -109,8 +116,13 @@ onUnmounted(() => {
 <template>
   <nav class="media-pagination" aria-label="媒体分页">
     <p class="media-pagination__summary">
-      显示 <strong>{{ rangeStart.toLocaleString() }}–{{ rangeEnd.toLocaleString() }}</strong>
-      <span>共 {{ totalItems.toLocaleString() }} {{ itemLabel }}</span>
+      <template v-if="totalItems > 0">
+        显示 <strong>{{ rangeStart.toLocaleString() }}–{{ rangeEnd.toLocaleString() }}</strong>
+        <span>共 {{ totalItems.toLocaleString() }} {{ itemLabel }}</span>
+      </template>
+      <template v-else>
+        <span>共 0 {{ itemLabel }}</span>
+      </template>
     </p>
 
     <div class="media-pagination__controls">

@@ -376,7 +376,7 @@ const onWebtoonScroll = () => {
     if (isProgrammaticScroll || readMode.value !== 'webtoon') return
     const container = webtoonContainerRef.value
     if (!container || !props.totalPages) return
-    const containerTop = container.scrollTop + (desktopBridge ? container.clientHeight / 2 : 100)
+    const containerTop = container.scrollTop + container.clientHeight / 2
     const children = container.children
     if (!children.length) return
     let low = 0
@@ -387,7 +387,7 @@ const onWebtoonScroll = () => {
       if (el.offsetTop + el.offsetHeight < containerTop) low = mid + 1
       else high = mid
     }
-    if (desktopBridge && container.scrollTop + container.clientHeight >= container.scrollHeight - 2) low = children.length - 1
+    if (container.scrollTop + container.clientHeight >= container.scrollHeight - 2) low = children.length - 1
     if (low !== props.currentPage) {
       // Scrolling reports progress; it must not trigger the page-navigation watcher.
       scrollReportedPage = low
@@ -707,7 +707,7 @@ onBeforeUnmount(() => {
         :style="{
           width: desktopBridge ? 'min(800px, calc(100% - 2rem))' : undefined,
           bottom: 'calc(12px + env(safe-area-inset-bottom))',
-          transform: `translate3d(-50%, ${isStripOpen ? '-184px' : (showControls || !clickOnlyControls ? '0px' : '12px')}, 0)`,
+          transform: `translate3d(-50%, ${isStripOpen ? 'calc(-184px - env(safe-area-inset-bottom))' : (showControls || !clickOnlyControls ? '0px' : '12px')}, 0)`,
         }"
         style="will-change: transform, opacity;"
         @mouseenter="emit('controlsHover', true)"
@@ -862,15 +862,15 @@ onBeforeUnmount(() => {
       <!-- Zoom Controls Floating Pill (Single / Double Mode) -->
       <div
         v-if="readMode !== 'webtoon'"
-        :class="showControls
+        :class="showControls || isZoomed
           ? 'opacity-100'
           : 'opacity-0 pointer-events-none'"
-        :inert="!showControls"
+        :inert="!showControls && !isZoomed"
         class="he-manga-zoom absolute right-6 z-20 flex select-none items-center gap-0.5 rounded-2xl bg-black/75 p-1 text-white/80 ring-1 ring-inset ring-white/10 transition-[transform,opacity] duration-200 ease-out"
         :style="{
           top: desktopBridge ? '84px' : undefined,
           bottom: desktopBridge ? 'auto' : 'calc(12px + env(safe-area-inset-bottom))',
-          transform: `translate3d(0, ${desktopBridge ? (showControls ? '0px' : '-12px') : isStripOpen ? '-184px' : (showControls ? '0px' : '12px')}, 0)`,
+          transform: `translate3d(0, ${desktopBridge ? (showControls ? '0px' : '-12px') : isStripOpen ? 'calc(-184px - env(safe-area-inset-bottom))' : (showControls || isZoomed ? '0px' : '12px')}, 0)`,
         }"
         style="will-change: transform, opacity;"
         @click.stop

@@ -157,13 +157,22 @@ function onKeydown(event: KeyboardEvent) {
  if (key === ' ' || key === 'k') { event.preventDefault(); if (!event.repeat) void control('pause') }
  else if (key === 'f') { event.preventDefault(); if (!event.repeat) void control('fullscreen') }
  else if (key === 'm') { event.preventDefault(); if (!event.repeat) void mute() }
+ else if (key === 'arrowleft' || key === 'j') { event.preventDefault(); void control('seek', -10) }
+ else if (key === 'arrowright' || key === 'l') { event.preventDefault(); void control('seek', 10) }
  else if (key === 'arrowup' || key === 'arrowdown') { event.preventDefault(); void setVolume(Math.max(0, Math.min(100, volume.value + (key === 'arrowup' ? 5 : -5)))) }
- else if (key === 'home') { event.preventDefault(); void seek(0) }
+ else if (key === 'home' || key === '0') { event.preventDefault(); void seek(0) }
  else if (key === 'end') { event.preventDefault(); void seek(state.value?.duration || 0) }
  revealControls()
 }
 watch(() => props.url, () => { settingsOpen.value = false; controlsHovered.value = false; keyboardFocus.value = false; revealControls(); void open() }, { immediate: true })
-onMounted(() => { desktopBridge!.mountVideoSurface(canvasId); void poll() })
+onMounted(() => {
+ desktopBridge!.mountVideoSurface(canvasId)
+ void poll()
+ void nextTick(() => {
+  const canvas = document.getElementById(canvasId)
+  canvas?.focus()
+ })
+})
 onBeforeUnmount(() => {
  disposed = true; epoch++; clearTimeout(timer); clearTimeout(clickTimer)
  flushProgress()

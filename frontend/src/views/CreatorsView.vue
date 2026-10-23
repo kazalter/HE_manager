@@ -148,7 +148,7 @@ const closeMedia = () => {
   selectedMedia.value = null
   const query = { ...route.query }
   delete query.media
-  router.push({ path: route.path, query })
+  void router.replace({ path: route.path, query })
 }
 
 const syncSelectedMediaFromRoute = async () => {

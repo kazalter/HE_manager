@@ -126,7 +126,10 @@ onMounted(() => {
   window.addEventListener('keydown', handleGlobalKeyDown)
 })
 
+let recommendAbortController: AbortController | null = null
+
 onBeforeUnmount(() => {
+  recommendAbortController?.abort()
   document.removeEventListener('pointerdown', handleDocClick)
   window.removeEventListener('keydown', handleGlobalKeyDown)
 })
@@ -286,7 +289,9 @@ const startProfileAnalysis = async (force = false) => {
 }
 
 const requestRecommendations = async (customSeed?: number) => {
-  if (loading.value) return
+  recommendAbortController?.abort()
+  recommendAbortController = new AbortController()
+  const signal = recommendAbortController.signal
   loading.value = true
   error.value = ''
   if (customSeed !== undefined) {
@@ -299,12 +304,16 @@ const requestRecommendations = async (customSeed?: number) => {
       avoid_tags: parseCsv(avoidInput.value),
       preferred_tags: parseCsv(preferredInput.value),
       seed: currentSeed.value,
-    })
+    }, { signal })
+    if (signal.aborted) return
     result.value = res.data
   } catch (err: any) {
+    if (axios.isCancel(err) || signal.aborted) return
     error.value = err?.response?.data?.detail || '推荐获取失败，请重试'
   } finally {
-    loading.value = false
+    if (!signal.aborted) {
+      loading.value = false
+    }
   }
 }
 

@@ -109,15 +109,26 @@ const filteredTags = computed(() => {
 })
 
 const activeFilterCount = computed(() => {
-  return Number(Boolean(selectedTag.value)) + Number(Boolean(sourceFilter.value)) + Number(sortBy.value !== 'date') + Number(Boolean(searchQuery.value))
+  return Number(Boolean(selectedTag.value)) +
+    Number(Boolean(sourceFilter.value)) +
+    Number(sortBy.value !== 'date') +
+    Number(Boolean(searchQuery.value)) +
+    Number(Boolean(favoriteOnly.value))
 })
 
 const clearFilters = () => {
-  searchQuery.value = ''
-  selectedTag.value = ''
+  window.clearTimeout(searchTimer)
   tagSearchQuery.value = ''
-  sourceFilter.value = ''
-  sortBy.value = 'date'
+  // Update the route once; its watcher restores every filter together.
+  // Mutating the refs first lets their watchers reinsert the old query.
+  const query = { ...route.query }
+  delete query.page
+  delete query.search
+  delete query.tag
+  delete query.sort
+  delete query.source
+  delete query.favorite
+  void router.replace({ path: route.path, query })
 }
 
 const dismissContinueItem = (id: number, event: MouseEvent) => {
@@ -132,11 +143,11 @@ const scrollContinue = (direction: -1 | 1) => {
 }
 
 const progressPercent = (media: Media) => {
-  if (media.media_type === 'video' && media.duration && media.progress > 0) {
+  if (media.media_type === 'video' && media.duration && media.duration > 0 && media.progress > 0) {
     return Math.min(100, Math.max(0, Math.round((media.progress / media.duration) * 100)))
   }
   // Manga progress is a 0-based page index, so page 0 only counts once reading started.
-  if (media.media_type === 'manga' && media.page_count && media.progress >= 0 && media.view_status !== 'unviewed') {
+  if (media.media_type === 'manga' && media.page_count && media.page_count > 0 && media.progress >= 0 && media.view_status !== 'unviewed') {
     return Math.min(100, Math.max(0, Math.round(((media.progress + 1) / media.page_count) * 100)))
   }
   return 0
@@ -434,10 +445,9 @@ const loadAdjacentViewerPage = async (direction: -1 | 1) => {
 const goToPage = (page: number) => {
   const target = Math.max(1, Math.min(page, pageCount.value))
   if (target === currentPage.value || loading.value) return
-  currentPage.value = target
-  syncPageQuery(target)
   const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
-  void fetchMedia(behavior)
+  scrollToTop(behavior)
+  syncPageQuery(target)
 }
 
 const updateMediaInList = (media: Media) => {
@@ -483,7 +493,7 @@ const closeMedia = () => {
   resetViewerMediaList()
   const query = { ...route.query }
   delete query.media
-  router.replace({ path: route.path, query })
+  void router.replace({ path: route.path, query })
 }
 
 const syncSelectedMediaFromRoute = async () => {

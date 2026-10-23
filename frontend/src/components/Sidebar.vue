@@ -7,6 +7,7 @@ import {
   Book,
   Box,
   CopyMinus,
+  Download,
   Film,
   Globe2,
   Headphones,
@@ -79,6 +80,7 @@ const sections = computed(() => ([
   {
     label: '系统与工具',
     items: [
+      { to: '/downloads', label: '下载任务', icon: Download },
       { to: '/bd2-spine', label: 'BD2 动态', icon: Box },
       { to: '/stats', label: '统计看板', icon: BarChart3 },
       { to: '/discarded', label: '丢弃记录', icon: ArchiveX, admin: true },

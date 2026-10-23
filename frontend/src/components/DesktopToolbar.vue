@@ -1,15 +1,22 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { Monitor, Server, Settings2 } from 'lucide-vue-next'
 import { desktopBridge, desktopState, setDesktopPreferences, type ImageEnhancement, type VideoEnhancement } from '../desktop'
 import { controlClass, fieldLabelClass, UiButton, UiModal } from './ui'
 import ColorModeSelect from './ColorModeSelect.vue'
 const open = ref(false), server = ref(''), error = ref(''), busy = ref(false)
 onMounted(() => { server.value = desktopState.server || 'http://192.168.0.101:8011'; open.value = !desktopState.server })
+watch(() => desktopState.server, (newServer) => {
+ if (newServer && (!server.value || server.value === 'http://192.168.0.101:8011')) {
+  server.value = newServer
+ }
+})
 const changeServer = async () => {
+ const target = server.value.trim()
+ if (!target) { error.value = '请输入服务器地址'; return }
  busy.value = true; error.value = ''
  try {
-  await desktopBridge!.connect(server.value)
+  await desktopBridge!.connect(target)
   localStorage.removeItem('he_manager_token')
   sessionStorage.clear()
   window.location.reload()

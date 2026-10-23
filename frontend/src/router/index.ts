@@ -82,6 +82,10 @@ const router = createRouter({
       path: '/bd2-spine/embed',
       name: 'bd2-spine-embed',
       component: () => import('../views/EmbedSpineView.vue')
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: '/'
     }
   ]
 })

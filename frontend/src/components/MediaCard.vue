@@ -40,14 +40,16 @@ const getThumb = (path: string | null) => path ? thumbnailUrl(path) : mediaPlace
 const coverSrc = computed(() => imageLoadFailed.value ? mediaPlaceholderUrl : getThumb(props.media.cover_path))
 
 const formatSize = (bytes: number) => {
-  if (bytes === 0) return '本地目录'
+  if (!bytes || bytes <= 0) return bytes === 0 ? '本地目录' : '0 B'
   const k = 1024
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1)
+  if (i < 0) return `${bytes} B`
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
 }
 
 const formatDuration = (seconds: number) => {
+  if (!seconds || seconds <= 0 || !Number.isFinite(seconds)) return '0:00'
   const total = Math.max(0, Math.floor(seconds))
   const hours = Math.floor(total / 3600)
   const minutes = Math.floor((total % 3600) / 60)
@@ -56,12 +58,12 @@ const formatDuration = (seconds: number) => {
 }
 
 const progressPercent = (media: Media) => {
-  if (media.media_type === 'video' && media.duration && media.progress > 0) {
+  if (media.media_type === 'video' && media.duration && media.duration > 0 && media.progress > 0) {
     return Math.min(100, Math.max(0, Math.round((media.progress / media.duration) * 100)))
   }
 
   // Manga progress is a 0-based page index, so page 0 only counts once reading started.
-  if (media.media_type === 'manga' && media.page_count && media.progress >= 0 && media.view_status !== 'unviewed') {
+  if (media.media_type === 'manga' && media.page_count && media.page_count > 0 && media.progress >= 0 && media.view_status !== 'unviewed') {
     return Math.min(100, Math.max(0, Math.round(((media.progress + 1) / media.page_count) * 100)))
   }
 
@@ -69,8 +71,8 @@ const progressPercent = (media: Media) => {
 }
 
 const mangaProgressText = (media: Media) => {
-  if (media.media_type !== 'manga' || !media.page_count) return ''
-  const current = Math.min(media.page_count, Math.max(1, media.progress + 1))
+  if (media.media_type !== 'manga' || !media.page_count || media.page_count <= 0) return ''
+  const current = Math.min(media.page_count, Math.max(1, (media.progress ?? 0) + 1))
   return `${current}/${media.page_count}`
 }
 
@@ -94,7 +96,7 @@ const typeLabel = (type: Media['media_type']) => {
 }
 
 const percent = computed(() => progressPercent(props.media))
-const extension = computed(() => props.media.extension.replace('.', '').toUpperCase() || 'DIR')
+const extension = computed(() => props.media.extension ? props.media.extension.replace('.', '').toUpperCase() : 'DIR')
 const showDuration = computed(() => (props.media.media_type === 'video' || props.media.media_type === 'audio') && !!props.media.duration)
 
 // Video stills and album art are not 2:3; fit them whole inside a poster tile.

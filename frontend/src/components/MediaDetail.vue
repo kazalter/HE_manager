@@ -554,14 +554,15 @@ onUnmounted(() => {
 const handleKeydown = (e: KeyboardEvent) => {
   if (discardTarget.value) return
   const target = e.target as HTMLElement | null
+  const el = target && typeof target.closest === 'function' ? target : null
   if (
-    target &&
-    (target.closest('.ui-modal') ||
-      target.tagName === 'SELECT' ||
-      (target.closest('button, a[href]') && e.key !== 'Escape') ||
-      target.tagName === 'INPUT' ||
-      target.tagName === 'TEXTAREA' ||
-      target.isContentEditable)
+    el &&
+    (el.closest('.ui-modal') ||
+      el.tagName === 'SELECT' ||
+      (el.closest('button, a[href]') && e.key !== 'Escape') ||
+      el.tagName === 'INPUT' ||
+      el.tagName === 'TEXTAREA' ||
+      el.isContentEditable)
   ) {
     return
   }
@@ -603,13 +604,30 @@ const handleKeydown = (e: KeyboardEvent) => {
     e.stopImmediatePropagation()
   }
 
-  if (e.key === 'F11') {
-    if (desktopBridge?.toggleFullscreen) {
+  if (e.key === 'F11' || (isVideo.value && desktopBridge && (e.key === 'f' || e.key === 'F'))) {
+    if (desktopBridge) {
       e.preventDefault()
       e.stopImmediatePropagation()
-      void desktopBridge.toggleFullscreen().catch(() => {})
+      if (!e.repeat) {
+        if (isVideo.value) {
+          desktopPlayer.value?.revealControls()
+          void desktopBridge.controlVideo('fullscreen').catch(() => {})
+        } else if (desktopBridge.toggleFullscreen) {
+          void desktopBridge.toggleFullscreen().catch(() => {})
+        }
+      }
       return
     }
+  }
+
+  if ((e.key === ' ' || e.key === 'k' || e.key === 'K') && isVideo.value && desktopBridge) {
+    e.preventDefault()
+    e.stopImmediatePropagation()
+    if (!e.repeat) {
+      desktopPlayer.value?.revealControls()
+      void desktopBridge.controlVideo('pause').catch(() => {})
+    }
+    return
   }
 
   if (e.key === 'ArrowRight') {
@@ -618,6 +636,7 @@ const handleKeydown = (e: KeyboardEvent) => {
       e.preventDefault()
       e.stopImmediatePropagation()
     } else if (isVideo.value && desktopBridge) {
+      desktopPlayer.value?.revealControls()
       void desktopBridge.controlVideo('seek', 10).catch(() => {})
       e.preventDefault()
       e.stopImmediatePropagation()
@@ -639,6 +658,7 @@ const handleKeydown = (e: KeyboardEvent) => {
       e.preventDefault()
       e.stopImmediatePropagation()
     } else if (isVideo.value && desktopBridge) {
+      desktopPlayer.value?.revealControls()
       void desktopBridge.controlVideo('seek', -10).catch(() => {})
       e.preventDefault()
       e.stopImmediatePropagation()

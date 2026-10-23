@@ -41,7 +41,11 @@ const resetGesture = () => {
   const pointerId = gesture?.id
   gesture = null
   dragPosition.value = null
-  if (pointerId !== undefined && surface.value?.hasPointerCapture?.(pointerId)) surface.value.releasePointerCapture(pointerId)
+  try {
+    if (pointerId !== undefined && surface.value?.hasPointerCapture?.(pointerId)) {
+      surface.value.releasePointerCapture(pointerId)
+    }
+  } catch { /* optional */ }
 }
 // Touch starts with implicit capture on the tapped icon or link. Transferring it to the
 // surface emits a bubbled lostpointercapture from that child, not a cancellation.
@@ -53,7 +57,7 @@ const onPointerDown = (event: PointerEvent) => {
   suppressClick = false
   window.clearTimeout(clickTimer)
   const box = surface.value.getBoundingClientRect()
-  gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, left: box.left + 5, lane: (box.width - 10) / 4, dragging: false }
+  gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, left: box.left + 4, lane: (box.width - 8) / 4, dragging: false }
 }
 const onPointerMove = (event: PointerEvent) => {
   if (!gesture || gesture.id !== event.pointerId) return
@@ -82,6 +86,9 @@ const onClick = (event: MouseEvent) => {
   suppressClick = false
   event.preventDefault(); event.stopPropagation()
 }
+const onItemClick = (item: { key: string }) => {
+  if (section.value === item.key) window.dispatchEvent(new CustomEvent('he:scroll-top'))
+}
 watch(() => route.fullPath, resetGesture)
 onBeforeUnmount(() => { resetGesture(); window.clearTimeout(clickTimer) })
 </script>
@@ -89,7 +96,7 @@ onBeforeUnmount(() => { resetGesture(); window.clearTimeout(clickTimer) })
   <nav class="he-mobile-nav" aria-label="手机主导航">
     <div ref="surface" class="he-nav-surface" :class="{ 'is-dragging': dragPosition !== null }" :style="{ '--he-nav-index': lensPosition }" @pointerdown="onPointerDown" @pointermove="onPointerMove" @pointerup="onPointerUp" @pointercancel="resetGesture" @lostpointercapture="onLostPointerCapture" @click.capture="onClick" @dragstart.prevent>
       <div class="he-nav-lens" aria-hidden="true"></div>
-      <router-link v-for="(item, index) in items" :key="item.key" :to="item.to" :aria-current="section === item.key ? 'page' : undefined" :class="{ active: section === item.key, 'is-preview': previewIndex === index }" draggable="false">
+      <router-link v-for="(item, index) in items" :key="item.key" :to="item.to" :aria-current="section === item.key ? 'page' : undefined" :class="{ active: section === item.key, 'is-preview': previewIndex === index }" draggable="false" @click="onItemClick(item)">
         <component :is="item.icon" :size="21" :stroke-width="section === item.key ? 2.2 : 1.9" aria-hidden="true" />
         <span>{{ item.title }}</span>
       </router-link>

@@ -85,7 +85,7 @@ export function useMediaProgress(options: MediaProgressOptions) {
     const mediaId = media.id
     const previous = progressWrites.get(mediaId) ?? Promise.resolve()
     const write = previous.catch(() => {}).then(async () => {
-      await options.updateMedia({ progress })
+      await options.updateMedia({ progress }, mediaId)
     })
     progressWrites.set(mediaId, write)
     try {

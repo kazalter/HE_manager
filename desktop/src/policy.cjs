@@ -4,9 +4,14 @@ const MEDIA_PATH =
 const API_PATH =
   /^\/(?:auth|users|search-folder|folders|media|mobile|system|tags|ai|recommend|external|manga|x|dedup|stats|creators|bd2|auto-sync|thumbnails|stream|audio|discard|assistant)(?:\/|$)/;
 function serverUrl(value) {
-  if (typeof value !== "string" || value.length > 2048)
+  if (typeof value !== "string" || !value.trim() || value.length > 2048)
     throw new Error("请输入服务器地址");
-  const url = new URL(value);
+  let url;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    throw new Error("地址只允许 HTTP/HTTPS，不要包含账号或参数");
+  }
   if (
     !["http:", "https:"].includes(url.protocol) ||
     url.username ||

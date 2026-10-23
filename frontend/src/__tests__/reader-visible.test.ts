@@ -88,8 +88,8 @@ it('saves only confirmed visible manga pages, including a close while the next p
     return {}
   }, template: '<div />' })))
   await progress.flushProgress(); expect(update).not.toHaveBeenCalled()
-  progress.visiblePage(0); await progress.flushProgress(); expect(update).toHaveBeenLastCalledWith({ progress: 0 })
+  progress.visiblePage(0); await progress.flushProgress(); expect(update).toHaveBeenLastCalledWith({ progress: 0 }, 7)
   currentPage.value = 3; await flushPromises(); await progress.flushProgress()
-  expect(update).toHaveBeenLastCalledWith({ progress: 0 })
-  progress.visiblePage(3); await progress.flushProgress(); expect(update).toHaveBeenLastCalledWith({ progress: 3 })
+  expect(update).toHaveBeenLastCalledWith({ progress: 0 }, 7)
+  progress.visiblePage(3); await progress.flushProgress(); expect(update).toHaveBeenLastCalledWith({ progress: 3 }, 7)
 })

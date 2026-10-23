@@ -26,7 +26,7 @@ class EmbeddedPlayer {
       position: current.position, duration: current.duration, droppedFrames: current.droppedFrames,
       hwdec: current.hwdec, ended: current.ended, buffering: current.buffering,
       tracks: current.tracks || [], aid: current.aid, sid: current.sid, speed: current.speed,
-      fullscreen: Boolean(this.getWindow()?._heFullscreen),
+      fullscreen: Boolean(this.getWindow()?._heFullscreen || this.getWindow()?.isFullScreen?.()),
       error: this.snapshot.error || (current.error ? '播放器无法读取或显示此媒体，请重试。' : '') };
   }
   serialize(task) { const next = this.operation.catch(() => {}).then(task); this.operation = next; return next; }

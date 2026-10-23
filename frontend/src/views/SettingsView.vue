@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import axios from 'axios'
 import { Check, CheckCircle2, FolderOpen, FolderPlus, HardDrive, Pipette, RefreshCw, Trash2 } from 'lucide-vue-next'
 import { EmptyState, PageHeader, SectionHeader, UiBadge, UiButton, UiCard, UiIconButton, UiModal, UiSpinner, controlClass, fieldHintClass, fieldLabelClass } from '../components/ui'
@@ -27,6 +27,8 @@ const proxyError = ref('')
 const proxyTestMessage = ref('')
 const proxyTestSucceeded = ref(false)
 let toastTimer: number | undefined
+let pollTimer: number | undefined
+let disposed = false
 const prevScanning = ref<Set<number>>(new Set())
 
 const showToast = (msg: string) => {
@@ -114,8 +116,11 @@ const testExternalProxy = async () => {
 }
 
 const fetchFolders = async () => {
+  if (disposed) return
+  window.clearTimeout(pollTimer)
   try {
     const res = await axios.get(`${API_BASE_URL}/folders`)
+    if (disposed) return
     const newFolders: Folder[] = res.data
     for (const id of prevScanning.value) {
       const f = newFolders.find(x => x.id === id)
@@ -129,11 +134,14 @@ const fetchFolders = async () => {
     }
     prevScanning.value = currentScanning
     folders.value = newFolders
-    if (currentScanning.size > 0) {
-      window.setTimeout(fetchFolders, 2000)
+    if (currentScanning.size > 0 && !disposed) {
+      window.clearTimeout(pollTimer)
+      pollTimer = window.setTimeout(fetchFolders, 2000)
     }
   } catch (err) {
-    console.error('无法连接到后端服务，请检查后端是否启动。', err)
+    if (!disposed) {
+      console.error('无法连接到后端服务，请检查后端是否启动。', err)
+    }
   }
 }
 
@@ -172,12 +180,13 @@ const browseFolder = async () => {
 }
 
 const addFolder = async () => {
-  if (!newPath.value) return
+  const path = newPath.value.trim()
+  if (!path) return
   loading.value = true
   try {
     thumbnailInterval.value = Math.min(60, Math.max(1, Number(thumbnailInterval.value) || 1))
     await axios.post(`${API_BASE_URL}/folders`, {
-      path: newPath.value,
+      path,
       scan_mode: scanMode.value,
       thumbnail_enabled: thumbnailEnabled.value,
       thumbnail_interval: thumbnailInterval.value,
@@ -236,8 +245,9 @@ const removeFolder = async (id: number) => {
   try {
     await axios.delete(`${API_BASE_URL}/folders/${id}`)
     await fetchFolders()
-  } catch (err) {
-    console.error(err)
+  } catch (err: any) {
+    console.error('移除目录失败:', err)
+    alert(err?.response?.data?.detail || '移除目录失败，请检查网络或后端状态。')
   }
 }
 
@@ -264,6 +274,12 @@ const formatLocalTime = (timeStr: string | null) => {
 onMounted(() => {
   void fetchFolders()
   void fetchExternalProxy()
+})
+
+onUnmounted(() => {
+  disposed = true
+  if (toastTimer) window.clearTimeout(toastTimer)
+  if (pollTimer) window.clearTimeout(pollTimer)
 })
 </script>
 

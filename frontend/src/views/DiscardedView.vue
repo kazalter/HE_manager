@@ -9,6 +9,11 @@ import PaginationControl from '../components/PaginationControl.vue'
 import { formatBytes, type DiscardRecord } from '../utils/discardApi'
 const items = ref<DiscardRecord[]>([]), total = ref(0), page = ref(1), search = ref(''), loading = ref(false), error = ref('')
 const allow = ref<DiscardRecord | null>(null), busyId = ref(''), notice = ref('')
+const formatDate = (iso: string) => {
+  if (!iso) return '-'
+  const date = new Date(/(?:Z|[+-]\d{2}:\d{2})$/i.test(iso) ? iso : iso + 'Z')
+  return isNaN(date.getTime()) ? iso : date.toLocaleString()
+}
 let generation = 0, timer: ReturnType<typeof setTimeout> | undefined
 const load = async () => {
   const mine = ++generation; loading.value = true; error.value = ''
@@ -46,7 +51,7 @@ const action = async (row: DiscardRecord, name: 'retry' | 'allow-download') => {
       <ul v-if="items.length" class="space-y-3">
         <li v-for="row in items" :key="row.id" class="rounded-2xl border border-line bg-surface p-4 sm:p-5">
           <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="min-w-0 flex-1"><p class="break-words text-body font-medium text-ink">{{ row.title }}</p><p class="mt-2 text-caption text-subtle">{{ row.source_type.toUpperCase() }} · {{ row.media_count }} 项 · {{ formatBytes(row.file_size) }} · {{ new Date(row.discarded_at + 'Z').toLocaleString() }}</p></div>
+            <div class="min-w-0 flex-1"><p class="break-words text-body font-medium text-ink">{{ row.title }}</p><p class="mt-2 text-caption text-subtle">{{ row.source_type.toUpperCase() }} · {{ row.media_count }} 项 · {{ formatBytes(row.file_size) }} · {{ formatDate(row.discarded_at) }}</p></div>
             <UiBadge tone="neutral">丢弃</UiBadge>
           </div>
           <p class="mt-3 text-meta" :class="row.cleanup_status === 'completed' ? 'text-subtle' : 'text-warning'">{{ row.cleanup_status === 'completed' ? '本地文件已删除，来源记录已保留' : row.cleanup_error || '文件清理待完成；后续下载已阻止' }}</p>

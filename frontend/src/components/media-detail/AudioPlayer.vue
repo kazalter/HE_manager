@@ -311,6 +311,18 @@ const onScrubInput = (event: Event) => {
   currentTime.value = target
 }
 
+const onScrubEnd = (event: Event) => {
+  const target = Number((event.target as HTMLInputElement).value)
+  const audio = audioRef.value
+  if (audio && Number.isFinite(target)) {
+    audio.currentTime = target
+  }
+  if (Number.isFinite(target)) {
+    currentTime.value = target
+  }
+  isScrubbing.value = false
+}
+
 const onScrubChange = (event: Event) => {
   const target = Number((event.target as HTMLInputElement).value)
   const audio = audioRef.value
@@ -510,7 +522,7 @@ onBeforeUnmount(() => {
               step="0.1"
               aria-label="音频播放进度"
               class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-              @pointerdown="isScrubbing = true" @pointercancel="isScrubbing = false"
+              @pointerdown="isScrubbing = true" @pointerup="onScrubEnd" @pointercancel="isScrubbing = false"
               @input="onScrubInput"
               @change="onScrubChange"
             />
@@ -673,7 +685,7 @@ onBeforeUnmount(() => {
 .he-audio-range::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; margin-top: -4px; border-radius: 9999px; background: #fff; }
 .he-audio-range::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 9999px; background: #fff; }
 @media (max-width: 899px) {
-  .he-audio-player { overflow-y: auto; padding-bottom: env(safe-area-inset-bottom); }
+  .he-audio-player { overflow-y: auto; padding-bottom: max(24px, calc(16px + env(safe-area-inset-bottom))); }
   .he-audio-body { flex: none; }
   .he-audio-tracks { flex: none; overflow: visible; }
   .he-audio-stage { padding: 24px 16px 20px; }
