@@ -14,7 +14,7 @@ import MediaCard from '../components/MediaCard.vue'
 import MediaViewCard from '../components/MediaViewCard.vue'
 import { AsyncMediaDetail as MediaDetail } from '../components/asyncComponents'
 import PaginationControl from '../components/PaginationControl.vue'
-import { EmptyState, PageHeader, SectionHeader, UiButton, UiIconButton, UiInput, UiSegmented, UiSkeleton, LoadingState, UiToast, buttonClass, controlClass, iconButtonClass, menuItemClass, popoverClass, type SegmentedOption } from '../components/ui'
+import { EmptyState, PageHeader, SectionHeader, UiButton, UiIconButton, UiInput, UiSegmented, UiSkeleton, UiToast, buttonClass, controlClass, iconButtonClass, menuItemClass, popoverClass, type SegmentedOption } from '../components/ui'
 import { useCompactViewport } from '../composables/useCompactViewport'
 const compact = useCompactViewport()
 const filterPanelRef = ref<HTMLElement | null>(null)
@@ -469,9 +469,12 @@ const updateMediaInList = (media: Media) => {
   fetchTags()
 }
 
+const canKeepImageReader = (mediaId: number) => !desktopBridge && selectedMedia.value?.media_type === 'image'
+  && viewerMediaList.value.some(item => item.id === mediaId && item.media_type === 'image' && !item.is_missing)
+
 const openMedia = (media: Media, replace = false) => {
   if (!replace || viewerMediaList.value.length === 0) resetViewerMediaList(media)
-  selectedMedia.value = null
+  if (!replace || !canKeepImageReader(media.id)) selectedMedia.value = null
   const location = {
     path: route.path,
     query: {
@@ -503,9 +506,12 @@ const syncSelectedMediaFromRoute = async () => {
     selectedMedia.value = null; openingMedia.value = false
     return
   }
-  if (selectedMedia.value?.id === mediaId) return
+  if (selectedMedia.value?.id === mediaId) { openingMedia.value = false; return }
   const scope = requestScope('detail'), identity = authIdentity()
-  selectedMedia.value = null; openingMedia.value = true; openingError.value = ''
+  // Image scroll reports update the route too. Keep the reader, decoded pages,
+  // scroll position and hidden controls alive while refreshing the selected DTO.
+  if (!canKeepImageReader(mediaId)) selectedMedia.value = null
+  openingMedia.value = true; openingError.value = ''
   try {
     // The detail route marks last_opened_at. Only an explicit viewer navigation reaches it.
     const res = await axios.get<Media>(`${API_BASE_URL}/media/${mediaId}`, scope)
@@ -584,10 +590,14 @@ watch(() => route.query.media, () => {
 })
 
 const onGlobalMediaUpdated = (event: Event) => updateMediaInList((event as CustomEvent<Media>).detail)
+const onOpeningKeydown = (event: KeyboardEvent) => {
+  if (openingMedia.value && event.key === 'Escape') closeMedia()
+}
 onUnmounted(() => {
   disposed = true; ++mediaRequestId; ++detailRequestId; ++viewerPageRequestId
   for (const controller of controllers.values()) controller.abort()
   window.removeEventListener('he:media-updated', onGlobalMediaUpdated)
+  window.removeEventListener('keydown', onOpeningKeydown)
   window.clearTimeout(searchTimer)
   document.removeEventListener('pointerdown', handleTagOutsidePointer)
 })
@@ -606,6 +616,7 @@ const triggerMissingRecheck = async () => {
 
 onMounted(async () => {
   window.addEventListener('he:media-updated', onGlobalMediaUpdated)
+  window.addEventListener('keydown', onOpeningKeydown)
   document.addEventListener('pointerdown', handleTagOutsidePointer)
   await Promise.all([fetchMedia(), fetchContinueMedia()])
   await syncSelectedMediaFromRoute()
@@ -932,15 +943,13 @@ onMounted(async () => {
     </div>
 
     <Teleport to="body">
-      <div v-if="openingMedia" class="fixed inset-0 z-[230] grid place-items-center bg-background/95" @keydown.esc="closeMedia">
-        <div class="text-center"><LoadingState label="正在打开作品" description="正在验证登录与作品信息。" /><UiButton autofocus @click="closeMedia">取消</UiButton></div>
-      </div>
       <UiToast v-if="openingError" :message="openingError" urgent overlay class="fixed bottom-6 left-1/2 z-[240] max-w-[90%] -translate-x-1/2" />
     </Teleport>
     <DiscardContentDialog v-model:target="discardTarget" @discarded="afterDiscard" />
     <MediaDetail
       v-if="selectedMedia"
       :initial-media="selectedMedia"
+      :current-image-id="selectedMedia.media_type === 'image' ? Number(route.query.media) : undefined"
       :verified-for-open="true"
       :all-media="viewerMediaList"
       :has-adjacent-media-page="hasAdjacentViewerPage"

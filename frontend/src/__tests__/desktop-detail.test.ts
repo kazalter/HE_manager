@@ -16,6 +16,8 @@ it('verifies a creator/recommendation item before mounting; DTO updates do not r
   const get = vi.spyOn(axios, 'get').mockImplementation(() => new Promise(resolve => { complete = resolve }))
   wrapper = mount(VerifiedMediaDetail, { props: { initialMedia: media(1), allMedia: [] }, attachTo: document.body })
   expect(wrapper.find('.detail').exists()).toBe(false)
+  expect(document.body.textContent).not.toContain('正在打开作品')
+  expect(document.querySelector('.fixed.inset-0')).toBeNull()
   expect(get).toHaveBeenCalledWith('/media/1', expect.objectContaining({ signal: expect.any(AbortSignal), headers: { 'X-HE-Generation': 'detail-identity' } }))
   complete({ data: media(1, 'Verified first') }); await flushPromises()
   expect(wrapper.get('.detail').text()).toBe('Verified first')

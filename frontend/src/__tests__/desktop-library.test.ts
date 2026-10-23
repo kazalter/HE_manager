@@ -42,7 +42,7 @@ describe('desktop library contract', () => {
   await wrapper!.get('.test-card').trigger('click'); await flushPromises()
   expect(get).toHaveBeenCalledWith('/media/1', expect.objectContaining({ headers: { 'X-HE-Generation': 'library-session' } }))
   expect(wrapper!.find('.opened-detail').exists()).toBe(false)
-  expect(document.body.textContent).toContain('正在打开作品')
+  expect(document.body.textContent).not.toContain('正在打开作品')
   complete(response({ ...item(1), title: 'Verified first item' })); await flushPromises()
   expect(wrapper!.get('.opened-detail').text()).toBe('Verified first item')
  })
@@ -50,8 +50,7 @@ describe('desktop library contract', () => {
   let complete!: (value: any) => void
   const { router } = await create(() => new Promise(resolve => { complete = resolve }))
   await wrapper!.get('.test-card').trigger('click'); await flushPromises()
-  const cancel = [...document.body.querySelectorAll('button')].find(button => button.textContent === '取消')!
-  cancel.click(); await flushPromises()
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await flushPromises()
   complete(response({ ...item(1), title: 'Stale detail' })); await flushPromises()
   expect(wrapper!.find('.opened-detail').exists()).toBe(false); expect(router.currentRoute.value.query.media).toBeUndefined()
  })

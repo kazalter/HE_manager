@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import { API_BASE_URL } from '../config'
 import { authHeaders, authIdentity } from '../auth'
@@ -7,9 +7,10 @@ import { desktopBridge } from '../desktop'
 import type { Media } from '../types'
 import type { DiscardRecord } from '../utils/discardApi'
 import MediaDetail from './MediaDetail.vue'
-import { EmptyState, LoadingState, UiButton } from './ui'
+import { EmptyState, UiButton } from './ui'
 const props = defineProps<{
   initialMedia: Media
+  currentImageId?: number
   allMedia: Media[]
   verifiedForOpen?: boolean
   hasAdjacentMediaPage?: (direction: -1 | 1) => boolean
@@ -40,18 +41,21 @@ function navigate(media: Media) {
   emit('navigate', media)
 }
 watch([() => props.initialMedia.id, () => authIdentity()], () => { void verify() }, { immediate: true })
-onBeforeUnmount(() => { ++epoch; controller?.abort() })
+const onOpeningKeydown = (event: KeyboardEvent) => {
+  if (!verified.value && event.key === 'Escape') emit('close')
+}
+onMounted(() => window.addEventListener('keydown', onOpeningKeydown))
+onBeforeUnmount(() => { ++epoch; controller?.abort(); window.removeEventListener('keydown', onOpeningKeydown) })
 </script>
 <template>
   <div>
-    <MediaDetail v-if="verified" :key="desktopBridge ? verified.id : undefined" :initial-media="verified" :all-media="allMedia"
+    <MediaDetail v-if="verified" :key="desktopBridge ? verified.id : undefined" :initial-media="verified" :current-image-id="currentImageId" :all-media="allMedia"
       :has-adjacent-media-page="hasAdjacentMediaPage" :load-adjacent-media-page="loadAdjacentMediaPage"
       @close="emit('close')" @updated="emit('updated', $event)" @navigate="navigate" @discarded="emit('discarded', $event)" />
     <Teleport to="body">
-      <div v-if="!verified" class="fixed inset-0 z-[230] grid place-items-center bg-background/95" @keydown.esc="emit('close')">
+      <div v-if="error" class="fixed inset-0 z-[230] grid place-items-center bg-background/95" @keydown.esc="emit('close')">
         <div class="space-y-4 text-center">
-          <EmptyState v-if="error" title="无法打开作品" :description="error" tone="warning"><UiButton @click="verify">重试</UiButton></EmptyState>
-          <LoadingState v-else label="正在打开作品" description="正在验证登录与作品信息。" />
+          <EmptyState title="无法打开作品" :description="error" tone="warning"><UiButton @click="verify">重试</UiButton></EmptyState>
           <UiButton autofocus @click="emit('close')">取消</UiButton>
         </div>
       </div>
