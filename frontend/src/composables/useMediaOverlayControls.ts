@@ -37,6 +37,8 @@ export function useMediaOverlayControls(
   }
 
   const setControlsHover = (hovering: boolean) => {
+    // Touch browsers can synthesize hover while the user is scrolling.
+    if (hovering && clickOnlyControls.value && !showControls.value) return
     isHoveringControls.value = hovering
     if (hovering) {
       clearTimer()
@@ -84,13 +86,21 @@ export function useMediaOverlayControls(
     toggleFullscreen()
   }
 
+  const fullscreenActive = () => immersiveFallback || !!document.fullscreenElement || (window.matchMedia('(pointer: fine)').matches && typeof screen !== 'undefined' && window.innerHeight >= screen.height - 2)
+
   const onFullscreenChange = () => {
-    isFullscreen.value = immersiveFallback || !!document.fullscreenElement || (window.matchMedia('(pointer: fine)').matches && typeof screen !== 'undefined' && window.innerHeight >= screen.height - 2)
+    isFullscreen.value = fullscreenActive()
     clearTimer()
     showControls.value = true
     if (clickOnlyControls.value) {
       startAutoHideTimer(4000)
     }
+  }
+
+  const onResize = () => {
+    // Mobile address bars resize the viewport during a swipe. Only an actual
+    // fullscreen transition should reveal controls or reset their idle timer.
+    if (fullscreenActive() !== isFullscreen.value) onFullscreenChange()
   }
 
   const onMouseMove = () => {
@@ -108,7 +118,7 @@ export function useMediaOverlayControls(
     document.body.style.overflow = 'hidden'
     window.addEventListener('mousemove', onMouseMove)
     document.addEventListener('fullscreenchange', onFullscreenChange)
-    window.addEventListener('resize', onFullscreenChange)
+    window.addEventListener('resize', onResize)
     resetTimer()
   })
 
@@ -116,7 +126,7 @@ export function useMediaOverlayControls(
     document.body.style.overflow = 'auto'
     window.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('fullscreenchange', onFullscreenChange)
-    window.removeEventListener('resize', onFullscreenChange)
+    window.removeEventListener('resize', onResize)
     clearTimer()
     window.clearTimeout(viewerClickTimer)
     if (document.fullscreenElement) void document.exitFullscreen()

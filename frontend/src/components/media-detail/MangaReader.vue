@@ -94,6 +94,10 @@ let webtoonScrollRafId: number | null = null
 let scrollRafId: number | null = null
 let dragRafId: number | null = null
 let pendingDragScroll = 0
+let webtoonTouchX = 0
+let webtoonTouchY = 0
+let webtoonTouchActive = false
+let suppressWebtoonClick = false
 
 const {
   scale: zoomScale,
@@ -371,6 +375,7 @@ const onWheel = (event: WheelEvent) => {
 }
 
 const onWebtoonScroll = () => {
+  if (webtoonTouchActive) suppressWebtoonClick = true
   scheduleVisiblePage()
   if (isProgrammaticScroll || readMode.value !== 'webtoon' || webtoonScrollRafId !== null) return
   webtoonScrollRafId = requestAnimationFrame(() => {
@@ -412,7 +417,34 @@ const scrollWebtoonToPage = (page: number) => {
   }, 100)
 }
 
+// Observe native scrolling without preventing it or invoking paged-mode swipes.
+const onWebtoonTouchStart = (event: TouchEvent) => {
+  if (!webtoonTouchActive) {
+    suppressWebtoonClick = false
+    webtoonTouchX = event.touches[0]?.clientX ?? 0
+    webtoonTouchY = event.touches[0]?.clientY ?? 0
+  }
+  webtoonTouchActive = true
+  if (event.touches.length !== 1) suppressWebtoonClick = true
+}
+const onWebtoonTouchMove = (event: TouchEvent) => {
+  const touch = event.touches[0]
+  if (event.touches.length !== 1 || (touch && Math.hypot(touch.clientX - webtoonTouchX, touch.clientY - webtoonTouchY) > 8)) {
+    suppressWebtoonClick = true
+  }
+}
+const onWebtoonTouchEnd = (event: TouchEvent) => {
+  const touch = event.changedTouches[0]
+  if (event.type === 'touchcancel' || (touch && Math.hypot(touch.clientX - webtoonTouchX, touch.clientY - webtoonTouchY) > 8)) {
+    suppressWebtoonClick = true
+  }
+  webtoonTouchActive = event.touches.length > 0
+}
 const onViewerClick = () => {
+  if (readMode.value === 'webtoon' && suppressWebtoonClick) {
+    suppressWebtoonClick = false
+    return
+  }
   if (wasZoomDragging() || wasTouchGesture()) return
   emit('viewerClick')
 }
@@ -598,6 +630,10 @@ onBeforeUnmount(() => {
         style="overflow-anchor: none"
         class="w-full h-full overflow-y-auto custom-scrollbar flex flex-col items-center py-6 px-2 select-none"
         @scroll="onWebtoonScroll"
+        @touchstart.passive="onWebtoonTouchStart"
+        @touchmove.passive="onWebtoonTouchMove"
+        @touchend.passive="onWebtoonTouchEnd"
+        @touchcancel.passive="onWebtoonTouchEnd"
       >
         <div
           v-for="pageIndex in totalPagesList"
@@ -606,6 +642,7 @@ onBeforeUnmount(() => {
           :data-page="pageIndex"
           class="he-reader-page w-full max-w-[840px] shrink-0 my-1 relative group bg-white/5"
           :style="{ aspectRatio: `${pageDimensionsFor(pageIndex)[0]} / ${pageDimensionsFor(pageIndex)[1]}` }"
+          :aria-busy="!pageReady(pageIndex) && !pageFailed(pageIndex)"
         >
           <img
             v-if="pageReady(pageIndex)"
@@ -618,12 +655,9 @@ onBeforeUnmount(() => {
             class="w-full h-full object-contain block rounded-sm"
             :alt="imagePages?.[pageIndex]?.title || `第 ${pageIndex + 1} 页`"
           />
-          <div v-else class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-meta text-white/60" role="status">
-            <template v-if="pageFailed(pageIndex)">
-              <span>图片加载失败</span>
-              <button type="button" class="h-10 rounded-lg bg-white/10 px-4 text-body font-medium text-white transition-colors hover:bg-white/15 focus-ring pointer-coarse:h-11" @click.stop="imageBuffer.retry(pageUrlFor(pageIndex))">重新加载</button>
-            </template>
-            <span v-else>正在加载第 {{ pageIndex + 1 }} {{ imagePages ? '张' : '页' }}…</span>
+          <div v-else-if="pageFailed(pageIndex)" class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-meta text-white/60" role="status">
+            <span>图片加载失败</span>
+            <button type="button" class="h-10 rounded-lg bg-white/10 px-4 text-body font-medium text-white transition-colors hover:bg-white/15 focus-ring pointer-coarse:h-11" @click.stop="imageBuffer.retry(pageUrlFor(pageIndex))">重新加载</button>
           </div>
           <div v-if="showControls" class="pointer-events-none absolute right-2 top-2 inline-flex h-6 items-center rounded-md bg-black/60 px-1.5 text-caption font-medium tabular-nums text-white/90 opacity-0 transition-opacity group-hover:opacity-100">
             {{ pageIndex + 1 }} / {{ totalPages }}

@@ -245,3 +245,78 @@ it('prioritizes both visible pages over a stalled speculative request when advan
   expect([...buffer.states.values()].filter(state => state.status === 'loading')).toHaveLength(3)
   buffer.dispose()
 })
+
+describe('continuous reading without interruptions', () => {
+  const createWebtoon = () => {
+    localStorage.setItem('he_image_read_mode', 'webtoon')
+    localStorage.setItem('he_image_read_mode_mobile', 'webtoon')
+    return mountCanvasReader()
+  }
+  const touch = (points: number[][]) => points.map(([clientX, clientY]) => ({ clientX, clientY }))
+
+  it('keeps pending pages quiet and their reserved space stable, while retaining failure and retry feedback', async () => {
+    const wrapper = createWebtoon()
+    const page = wrapper.get('#webtoon-page-0')
+    await wrapper.setProps({ pageDimensions: [[800, 1200]] })
+    const reservedSpace = page.attributes('style')
+    expect(wrapper.text()).not.toContain('正在加载')
+    expect(page.attributes('aria-busy')).toBe('true')
+    expect(wrapper.find('.he-reader-page [role="status"]').exists()).toBe(false)
+    ControlledImage.instances[0]!.onerror!()
+    await flushPromises()
+    expect(page.text()).toContain('图片加载失败')
+    await page.get('button').trigger('click')
+    expect(wrapper.emitted('viewerClick')).toBeUndefined()
+    expect(page.text()).not.toContain('正在加载')
+    const retried = [...ControlledImage.instances].reverse().find(img => img.src.includes('/stream/100'))!
+    await retried.onload!(); await flushPromises()
+    expect(page.find('img').exists()).toBe(true)
+    expect(page.attributes('aria-busy')).toBe('false')
+    expect(page.attributes('style')).toBe(reservedSpace)
+  })
+
+  it.each(['vertical', 'horizontal', 'canceled', 'pinch'])('ignores a click following a %s gesture but accepts the next deliberate tap', async gesture => {
+    const wrapper = createWebtoon()
+    const container = wrapper.find({ ref: 'webtoonContainerRef' })
+    await container.trigger('touchstart', { touches: touch([[150, 300]]) })
+    if (gesture === 'pinch') {
+      await container.trigger('touchstart', { touches: touch([[150, 300], [250, 300]]) })
+    } else if (gesture !== 'canceled') {
+      await container.trigger('touchmove', { touches: touch(gesture === 'vertical' ? [[150, 200]] : [[50, 300]]) })
+    }
+    await container.trigger(gesture === 'canceled' ? 'touchcancel' : 'touchend', { touches: [], changedTouches: touch([[150, 300]]) })
+    await container.trigger('scroll')
+    await container.trigger('click')
+    expect(wrapper.emitted('viewerClick')).toBeUndefined()
+    expect(wrapper.emitted('update:currentPage')).toBeUndefined()
+    await container.trigger('touchstart', { touches: touch([[150, 300]]) })
+    await container.trigger('touchend', { touches: [], changedTouches: touch([[152, 302]]) })
+    await container.trigger('click')
+    expect(wrapper.emitted('viewerClick')).toEqual([[]])
+  })
+
+  it('updates reading progress during scrolling without snapping back or revealing controls', async () => {
+    vi.useFakeTimers()
+    const wrapper = createWebtoon()
+    await flushPromises()
+    vi.advanceTimersByTime(110)
+    const viewport = wrapper.find({ ref: 'webtoonContainerRef' })
+    const container = viewport.element as HTMLElement
+    Object.defineProperties(container, {
+      clientHeight: { value: 600 }, scrollHeight: { value: 9000 },
+    })
+    Array.from(container.children).forEach((child, index) => {
+      Object.defineProperties(child, { offsetTop: { value: index * 1000 }, offsetHeight: { value: 1000 } })
+    })
+    const scrollTo = vi.spyOn(container, 'scrollTo')
+    container.scrollTop = 1100
+    await viewport.trigger('scroll')
+    vi.advanceTimersByTime(20)
+    expect(wrapper.emitted('update:currentPage')?.at(-1)).toEqual([1])
+    await wrapper.setProps({ currentPage: 1 })
+    expect(scrollTo).not.toHaveBeenCalled()
+    expect(container.scrollTop).toBe(1100)
+    expect(wrapper.emitted('viewerClick')).toBeUndefined()
+    expect(wrapper.get('.he-manga-controls').attributes('inert')).toBeDefined()
+  })
+})
