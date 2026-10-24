@@ -78,6 +78,7 @@ const isStripOpen = computed(() => !props.imagePages && (props.showControls || !
 
 const thumbStripRef = ref<HTMLDivElement | null>(null)
 const imageContainerRef = ref<HTMLDivElement | null>(null)
+const canvasContentRef = ref<HTMLDivElement | null>(null)
 const webtoonContainerRef = ref<HTMLDivElement | null>(null)
 const webtoonContentRef = ref<HTMLDivElement | null>(null)
 const webtoonZoom = useWebtoonZoom(webtoonContainerRef, webtoonContentRef)
@@ -109,9 +110,6 @@ let scrollDirection: -1 | 1 = 1
 let lastWebtoonScrollTop = 0
 
 const {
-  scale: zoomScale,
-  translateX: zoomTx,
-  translateY: zoomTy,
   isZoomed,
   isPanning: isZoomPanning,
   zoomPercent,
@@ -121,11 +119,31 @@ const {
   handleZoomWheel,
   onMouseDown: onZoomMouseDown,
   wasDragging: wasZoomDragging,
-  onTouchStart: onCanvasTouchStart, onTouchMove, onTouchEnd, wasTouchGesture,
-} = useImageViewerZoom(imageContainerRef, { onSwipe: direction => { if ((direction === 1) !== isRtl.value) nextPage(); else previousPage() } })
+  onTouchStart: onCanvasTouchStart, onTouchMove, onTouchEnd, wasTouchGesture, wasDoubleTap,
+} = useImageViewerZoom(imageContainerRef, {
+  contentRef: canvasContentRef,
+  contentSize: (width, height) => canvasContentSize(width, height),
+  doubleTapScale: 2.5,
+  onDoubleTap: () => { if (compactViewport.value && !desktopBridge) emit('hideControls') },
+  onSwipe: direction => { if ((direction === 1) !== isRtl.value) nextPage(); else previousPage() },
+})
 const showZoomControls = computed(() => props.showControls || (isZoomed.value && (!compactViewport.value || !!desktopBridge)))
 const hideControlsForPinch = (event: TouchEvent) => {
   if (event.touches.length > 1 && compactViewport.value && !desktopBridge) emit('hideControls')
+}
+// Extent of the fitted page images, so a zoomed page pans to its edges rather than into the letterbox.
+const canvasContentSize = (width: number, height: number) => {
+  const pages = canvasPages.value
+  const slot = width / pages.length
+  let first = 0, last = 0, tallest = 0
+  pages.forEach((page, index) => {
+    const [pageWidth, pageHeight] = pageDimensionsFor(page)
+    const fit = Math.min(slot / pageWidth, height / pageHeight)
+    if (index === 0) first = pageWidth * fit
+    if (index === pages.length - 1) last = pageWidth * fit
+    tallest = Math.max(tallest, pageHeight * fit)
+  })
+  return { width: Math.min(width, width - slot + (first + last) / 2), height: tallest }
 }
 const onTouchStart = (event: TouchEvent) => { hideControlsForPinch(event); onCanvasTouchStart(event) }
 
@@ -469,6 +487,11 @@ const onWebtoonTouchEnd = (event: TouchEvent) => {
 const onWebtoonGesture = (event: Event) => {
   if (compactViewport.value && !desktopBridge) event.preventDefault()
 }
+// A touch double-tap zooms the page; only a mouse double-click toggles fullscreen.
+const onViewerDoubleClick = () => {
+  if (readMode.value !== 'webtoon' && wasDoubleTap()) return
+  emit('viewerDoubleClick')
+}
 const onViewerClick = () => {
   if (readMode.value === 'webtoon' && suppressWebtoonClick) {
     suppressWebtoonClick = false
@@ -670,7 +693,7 @@ function onReaderViewportResize() { preloadAdjacentPages() }
       class="flex-1 min-h-0 flex items-center justify-center w-full relative group overflow-hidden"
       @wheel="onWheel"
       @click="onViewerClick"
-      @dblclick="emit('viewerDoubleClick')"
+      @dblclick="onViewerDoubleClick"
     >
       <!-- Left Prev Button -->
       <button
@@ -701,8 +724,8 @@ function onReaderViewportResize() { preloadAdjacentPages() }
         @touchcancel.passive="onWebtoonTouchEnd"
         @gesturestart="onWebtoonGesture" @gesturechange="onWebtoonGesture"
       >
-        <div class="he-webtoon-space relative w-full" :style="webtoonZoom.spaceStyle.value">
-          <div ref="webtoonContentRef" class="he-webtoon-content relative w-full flex flex-col items-center py-6 px-2" :style="webtoonZoom.contentStyle.value">
+        <div class="he-webtoon-space relative w-full">
+          <div ref="webtoonContentRef" class="he-webtoon-content relative w-full flex flex-col items-center py-6 px-2">
             <div
               v-for="pageIndex in totalPagesList"
               :key="imagePages?.[pageIndex]?.id ?? pageIndex"
@@ -746,13 +769,11 @@ function onReaderViewportResize() { preloadAdjacentPages() }
         style="touch-action: none"
       >
         <!-- Key each page by its source, so a pending page never retains the previous bitmap. -->
+        <!-- Transform is written by useImageViewerZoom, so gestures do not re-render the reader. -->
         <div
+          ref="canvasContentRef"
           class="w-full h-full flex items-center justify-center"
           :class="readMode === 'double' ? 'gap-1 sm:gap-2 px-2' : ''"
-          :style="{
-            transform: `translate3d(${zoomTx}px, ${zoomTy}px, 0px) scale(${zoomScale})`,
-            transition: isZoomPanning ? 'none' : 'transform 0.15s ease-out',
-          }"
         >
           <div
             v-for="pageIndex in canvasPages"
@@ -985,7 +1006,7 @@ function onReaderViewportResize() { preloadAdjacentPages() }
       >
         <button
           @click="zoomOut()"
-          :disabled="zoomScale <= 1"
+          :disabled="!isZoomed"
           class="he-reader-btn w-8 hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-35"
           aria-label="缩小"
           title="缩小 (Ctrl + 滚轮向下 / 快捷键: -)"
@@ -994,7 +1015,7 @@ function onReaderViewportResize() { preloadAdjacentPages() }
         </button>
 
         <button
-          @click="resetZoom"
+          @click="resetZoom(true)"
           class="he-reader-btn min-w-14 px-2 text-meta font-medium tabular-nums hover:bg-white/10 hover:text-white"
           :class="isZoomed ? 'text-white' : 'text-white/65'"
           title="重置缩放 (快捷键: 0)"
@@ -1004,7 +1025,7 @@ function onReaderViewportResize() { preloadAdjacentPages() }
 
         <button
           @click="zoomIn()"
-          :disabled="zoomScale >= 5"
+          :disabled="zoomPercent >= 500"
           class="he-reader-btn w-8 hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-35"
           aria-label="放大"
           title="放大 (Ctrl + 滚轮向上 / 快捷键: +)"
@@ -1014,7 +1035,7 @@ function onReaderViewportResize() { preloadAdjacentPages() }
 
         <button
           v-if="isZoomed"
-          @click="resetZoom"
+          @click="resetZoom(true)"
           class="he-reader-btn w-8 text-white/65 hover:bg-white/10 hover:text-white"
           aria-label="适应屏幕"
           title="适应屏幕 (快捷键: 0)"
