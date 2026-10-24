@@ -1,11 +1,25 @@
 import { onBeforeUnmount, ref, watch, type Ref } from 'vue'
 
-/** Only a pinch owns scrolling; independent one-finger gestures stay native. */
+// Per-millisecond velocity retention for a released pan of the enlarged column.
+const FLING_DECAY = 0.997
+const FLING_MIN_SPEED = 0.12
+
+/**
+ * At 1x the column scrolls natively and only a pinch is handled here. Once
+ * enlarged, browsers lock a native touch scroll to the axis it starts on
+ * (pan-y suppresses vertical after a sideways start; Chrome also rails steep
+ * diagonals), so both axes of a drag are driven here, together, with momentum.
+ */
 export function useWebtoonZoom(viewport: Ref<HTMLDivElement | null>, content: Ref<HTMLDivElement | null>) {
-  const scale = ref(1), translateX = ref(0), contentHeight = ref(0), isInteracting = ref(false)
+  const scale = ref(1), contentHeight = ref(0), isInteracting = ref(false)
+  let baseWidth = 0, viewHeight = 0
   let previousDistance = 0, previousX = 0, previousY = 0
-  let gesturePinched = false, touching = false
-  let panX = 0, panY = 0, panTx = 0, panScroll = 0
+  let gesturePinched = false, panning = false
+  let panX = 0, panY = 0, panLeft = 0, panTop = 0
+  // Unrounded positions last written, since browsers may round scrollLeft/scrollTop.
+  let writtenLeft = 0, writtenTop = 0
+  let samples: Array<[number, number, number]> = []
+  let flingRaf: number | null = null
   let rect: DOMRect | undefined
   let observer: ResizeObserver | undefined
   let activeTarget: HTMLDivElement | null = null
@@ -18,54 +32,114 @@ export function useWebtoonZoom(viewport: Ref<HTMLDivElement | null>, content: Re
     activeTarget = viewport.value
     activeTarget?.addEventListener('touchmove', onTouchMove, { passive: false })
   }
+  const stopFling = () => {
+    if (flingRaf !== null) cancelAnimationFrame(flingRaf)
+    flingRaf = null
+  }
   // Styles are written directly. Binding them in the reader template would
-  // re-render every page of the column on each touchmove of a pinch or pan.
+  // re-render every page of the column on each touchmove of a pinch.
   const render = () => {
-    const element = content.value
+    const scroller = viewport.value, element = content.value
+    const zoomed = scale.value > 1
+    if (scroller) scroller.style.touchAction = zoomed ? 'none' : 'pan-y'
     if (!element) return
-    const zoomed = scale.value > 1 && contentHeight.value > 0
-    // At 1x the column stays in normal flow, without a measured height shim.
+    // At 1x the column stays in normal flow, without a measured extent shim.
+    const sized = zoomed && contentHeight.value > 0 && baseWidth > 0
     const space = element.parentElement
-    if (space) space.style.height = zoomed ? `${contentHeight.value * scale.value}px` : ''
-    element.style.position = zoomed ? 'absolute' : ''
+    if (space) {
+      space.style.width = sized ? `${baseWidth * scale.value}px` : ''
+      space.style.height = sized ? `${contentHeight.value * scale.value}px` : ''
+    }
+    element.style.position = sized ? 'absolute' : ''
+    element.style.width = sized ? `${baseWidth}px` : ''
     element.style.transformOrigin = 'top left'
-    element.style.transform = scale.value === 1 ? '' : `translate(${translateX.value}px, 0px) scale(${scale.value})`
-    // Composite only while fingers move it; dropping the hint re-rasterizes sharply.
-    element.style.willChange = isInteracting.value || (touching && scale.value > 1) ? 'transform' : ''
+    element.style.transform = scale.value === 1 ? '' : `scale(${scale.value})`
+    // Composite only while a pinch rescales it; at rest it is painted sharply.
+    element.style.willChange = isInteracting.value ? 'transform' : ''
   }
   const measure = () => {
     contentHeight.value = content.value?.offsetHeight || 0
+    baseWidth = viewport.value?.clientWidth || 0
+    viewHeight = viewport.value?.clientHeight || 0
     if (scale.value > 1) render()
   }
-  watch([content, () => scale.value > 1], ([element, zoomed]) => {
+  watch([content, viewport, () => scale.value > 1], ([element, scroller, zoomed]) => {
     observer?.disconnect(); observer = undefined
     if (!element || !zoomed) return
     measure()
-    if (typeof ResizeObserver !== 'undefined') { observer = new ResizeObserver(measure); observer.observe(element) }
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(measure)
+      observer.observe(element)
+      if (scroller) observer.observe(scroller)
+    }
   }, { flush: 'post' })
   watch(content, render, { flush: 'post' })
-  watch(viewport, stopBlockingMoves, { flush: 'sync' })
-  const clampX = (x: number, zoom: number) => Math.max((viewport.value?.clientWidth || 0) * (1 - zoom), Math.min(0, x))
-  // The scaled extent is already rendered, so the scroll position can follow in the same frame.
-  const setScroll = (top: number) => {
-    const element = viewport.value
-    if (!element) return
-    const maximum = Math.max(0, contentHeight.value * scale.value - element.clientHeight)
-    element.scrollTop = Math.max(0, Math.min(maximum, top))
+  watch(viewport, () => { stopBlockingMoves(); stopFling() }, { flush: 'sync' })
+  // Bounds come from the last measurement, so a drag never forces a layout read.
+  const setScroll = (left: number, top: number) => {
+    const scroller = viewport.value
+    if (!scroller) return
+    writtenLeft = Math.max(0, Math.min(Math.max(0, baseWidth * (scale.value - 1)), left))
+    writtenTop = Math.max(0, Math.min(Math.max(0, contentHeight.value * scale.value - viewHeight), top))
+    scroller.scrollLeft = writtenLeft
+    scroller.scrollTop = writtenTop
   }
+  // Prefer the exact value written last unless the scroller has since moved.
+  const currentScroll = (scroller: HTMLDivElement) => ({
+    left: Math.abs(scroller.scrollLeft - writtenLeft) < 1 ? writtenLeft : scroller.scrollLeft,
+    top: Math.abs(scroller.scrollTop - writtenTop) < 1 ? writtenTop : scroller.scrollTop,
+  })
   const midpoint = (touches: TouchList) => ({
     x: (touches[0]!.clientX + touches[1]!.clientX) / 2,
     y: (touches[0]!.clientY + touches[1]!.clientY) / 2,
     distance: Math.hypot(touches[0]!.clientX - touches[1]!.clientX, touches[0]!.clientY - touches[1]!.clientY),
   })
   const startPan = (touch: Touch) => {
-    panX = touch.clientX; panY = touch.clientY; panTx = translateX.value
-    panScroll = viewport.value?.scrollTop ?? 0
+    panning = true
+    panX = touch.clientX; panY = touch.clientY
+    samples = []
+    if (!viewport.value) return
+    const scroll = currentScroll(viewport.value)
+    panLeft = scroll.left; panTop = scroll.top
+  }
+  const pan = (touch: Touch) => {
+    setScroll(panLeft - (touch.clientX - panX), panTop - (touch.clientY - panY))
+    const now = performance.now()
+    samples.push([now, writtenLeft, writtenTop])
+    while (samples.length > 2 && now - samples[0]![0] > 100) samples.shift()
+  }
+  const fling = () => {
+    const first = samples[0], last = samples.at(-1)
+    samples = []
+    const elapsed = first && last ? last[0] - first[0] : 0
+    // A finger that paused before lifting should not throw the column.
+    if (!first || !last || elapsed < 8 || performance.now() - last[0] > 60) return
+    let vx = (last[1] - first[1]) / elapsed
+    let vy = (last[2] - first[2]) / elapsed
+    if (Math.hypot(vx, vy) < FLING_MIN_SPEED) return
+    let previous = performance.now()
+    const step = (now: number) => {
+      const scroller = viewport.value
+      // Stop if anything else (a page button, a resize) moved the column meanwhile.
+      if (!scroller || Math.abs(scroller.scrollLeft - writtenLeft) >= 1 || Math.abs(scroller.scrollTop - writtenTop) >= 1) { flingRaf = null; return }
+      const elapsedFrame = Math.min(32, Math.max(0, now - previous))
+      previous = now
+      const decay = Math.pow(FLING_DECAY, elapsedFrame)
+      vx *= decay; vy *= decay
+      const nextLeft = writtenLeft + vx * elapsedFrame, nextTop = writtenTop + vy * elapsedFrame
+      setScroll(nextLeft, nextTop)
+      // Stop each axis at the edge instead of sliding along it.
+      if (writtenLeft !== nextLeft) vx = 0
+      if (writtenTop !== nextTop) vy = 0
+      flingRaf = Math.hypot(vx, vy) < 0.02 ? null : requestAnimationFrame(step)
+    }
+    flingRaf = requestAnimationFrame(step)
   }
   const onTouchStart = (event: TouchEvent) => {
+    stopFling()
     if (event.touches.length >= 2) {
       rect = viewport.value?.getBoundingClientRect(); measure()
-      gesturePinched = true; touching = true
+      gesturePinched = true; panning = false
       const point = midpoint(event.touches)
       previousDistance = Math.max(1, point.distance); previousX = point.x; previousY = point.y
       isInteracting.value = true
@@ -76,63 +150,64 @@ export function useWebtoonZoom(viewport: Ref<HTMLDivElement | null>, content: Re
     } else if (event.touches[0]) {
       gesturePinched = false; isInteracting.value = false
       stopBlockingMoves()
-      if (scale.value > 1) {
-        touching = true
-        startPan(event.touches[0])
-        render()
-      }
+      // touch-action is none while enlarged, so this drag is ours on both axes.
+      if (scale.value > 1) startPan(event.touches[0])
+      else panning = false
     }
   }
   const onTouchMove = (event: TouchEvent) => {
-    if (!gesturePinched) {
-      // Native pan-y retains vertical inertia even when the column is enlarged.
-      if (scale.value > 1 && event.touches.length === 1) {
-        translateX.value = clampX(panTx + event.touches[0]!.clientX - panX, scale.value)
-        render()
-      }
-      return
-    }
-    if (!viewport.value || !rect) return
+    const scroller = viewport.value
+    if (!gesturePinched || !scroller || !rect) return
     if (event.touches.length >= 2 && previousDistance) {
       if (event.cancelable) event.preventDefault()
       const point = midpoint(event.touches)
       const nextScale = Math.max(1, Math.min(5, scale.value * point.distance / previousDistance))
       const ratio = nextScale / scale.value
-      const nextTop = (viewport.value.scrollTop + previousY - rect.top) * ratio - (point.y - rect.top)
-      translateX.value = clampX(point.x - rect.left - (previousX - rect.left - translateX.value) * ratio, nextScale)
+      // Keep the content under the previous midpoint under the current one.
+      const scroll = currentScroll(scroller)
+      const nextLeft = (scroll.left + previousX - rect.left) * ratio - (point.x - rect.left)
+      const nextTop = (scroll.top + previousY - rect.top) * ratio - (point.y - rect.top)
       scale.value = nextScale
       render()
-      setScroll(nextTop)
+      setScroll(nextLeft, nextTop)
       previousDistance = Math.max(1, point.distance); previousX = point.x; previousY = point.y
-    } else if (event.touches.length === 1) {
+    } else if (event.touches.length === 1 && panning) {
+      // The sequence began as a pinch, so the remaining finger cannot hand over to native scrolling.
       if (event.cancelable) event.preventDefault()
-      translateX.value = clampX(panTx + event.touches[0]!.clientX - panX, scale.value)
-      render()
-      setScroll(panScroll - (event.touches[0]!.clientY - panY))
+      pan(event.touches[0]!)
     }
   }
-  // The permanently installed move observer must never cancel native scrolling.
-  const onPassiveTouchMove = (event: TouchEvent) => { if (!gesturePinched) onTouchMove(event) }
+  // Installed for the whole reader; it never cancels, so 1x scrolling stays native.
+  const onPassiveTouchMove = (event: TouchEvent) => {
+    if (!gesturePinched && panning && event.touches.length === 1) pan(event.touches[0]!)
+  }
   const onTouchEnd = (event: TouchEvent) => {
-    if (event.type !== 'touchcancel' && event.touches.length >= 2) { onTouchStart(event); return }
-    previousDistance = 0
-    isInteracting.value = event.type !== 'touchcancel' && event.touches.length > 0 && gesturePinched
-    if (event.touches[0]) startPan(event.touches[0])
-    if (!event.touches.length || event.type === 'touchcancel') {
-      gesturePinched = false; touching = false
-      stopBlockingMoves()
+    const canceled = event.type === 'touchcancel'
+    if (!canceled && event.touches.length >= 2) { onTouchStart(event); return }
+    if (!canceled && event.touches[0]) {
+      previousDistance = 0
+      if (gesturePinched || scale.value > 1) startPan(event.touches[0])
+      return
     }
-    render()
+    const wasPinched = gesturePinched, wasPanning = panning
+    previousDistance = 0; gesturePinched = false; panning = false
+    if (wasPinched) {
+      isInteracting.value = false
+      stopBlockingMoves()
+      render()
+    }
+    if (wasPanning && !canceled && scale.value > 1) fling()
   }
   const reset = () => {
-    isInteracting.value = false; gesturePinched = false; touching = false; previousDistance = 0
+    stopFling()
+    isInteracting.value = false; gesturePinched = false; panning = false; previousDistance = 0
     stopBlockingMoves()
-    if (scale.value === 1 && translateX.value === 0) { render(); return }
-    const top = (viewport.value?.scrollTop ?? 0) / scale.value
-    scale.value = 1; translateX.value = 0
+    if (scale.value === 1) { render(); return }
+    const top = (viewport.value ? currentScroll(viewport.value).top : 0) / scale.value
+    scale.value = 1
     render()
-    setScroll(top)
+    setScroll(0, top)
   }
-  onBeforeUnmount(() => { observer?.disconnect(); stopBlockingMoves() })
-  return { scale, translateX, contentHeight, isInteracting, measure, reset, onTouchStart, onTouchMove, onPassiveTouchMove, onTouchEnd }
+  onBeforeUnmount(() => { stopFling(); observer?.disconnect(); stopBlockingMoves() })
+  return { scale, contentHeight, isInteracting, measure, reset, onTouchStart, onTouchMove, onPassiveTouchMove, onTouchEnd }
 }
