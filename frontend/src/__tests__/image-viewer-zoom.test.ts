@@ -248,6 +248,9 @@ describe('useImageViewerZoom composable', () => {
     expect(onDoubleTap).toHaveBeenCalledOnce()
     tap(200, 400); tap(200, 400)
     expect(zoom.scale.value).toBe(1)
+    expect(zoom.isPanning.value).toBe(false)
+    expect(content.style.transition).not.toBe('none')
+    expect(content.style.willChange).toBe('')
     wrapper.unmount()
   })
 
