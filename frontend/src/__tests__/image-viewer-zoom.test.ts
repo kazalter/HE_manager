@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { defineComponent, ref } from 'vue'
+import { defineComponent, h, nextTick, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { useImageViewerZoom } from '../composables/useImageViewerZoom'
 
@@ -21,6 +21,7 @@ describe('useImageViewerZoom composable', () => {
   }
 
   afterEach(() => {
+    vi.restoreAllMocks()
     document.body.innerHTML = ''
   })
 
@@ -152,14 +153,162 @@ describe('useImageViewerZoom composable', () => {
     wrapper.unmount()
   })
 
-  it('clamps during the pinch and responds immediately after reversing at the minimum', () => {
+  it('resists past the minimum during the pinch, reverses immediately and springs back on release', () => {
     const { wrapper, zoom } = createTestViewer()
-    const touch = (points: number[][]) => ({ touches: points.map(([clientX, clientY]) => ({ clientX, clientY })), cancelable: true, preventDefault: vi.fn() }) as unknown as TouchEvent
+    const touch = (points: number[][], changed: number[][] = []) => ({
+      touches: points.map(([clientX, clientY]) => ({ clientX, clientY })),
+      changedTouches: changed.map(([clientX, clientY]) => ({ clientX, clientY })),
+      cancelable: true, preventDefault: vi.fn(),
+    }) as unknown as TouchEvent
     zoom.onTouchStart(touch([[100, 100], [300, 100]]))
     zoom.onTouchMove(touch([[190, 100], [210, 100]]))
-    expect(zoom.scale.value).toBe(1)
+    // A tenth of the finger distance only shrinks to the rubber-band floor.
+    expect(zoom.scale.value).toBeLessThan(1)
+    expect(zoom.scale.value).toBeGreaterThanOrEqual(0.75)
+    const shrunk = zoom.scale.value
     zoom.onTouchMove(touch([[185, 100], [215, 100]]))
-    expect(zoom.scale.value).toBe(1.5)
+    expect(zoom.scale.value).toBeCloseTo(shrunk * 1.5)
+    zoom.onTouchMove(touch([[195, 100], [205, 100]]))
+    zoom.onTouchEnd(touch([], [[195, 100], [205, 100]]))
+    expect(zoom.scale.value).toBe(1)
+    expect(zoom.zoomPercent.value).toBe(100)
+    expect(zoom.wasTouchGesture()).toBe(true)
+    wrapper.unmount()
+  })
+
+  const mountWithContent = (options = {}) => {
+    let zoom!: ReturnType<typeof useImageViewerZoom>
+    const containerRef = ref<HTMLDivElement | null>(null), contentRef = ref<HTMLDivElement | null>(null)
+    const renders = vi.fn()
+    const Comp = defineComponent({
+      setup() {
+        zoom = useImageViewerZoom(containerRef, { contentRef, ...options })
+        return () => { renders(); return h('div', { ref: containerRef }, [h('div', { ref: contentRef })]) }
+      },
+    })
+    const wrapper = mount(Comp, { attachTo: document.body })
+    vi.spyOn(containerRef.value!, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 400, height: 800 } as DOMRect)
+    return { wrapper, zoom, content: contentRef.value!, renders }
+  }
+  const touchAt = (points: number[][], changed: number[][] = []) => ({
+    type: 'touchmove',
+    touches: points.map(([clientX, clientY]) => ({ clientX, clientY })),
+    changedTouches: changed.map(([clientX, clientY]) => ({ clientX, clientY })),
+    cancelable: true, preventDefault: vi.fn(),
+  }) as unknown as TouchEvent
+
+  it('writes the transform directly, compositing only while the fingers move', async () => {
+    const { wrapper, zoom, content, renders } = mountWithContent()
+    await nextTick()
+    renders.mockClear()
+    zoom.onTouchStart(touchAt([[100, 400], [300, 400]]))
+    zoom.onTouchMove(touchAt([[50, 400], [350, 400]]))
+    zoom.onTouchMove(touchAt([[0, 400], [400, 400]]))
+    expect(content.style.transform).toBe('translate(0px, 0px) scale(2)')
+    expect(content.style.transition).toBe('none')
+    expect(content.style.willChange).toBe('transform')
+    zoom.onTouchEnd(touchAt([], [[0, 400], [400, 400]]))
+    expect(content.style.willChange).toBe('')
+    expect(zoom.zoomPercent.value).toBe(200)
+    await nextTick()
+    expect(renders).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('stops panning at the fitted image edges instead of the letterbox', () => {
+    // A 400x400 image fitted into a 400x800 container leaves 200px bands above and below.
+    const { wrapper, zoom } = mountWithContent({ contentSize: () => ({ width: 400, height: 400 }) })
+    zoom.setScale(1.5)
+    zoom.onTouchStart(touchAt([[200, 400]]))
+    zoom.onTouchMove(touchAt([[300, 600]]))
+    expect(zoom.translateX.value).toBe(100)
+    // 1.5 x 400 = 600px of image is still shorter than the 800px container.
+    expect(zoom.translateY.value).toBe(0)
+    wrapper.unmount()
+  })
+
+  it('zooms around a double-tap, zooms back out on the next one, and swallows the synthetic dblclick', () => {
+    const onDoubleTap = vi.fn()
+    const { wrapper, zoom, content } = mountWithContent({ doubleTapScale: 2.5, onDoubleTap })
+    const tap = (x: number, y: number) => {
+      zoom.onTouchStart(touchAt([[x, y]]))
+      zoom.onTouchEnd(touchAt([], [[x, y]]))
+    }
+    tap(100, 400)
+    expect(zoom.scale.value).toBe(1)
+    expect(zoom.wasTouchGesture()).toBe(false)
+    tap(102, 401)
+    expect(zoom.scale.value).toBe(2.5)
+    // The tapped point (98px left of centre) stays under the finger.
+    expect(zoom.translateX.value).toBeCloseTo(147)
+    expect(content.style.transition).not.toBe('none')
+    expect(zoom.wasTouchGesture()).toBe(true)
+    expect(zoom.wasDoubleTap()).toBe(true)
+    expect(zoom.wasDoubleTap()).toBe(false)
+    expect(onDoubleTap).toHaveBeenCalledOnce()
+    tap(200, 400); tap(200, 400)
+    expect(zoom.scale.value).toBe(1)
+    expect(zoom.isPanning.value).toBe(false)
+    expect(content.style.transition).not.toBe('none')
+    expect(content.style.willChange).toBe('')
+    wrapper.unmount()
+  })
+
+  it('carries a released pan forward with decaying momentum', () => {
+    let now = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    const frames: FrameRequestCallback[] = []
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => frames.push(callback))
+    const cancel = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {})
+    const { wrapper, zoom } = mountWithContent()
+    zoom.setScale(4)
+    zoom.onTouchStart(touchAt([[200, 400]]))
+    for (let step = 1; step <= 5; step++) { now += 16; zoom.onTouchMove(touchAt([[200 + step * 16, 400]])) }
+    const released = zoom.translateX.value
+    zoom.onTouchEnd(touchAt([], [[280, 400]]))
+    expect(zoom.isPanning.value).toBe(true)
+    let previous = released, previousStep = Infinity
+    for (let frame = 0; frame < 5; frame++) {
+      now += 16; frames.shift()!(now)
+      const stepSize = zoom.translateX.value - previous
+      expect(stepSize).toBeGreaterThan(0)
+      expect(stepSize).toBeLessThan(previousStep)
+      previous = zoom.translateX.value; previousStep = stepSize
+    }
+    // Touching the page again catches it.
+    cancel.mockClear()
+    zoom.onTouchStart(touchAt([[200, 400]]))
+    expect(cancel).toHaveBeenCalledOnce()
+    wrapper.unmount()
+  })
+
+  it('does not throw the image when the finger rests before lifting', () => {
+    let now = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    const raf = vi.spyOn(window, 'requestAnimationFrame')
+    const { wrapper, zoom } = mountWithContent()
+    zoom.setScale(4)
+    zoom.onTouchStart(touchAt([[200, 400]]))
+    for (let step = 1; step <= 5; step++) { now += 16; zoom.onTouchMove(touchAt([[200 + step * 16, 400]])) }
+    now += 200
+    zoom.onTouchEnd(touchAt([], [[280, 400]]))
+    expect(raf).not.toHaveBeenCalled()
+    expect(zoom.isPanning.value).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('follows trackpad pinches without easing and updates the label once they settle', () => {
+    vi.useFakeTimers()
+    const { wrapper, zoom, content } = mountWithContent()
+    zoom.handleZoomWheel(new WheelEvent('wheel', { deltaY: -100, ctrlKey: true, clientX: 200, clientY: 400 }))
+    zoom.handleZoomWheel(new WheelEvent('wheel', { deltaY: -100, ctrlKey: true, clientX: 200, clientY: 400 }))
+    expect(zoom.scale.value).toBeGreaterThan(1.4)
+    expect(content.style.transition).toBe('none')
+    expect(zoom.zoomPercent.value).toBe(100)
+    vi.advanceTimersByTime(200)
+    expect(zoom.zoomPercent.value).toBe(Math.round(zoom.scale.value * 100))
+    expect(content.style.willChange).toBe('')
+    vi.useRealTimers()
     wrapper.unmount()
   })
 })

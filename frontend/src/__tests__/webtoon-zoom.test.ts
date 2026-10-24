@@ -9,14 +9,15 @@ const touch = (points: number[][], type = 'touchmove') => ({
   type, touches: points.map(([clientX, clientY]) => ({ clientX, clientY })), cancelable: true, preventDefault: vi.fn(),
 }) as unknown as TouchEvent
 function create() {
-  const viewport = document.createElement('div'), content = document.createElement('div')
+  const viewport = document.createElement('div'), space = document.createElement('div'), content = document.createElement('div')
+  space.append(content)
   Object.defineProperties(viewport, { clientWidth: { value: 400 }, clientHeight: { value: 600 } })
   Object.defineProperty(content, 'offsetHeight', { get: () => 5000, configurable: true })
   vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 400, height: 600 } as DOMRect)
   viewport.scrollTop = 1000
   let zoom!: ReturnType<typeof useWebtoonZoom>
   wrapper = mount(defineComponent({ setup() { zoom = useWebtoonZoom(ref(viewport), ref(content)); return () => null } }))
-  return { zoom, viewport, content }
+  return { zoom, viewport, space, content }
 }
 
 it('clamps to 100% while fingers are still down, with no change or rebound on release', async () => {
@@ -35,21 +36,29 @@ it('clamps to 100% while fingers are still down, with no change or rebound on re
 })
 
 it('anchors the content under the pinch and maintains the enlarged scroll extent', async () => {
-  const { zoom, viewport } = create()
+  const { zoom, viewport, space, content } = create()
   zoom.onTouchStart(touch([[100, 300], [300, 300]], 'touchstart'))
-  zoom.onTouchMove(touch([[0, 300], [400, 300]])); await nextTick()
+  zoom.onTouchMove(touch([[0, 300], [400, 300]]))
+  // Extent, transform and scroll position land together, without waiting for a Vue flush.
   expect(zoom.scale.value).toBe(2)
   expect(viewport.scrollTop).toBe(2300)
   expect(zoom.translateX.value).toBe(-200)
-  expect(zoom.spaceStyle.value.height).toBe('10000px')
+  expect(space.style.height).toBe('10000px')
+  expect(content.style.position).toBe('absolute')
+  expect(content.style.transform).toBe('translate(-200px, 0px) scale(2)')
+  expect(content.style.willChange).toBe('transform')
   zoom.onTouchEnd(touch([[200, 300]], 'touchend'))
   zoom.onTouchMove(touch([[220, 250]])); await nextTick()
   expect(zoom.translateX.value).toBe(-180)
   expect(viewport.scrollTop).toBe(2350)
   zoom.onTouchEnd(touch([], 'touchend'))
-  zoom.reset(); await nextTick()
+  expect(content.style.willChange).toBe('')
+  zoom.reset()
   expect(zoom.scale.value).toBe(1)
   expect(viewport.scrollTop).toBe(1175)
+  expect(space.style.height).toBe('')
+  expect(content.style.position).toBe('')
+  expect(content.style.transform).toBe('')
 })
 
 it('keeps normal one-finger scrolling native and reverses immediately after reaching the zoom limit', async () => {
@@ -65,7 +74,7 @@ it('keeps normal one-finger scrolling native and reverses immediately after reac
 })
 
 it('does no zoom layout reads or scroll writes during normal one-finger reading', async () => {
-  const { zoom, viewport, content } = create()
+  const { zoom, viewport, space, content } = create()
   const height = vi.spyOn(content, 'offsetHeight', 'get')
   const scroll = vi.spyOn(viewport, 'scrollTop', 'set')
   zoom.onTouchStart(touch([[100, 300]], 'touchstart'))
@@ -74,8 +83,9 @@ it('does no zoom layout reads or scroll writes during normal one-finger reading'
   expect(viewport.getBoundingClientRect).not.toHaveBeenCalled()
   expect(height).not.toHaveBeenCalled()
   expect(scroll).not.toHaveBeenCalled()
-  expect(zoom.spaceStyle.value.height).toBeUndefined()
-  expect(zoom.contentStyle.value.position).toBe('relative')
+  expect(space.style.height).toBe('')
+  expect(content.style.position).toBe('')
+  expect(content.style.transform).toBe('')
 })
 
 it('only installs a blocking move listener during a pinch, and cleans it up on end or unmount', async () => {
@@ -109,12 +119,11 @@ it('preserves native vertical scrolling on a new one-finger gesture while zoomed
   expect(zoom.isInteracting.value).toBe(false)
 })
 
-it('cancels pending scroll writes when the reader closes', async () => {
+it('leaves the scroll position alone when resetting an unzoomed column', () => {
   const { zoom, viewport } = create()
-  zoom.onTouchStart(touch([[100, 300], [300, 300]], 'touchstart'))
-  zoom.onTouchMove(touch([[0, 300], [400, 300]]))
-  wrapper!.unmount(); wrapper = undefined
-  await nextTick()
+  const scroll = vi.spyOn(viewport, 'scrollTop', 'set')
+  zoom.reset()
+  expect(scroll).not.toHaveBeenCalled()
   expect(viewport.scrollTop).toBe(1000)
 })
 

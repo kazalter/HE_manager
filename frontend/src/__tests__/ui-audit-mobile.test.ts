@@ -216,6 +216,69 @@ describe('MangaReader mobile webtoon mode and controls', () => {
     expect(wrapper.emitted('hideControls')).toBeUndefined()
   })
 
+  const renderedTree = (wrapper: ReturnType<typeof mount>) => (wrapper.vm as unknown as { $: { subTree: unknown } }).$.subTree
+  const fingers = (...points: number[][]) => ({ touches: points.map(([clientX, clientY]) => ({ clientX, clientY })) })
+  const scaleOf = (element: HTMLElement) => Number(/scale\(([\d.]+)\)/.exec(element.style.transform)?.[1])
+
+  it.each(['single', 'double'])('pinches the %s canvas without re-rendering the reader on each move', async mode => {
+    window.innerWidth = 390
+    localStorage.setItem('he_manga_read_mode_mobile', mode)
+    const wrapper = mount(MangaReader, { props: {
+      media: sampleMangaMedia, currentPage: 0, totalPages: 3, pageDimensions: [[800, 1200], [800, 1200], [800, 1200]],
+      showControls: false, clickOnlyControls: true, progressText: '', progressPercent: 0,
+    } })
+    wrappers.push(wrapper)
+    const canvas = wrapper.find({ ref: 'imageContainerRef' })
+    const content = wrapper.find({ ref: 'canvasContentRef' }).element as HTMLElement
+    await canvas.trigger('touchstart', fingers([100, 100], [200, 100]))
+    // Crossing 1x renders once (cursor and zoom pill visibility); further moves must not.
+    await canvas.trigger('touchmove', fingers([95, 100], [205, 100]))
+    const tree = renderedTree(wrapper)
+    for (const spread of [60, 80, 100]) await canvas.trigger('touchmove', fingers([150 - spread, 100], [150 + spread, 100]))
+    expect(scaleOf(content)).toBeCloseTo(2)
+    expect(renderedTree(wrapper)).toBe(tree)
+  })
+
+  it('pinches the webtoon column without re-rendering every page on each move', async () => {
+    window.innerWidth = 390
+    localStorage.setItem('he_manga_read_mode_mobile', 'webtoon')
+    const wrapper = mount(MangaReader, { props: {
+      media: sampleMangaMedia, currentPage: 0, totalPages: 3, pageDimensions: [[800, 1200], [800, 1200], [800, 1200]],
+      showControls: false, clickOnlyControls: true, progressText: '', progressPercent: 0,
+    } })
+    wrappers.push(wrapper)
+    await nextTick()
+    const viewport = wrapper.get('.he-webtoon-viewport')
+    const content = wrapper.get('.he-webtoon-content').element as HTMLElement
+    await viewport.trigger('touchstart', fingers([100, 100], [200, 100]))
+    const tree = renderedTree(wrapper)
+    for (const spread of [60, 80, 100]) await viewport.trigger('touchmove', fingers([150 - spread, 100], [150 + spread, 100]))
+    expect(scaleOf(content)).toBeCloseTo(2)
+    expect(renderedTree(wrapper)).toBe(tree)
+  })
+
+  it('uses a touch double-tap for page zoom and keeps a mouse double-click for fullscreen', async () => {
+    window.innerWidth = 390
+    localStorage.setItem('he_manga_read_mode_mobile', 'single')
+    const wrapper = mount(MangaReader, { props: {
+      media: sampleMangaMedia, currentPage: 0, totalPages: 3, pageDimensions: [[800, 1200], [800, 1200], [800, 1200]],
+      showControls: false, clickOnlyControls: true, progressText: '', progressPercent: 0,
+    } })
+    wrappers.push(wrapper)
+    const canvas = wrapper.find({ ref: 'imageContainerRef' })
+    const content = wrapper.find({ ref: 'canvasContentRef' }).element as HTMLElement
+    for (let tap = 0; tap < 2; tap++) {
+      await canvas.trigger('touchstart', fingers([195, 300]))
+      await canvas.trigger('touchend', { touches: [], changedTouches: [{ clientX: 195, clientY: 300 }] })
+    }
+    expect(scaleOf(content)).toBe(2.5)
+    expect(wrapper.emitted('hideControls')).toEqual([[]])
+    await canvas.trigger('dblclick')
+    expect(wrapper.emitted('viewerDoubleClick')).toBeUndefined()
+    await canvas.trigger('dblclick')
+    expect(wrapper.emitted('viewerDoubleClick')).toEqual([[]])
+  })
+
 })
 
 describe('AudioPlayer progress scrubbing on touch/pointer', () => {
@@ -420,7 +483,8 @@ describe('pinch sequences never become page swipes', () => {
     zoom.onTouchMove(touch([[50, 100], [350, 100]]))
     expect(zoom.scale.value).toBe(1.5)
     zoom.onTouchMove(touch([[190, 100], [210, 100]]))
-    expect(zoom.scale.value).toBe(1)
+    // Rubber-banded below 1x while the fingers stay down.
+    expect(zoom.scale.value).toBeLessThan(1)
     if (ending === 'one finger then the other') {
       zoom.onTouchEnd(touch([[210, 100]], [[190, 100]]))
       zoom.onTouchMove(touch([[320, 100]]))
@@ -432,6 +496,7 @@ describe('pinch sequences never become page swipes', () => {
       zoom.onTouchEnd(touch([], [[320, 100], [190, 100]]))
     }
     expect(onSwipe).not.toHaveBeenCalled()
+    expect(zoom.scale.value).toBe(1)
     expect(zoom.wasTouchGesture()).toBe(true)
     zoom.onTouchStart(touch([[250, 100]]))
     zoom.onTouchEnd(touch([], [[100, 105]]))
