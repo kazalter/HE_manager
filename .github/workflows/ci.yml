@@ -35,6 +35,13 @@ jobs:
         run: |
           python -m pytest
 
+      - name: Run MCP transport and HE integration tests
+        run: |
+          python -m venv .venv-mcp
+          .venv-mcp/bin/python -m pip install -r integrations/he_mcp/requirements-dev.txt
+          HE_TEST_PYTHON="$(command -v python)" PYTHONPATH=backend:. \
+            .venv-mcp/bin/python -m pytest integrations/he_mcp/tests -q
+
   frontend-check-and-build:
     name: Frontend Test & Production Build
     runs-on: ubuntu-latest

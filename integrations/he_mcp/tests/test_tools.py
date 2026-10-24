@@ -18,7 +18,9 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-NAMES = {
+# Keep expectations explicit: deriving this allowlist from TOOL_CATALOG would
+# silently approve accidental exposure of a new tool.
+HISTORICAL_NAMES = {
     "search_media",
     "get_media_detail",
     "get_library_stats",
@@ -29,6 +31,78 @@ NAMES = {
     "propose_media_update",
     "propose_scan",
 }
+PAGE = {"items": [], "total": 0, "offset": 0, "has_more": False}
+READ_CASES = {
+    "search_media": ({"query": "你好"}, PAGE),
+    "get_media_detail": (
+        {"media_id": 1},
+        {"id": 1, "title": "媒体", "media_type": "manga"},
+    ),
+    "get_library_stats": (
+        {},
+        {"total": 0, "by_type": {}, "favorite_count": 0, "watched_count": 0},
+    ),
+    "recommend_media": (
+        {},
+        {"items": [], "basis": "资料筛选", "method": "metadata_filter"},
+    ),
+    "list_duplicate_candidates": ({}, PAGE),
+    "list_tags": ({}, PAGE),
+    "list_folders": ({}, PAGE),
+    "list_creators": ({}, PAGE),
+    "get_creator_detail": (
+        {"key": "a:作者"},
+        {**PAGE, "key": "a:作者", "name": "作者"},
+    ),
+    "list_tasks": ({}, PAGE),
+    "get_task_detail": (
+        {"task_id": "scan-folder-1"},
+        {
+            "task_id": "scan-folder-1",
+            "kind": "scan",
+            "status": "idle",
+            "summary": "尚未扫描",
+        },
+    ),
+    "get_project_status": ({}, {"storage": [], "backup": [], "backup_count": 0}),
+    "get_project_settings": ({}, PAGE),
+    "list_directory": ({"folder_id": 1}, PAGE),
+    "read_text": (
+        {"folder_id": 1, "relative_path": "note.txt"},
+        {
+            "folder_id": 1,
+            "relative_path": "note.txt",
+            "text": "正文",
+            "offset_bytes": 0,
+            "truncated": False,
+        },
+    ),
+    "get_media_preview": (
+        {"media_id": 1, "page_index": 2},
+        {
+            "media_id": 1,
+            "media_type": "manga",
+            "page_index": 2,
+            "page_count": 3,
+            "preview_path": "/assistant/media/1/preview?page_index=2",
+        },
+    ),
+    "read_logs": ({"source": "scan", "limit": 1}, {"items": [], "has_more": False}),
+}
+PROPOSAL_ARGS = {
+    "propose_media_update": {"media_id": 1, "patch": {"rating": 4}},
+    "propose_scan": {"folder_id": 1},
+    "propose_media_batch_update": {"items": [{"media_id": 1, "patch": {"rating": 4}}]},
+    "propose_tag_rename": {"tag_id": 1, "name": "新标签"},
+    "propose_tag_merge": {"source_tag_id": 1, "target_tag_id": 2},
+    "propose_maintenance": {"action": "backup_database"},
+    "propose_file_move": {
+        "media_id": 1,
+        "destination_folder_id": 1,
+        "destination_relative_path": "new.cbz",
+    },
+}
+NAMES = set(READ_CASES) | set(PROPOSAL_ARGS)
 CONTEXT = {"session_id": str(uuid4()), "run_id": str(uuid4())}
 TOKEN_A = "test-admin-a-" + "a" * 32
 TOKEN_B = "test-admin-b-" + "b" * 32
@@ -79,7 +153,7 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
             async with httpx2.AsyncClient(trust_env=False) as http:
                 response = await http.get(base + "/healthz")
                 self.assertEqual(response.status_code, 200)
-                self.assertEqual(response.json(), {"status": "ok", "tools": 9})
+                self.assertEqual(response.json(), {"status": "ok", "tools": len(NAMES)})
                 denied = await http.post(base + "/mcp", json={})
                 self.assertEqual(denied.status_code, 401)
 
@@ -101,21 +175,14 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
         if name.startswith("propose_"):
             result = {
                 "id": str(uuid4()),
-                "kind": "scan" if name == "propose_scan" else "media_update",
+                "kind": name.removeprefix("propose_"),
                 "target_id": 1,
                 "target_label": "媒体",
                 "state": "pending",
                 "expires_at": "2026-10-10T10:00:00",
             }
-        elif name == "get_library_stats":
-            result = {
-                "total": 0,
-                "by_type": {},
-                "favorite_count": 0,
-                "watched_count": 0,
-            }
         else:
-            result = {"items": [], "total": 0, "offset": 0, "has_more": False}
+            result = READ_CASES[name][1]
         return JSONResponse(
             {"tool_name": name, "tool_call_id": str(uuid4()), "result": result}
         )
@@ -141,6 +208,7 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
                         not tool.name.startswith("propose_"),
                     )
                     self.assertFalse(tool.annotations.open_world_hint)
+                    self.assertFalse(tool.annotations.destructive_hint)
                     self.assertEqual(
                         set(tool.input_schema["properties"]), {"context", "args"}
                     )
@@ -153,6 +221,37 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
                     {"items": [], "total": 0, "offset": 0, "has_more": False},
                 )
                 self.assertNotIn("tool_call_id", result.structured_content)
+
+    async def test_every_read_tool_forwards_arguments_and_preserves_typed_result(self):
+        async with self.bridge() as (url, _):
+            async with sdk(url, TOKEN_A) as session:
+                for name, (args, expected) in READ_CASES.items():
+                    with self.subTest(tool=name):
+                        result = await session.call_tool(
+                            name, {"context": CONTEXT, "args": args}
+                        )
+                        self.assertFalse(result.is_error, str(result))
+                        self.assertEqual(result.structured_content, expected)
+                        self.assertEqual(
+                            self.calls[-1],
+                            (
+                                "Bearer " + TOKEN_A,
+                                name,
+                                {"context": CONTEXT, "args": args},
+                            ),
+                        )
+
+    async def test_every_tool_rejects_extra_identity_before_upstream(self):
+        cases = {name: args for name, (args, _) in READ_CASES.items()} | PROPOSAL_ARGS
+        async with self.bridge() as (url, _):
+            async with sdk(url, TOKEN_A) as session:
+                for name, args in cases.items():
+                    with self.subTest(tool=name):
+                        result = await session.call_tool(
+                            name, {"context": CONTEXT, "args": {**args, "user_id": 2}}
+                        )
+                        self.assertTrue(result.is_error)
+        self.assertEqual(self.calls, [])
 
     async def test_two_admin_tokens_are_scoped_to_each_concurrent_request(self):
         self.barrier = asyncio.Event()
@@ -193,35 +292,39 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
     async def test_proposals_are_only_pending_and_never_call_confirm(self):
         async with self.bridge() as (url, _):
             async with sdk(url, TOKEN_A) as session:
-                for name, args in [
-                    ("propose_media_update", {"media_id": 1, "patch": {"rating": 4}}),
-                    ("propose_scan", {"folder_id": 1}),
-                ]:
+                for name, args in PROPOSAL_ARGS.items():
                     result = await session.call_tool(
                         name, {"context": CONTEXT, "args": args}
                     )
                     self.assertFalse(result.is_error)
                     self.assertEqual(result.structured_content["state"], "pending")
-        self.assertEqual(
-            [c[1] for c in self.calls], ["propose_media_update", "propose_scan"]
-        )
+                    self.assertEqual(
+                        result.structured_content["kind"], name.removeprefix("propose_")
+                    )
+        self.assertEqual([c[1] for c in self.calls], list(PROPOSAL_ARGS))
 
     async def test_read_retry_once_proposal_no_automatic_retry(self):
         async with self.bridge() as (url, _):
             async with sdk(url, TOKEN_A) as session:
-                self.failures = 1
-                read = await session.call_tool(
-                    "search_media", {"context": CONTEXT, "args": {}}
-                )
-                self.assertFalse(read.is_error)
-                self.assertEqual(len(self.calls), 2)
-                self.failures = 1
-                proposal = await session.call_tool(
-                    "propose_scan", {"context": CONTEXT, "args": {"folder_id": 1}}
-                )
-                self.assertTrue(proposal.is_error)
-                self.assertEqual(len(self.calls), 3)
-                self.assertNotIn("secret path", str(proposal))
+                for name, (args, _) in READ_CASES.items():
+                    with self.subTest(tool=name):
+                        self.calls.clear()
+                        self.failures = 1
+                        read = await session.call_tool(
+                            name, {"context": CONTEXT, "args": args}
+                        )
+                        self.assertFalse(read.is_error, str(read))
+                        self.assertEqual(len(self.calls), 2)
+                for name, args in PROPOSAL_ARGS.items():
+                    with self.subTest(tool=name):
+                        self.calls.clear()
+                        self.failures = 1
+                        proposal = await session.call_tool(
+                            name, {"context": CONTEXT, "args": args}
+                        )
+                        self.assertTrue(proposal.is_error)
+                        self.assertEqual(len(self.calls), 1)
+                        self.assertNotIn("secret path", str(proposal))
 
     async def test_missing_authorization_rejected_on_every_transport_method(self):
         async with self.bridge() as (url, _):
@@ -310,17 +413,20 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
                 str(calls[0].url), "http://he-tools:8021/tools/search_media"
             )
 
-    async def test_runtime_lock_catalog_matches_sdk_and_no_private_he_runtime_imports(
+    async def test_historical_runtime_lock_is_preserved_without_private_he_runtime_imports(
         self,
     ):
         from pathlib import Path
 
         root = Path(__file__).resolve().parents[3]
         lock = json.loads((root / "deploy/hermes/runtime-lock.json").read_text())
-        self.assertEqual(set(lock["bridge"]["tool_names"]), NAMES)
+        # This is evidence of the original H01 verification, not today's live
+        # allowlist. Do not rewrite that historical attestation to make tests pass.
+        self.assertEqual(set(lock["bridge"]["tool_names"]), HISTORICAL_NAMES)
+        self.assertLess(HISTORICAL_NAMES, NAMES)
         self.assertEqual(
             set(lock["toolset_config"]["model_tool_names"]),
-            {"mcp__he__" + n for n in NAMES} | {"memory"},
+            {"mcp__he__" + n for n in HISTORICAL_NAMES} | {"memory"},
         )
         self.assertNotIn("app.database", sys.modules)
         self.assertNotIn("app.scanner", sys.modules)
