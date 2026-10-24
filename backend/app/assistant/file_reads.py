@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 from PIL import Image
 from fastapi import HTTPException
 from .. import models
+from ..media_files import SKIP_FOLDERS, is_manga_page
 from . import schemas as s
 from .identity import require_tool_context
 from .readonly import page
@@ -19,7 +20,6 @@ from .tool_catalog import TOOL_CATALOG
 FILE_TOOLS = frozenset(("list_directory", "read_text", "get_media_preview"))
 BLOCKED = {".git", ".env", "node_modules", "profiles.json", "deepseek.json", "external_config.json", "hermes-model.json", "library.db"}
 SECRET_EXT = {".pem", ".key", ".p12", ".pfx", ".db", ".sqlite", ".sqlite3"}
-IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"}
 
 def clean_parts(relative):
     p=PurePosixPath(relative.replace("\\","/"))
@@ -125,10 +125,10 @@ def preview_payload(db, media_id, page_index=0):
     if path.is_dir():
         files=[]
         for base,dirs,names in os.walk(path,followlinks=False):
-            dirs[:]=[x for x in dirs if not Path(base,x).is_symlink() and x.casefold() not in BLOCKED]
+            dirs[:]=[x for x in dirs if not Path(base,x).is_symlink() and x.casefold() not in BLOCKED | SKIP_FOLDERS]
             for name in names:
                 file=Path(base,name)
-                if file.suffix.lower() in IMAGE_EXT and not file.is_symlink():files.append(file)
+                if is_manga_page(file.relative_to(path).as_posix()) and not file.is_symlink():files.append(file)
                 if len(files)>10000:raise HTTPException(413,"assistant_content_too_large")
         files.sort()
         if page_index>=len(files):raise HTTPException(404,"assistant_file_unavailable")
@@ -139,7 +139,7 @@ def preview_payload(db, media_id, page_index=0):
             with os.fdopen(os.dup(fd),"rb") as handle,zipfile.ZipFile(handle) as z:
                 infos=z.infolist()
                 if len(infos)>10000 or sum(x.file_size for x in infos)>2*1024**3:raise HTTPException(413,"assistant_content_too_large")
-                entries=sorted([x for x in infos if not x.is_dir() and Path(x.filename).suffix.lower() in IMAGE_EXT],key=lambda x:x.filename)
+                entries=sorted([x for x in infos if not x.is_dir() and is_manga_page(x.filename)],key=lambda x:x.filename)
                 if page_index>=len(entries):raise HTTPException(404,"assistant_file_unavailable")
                 entry=entries[page_index];clean_parts(entry.filename)
                 if entry.file_size>32*1024*1024 or entry.file_size>max(1,entry.compress_size)*200:raise HTTPException(413,"assistant_content_too_large")
