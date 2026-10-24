@@ -133,6 +133,8 @@ export function useImageViewerZoom(
 
   const setScale = (newScale: number, centerClientX?: number, centerClientY?: number) => {
     stopFling()
+    // Programmatic zooms end an active pan or fling, so settle styles can animate and release.
+    isPanning.value = false
     zoomAt(newScale, centerClientX, centerClientY)
     settledScale.value = scale.value
     render()
@@ -140,8 +142,6 @@ export function useImageViewerZoom(
 
   const animateTo = (newScale: number, centerClientX?: number, centerClientY?: number) => {
     animateNext = true
-    // Programmatic zooms end an active pan, so settle styles can animate and release.
-    isPanning.value = false
     setScale(newScale, centerClientX, centerClientY)
   }
 
