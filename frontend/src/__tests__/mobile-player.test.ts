@@ -4,7 +4,7 @@ import { computed, defineComponent, ref } from 'vue'
 import axios from 'axios'
 import GlobalAudioPlayer from '../components/GlobalAudioPlayer.vue'
 import { audioPlaybackStore as player } from '../stores/audioPlaybackStore'
-import { useImageViewerZoom } from '../composables/useImageViewerZoom'
+import { useZoomScroller } from '../composables/useZoomScroller'
 import { useMediaOverlayControls } from '../composables/useMediaOverlayControls'
 import type { Media } from '../types'
 
@@ -38,21 +38,37 @@ describe('persistent audio and phone gestures', () => {
     expect(pause).toHaveBeenCalledOnce()
   })
   it('pinches without navigating and allows a deliberate swipe only at normal scale', () => {
-    let zoom!: ReturnType<typeof useImageViewerZoom>
+    let zoom!: ReturnType<typeof useZoomScroller>
     const onSwipe = vi.fn()
-    const wrapper = mount(defineComponent({ setup() { zoom = useImageViewerZoom(ref(null), { onSwipe }); return {} }, template: '<div />' }))
+    const scroller = document.createElement('div'), content = document.createElement('div')
+    scroller.append(content)
+    const frames: FrameRequestCallback[] = []
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => frames.push(callback))
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {})
+    const settle = () => { for (let frame = 0, time = 0; frame < 300 && frames.length; frame++) frames.splice(0).forEach(callback => callback(time += 16)) }
+    const wrapper = mount(defineComponent({ setup() {
+      zoom = useZoomScroller({ scroller: ref(scroller), content: ref(content), centered: true, onSwipe, applyScale: (element, scale) => element.style.setProperty('--he-zoom', String(scale)) })
+      return {}
+    }, template: '<div />' }))
     const touch = (points: number[][], changed: number[][] = []) => ({ touches: points.map(([x, y]) => ({ clientX: x, clientY: y })), changedTouches: changed.map(([x, y]) => ({ clientX: x, clientY: y })), cancelable: true, preventDefault: vi.fn() }) as unknown as TouchEvent
     zoom.onTouchStart(touch([[100,100], [200,100]]))
     zoom.onTouchMove(touch([[50,100], [250,100]]))
     zoom.onTouchEnd(touch([], [[250,100]]))
+    settle()
     expect(zoom.scale.value).toBe(2)
     expect(onSwipe).not.toHaveBeenCalled()
-    expect(zoom.wasTouchGesture()).toBe(true)
-    zoom.resetZoom()
+    expect(zoom.wasGesture()).toBe(true)
+    // While zoomed a horizontal drag is the page's own native panning.
     zoom.onTouchStart(touch([[250,100]]))
+    zoom.onTouchMove(touch([[100,110]]))
+    zoom.onTouchEnd(touch([], [[100,110]]))
+    expect(onSwipe).not.toHaveBeenCalled()
+    zoom.reset()
+    zoom.onTouchStart(touch([[250,100]]))
+    zoom.onTouchMove(touch([[100,110]]))
     zoom.onTouchEnd(touch([], [[100,110]]))
     expect(onSwipe).toHaveBeenCalledWith(1)
-    expect(zoom.wasTouchGesture()).toBe(true)
+    expect(zoom.wasGesture()).toBe(true)
     wrapper.unmount()
   })
   it('falls back to an immersive viewer if browser fullscreen is rejected', async () => {

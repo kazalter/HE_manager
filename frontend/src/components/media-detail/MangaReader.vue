@@ -21,10 +21,10 @@ import { useDesktopImageEnhancement } from '../../composables/useDesktopImageEnh
 import { authIdentity } from '../../auth'
 import { API_BASE_URL, authUrl } from '../../config'
 import type { Media } from '../../types'
-import { useImageViewerZoom } from '../../composables/useImageViewerZoom'
+import { useZoomScroller } from '../../composables/useZoomScroller'
+import { useReaderPager } from '../../composables/useReaderPager'
 import { useReaderImageBuffer } from '../../composables/useReaderImageBuffer'
 import { readerImageWindow } from '../../utils/readerImageWindow'
-import { useWebtoonZoom } from '../../composables/useWebtoonZoom'
 import { useCompactViewport } from '../../composables/useCompactViewport'
 
 export type MangaReadMode = 'single' | 'double' | 'webtoon'
@@ -77,12 +77,22 @@ const toggleStripCollapsed = () => {
 const isStripOpen = computed(() => !props.imagePages && (props.showControls || !props.clickOnlyControls) && !isStripCollapsed.value)
 
 const thumbStripRef = ref<HTMLDivElement | null>(null)
-const imageContainerRef = ref<HTMLDivElement | null>(null)
-const canvasContentRef = ref<HTMLDivElement | null>(null)
+const pagerRef = ref<HTMLDivElement | null>(null)
+const slideScrollerRef = ref<HTMLElement | null>(null)
+const slideContentRef = ref<HTMLElement | null>(null)
 const webtoonContainerRef = ref<HTMLDivElement | null>(null)
 const webtoonContentRef = ref<HTMLDivElement | null>(null)
-const webtoonZoom = useWebtoonZoom(webtoonContainerRef, webtoonContentRef)
 const compactViewport = useCompactViewport()
+// Every size inside a zoomable surface is multiplied by --he-zoom, so a zoom level is a real layout.
+const applyZoomScale = (content: HTMLElement, scale: number) => content.style.setProperty('--he-zoom', String(scale))
+const hideControlsForZoom = () => { if (compactViewport.value && !desktopBridge) emit('hideControls') }
+const webtoonZoom = useZoomScroller({
+  scroller: webtoonContainerRef, content: webtoonContentRef, applyScale: applyZoomScale,
+  doubleTapScale: () => 2, keyboard: () => readMode.value === 'webtoon',
+  onPinchStart: hideControlsForZoom, onDoubleTap: hideControlsForZoom,
+  // Page tracking pauses while the column is transformed and resumes on its committed layout.
+  onSessionChange: active => { if (!active) void nextTick(trackWebtoonPage) },
+})
 const thumbStripScroll = ref(0)
 const stripContainerWidth = ref(800)
 let stripResizeObserver: ResizeObserver | null = null
@@ -109,43 +119,20 @@ let suppressWebtoonClick = false
 let scrollDirection: -1 | 1 = 1
 let lastWebtoonScrollTop = 0
 
-const {
-  isZoomed,
-  isPanning: isZoomPanning,
-  zoomPercent,
-  zoomIn,
-  zoomOut,
-  resetZoom,
-  handleZoomWheel,
-  onMouseDown: onZoomMouseDown,
-  wasDragging: wasZoomDragging,
-  onTouchStart: onCanvasTouchStart, onTouchMove, onTouchEnd, wasTouchGesture, wasDoubleTap,
-} = useImageViewerZoom(imageContainerRef, {
-  contentRef: canvasContentRef,
-  contentSize: (width, height) => canvasContentSize(width, height),
-  doubleTapScale: 2.5,
-  onDoubleTap: () => { if (compactViewport.value && !desktopBridge) emit('hideControls') },
-  onSwipe: direction => { if ((direction === 1) !== isRtl.value) nextPage(); else previousPage() },
+const pagedZoom = useZoomScroller({
+  scroller: slideScrollerRef, content: slideContentRef, applyScale: applyZoomScale, centered: true,
+  doubleTapScale: () => 2.5, keyboard: () => readMode.value !== 'webtoon',
+  onPinchStart: hideControlsForZoom, onDoubleTap: hideControlsForZoom,
+  onSessionChange: () => lockPager(),
 })
+const { isZoomed, zoomPercent, zoomIn, zoomOut } = pagedZoom
+const resetZoom = (animated = false) => pagedZoom.reset(animated)
 const showZoomControls = computed(() => props.showControls || (isZoomed.value && (!compactViewport.value || !!desktopBridge)))
-const hideControlsForPinch = (event: TouchEvent) => {
-  if (event.touches.length > 1 && compactViewport.value && !desktopBridge) emit('hideControls')
+// A zoomed or zooming page pans inside itself; swiping to another page waits until it is back at fit.
+const lockPager = () => {
+  if (pagerRef.value) pagerRef.value.style.overflowX = pagedZoom.isGesturing.value || isZoomed.value ? 'hidden' : ''
 }
-// Extent of the fitted page images, so a zoomed page pans to its edges rather than into the letterbox.
-const canvasContentSize = (width: number, height: number) => {
-  const pages = canvasPages.value
-  const slot = width / pages.length
-  let first = 0, last = 0, tallest = 0
-  pages.forEach((page, index) => {
-    const [pageWidth, pageHeight] = pageDimensionsFor(page)
-    const fit = Math.min(slot / pageWidth, height / pageHeight)
-    if (index === 0) first = pageWidth * fit
-    if (index === pages.length - 1) last = pageWidth * fit
-    tallest = Math.max(tallest, pageHeight * fit)
-  })
-  return { width: Math.min(width, width - slot + (first + last) / 2), height: tallest }
-}
-const onTouchStart = (event: TouchEvent) => { hideControlsForPinch(event); onCanvasTouchStart(event) }
+watch([isZoomed, pagerRef], lockPager, { flush: 'post' })
 
 const THUMB_W = 110
 const THUMB_H = 148
@@ -168,6 +155,87 @@ const canvasPages = computed(() => {
   }
   return isRtl.value ? pages.reverse() : pages
 })
+
+// Paged reading is a native carousel of slots: one per page or two-page spread,
+// plus a slot at either end that loads the adjacent batch of images.
+const spreadParity = ref(props.currentPage % 2)
+const knownPages = computed(() => props.totalPages ?? props.currentPage + 1)
+const leadingSlot = computed(() => props.hasPreviousBatch ? 1 : 0)
+const pageSlotCount = computed(() => {
+  const total = knownPages.value
+  if (readMode.value !== 'double' || !total) return total
+  // Spreads start on even pages, or on odd pages after a single first page.
+  return spreadParity.value ? 1 + Math.ceil((total - 1) / 2) : Math.ceil(total / 2)
+})
+const slotCount = computed(() => leadingSlot.value + pageSlotCount.value + (props.hasNextBatch && pageSlotCount.value ? 1 : 0))
+const slotOfPage = (page: number) => leadingSlot.value + (readMode.value === 'double' ? Math.floor((page + spreadParity.value) / 2) : page)
+const slotStartPage = (slot: number) => {
+  const index = slot - leadingSlot.value
+  return readMode.value === 'double' ? Math.max(0, index * 2 - spreadParity.value) : index
+}
+const slotPages = (slot: number) => {
+  const start = slotStartPage(slot)
+  const pages = [start]
+  if (readMode.value === 'double' && !(spreadParity.value && start === 0) && start + 1 < knownPages.value) pages.push(start + 1)
+  return isRtl.value ? pages.reverse() : pages
+}
+const currentSlot = computed(() => slotOfPage(props.currentPage))
+const pager = useReaderPager({
+  pager: pagerRef,
+  currentSlot: () => currentSlot.value,
+  slotCount: () => slotCount.value,
+  rtl: () => isRtl.value,
+  onSettle: slot => {
+    if (slot < leadingSlot.value) emit('boundary', -1)
+    else if (slot >= leadingSlot.value + pageSlotCount.value) emit('boundary', 1)
+    else setPage(slotStartPage(slot))
+  },
+})
+// The pages of a spread share one height, side by side, fitted inside the viewport.
+const spreadLayout = (pages: number[]) => {
+  const ratios = pages.map(page => { const [width, height] = pageDimensionsFor(page); return width / height })
+  const total = ratios.reduce((sum, ratio) => sum + ratio, 0) || 1
+  const height = Math.min(pager.height.value, pager.width.value / total)
+  return { width: height * total, height, widths: ratios.map(ratio => ratio * height) }
+}
+// Only the slots around the shown and the settled position exist in the DOM.
+const renderedSlots = computed(() => {
+  const count = slotCount.value
+  if (!count || readMode.value === 'webtoon') return []
+  const low = Math.max(0, Math.min(currentSlot.value, pager.visualSlot.value) - 1)
+  const high = Math.min(count - 1, Math.max(currentSlot.value, pager.visualSlot.value) + 1)
+  return Array.from({ length: high - low + 1 }, (_, offset) => {
+    const index = low + offset
+    const edge = index < leadingSlot.value ? 'start' : index >= leadingSlot.value + pageSlotCount.value ? 'end' : null
+    const pages = edge ? [] : slotPages(index)
+    return {
+      index, edge, pages, current: index === currentSlot.value,
+      key: edge ? `edge-${edge}` : `pages-${pages.join('-')}`,
+      layout: edge ? null : spreadLayout(pages),
+    }
+  })
+})
+// The zoom surface follows the current slot's elements as slots mount and unmount.
+const slideElements = new Map<string, HTMLElement>()
+const slideBinders = new Map<string, (element: unknown) => void>()
+const currentSlotKey = computed(() => renderedSlots.value.find(slot => slot.current)?.key ?? '')
+const syncSlideRefs = () => {
+  const scroller = slideElements.get(currentSlotKey.value) ?? null
+  slideScrollerRef.value = scroller
+  slideContentRef.value = scroller?.querySelector<HTMLElement>('.he-slide-content') ?? null
+}
+const slideRef = (key: string) => {
+  let bind = slideBinders.get(key)
+  if (!bind) {
+    bind = element => {
+      if (element instanceof HTMLElement) slideElements.set(key, element)
+      else slideElements.delete(key)
+      syncSlideRefs()
+    }
+    slideBinders.set(key, bind)
+  }
+  return bind
+}
 const desktopImages = useDesktopImageEnhancement(() => canvasPages.value.filter(page => page >= 0 && (props.totalPages === null || page < props.totalPages)).map(pageUrlFor))
 const displayPageUrlFor = (page: number) => desktopImages.displayUrl(pageUrlFor(page))
 const pageLabel = (page: number) => `第 ${page + 1} ${props.imagePages ? '张' : '页'}`
@@ -210,6 +278,7 @@ const nextPage = () => {
 
 const setReadMode = (mode: MangaReadMode) => {
   webtoonZoom.reset()
+  spreadParity.value = props.currentPage % 2
   readMode.value = mode
   localStorage.setItem(modeKey, mode)
   resetZoom()
@@ -391,13 +460,12 @@ const onThumbLeave = () => {
 }
 
 const onWheel = (event: WheelEvent) => {
-  if (readMode.value === 'webtoon') {
-    return
-  }
   if (event.ctrlKey || event.metaKey) {
-    handleZoomWheel(event)
+    activeZoom().handleWheelZoom(event)
     return
   }
+  // Wheel and trackpad scrolling pan the column, or a zoomed page, natively.
+  if (readMode.value === 'webtoon' || isZoomed.value) return
   const now = Date.now()
   if (now - lastWheelAt < WHEEL_INTERVAL_MS) return
   const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX
@@ -409,6 +477,9 @@ const onWheel = (event: WheelEvent) => {
 
 const onWebtoonScroll = () => {
   if (webtoonTouchActive) suppressWebtoonClick = true
+  trackWebtoonPage()
+}
+const trackWebtoonPage = () => {
   scheduleVisiblePage()
   if (isProgrammaticScroll || readMode.value !== 'webtoon' || webtoonScrollRafId !== null) return
   webtoonScrollRafId = requestAnimationFrame(() => {
@@ -426,13 +497,13 @@ const onWebtoonScroll = () => {
     while (low < high) {
       const mid = Math.floor((low + high) / 2)
       const el = children[mid] as HTMLElement
-      if ((el.offsetTop + el.offsetHeight) * webtoonZoom.scale.value < containerTop) low = mid + 1
+      if (el.offsetTop + el.offsetHeight < containerTop) low = mid + 1
       else high = mid
     }
     if (container.scrollTop + container.clientHeight >= container.scrollHeight - 2) low = children.length - 1
     // Warm the actual viewport before waiting for parent/router progress updates.
     preloadAdjacentPages(low, true)
-    if (!webtoonZoom.isInteracting.value && low !== props.currentPage) {
+    if (!webtoonZoom.isGesturing.value && low !== props.currentPage) {
       // Scrolling reports progress; it must not trigger the page-navigation watcher.
       scrollReportedPage = low
       emit('update:currentPage', low)
@@ -448,7 +519,7 @@ const scrollWebtoonToPage = (page: number) => {
   isProgrammaticScroll = true
   window.clearTimeout(programmaticScrollTimer)
   // Only move the reader. scrollIntoView can also move the surrounding overlay.
-  container.scrollTo({ top: el.offsetTop * webtoonZoom.scale.value, behavior: 'auto' })
+  container.scrollTo({ top: el.offsetTop, behavior: 'auto' })
   lastWebtoonScrollTop = container.scrollTop
   preloadAdjacentPages(page, true)
   programmaticScrollTimer = window.setTimeout(() => {
@@ -458,7 +529,6 @@ const scrollWebtoonToPage = (page: number) => {
 
 // Observe native scrolling without preventing it or invoking paged-mode swipes.
 const onWebtoonTouchStart = (event: TouchEvent) => {
-  hideControlsForPinch(event)
   webtoonZoom.onTouchStart(event)
   if (!webtoonTouchActive) {
     suppressWebtoonClick = false
@@ -469,7 +539,7 @@ const onWebtoonTouchStart = (event: TouchEvent) => {
   if (event.touches.length !== 1) suppressWebtoonClick = true
 }
 const onWebtoonTouchMove = (event: TouchEvent) => {
-  webtoonZoom.onPassiveTouchMove(event)
+  webtoonZoom.onTouchMove(event)
   const touch = event.touches[0]
   if (event.touches.length !== 1 || (touch && Math.hypot(touch.clientX - webtoonTouchX, touch.clientY - webtoonTouchY) > 8)) {
     suppressWebtoonClick = true
@@ -487,17 +557,17 @@ const onWebtoonTouchEnd = (event: TouchEvent) => {
 const onWebtoonGesture = (event: Event) => {
   if (compactViewport.value && !desktopBridge) event.preventDefault()
 }
-// A touch double-tap zooms the page; only a mouse double-click toggles fullscreen.
+const activeZoom = () => readMode.value === 'webtoon' ? webtoonZoom : pagedZoom
+// A touch double-tap zooms; only a mouse double-click toggles fullscreen.
 const onViewerDoubleClick = () => {
-  if (readMode.value !== 'webtoon' && wasDoubleTap()) return
+  if (activeZoom().wasDoubleTap()) return
   emit('viewerDoubleClick')
 }
 const onViewerClick = () => {
-  if (readMode.value === 'webtoon' && suppressWebtoonClick) {
-    suppressWebtoonClick = false
-    return
-  }
-  if (wasZoomDragging() || wasTouchGesture()) return
+  const scrolled = readMode.value === 'webtoon' && suppressWebtoonClick
+  suppressWebtoonClick = false
+  // Both flags are consumed, so neither can swallow a later deliberate tap.
+  if (activeZoom().wasGesture() || scrolled) return
   emit('viewerClick')
 }
 
@@ -511,17 +581,15 @@ const imageBuffer = useReaderImageBuffer(update => {
   if (anchor) pendingAnchor = anchor
   update()
   if (anchor) {
-    void nextTick(async () => {
-      webtoonZoom.measure()
-      await nextTick()
-      if (!webtoonZoom.isInteracting.value && webtoonContainerRef.value === anchor.container && anchor.element.isConnected) {
-        const delta = (anchor.element.offsetTop - anchor.top) * webtoonZoom.scale.value
+    void nextTick(() => {
+      if (!webtoonZoom.isGesturing.value && webtoonContainerRef.value === anchor.container && anchor.element.isConnected) {
+        const delta = anchor.element.offsetTop - anchor.top
         if (delta) anchor.container.scrollTop += delta
       }
       pendingAnchor = null
       preloadAdjacentPages()
     })
-  } else void nextTick(() => { webtoonZoom.measure(); preloadAdjacentPages() })
+  } else void nextTick(() => preloadAdjacentPages())
 })
 const pageDimensionsFor = (page: number): [number, number] => {
   const dimensions = props.pageDimensions[page]
@@ -537,7 +605,7 @@ const pageAtOffset = (offset: number) => {
   let low = 0, high = children.length - 1
   while (low < high) {
     const mid = Math.floor((low + high) / 2), element = children[mid] as HTMLElement
-    if ((element.offsetTop + element.offsetHeight) * webtoonZoom.scale.value < offset) low = mid + 1
+    if (element.offsetTop + element.offsetHeight < offset) low = mid + 1
     else high = mid
   }
   return low
@@ -571,7 +639,7 @@ const openedIdentity = authIdentity()
 let visibleRaf: number | null = null, visibleDisposed = false, lastVisible = ''
 function reportVisiblePage() {
   if (!desktopBridge || props.imagePages || visibleDisposed || document.hidden || authIdentity() !== openedIdentity) return
-  const container = readMode.value === 'webtoon' ? webtoonContainerRef.value : imageContainerRef.value
+  const container = readMode.value === 'webtoon' ? webtoonContainerRef.value : pagerRef.value
   if (!container?.isConnected) return
   const rect = container.getBoundingClientRect()
   const top = Math.max(0, rect.top), bottom = Math.min(innerHeight, rect.bottom)
@@ -613,9 +681,12 @@ watch([() => props.currentPage, readMode, () => props.totalPages,
 
 watch(() => [props.totalPages, readMode.value, props.imagePages?.map(item => item.id).join(',')], () => { preloadAdjacentPages(); void nextTick(() => preloadAdjacentPages()) })
 watch(() => props.showControls, visible => { if (!visible) showShortcutGuide.value = false })
+watch(currentSlotKey, syncSlideRefs, { flush: 'post' })
 defineExpose({ nextPage, previousPage, stepSize, flushVisiblePage: reportVisiblePage })
 
 watch(() => props.currentPage, page => {
+  // A page that does not start a spread of the current pairing starts a new pairing.
+  if (readMode.value === 'double' && page !== 0 && page % 2 !== spreadParity.value) spreadParity.value = page % 2
   if (readMode.value !== 'webtoon') {
     resetZoom()
   } else if (page === scrollReportedPage) {
@@ -711,100 +782,138 @@ function onReaderViewportResize() { preloadAdjacentPages() }
         <ChevronLeft :size="26" aria-hidden="true" />
       </button>
 
-      <!-- Webtoon Continuous Scroll Mode -->
+      <!-- Webtoon Continuous Scroll Mode: native scrolling on both axes; only zoom changes run in script. -->
       <div
         v-if="readMode === 'webtoon'"
         ref="webtoonContainerRef"
-        style="overflow-anchor: none; overscroll-behavior: contain; touch-action: pan-y"
+        style="overflow-anchor: none; overscroll-behavior: contain; touch-action: pan-x pan-y; scroll-axis-lock: none"
         class="he-webtoon-viewport w-full h-full overflow-y-auto overflow-x-hidden custom-scrollbar select-none"
+        :style="{ cursor: webtoonZoom.isZoomed.value ? (webtoonZoom.isDragging.value ? 'grabbing' : 'grab') : undefined }"
         @scroll="onWebtoonScroll"
+        @mousedown="webtoonZoom.onMouseDown"
         @touchstart.passive="onWebtoonTouchStart"
         @touchmove.passive="onWebtoonTouchMove"
         @touchend.passive="onWebtoonTouchEnd"
         @touchcancel.passive="onWebtoonTouchEnd"
         @gesturestart="onWebtoonGesture" @gesturechange="onWebtoonGesture"
       >
-        <div class="he-webtoon-space relative w-full">
-          <div ref="webtoonContentRef" class="he-webtoon-content relative w-full flex flex-col items-center py-6 px-2">
-            <div
-              v-for="pageIndex in totalPagesList"
-              :key="imagePages?.[pageIndex]?.id ?? pageIndex"
-              :id="`webtoon-page-${pageIndex}`"
-              :data-page="pageIndex"
-              class="he-reader-page w-full max-w-[840px] shrink-0 my-1 relative group bg-white/5"
-              :style="{ aspectRatio: `${pageDimensionsFor(pageIndex)[0]} / ${pageDimensionsFor(pageIndex)[1]}` }"
-              :aria-busy="!pageReady(pageIndex) && !pageFailed(pageIndex)"
-            >
-              <img
-                v-if="pageResident(pageIndex)"
-                :src="displayPageUrlFor(pageIndex)"
-                @load="onWebtoonImageLoad"
-                :width="pageDimensionsFor(pageIndex)[0]"
-                :height="pageDimensionsFor(pageIndex)[1]"
-                loading="eager"
-                decoding="async"
-                class="w-full h-full object-contain block rounded-sm"
-                :alt="imagePages?.[pageIndex]?.title || `第 ${pageIndex + 1} 页`"
-              />
-              <div v-else-if="pageFailed(pageIndex)" class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-meta text-white/60" role="status">
-                <span>图片加载失败</span>
-                <button type="button" class="h-10 rounded-lg bg-white/10 px-4 text-body font-medium text-white transition-colors hover:bg-white/15 focus-ring pointer-coarse:h-11" @click.stop="imageBuffer.retry(pageUrlFor(pageIndex))">重新加载</button>
-              </div>
-              <div v-if="showControls" class="pointer-events-none absolute right-2 top-2 inline-flex h-6 items-center rounded-md bg-black/60 px-1.5 text-caption font-medium tabular-nums text-white/90 opacity-0 transition-opacity group-hover:opacity-100">
-                {{ pageIndex + 1 }} / {{ totalPages }}
-              </div>
+        <!-- Every size is multiplied by --he-zoom, so a zoomed column is laid out, not stretched. -->
+        <div
+          ref="webtoonContentRef"
+          class="he-webtoon-content relative flex flex-col items-center"
+          style="width: calc(100% * var(--he-zoom, 1)); padding: calc(24px * var(--he-zoom, 1)) calc(8px * var(--he-zoom, 1))"
+        >
+          <div
+            v-for="pageIndex in totalPagesList"
+            :key="imagePages?.[pageIndex]?.id ?? pageIndex"
+            :id="`webtoon-page-${pageIndex}`"
+            :data-page="pageIndex"
+            class="he-reader-page w-full shrink-0 relative group bg-white/5"
+            style="max-width: calc(840px * var(--he-zoom, 1)); margin-block: calc(4px * var(--he-zoom, 1))"
+            :style="{ aspectRatio: `${pageDimensionsFor(pageIndex)[0]} / ${pageDimensionsFor(pageIndex)[1]}` }"
+            :aria-busy="!pageReady(pageIndex) && !pageFailed(pageIndex)"
+          >
+            <img
+              v-if="pageResident(pageIndex)"
+              :src="displayPageUrlFor(pageIndex)"
+              @load="onWebtoonImageLoad"
+              :width="pageDimensionsFor(pageIndex)[0]"
+              :height="pageDimensionsFor(pageIndex)[1]"
+              loading="eager"
+              decoding="async"
+              class="w-full h-full object-contain block rounded-sm"
+              :alt="imagePages?.[pageIndex]?.title || `第 ${pageIndex + 1} 页`"
+            />
+            <div v-else-if="pageFailed(pageIndex)" class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-meta text-white/60" role="status">
+              <span>图片加载失败</span>
+              <button type="button" class="h-10 rounded-lg bg-white/10 px-4 text-body font-medium text-white transition-colors hover:bg-white/15 focus-ring pointer-coarse:h-11" @click.stop="imageBuffer.retry(pageUrlFor(pageIndex))">重新加载</button>
+            </div>
+            <div v-if="showControls" class="pointer-events-none absolute right-2 top-2 inline-flex h-6 items-center rounded-md bg-black/60 px-1.5 text-caption font-medium tabular-nums text-white/90 opacity-0 transition-opacity group-hover:opacity-100">
+              {{ pageIndex + 1 }} / {{ totalPages }}
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Single / Double Page Canvas Mode -->
+      <!-- Single / Double Page Mode: a native scroll-snap carousel, so a swipe moves the pages under the finger. -->
       <div
         v-else
-        ref="imageContainerRef"
-        class="w-full h-full flex items-center justify-center overflow-hidden select-none"
-        :style="{ cursor: isZoomed ? (isZoomPanning ? 'grabbing' : 'grab') : 'default' }"
-        @mousedown="onZoomMouseDown"
-        @touchstart="onTouchStart" @touchmove="onTouchMove" @touchend="onTouchEnd" @touchcancel="onTouchEnd"
-        style="touch-action: none"
+        ref="pagerRef"
+        :dir="isRtl ? 'rtl' : 'ltr'"
+        class="he-pager w-full h-full overflow-x-auto overflow-y-hidden select-none"
+        style="scroll-snap-type: x mandatory; overscroll-behavior: contain; touch-action: pan-x pan-y; scrollbar-width: none"
+        @scroll.passive="pager.onScroll"
       >
-        <!-- Key each page by its source, so a pending page never retains the previous bitmap. -->
-        <!-- Transform is written by useImageViewerZoom, so gestures do not re-render the reader. -->
-        <div
-          ref="canvasContentRef"
-          class="w-full h-full flex items-center justify-center"
-          :class="readMode === 'double' ? 'gap-1 sm:gap-2 px-2' : ''"
-        >
+        <div class="relative h-full" :style="{ width: `${slotCount * 100}%` }">
+          <!-- Each slot is also a native scroller: a zoomed page pans inside it on both axes.
+               It is positioned physically, since its own dir="ltr" would flip a logical inset. -->
           <div
-            v-for="pageIndex in canvasPages"
-            :key="pageUrlFor(pageIndex)"
-            class="he-reader-canvas-page relative flex h-full min-w-0 flex-1 items-center justify-center"
-            :aria-label="pageLabel(pageIndex)"
-            :data-page="pageIndex"
-            :aria-busy="!pageReady(pageIndex) && !pageFailed(pageIndex)"
+            v-for="slot in renderedSlots"
+            :key="slot.key"
+            :ref="slideRef(slot.key)"
+            dir="ltr"
+            class="he-pager-slot absolute inset-y-0 overflow-hidden"
+            style="scroll-snap-align: start; scroll-snap-stop: always; touch-action: pan-x pan-y; scroll-axis-lock: none; scrollbar-width: none"
+            :style="{
+              [isRtl ? 'right' : 'left']: `${slot.index * 100 / slotCount}%`,
+              width: `${100 / slotCount}%`,
+              cursor: slot.current && isZoomed ? (pagedZoom.isDragging.value ? 'grabbing' : 'grab') : undefined,
+            }"
+            :aria-hidden="slot.current ? undefined : 'true'"
+            @mousedown="slot.current && pagedZoom.onMouseDown($event)"
+            @touchstart.passive="slot.current && pagedZoom.onTouchStart($event)"
+            @touchmove.passive="slot.current && pagedZoom.onTouchMove($event)"
+            @touchend.passive="slot.current && pagedZoom.onTouchEnd($event)"
+            @touchcancel.passive="slot.current && pagedZoom.onTouchEnd($event)"
+            @gesturestart="pagedZoom.onGesture" @gesturechange="pagedZoom.onGesture"
           >
-            <img
-              v-if="pageReady(pageIndex)"
-              :src="displayPageUrlFor(pageIndex)"
-            @load="scheduleVisiblePage"
-              decoding="sync"
-              class="h-full w-full object-contain pointer-events-none"
-              :alt="imagePages?.[pageIndex]?.title || pageLabel(pageIndex)"
-            />
-            <div v-else class="flex flex-col items-center justify-center gap-3 px-4 text-center text-meta text-white/75" role="status" aria-live="polite">
-              <template v-if="pageFailed(pageIndex)">
-                <span>{{ pageLabel(pageIndex) }}加载失败</span>
-                <button
-                  type="button"
-                  class="min-h-11 rounded-lg bg-white/10 px-4 text-body font-medium text-white transition-colors hover:bg-white/15 focus-ring"
-                  @mousedown.stop @touchstart.stop @dblclick.stop
-                  @click.stop="imageBuffer.retry(pageUrlFor(pageIndex))"
-                >重新加载</button>
-              </template>
-              <template v-else>
-                <Loader2 :size="28" class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                <span>正在加载{{ pageLabel(pageIndex) }}…</span>
-              </template>
+            <div v-if="slot.edge" class="flex h-full flex-col items-center justify-center gap-3 text-meta text-white/75" role="status" aria-live="polite">
+              <Loader2 :size="28" class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              <span>{{ slot.edge === 'end' ? '正在加载后面的图片…' : '正在加载前面的图片…' }}</span>
+            </div>
+            <!-- Centred while it fits, scrollable once zoomed past the viewport. -->
+            <div v-else class="grid min-h-full min-w-full place-items-center" style="width: max-content">
+              <!-- Key each page by its source, so a pending page never retains the previous bitmap. -->
+              <div
+                class="he-slide-content flex"
+                :style="{ width: `calc(${slot.layout!.width}px * var(--he-zoom, 1))`, height: `calc(${slot.layout!.height}px * var(--he-zoom, 1))` }"
+              >
+                <div
+                  v-for="(pageIndex, position) in slot.pages"
+                  :key="pageUrlFor(pageIndex)"
+                  :class="slot.current ? 'he-reader-canvas-page' : 'he-reader-neighbor-page'"
+                  class="relative flex h-full shrink-0 items-center justify-center"
+                  :style="{ width: `calc(${slot.layout!.widths[position]}px * var(--he-zoom, 1))` }"
+                  :aria-label="pageLabel(pageIndex)"
+                  :data-page="pageIndex"
+                  :aria-busy="!pageReady(pageIndex) && !pageFailed(pageIndex)"
+                >
+                  <img
+                    v-if="pageReady(pageIndex)"
+                    :src="displayPageUrlFor(pageIndex)"
+                    @load="scheduleVisiblePage"
+                    decoding="sync"
+                    draggable="false"
+                    class="h-full w-full pointer-events-none"
+                    :alt="imagePages?.[pageIndex]?.title || pageLabel(pageIndex)"
+                  />
+                  <div v-else class="flex flex-col items-center justify-center gap-3 px-4 text-center text-meta text-white/75" role="status" aria-live="polite">
+                    <template v-if="pageFailed(pageIndex)">
+                      <span>{{ pageLabel(pageIndex) }}加载失败</span>
+                      <button
+                        type="button"
+                        class="min-h-11 rounded-lg bg-white/10 px-4 text-body font-medium text-white transition-colors hover:bg-white/15 focus-ring"
+                        @mousedown.stop @touchstart.stop @dblclick.stop
+                        @click.stop="imageBuffer.retry(pageUrlFor(pageIndex))"
+                      >重新加载</button>
+                    </template>
+                    <template v-else>
+                      <Loader2 :size="28" class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                      <span>正在加载{{ pageLabel(pageIndex) }}…</span>
+                    </template>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1129,6 +1238,11 @@ function onReaderViewportResize() { preloadAdjacentPages() }
 </template>
 
 <style scoped>
+/* Older WebKit ignores scrollbar-width; the pager and a zoomed page pan by touch, drag and wheel. */
+.he-pager::-webkit-scrollbar,
+.he-pager-slot::-webkit-scrollbar {
+  display: none;
+}
 .he-reader-seg {
   display: inline-flex;
   flex-shrink: 0;

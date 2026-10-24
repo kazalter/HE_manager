@@ -39,7 +39,7 @@ beforeEach(() => {
 afterEach(() => { for (const wrapper of wrappers.splice(0)) wrapper.unmount(); vi.unstubAllGlobals(); vi.restoreAllMocks(); frames.clear(); document.body.innerHTML = '' })
 it('does not report decoder prefetch or an unloaded DOM image; a displayed cache hit uses the same path', async () => {
   const wrapper = create(); await finish(0); await finish(1)
-  const container = wrapper.get('.he-reader-canvas-page').element.parentElement!.parentElement!
+  const container = wrapper.get('.he-pager').element
   rectangle(container, () => box())
   paint(); expect(wrapper.emitted('visiblePage')).toBeUndefined()
   loaded(wrapper.get('.he-reader-canvas-page img').element as HTMLImageElement)
@@ -53,7 +53,7 @@ it('does not report decoder prefetch or an unloaded DOM image; a displayed cache
 it('reports the largest displayed server index for an RTL spread and ignores an obsolete identity', async () => {
   localStorage.setItem('he_manga_read_mode', 'double'); localStorage.setItem('he_manga_rtl', 'true')
   const wrapper = create(); await finish(0); await finish(1)
-  const container = wrapper.get('.he-reader-canvas-page').element.parentElement!.parentElement!
+  const container = wrapper.get('.he-pager').element
   rectangle(container, () => box())
   wrapper.findAll('.he-reader-canvas-page img').forEach((image, index) => loaded(image.element as HTMLImageElement, () => box(0, 600, index * 400, 400)))
   paint(); expect(wrapper.emitted('visiblePage')).toEqual([[7, 1]])
