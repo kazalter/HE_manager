@@ -144,14 +144,14 @@ describe('canvas reader loading feedback', () => {
   it('replaces the old image with loading feedback until the next image has decoded', async () => {
     const wrapper = mountCanvasReader()
     expect(wrapper.text()).toContain('正在加载第 1 张')
-    expect(wrapper.findAll('img')).toHaveLength(0)
+    expect(wrapper.findAll('.he-reader-canvas-page img')).toHaveLength(0)
     await finishImage(0)
     const first = wrapper.get('.he-reader-canvas-page img').element
-    expect(wrapper.find('[role="status"]').exists()).toBe(false)
+    expect(wrapper.find('.he-reader-canvas-page [role="status"]').exists()).toBe(false)
     await wrapper.setProps({ currentPage: 1 })
     expect(wrapper.text()).toContain('正在加载第 2 张')
     expect(wrapper.get('.he-reader-canvas-page').attributes('aria-busy')).toBe('true')
-    expect(wrapper.findAll('img')).toHaveLength(0)
+    expect(wrapper.findAll('.he-reader-canvas-page img')).toHaveLength(0)
     let decoded!: () => void
     ControlledImage.instances[1]!.decode.mockImplementation(() => new Promise<void>(resolve => { decoded = resolve }))
     const loading = ControlledImage.instances[1]!.onload!()
@@ -160,7 +160,7 @@ describe('canvas reader loading feedback', () => {
     decoded(); await loading; await flushPromises()
     expect(wrapper.get('.he-reader-canvas-page img').attributes('src')).toContain('/stream/101')
     expect(wrapper.get('.he-reader-canvas-page img').element).not.toBe(first)
-    expect(wrapper.find('[role="status"]').exists()).toBe(false)
+    expect(wrapper.find('.he-reader-canvas-page [role="status"]').exists()).toBe(false)
   })
 
   it('keeps feedback on the requested page when a skipped image finishes late', async () => {
@@ -170,7 +170,7 @@ describe('canvas reader loading feedback', () => {
     await finishImage(0)
     await finishImage(1)
     expect(wrapper.text()).toContain('正在加载第 3 张')
-    expect(wrapper.findAll('img')).toHaveLength(0)
+    expect(wrapper.findAll('.he-reader-canvas-page img')).toHaveLength(0)
     await finishImage(2)
     expect(wrapper.get('.he-reader-canvas-page img').attributes('src')).toContain('/stream/102')
   })
@@ -179,9 +179,9 @@ describe('canvas reader loading feedback', () => {
     const wrapper = mountCanvasReader()
     await finishImage(0); await finishImage(1)
     await wrapper.setProps({ currentPage: 1 })
-    expect(wrapper.find('[role="status"]').exists()).toBe(false)
+    expect(wrapper.find('.he-reader-canvas-page [role="status"]').exists()).toBe(false)
     await wrapper.setProps({ currentPage: 0 })
-    expect(wrapper.find('[role="status"]').exists()).toBe(false)
+    expect(wrapper.find('.he-reader-canvas-page [role="status"]').exists()).toBe(false)
     expect(wrapper.get('.he-reader-canvas-page img').attributes('src')).toContain('/stream/100')
   })
 

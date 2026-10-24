@@ -9,7 +9,7 @@ import GlobalAudioPlayer from '../components/GlobalAudioPlayer.vue'
 import AudioPlayer from '../components/media-detail/AudioPlayer.vue'
 import MangaReader from '../components/media-detail/MangaReader.vue'
 import { audioPlaybackStore } from '../stores/audioPlaybackStore'
-import { useImageViewerZoom } from '../composables/useImageViewerZoom'
+import { useZoomScroller } from '../composables/useZoomScroller'
 import type { Media, User } from '../types'
 
 const sampleAudioMedia = {
@@ -158,88 +158,94 @@ describe('MangaReader mobile webtoon mode and controls', () => {
     expect(currentPageReported).toBe(4)
   })
 
-  it.each(['single', 'double'])('keeps mobile %s zoom controls hidden until explicitly opened', async mode => {
-    window.innerWidth = 390
+  // Zoom gestures settle on animation frames before committing; these tests drive the frames.
+  const animationFrames = () => {
+    const queue = new Map<number, FrameRequestCallback>()
+    let id = 0, time = 0
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => { queue.set(++id, callback); return id })
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(handle => { queue.delete(handle) })
+    return () => {
+      for (let index = 0; index < 300 && queue.size; index++) {
+        const batch = [...queue.values()]; queue.clear(); time += 16
+        batch.forEach(callback => callback(time))
+      }
+    }
+  }
+  const renderedTree = (wrapper: ReturnType<typeof mount>) => (wrapper.vm as unknown as { $: { subTree: unknown } }).$.subTree
+  const fingers = (...points: number[][]) => ({ touches: points.map(([clientX, clientY]) => ({ clientX, clientY })) })
+  const lifted = (...points: number[][]) => ({ touches: [], changedTouches: points.map(([clientX, clientY]) => ({ clientX, clientY })) })
+  const scaleOf = (element: HTMLElement) => Number(/scale\(([\d.]+)\)/.exec(element.style.transform)?.[1])
+  // The shown page's carousel slot is the zoom surface.
+  const currentSlot = (wrapper: ReturnType<typeof mount>) => wrapper.findAll('.he-pager-slot').find(slot => slot.find('.he-reader-canvas-page').exists())!
+  const mountPaged = (mode: string, width = 390) => {
+    window.innerWidth = width
     localStorage.setItem('he_manga_read_mode', mode)
     localStorage.setItem('he_manga_read_mode_mobile', mode)
-
-    const wrapper = mount(MangaReader, {
-      props: {
-        media: sampleMangaMedia,
-        currentPage: 0,
-        totalPages: 3,
-        pageDimensions: [[800, 1200], [800, 1200], [800, 1200]],
-        showControls: false, // controls hidden
-        clickOnlyControls: true,
-        progressText: '1 / 3',
-        progressPercent: 33,
-      },
-    })
+    const wrapper = mount(MangaReader, { props: {
+      media: sampleMangaMedia, currentPage: 0, totalPages: 3, pageDimensions: [[800, 1200], [800, 1200], [800, 1200]],
+      showControls: false, clickOnlyControls: true, progressText: '1 / 3', progressPercent: 33,
+    } })
     wrappers.push(wrapper)
-    await nextTick()
+    return wrapper
+  }
 
+  it.each(['single', 'double'])('keeps mobile %s zoom controls hidden until explicitly opened', async mode => {
+    const flushFrames = animationFrames()
+    const wrapper = mountPaged(mode)
+    await nextTick()
     const zoomPill = wrapper.find('.he-manga-zoom')
     expect(zoomPill.exists()).toBe(true)
-    // Initially not zoomed and showControls=false -> opacity-0 pointer-events-none
     expect(zoomPill.classes()).toContain('opacity-0')
-
-    // Reach the hidden controls through the actual canvas pinch handlers.
-    const canvas = wrapper.find({ ref: 'imageContainerRef' })
-    await canvas.trigger('touchstart', { touches: [{ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 100 }] })
+    // Reach the hidden controls through the shown page's own pinch handlers.
+    const slot = currentSlot(wrapper)
+    await slot.trigger('touchstart', fingers([100, 100], [200, 100]))
     expect(wrapper.emitted('hideControls')).toEqual([[]])
-    await canvas.trigger('touchmove', { touches: [{ clientX: 50, clientY: 100 }, { clientX: 250, clientY: 100 }] })
-    await canvas.trigger('touchend', { touches: [], changedTouches: [{ clientX: 50, clientY: 100 }, { clientX: 250, clientY: 100 }] })
+    await slot.trigger('touchmove', fingers([50, 100], [250, 100]))
+    await slot.trigger('touchend', lifted([50, 100], [250, 100]))
+    flushFrames(); await nextTick()
     expect(zoomPill.classes()).toContain('opacity-0')
     expect(zoomPill.attributes('inert')).toBeDefined()
     await wrapper.setProps({ showControls: true })
     expect(zoomPill.classes()).toContain('opacity-100')
     expect(zoomPill.text()).toContain('200%')
     await zoomPill.get('button[aria-label="适应屏幕"]').trigger('click')
+    flushFrames(); await nextTick()
     expect(zoomPill.text()).toContain('100%')
     await wrapper.setProps({ showControls: false })
     expect(zoomPill.attributes('inert')).toBeDefined()
   })
 
   it('retains visible zoom controls for a zoomed desktop viewport', async () => {
-    window.innerWidth = 1280
-    localStorage.setItem('he_manga_read_mode', 'single')
-    const wrapper = mount(MangaReader, { props: {
-      media: sampleMangaMedia, currentPage: 0, totalPages: 3, pageDimensions: [],
-      showControls: false, clickOnlyControls: true, progressText: '', progressPercent: 0,
-    } })
-    wrappers.push(wrapper)
-    const canvas = wrapper.find({ ref: 'imageContainerRef' })
-    await canvas.trigger('touchstart', { touches: [{ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 100 }] })
-    await canvas.trigger('touchmove', { touches: [{ clientX: 50, clientY: 100 }, { clientX: 250, clientY: 100 }] })
+    const flushFrames = animationFrames()
+    const wrapper = mountPaged('single', 1280)
+    await nextTick()
+    const slot = currentSlot(wrapper)
+    await slot.trigger('touchstart', fingers([100, 100], [200, 100]))
+    await slot.trigger('touchmove', fingers([50, 100], [250, 100]))
+    await slot.trigger('touchend', lifted([50, 100], [250, 100]))
+    flushFrames(); await nextTick()
     expect(wrapper.get('.he-manga-zoom').classes()).toContain('opacity-100')
     expect(wrapper.get('.he-manga-zoom').attributes('inert')).toBeUndefined()
     expect(wrapper.emitted('hideControls')).toBeUndefined()
   })
 
-  const renderedTree = (wrapper: ReturnType<typeof mount>) => (wrapper.vm as unknown as { $: { subTree: unknown } }).$.subTree
-  const fingers = (...points: number[][]) => ({ touches: points.map(([clientX, clientY]) => ({ clientX, clientY })) })
-  const scaleOf = (element: HTMLElement) => Number(/scale\(([\d.]+)\)/.exec(element.style.transform)?.[1])
-
-  it.each(['single', 'double'])('pinches the %s canvas without re-rendering the reader on each move', async mode => {
-    window.innerWidth = 390
-    localStorage.setItem('he_manga_read_mode_mobile', mode)
-    const wrapper = mount(MangaReader, { props: {
-      media: sampleMangaMedia, currentPage: 0, totalPages: 3, pageDimensions: [[800, 1200], [800, 1200], [800, 1200]],
-      showControls: false, clickOnlyControls: true, progressText: '', progressPercent: 0,
-    } })
-    wrappers.push(wrapper)
-    const canvas = wrapper.find({ ref: 'imageContainerRef' })
-    const content = wrapper.find({ ref: 'canvasContentRef' }).element as HTMLElement
-    await canvas.trigger('touchstart', fingers([100, 100], [200, 100]))
-    // Crossing 1x renders once (cursor and zoom pill visibility); further moves must not.
-    await canvas.trigger('touchmove', fingers([95, 100], [205, 100]))
+  it.each(['single', 'double'])('pinches the %s page without re-rendering the reader, and holds the pager still', async mode => {
+    const flushFrames = animationFrames()
+    const wrapper = mountPaged(mode)
+    await nextTick()
+    const slot = currentSlot(wrapper)
+    const content = slot.get('.he-slide-content').element as HTMLElement
+    await slot.trigger('touchstart', fingers([100, 100], [200, 100]))
     const tree = renderedTree(wrapper)
-    for (const spread of [60, 80, 100]) await canvas.trigger('touchmove', fingers([150 - spread, 100], [150 + spread, 100]))
+    for (const spread of [60, 80, 100]) { await slot.trigger('touchmove', fingers([150 - spread, 100], [150 + spread, 100])); flushFrames() }
+    // Only the live transform changes; the page is laid out anew once the fingers lift.
     expect(scaleOf(content)).toBeCloseTo(2)
     expect(renderedTree(wrapper)).toBe(tree)
+    expect((wrapper.get('.he-pager').element as HTMLElement).style.overflowX).toBe('hidden')
   })
 
   it('pinches the webtoon column without re-rendering every page on each move', async () => {
+    const flushFrames = animationFrames()
     window.innerWidth = 390
     localStorage.setItem('he_manga_read_mode_mobile', 'webtoon')
     const wrapper = mount(MangaReader, { props: {
@@ -252,33 +258,61 @@ describe('MangaReader mobile webtoon mode and controls', () => {
     const content = wrapper.get('.he-webtoon-content').element as HTMLElement
     await viewport.trigger('touchstart', fingers([100, 100], [200, 100]))
     const tree = renderedTree(wrapper)
-    for (const spread of [60, 80, 100]) await viewport.trigger('touchmove', fingers([150 - spread, 100], [150 + spread, 100]))
+    for (const spread of [60, 80, 100]) { await viewport.trigger('touchmove', fingers([150 - spread, 100], [150 + spread, 100])); flushFrames() }
     expect(scaleOf(content)).toBeCloseTo(2)
     expect(renderedTree(wrapper)).toBe(tree)
   })
 
-  it('uses a touch double-tap for page zoom and keeps a mouse double-click for fullscreen', async () => {
-    window.innerWidth = 390
-    localStorage.setItem('he_manga_read_mode_mobile', 'single')
-    const wrapper = mount(MangaReader, { props: {
-      media: sampleMangaMedia, currentPage: 0, totalPages: 3, pageDimensions: [[800, 1200], [800, 1200], [800, 1200]],
-      showControls: false, clickOnlyControls: true, progressText: '', progressPercent: 0,
-    } })
-    wrappers.push(wrapper)
-    const canvas = wrapper.find({ ref: 'imageContainerRef' })
-    const content = wrapper.find({ ref: 'canvasContentRef' }).element as HTMLElement
+  it.each(['single', 'webtoon'])('uses a touch double-tap to zoom %s reading and keeps a mouse double-click for fullscreen', async mode => {
+    const flushFrames = animationFrames()
+    const wrapper = mode === 'webtoon'
+      ? (() => { localStorage.setItem('he_manga_read_mode_mobile', 'webtoon'); window.innerWidth = 390; const reader = mount(MangaReader, { props: { media: sampleMangaMedia, currentPage: 0, totalPages: 3, pageDimensions: [], showControls: false, clickOnlyControls: true, progressText: '', progressPercent: 0 } }); wrappers.push(reader); return reader })()
+      : mountPaged(mode)
+    await nextTick()
+    const surface = mode === 'webtoon' ? wrapper.get('.he-webtoon-viewport') : currentSlot(wrapper)
+    const content = (mode === 'webtoon' ? wrapper.get('.he-webtoon-content') : surface.get('.he-slide-content')).element as HTMLElement
     for (let tap = 0; tap < 2; tap++) {
-      await canvas.trigger('touchstart', fingers([195, 300]))
-      await canvas.trigger('touchend', { touches: [], changedTouches: [{ clientX: 195, clientY: 300 }] })
+      await surface.trigger('touchstart', fingers([195, 300]))
+      await surface.trigger('touchend', lifted([195, 300]))
     }
-    expect(scaleOf(content)).toBe(2.5)
+    flushFrames()
+    expect(content.style.getPropertyValue('--he-zoom')).toBe(mode === 'webtoon' ? '2' : '2.5')
     expect(wrapper.emitted('hideControls')).toEqual([[]])
-    await canvas.trigger('dblclick')
+    await surface.trigger('dblclick')
     expect(wrapper.emitted('viewerDoubleClick')).toBeUndefined()
-    await canvas.trigger('dblclick')
+    await surface.trigger('dblclick')
     expect(wrapper.emitted('viewerDoubleClick')).toEqual([[]])
   })
 
+  it('turns pages with a native swipe, by spread in double mode, and reaches the next batch from the end slot', async () => {
+    window.innerWidth = 390
+    localStorage.setItem('he_image_read_mode_mobile', 'double')
+    const pages = Array.from({ length: 5 }, (_, id) => ({ id: id + 300, title: `Image ${id}`, media_type: 'image' })) as Media[]
+    const wrapper = mount(MangaReader, { props: {
+      media: pages[0]!, imagePages: pages, hasNextBatch: true, currentPage: 0, totalPages: 5, pageDimensions: [],
+      showControls: false, clickOnlyControls: true, progressText: '', progressPercent: 0,
+    } })
+    wrappers.push(wrapper)
+    const pager = wrapper.get('.he-pager').element as HTMLElement
+    Object.defineProperties(pager, { clientWidth: { value: 390, configurable: true }, clientHeight: { value: 800, configurable: true } })
+    window.dispatchEvent(new Event('resize'))
+    await wrapper.setProps({ progressText: 'measured' })
+    const swipeTo = async (slot: number) => {
+      pager.scrollLeft = slot * 390
+      pager.dispatchEvent(new Event('scroll'))
+      pager.dispatchEvent(new Event('scrollend'))
+      await nextTick()
+    }
+    expect(wrapper.findAll('.he-reader-canvas-page').map(page => page.attributes('data-page'))).toEqual(['0', '1'])
+    await swipeTo(1)
+    expect(wrapper.emitted('update:currentPage')).toEqual([[2]])
+    await wrapper.setProps({ currentPage: 2 })
+    expect(wrapper.findAll('.he-reader-canvas-page').map(page => page.attributes('data-page'))).toEqual(['2', '3'])
+    // Spreads [0,1] [2,3] [4]: slot 3 loads the next batch instead of a page.
+    await swipeTo(3)
+    expect(wrapper.emitted('boundary')).toEqual([[1]])
+    expect(wrapper.text()).toContain('正在加载后面的图片')
+  })
 })
 
 describe('AudioPlayer progress scrubbing on touch/pointer', () => {
@@ -419,51 +453,6 @@ describe('MobileNavigation active tab tap interaction', () => {
   })
 })
 
-describe('useImageViewerZoom touch gestures', () => {
-  it('transitions from 2-finger pinch to 1-finger pan smoothly without freezing', () => {
-    const container = document.createElement('div')
-    Object.defineProperty(container, 'getBoundingClientRect', {
-      value: () => ({ width: 400, height: 600, top: 0, left: 0, right: 400, bottom: 600 } as DOMRect),
-    })
-
-    let zoom!: ReturnType<typeof useImageViewerZoom>
-    const wrapper = mount(defineComponent({
-      setup() {
-        zoom = useImageViewerZoom(ref(container))
-        return () => h('div')
-      },
-    }))
-    wrappers.push(wrapper)
-
-    const makeTouch = (points: number[][], changed: number[][] = []) => ({
-      touches: points.map(([x, y]) => ({ clientX: x, clientY: y })),
-      changedTouches: changed.map(([x, y]) => ({ clientX: x, clientY: y })),
-      cancelable: true,
-      preventDefault: vi.fn(),
-    }) as unknown as TouchEvent
-
-    // 2-finger pinch starts
-    zoom.onTouchStart(makeTouch([[100, 100], [200, 100]]))
-    zoom.onTouchMove(makeTouch([[50, 100], [250, 100]]))
-    expect(zoom.scale.value).toBe(2)
-
-    // User lifts 1 finger, leaving 1 finger on screen
-    zoom.onTouchEnd(makeTouch([[250, 100]], [[50, 100]]))
-
-    // Moving the remaining single finger should pan the zoomed image smoothly
-    const beforePan = zoom.translateX.value
-    zoom.onTouchMove(makeTouch([[280, 100]]))
-    expect(zoom.translateX.value).toBeGreaterThan(beforePan)
-    expect(zoom.isPanning.value).toBe(true)
-
-    // resetZoom resets all states cleanly
-    zoom.resetZoom()
-    expect(zoom.scale.value).toBe(1)
-    expect(zoom.translateX.value).toBe(0)
-    expect(zoom.wasTouchGesture()).toBe(false)
-  })
-})
-
 describe('pinch sequences never become page swipes', () => {
   const touch = (points: number[][], changed: number[][] = [], type = 'touchend') => ({
     type,
@@ -475,19 +464,24 @@ describe('pinch sequences never become page swipes', () => {
 
   it.each(['together', 'one finger then the other', 'canceled'])('suppresses navigation after a pinch shrinks to 1x and ends %s', ending => {
     const onSwipe = vi.fn()
-    let zoom!: ReturnType<typeof useImageViewerZoom>
+    let zoom!: ReturnType<typeof useZoomScroller>
+    const scroller = document.createElement('div'), content = document.createElement('div')
+    scroller.append(content)
+    const frames: FrameRequestCallback[] = []
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => frames.push(callback))
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {})
     wrappers.push(mount(defineComponent({
-      setup() { zoom = useImageViewerZoom(ref(null), { onSwipe }); return () => h('div') },
+      setup() {
+        zoom = useZoomScroller({ scroller: ref(scroller), content: ref(content), centered: true, onSwipe, applyScale: (element, scale) => element.style.setProperty('--he-zoom', String(scale)) })
+        return () => h('div')
+      },
     })))
-    zoom.onTouchStart(touch([[100, 100], [300, 100]]))
-    zoom.onTouchMove(touch([[50, 100], [350, 100]]))
-    expect(zoom.scale.value).toBe(1.5)
-    zoom.onTouchMove(touch([[190, 100], [210, 100]]))
-    // Rubber-banded below 1x while the fingers stay down.
-    expect(zoom.scale.value).toBeLessThan(1)
+    zoom.onTouchStart(touch([[100, 100], [300, 100]], [], 'touchstart'))
+    zoom.onTouchMove(touch([[50, 100], [350, 100]], [], 'touchmove'))
+    zoom.onTouchMove(touch([[190, 100], [210, 100]], [], 'touchmove'))
     if (ending === 'one finger then the other') {
       zoom.onTouchEnd(touch([[210, 100]], [[190, 100]]))
-      zoom.onTouchMove(touch([[320, 100]]))
+      zoom.onTouchMove(touch([[320, 100]], [], 'touchmove'))
       zoom.onTouchEnd(touch([], [[320, 100]]))
     } else if (ending === 'canceled') {
       zoom.onTouchEnd(touch([], [[320, 100]], 'touchcancel'))
@@ -495,10 +489,13 @@ describe('pinch sequences never become page swipes', () => {
     } else {
       zoom.onTouchEnd(touch([], [[320, 100], [190, 100]]))
     }
+    for (let frame = 0, time = 0; frame < 300 && frames.length; frame++) frames.splice(0).forEach(callback => callback(time += 16))
     expect(onSwipe).not.toHaveBeenCalled()
+    // Rubber-banded below 1x while the fingers were down, then settled back at fit.
     expect(zoom.scale.value).toBe(1)
-    expect(zoom.wasTouchGesture()).toBe(true)
-    zoom.onTouchStart(touch([[250, 100]]))
+    expect(zoom.wasGesture()).toBe(true)
+    zoom.onTouchStart(touch([[250, 100]], [], 'touchstart'))
+    zoom.onTouchMove(touch([[180, 104]], [], 'touchmove'))
     zoom.onTouchEnd(touch([], [[100, 105]]))
     expect(onSwipe).toHaveBeenCalledExactlyOnceWith(1)
   })
