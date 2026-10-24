@@ -282,6 +282,25 @@ describe('useImageViewerZoom composable', () => {
     wrapper.unmount()
   })
 
+  it('settles a running fling when the scale is set directly', () => {
+    let now = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 1)
+    const cancel = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {})
+    const { wrapper, zoom, content } = mountWithContent()
+    zoom.setScale(4)
+    zoom.onTouchStart(touchAt([[200, 400]]))
+    for (let step = 1; step <= 5; step++) { now += 16; zoom.onTouchMove(touchAt([[200 + step * 16, 400]])) }
+    zoom.onTouchEnd(touchAt([], [[280, 400]]))
+    expect(zoom.isPanning.value).toBe(true)
+    // e.g. ImageViewer's actual-size toggle while the image is still gliding.
+    zoom.setScale(2)
+    expect(cancel).toHaveBeenCalledOnce()
+    expect(zoom.isPanning.value).toBe(false)
+    expect(content.style.willChange).toBe('')
+    wrapper.unmount()
+  })
+
   it('does not throw the image when the finger rests before lifting', () => {
     let now = 0
     vi.spyOn(performance, 'now').mockImplementation(() => now)
