@@ -2,12 +2,11 @@
 from __future__ import annotations
 
 import hashlib
-import re
 from typing import Any
 
-from . import refs
+from . import client, refs, sources
 
-FILE_PATH = re.compile(r"^/[0-9a-f]{2}/[0-9a-f]{2}/[0-9a-f]{64}\.[a-z0-9]{2,5}$")
+FILE_PATH = sources.FILE_PATH
 IMAGE_MIME = {
     "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
     "gif": "image/gif", "webp": "image/webp", "avif": "image/avif",
@@ -18,7 +17,11 @@ VIDEO_MIME = {"mp4": "video/mp4", "webm": "video/webm"}
 def file_type(path: str) -> tuple[str, str] | None:
     if not FILE_PATH.fullmatch(path):
         return None
-    extension = path.rsplit(".", 1)[-1]
+    return filename_type(path)
+
+
+def filename_type(path: str) -> tuple[str, str] | None:
+    extension = path.rsplit(".", 1)[-1].lower()
     if extension in IMAGE_MIME:
         return "image", IMAGE_MIME[extension]
     if extension in VIDEO_MIME:
@@ -43,7 +46,11 @@ def normalize_post(raw: dict[str, Any], *, creator_name: str | None = None, deta
         if not path or path in seen_paths:
             continue
         seen_paths.add(path)
-        media = file_type(path)
+        try:
+            original_url = sources.original_source(source) if FILE_PATH.fullmatch(path) else None
+        except ValueError as exc:
+            raise client.PawchiveError("UPSTREAM_INVALID", "Pawchive 返回了无效的原图地址", 502) from exc
+        media = filename_type(sources.original_path(path, original_url)) if original_url else file_type(path)
         attachment_key = hashlib.sha256(path.encode("utf-8")).hexdigest()[:24]
         attachments.append({
             "attachment_key": attachment_key,
@@ -51,7 +58,7 @@ def normalize_post(raw: dict[str, Any], *, creator_name: str | None = None, deta
             "filename": str(source.get("name") or path.rsplit("/", 1)[-1])[:240],
             "media_type": media[0] if media else "unsupported",
             "mime_type": media[1] if media else None,
-            "stream_ref": refs.sign_media(path, media[0]) if media else None,
+            "stream_ref": refs.sign_media(path, media[0], source_url=original_url) if media else None,
             "preview_ref": refs.sign_media(path, "preview") if media else None,
             "availability": "playable" if media else "unsupported",
         })

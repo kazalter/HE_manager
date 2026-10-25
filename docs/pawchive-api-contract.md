@@ -1,4 +1,4 @@
-# Pawchive public API contract (verified 2026-09-27)
+# Pawchive public API contract (metadata verified 2026-09-27; media updated 2026-10-25)
 
 This records observed Pawchive behavior used by the HE Manager adapter. The
 site's OpenAPI document is embedded in `https://pawchive.pw/api/swagger_schema`
@@ -64,10 +64,26 @@ are collapsed while preserving first occurrence.
 
 ## Media
 
-Post HTML links files at `https://file.pawchive.pw/data{path}` and thumbnails
-at `https://img.pawchive.pw/thumbnail/data{path}`. The adapter constructs these
-fixed-host URLs from validated path components; upstream URLs are never passed
-through from users or JSON. It rejects redirects.
+Legacy originals use `https://file.pawchive.pw/data{path}` and thumbnails use
+`https://img.pawchive.pw/thumbnail/data{path}`. As verified on 2026-10-25, file
+objects can also include `node: 2`, selecting `https://n2.pawchive.pw/data{path}`,
+or `preview_only: true` with a signed `temp_url` on `https://t1.pawchive.pw`.
+Temporary URLs have the form `/f/{16-hex-id}/{filename}?e={expiry}&s={32-hex-signature}`.
+For these files, `path` identifies the preview; requesting it on the legacy
+original host can return 404 even while the temporary original returns 206.
+The original can have a different extension from its preview (including video).
+
+The adapter prefers `temp_url`, then the verified node, then the legacy host.
+Only exact allowlisted hosts and validated paths/query signatures are accepted;
+temporary signatures travel inside authenticated HMAC-signed media references.
+Preview requests remain on the thumbnail host. No redirects are followed and
+no account cookies or HE Manager credentials are sent to any media host.
+An expired temporary URL is a retryable media-link error, not evidence that the
+original was deleted. Refreshing the post obtains current file metadata.
+
+Some list entries now contain `deferred` / `preview_only` files without a node
+or temporary URL. Post detail must be fetched before opening/downloading the
+original; HE Manager's viewer and downloader already do this.
 
 Bounded byte-range probes of one public JPEG and one MP4 returned HTTP `206`,
 `Content-Range: bytes 0-1023/{size}`, the matching image/video content type,

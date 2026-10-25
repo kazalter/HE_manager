@@ -21,6 +21,7 @@ import threading
 import time
 from collections import OrderedDict
 from urllib.parse import urlencode, urlsplit
+from . import sources
 
 API_HOST = "pawchive.pw"
 FILE_HOST = "file.pawchive.pw"
@@ -147,8 +148,13 @@ def clear_pool() -> None:
 
 
 def _request(host: str, target: str, *, range_header: str | None = None):
-    if host not in {API_HOST, FILE_HOST, IMAGE_HOST} or not target.startswith("/") or ".." in target:
+    if host not in {API_HOST, FILE_HOST, IMAGE_HOST, sources.TEMP_HOST, *sources.NODE_HOSTS.values()} or not target.startswith("/") or ".." in target:
         raise PawchiveError("INVALID_REQUEST", "非法上游请求", 400)
+    if host in {sources.TEMP_HOST, *sources.NODE_HOSTS.values()}:
+        try:
+            sources.validate_source(f"https://{host}{target}")
+        except ValueError as exc:
+            raise PawchiveError("INVALID_REQUEST", "非法媒体来源地址", 400) from exc
     headers = {
         "Host": host,
         "Accept": "application/json" if host == API_HOST else "image/*, video/*",
@@ -403,11 +409,24 @@ def account_request(
         connection.close()
 
 
-def open_media(path: str, *, preview: bool = False, range_header: str | None = None):
+def open_media(path: str, *, preview: bool = False, range_header: str | None = None,
+               source_url: str | None = None):
     host = IMAGE_HOST if preview else FILE_HOST
     prefix = "/thumbnail/data" if preview else "/data"
-    connection, response = _request(host, prefix + path, range_header=range_header)
+    target = prefix + path
+    if source_url is not None:
+        try:
+            if preview:
+                raise ValueError("preview cannot use an original source")
+            host, target = sources.validate_source(source_url)
+        except ValueError as exc:
+            raise PawchiveError("INVALID_REQUEST", "非法媒体来源地址", 400) from exc
+    connection, response = _request(host, target, range_header=range_header)
     try:
+        if host == sources.TEMP_HOST and response.status in {401, 403, 404, 410}:
+            # A temporary link can expire while the original still exists.
+            # Let the viewer refresh post metadata instead of claiming deletion.
+            raise PawchiveError("MEDIA_LINK_EXPIRED", "原图临时链接已失效，请重新打开帖子", 502)
         if response.status != 416:
             _raise_for_status(response)
         return connection, response

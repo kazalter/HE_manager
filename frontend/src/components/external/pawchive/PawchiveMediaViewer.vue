@@ -59,7 +59,7 @@ let preloadPending = false
 let imageController: AbortController | null = null
 // Fraction of the current original received, or null while the size is unknown.
 const loadProgress = ref<number | null>(null)
-// Originals the source no longer has (404); their thumbnail is shown instead.
+// Unavailable originals (404); their thumbnail is shown instead.
 const missingOriginals = ref(new Set<string>())
 const originalMissing = computed(() => props.attachment.media_type === 'image' &&
   missingOriginals.value.has(props.attachment.attachment_key) && displayImageUrl.value !== '')
@@ -158,7 +158,7 @@ const loadCurrentImage = async () => {
   } catch (error) {
     if (isAbortError(error) || imageController !== controller) return
     if (error instanceof PawchiveImageError && error.status === 404 && item.preview_ref) {
-      // Retrying cannot bring back a deleted original, but its thumbnail usually still exists.
+      // A 404 does not prove deletion; the source may have moved the original.
       missingOriginals.value = new Set(missingOriginals.value).add(item.attachment_key)
       displayImageUrl.value = pawchiveMediaUrl(item.preview_ref)
       return
@@ -577,7 +577,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </nav>
-      <p v-if="originalMissing" role="status" class="text-xs text-warning">来源站已缺失这张原图，当前显示的是缩略图。</p>
+      <p v-if="originalMissing" role="status" class="text-xs text-warning">原图暂时无法读取，当前显示的是缩略图，可前往原站查看。</p>
       <p v-if="error" role="alert" class="text-sm text-warning">{{ error }}</p>
       <p v-else-if="notice" role="status" class="text-xs text-white/60">{{ notice }}</p>
       <p v-if="downloadMessage" :role="downloadError ? 'alert' : 'status'" :class="downloadError ? 'text-danger' : 'text-success'" class="text-sm">{{ downloadMessage }}</p>

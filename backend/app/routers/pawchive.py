@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from .. import auth, models
 from ..database import get_db
 from ..services import job_lifecycle
-from ..services.external.pawchive import account, client, downloader, media_fetch, normalize, provider, refs
+from ..services.external.pawchive import account, client, downloader, media_fetch, normalize, provider, refs, sources
 from ..services.external.pawchive.media_cache import CacheLease, media_cache
 
 router = APIRouter(prefix="/external/pawchive", tags=["pawchive"])
@@ -35,7 +35,7 @@ def _run(operation, *args, **kwargs):
         raise HTTPException(status_code=exc.status, detail={
             "code": exc.code,
             "message": str(exc),
-            "retryable": exc.code in {"UPSTREAM_UNAVAILABLE", "RATE_LIMITED"},
+            "retryable": exc.code in {"UPSTREAM_UNAVAILABLE", "RATE_LIMITED", "MEDIA_LINK_EXPIRED"},
             "retry_after": exc.retry_after,
         }) from exc
 
@@ -220,17 +220,19 @@ _CONTENT_RANGE = re.compile(r"^bytes \d+-\d+/(?:\d+|\*)$")
 
 def stream_media_response(stream_ref: str, range_header: str | None = None):
     try:
-        path, kind = refs.read_media(stream_ref)
+        path, kind, source_url = refs.read_media_source(stream_ref)
     except ValueError as exc:
         raise client.PawchiveError("INVALID_REF", "媒体引用已过期，请重新打开帖子", 400) from exc
     media = normalize.file_type(path)
+    if source_url and normalize.FILE_PATH.fullmatch(path):
+        media = normalize.filename_type(sources.original_path(path, source_url))
     if not media or (kind != "preview" and media[0] != kind):
         raise client.PawchiveError("MEDIA_UNSUPPORTED", "媒体格式不受支持", 415)
     if range_header and not _SINGLE_RANGE.fullmatch(range_header):
         raise client.PawchiveError("INVALID_RANGE", "仅支持单一区间读取", 416)
     # Whole-image reads share one upstream download; ranges and videos stream directly.
     if kind in {"image", "preview"} and not range_header:
-        shared = media_fetch.open_shared(path, kind)
+        shared = media_fetch.open_shared(path, kind, source_url=source_url)
     else:
         shared = media_cache.lookup(path, kind)
     if isinstance(shared, CacheLease):
@@ -252,7 +254,9 @@ def stream_media_response(stream_ref: str, range_header: str | None = None):
             headers["Content-Length"] = str(shared.expected_size)
         return StreamingResponse(_in_media_threads(reader), media_type=shared.content_type, headers=headers,
                                  background=BackgroundTask(reader.close))
-    connection, upstream = client.open_media(path, preview=kind == "preview", range_header=range_header)
+    source_options = {"source_url": source_url} if source_url else {}
+    connection, upstream = client.open_media(path, preview=kind == "preview", range_header=range_header,
+                                             **source_options)
     content_range = upstream.getheader("Content-Range")
     if upstream.status == 416:
         connection.close()

@@ -91,9 +91,12 @@ The web viewer loads originals with a 20-second inactivity timeout rather than
 a total time limit. A large image that is still arriving keeps loading, with
 its progress shown, and only a 20-second pause in received data counts as a
 stall.
-Some originals are missing on the source file host even though their
-thumbnails still exist. When an original returns 404, the viewer shows the
-thumbnail with a notice instead of retrying.
+When an original returns 404, the viewer shows the thumbnail with a notice
+that the original is temporarily unreadable. A 404 alone does not prove the
+source deleted it. Original requests use the current post detail's `temp_url`
+or `node` when present, rather than assuming every file lives on the legacy
+host. An invalid/expired temporary link triggers the viewer's metadata refresh
+and retry instead of the thumbnail fallback.
 
 The backend uses /mnt/hdd/.he-manager/pawchive-cache and requires
 /mnt/hdd/.mounted. It removes only that cache directory when the backend

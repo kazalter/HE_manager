@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from .... import database, models, scanner
 from ... import job_lifecycle, storage_guard
 from ...thumbnails import THUMBNAIL_DIR
-from . import client, normalize, provider, refs
+from . import client, normalize, provider, refs, sources
 
 logger = logging.getLogger(__name__)
 JOB_KIND = "pawchive"
@@ -257,7 +257,7 @@ def _reusable(target: Path, manifest: Path, key: str, media_type: str) -> tuple[
 
 
 def _fetch_file(path: str, target: Path, manifest: Path, row: models.PawchiveAttachment,
-                stop: threading.Event, root: Path) -> tuple[int, str]:
+                stop: threading.Event, root: Path, *, source_url: str | None = None) -> tuple[int, str]:
     existing = _reusable(target, manifest, row.attachment_key, row.media_type)
     if existing:
         return existing
@@ -265,7 +265,8 @@ def _fetch_file(path: str, target: Path, manifest: Path, row: models.PawchiveAtt
     temp = target.with_name(f".{target.name}.{uuid.uuid4().hex}.part")
     connection = None
     try:
-        connection, response = client.open_media(path)
+        source_options = {"source_url": source_url} if source_url else {}
+        connection, response = client.open_media(path, **source_options)
         content_type = (response.getheader("Content-Type") or "").lower()
         if response.status != 200 or not content_type.startswith(row.media_type + "/"):
             raise client.PawchiveError("UPSTREAM_INVALID", "来源返回了无效文件", 502)
@@ -377,9 +378,9 @@ def _download_one(row_id: int, job_id: str, stop: threading.Event, root: Path, d
         item = next((a for a in detail["attachments"] if a["attachment_key"] == row.attachment_key), None)
         if not item or item["availability"] != "playable" or item["media_type"] != row.media_type:
             raise client.PawchiveError("MEDIA_UNSUPPORTED", "来源附件已变化或不可下载", 415)
-        path, _ = refs.read_media(item["stream_ref"])
-        target, manifest = _target(root, row.post, row, path)
-        size, digest = _fetch_file(path, target, manifest, row, stop, root)
+        path, _, source_url = refs.read_media_source(item["stream_ref"])
+        target, manifest = _target(root, row.post, row, sources.original_path(path, source_url))
+        size, digest = _fetch_file(path, target, manifest, row, stop, root, source_url=source_url)
         media_id = _admit_media(root, row, target, size, digest, db)
         return {"attachment_id": row_id, **_serialize_attachment(row), "media_id": media_id}
     except DownloadCanceled:

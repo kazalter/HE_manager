@@ -11,6 +11,7 @@ import secrets
 import time
 
 from app.external_config import CONFIG_PATH
+from . import sources
 
 logger = logging.getLogger(__name__)
 SECRET_PATH = os.path.join(os.path.dirname(CONFIG_PATH) or ".", "pawchive_stream.key")
@@ -60,7 +61,7 @@ def _encode(payload: dict) -> str:
 def _decode(token: str) -> dict:
     try:
         body, signature = token.split(".", 1)
-        if len(body) > 1024 or not hmac.compare_digest(
+        if len(body) > 4096 or not hmac.compare_digest(
             hmac.new(_secret, body.encode(), hashlib.sha256).hexdigest()[:32], signature
         ):
             raise ValueError("invalid signature")
@@ -72,16 +73,30 @@ def _decode(token: str) -> dict:
         raise ValueError("invalid or expired reference") from exc
 
 
-def sign_media(path: str, kind: str) -> str:
+def sign_media(path: str, kind: str, *, source_url: str | None = None) -> str:
     expires = -(-(int(time.time()) + MEDIA_TTL) // MEDIA_EXPIRY_STEP) * MEDIA_EXPIRY_STEP
-    return _encode({"kind": kind, "path": path, "exp": expires})
+    payload = {"kind": kind, "path": path, "exp": expires}
+    if source_url is not None:
+        sources.validate_source(source_url)
+        payload["source_url"] = source_url
+    return _encode(payload)
 
 
 def read_media(token: str) -> tuple[str, str]:
+    path, kind, _ = read_media_source(token)
+    return path, kind
+
+
+def read_media_source(token: str) -> tuple[str, str, str | None]:
     payload = _decode(token)
     if payload.get("kind") not in {"image", "video", "preview"}:
         raise ValueError("invalid media kind")
-    return str(payload.get("path") or ""), payload["kind"]
+    source_url = payload.get("source_url")
+    if source_url is not None:
+        sources.validate_source(source_url)
+        if payload["kind"] == "preview":
+            raise ValueError("preview cannot use an original source")
+    return str(payload.get("path") or ""), payload["kind"], source_url
 
 
 def sign_cursor(offset: int, scope_key: str) -> str:

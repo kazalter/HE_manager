@@ -154,7 +154,7 @@ describe('Pawchive fullscreen viewer', () => {
     try {
       await flushPromises()
       expect(wrapper.get('img[alt="image.jpg"]').attributes('src')).toContain('/external/pawchive/media/preview-ref')
-      expect(wrapper.text()).toContain('来源站已缺失这张原图')
+      expect(wrapper.text()).toContain('原图暂时无法读取')
       expect(reloadMedia).not.toHaveBeenCalled()
       expect(wrapper.emitted('playbackError')).toBeUndefined()
     } finally {

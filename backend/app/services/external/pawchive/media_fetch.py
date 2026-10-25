@@ -44,9 +44,10 @@ _downloads: dict[tuple[str, str], "SharedDownload"] = {}
 
 
 class SharedDownload:
-    def __init__(self, kind: str, path: str, writer: CacheWriter):
+    def __init__(self, kind: str, path: str, writer: CacheWriter, source_url: str | None = None):
         self.kind = kind
         self.path = path
+        self.source_url = source_url
         self.file_path = writer.path
         self._writer = writer
         self._cond = threading.Condition()
@@ -95,7 +96,8 @@ class SharedDownload:
                     raise client.PawchiveError("CANCELED", "已无读取者", 499)
             if self._abandoned():
                 raise client.PawchiveError("CANCELED", "已无读取者", 499)
-            connection, response = client.open_media(self.path, preview=self.kind == "preview")
+            source_options = {"source_url": self.source_url} if self.source_url else {}
+            connection, response = client.open_media(self.path, preview=self.kind == "preview", **source_options)
             content_type = (response.getheader("Content-Type") or "").split(";", 1)[0].strip().lower()
             if response.status != 200 or not content_type.startswith("image/"):
                 raise client.PawchiveError("UPSTREAM_INVALID", "来源返回了无效的媒体响应", 502)
@@ -205,7 +207,7 @@ class _Reader:
         self.close()
 
 
-def open_shared(path: str, kind: str) -> CacheLease | SharedDownload | None:
+def open_shared(path: str, kind: str, *, source_url: str | None = None) -> CacheLease | SharedDownload | None:
     """Return a cache hit, an attached shared download, or None to stream directly.
 
     The lookup and registry check share one lock with registry removal, so a
@@ -220,7 +222,7 @@ def open_shared(path: str, kind: str) -> CacheLease | SharedDownload | None:
             writer = media_cache.begin_write(path, kind, "", None, in_place=True)
             if writer is None:
                 return None
-            download = SharedDownload(kind, path, writer)
+            download = SharedDownload(kind, path, writer, source_url)
             _downloads[(kind, path)] = download
             download.attach()
             threading.Thread(target=download.run, name="pawchive-media", daemon=True).start()
