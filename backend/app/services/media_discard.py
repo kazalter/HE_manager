@@ -10,7 +10,6 @@ import json
 import logging
 import os
 import re
-import shutil
 import stat
 import uuid
 
@@ -23,6 +22,11 @@ from .media_operation_guard import acquire_media_operation
 from .thumbnails import remove_cover_thumbnails, remove_manga_page_thumbnails
 
 logger = logging.getLogger(__name__)
+MAX_CLEANUP_ENTRIES_BYTES = 16 * 1024 * 1024
+_DIRECTORY_FDS = (
+    all(fn in os.supports_dir_fd for fn in (os.open, os.stat, os.unlink, os.rmdir))
+    and hasattr(os, 'O_DIRECTORY') and hasattr(os, 'O_NOFOLLOW')
+)
 
 def path_key(path):
     return 'path:' + hashlib.sha256(os.path.normcase(os.path.abspath(path)).encode()).hexdigest()
@@ -105,6 +109,18 @@ def _inside(path, root):
     except ValueError:
         return False
 
+def _entry_fingerprint(info):
+    return [stat.S_IFMT(info.st_mode), info.st_dev, info.st_ino, info.st_mtime_ns, info.st_size]
+
+def _same_entry(expected, actual):
+    if not isinstance(expected, list) or len(expected) != 5:
+        return False
+    # Removing children changes directory timestamps/size. Its identity must
+    # remain stable, while every remaining file must still match in full.
+    if expected[0] == stat.S_IFDIR:
+        return expected[:3] == actual[:3]
+    return expected == actual
+
 def _safe_target(path, root):
     if not path or not root or not os.path.isabs(path) or not os.path.isabs(root):
         raise HTTPException(409, '删除目标没有可验证的媒体库目录')
@@ -129,6 +145,8 @@ def _safe_target(path, root):
     tree_hash = None
     total_size = 0
     file_count = 0
+    entries = {}
+    entries_bytes = 0
     if info and stat.S_ISDIR(info.st_mode):
         digest = hashlib.sha256()
         for directory, dirs, files in os.walk(path, followlinks=False):
@@ -136,6 +154,12 @@ def _safe_target(path, root):
             for name in sorted(dirs + files):
                 child = os.path.join(directory, name)
                 child_stat = os.lstat(child)
+                relative = os.path.relpath(child, path)
+                fingerprint = _entry_fingerprint(child_stat)
+                entries_bytes += len(json.dumps([relative, fingerprint], ensure_ascii=False).encode())
+                if entries_bytes > MAX_CLEANUP_ENTRIES_BYTES:
+                    raise HTTPException(409, '目录清理快照超过预览上限，请分批处理')
+                entries[relative] = fingerprint
                 file_count += 1
                 if file_count > 100000:
                     raise HTTPException(409, '目录项目超过删除预览上限，请分批处理')
@@ -146,7 +170,7 @@ def _safe_target(path, root):
         tree_hash = digest.hexdigest()
     elif info:
         total_size, file_count = info.st_size, 1
-    return {'tree_hash': tree_hash, 'total_size': total_size, 'file_count': file_count, 'path': path, 'root': root, 'relative_path': os.path.relpath(path, root),
+    return {'tree_hash': tree_hash, 'entries': entries, 'total_size': total_size, 'file_count': file_count, 'path': path, 'root': root, 'relative_path': os.path.relpath(path, root),
             'exists': info is not None, 'is_directory': bool(info and stat.S_ISDIR(info.st_mode)),
             'fingerprint': None if info is None else [info.st_dev, info.st_ino, info.st_mtime_ns, info.st_size]}
 
@@ -273,6 +297,75 @@ def serialize_record(record):
             'media_ids': json.loads(record.media_ids_json),
             'cleanup_status': record.cleanup_status, 'cleanup_error': record.cleanup_error}
 
+def _cleanup_directory(target, current):
+    expected = target.get('entries')
+    if expected is None:
+        # Old records have no per-entry evidence. Only an unchanged tree can
+        # establish the allowlist; never approve today's contents on a retry.
+        if current['tree_hash'] != target.get('tree_hash'):
+            raise HTTPException(409, '删除目录已变化，拒绝清理未确认的内容')
+    elif not isinstance(expected, dict) or any(
+        not _same_entry(expected.get(name), fingerprint)
+        for name, fingerprint in current['entries'].items()
+    ):
+        raise HTTPException(409, '删除目录已变化，拒绝清理新增或修改的文件')
+
+    children = {}
+    for relative, fingerprint in current['entries'].items():
+        children.setdefault(os.path.dirname(relative), []).append(
+            (os.path.basename(relative), relative, fingerprint))
+
+    def remove(base, name, relative, fingerprint, parent_fd=None):
+        path = os.path.join(base, name)
+        location = name if parent_fd is not None else path
+
+        def check():
+            info = os.stat(location, dir_fd=parent_fd, follow_symlinks=False)
+            if not _same_entry(fingerprint, _entry_fingerprint(info)):
+                raise HTTPException(409, '删除目标已变化，拒绝清理新文件')
+
+        try:
+            if not _DIRECTORY_FDS and os.path.realpath(base) != base:
+                raise HTTPException(409, '拒绝清理符号链接或目录连接内的文件')
+            check()
+        except FileNotFoundError:
+            return  # An earlier attempt (or the user) already removed it.
+        if fingerprint[0] == stat.S_IFDIR:
+            if not _DIRECTORY_FDS:
+                if os.path.realpath(path) != path:
+                    raise HTTPException(409, '拒绝清理符号链接或目录连接')
+                for child, rel, entry in children.get(relative, []):
+                    remove(path, child, rel, entry)
+            else:
+                fd = os.open(
+                    location, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                    dir_fd=parent_fd,
+                )
+                try:
+                    if not _same_entry(fingerprint, _entry_fingerprint(os.fstat(fd))):
+                        raise HTTPException(409, '删除目录已变化')
+                    for child, rel, entry in children.get(relative, []):
+                        remove(path, child, rel, entry, fd)
+                finally:
+                    os.close(fd)
+            check()
+            # New names are never visited. A concurrent addition leaves the
+            # directory non-empty and makes cleanup retryable instead of lost.
+            os.rmdir(location, dir_fd=parent_fd)
+        else:
+            os.unlink(location, dir_fd=parent_fd)
+
+    path = target['path']
+    root_entry = [stat.S_IFDIR, *target['fingerprint']]
+    if not _DIRECTORY_FDS:
+        remove(os.path.dirname(path), os.path.basename(path), '', root_entry)
+    else:
+        parent = os.open(os.path.dirname(path), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            remove(os.path.dirname(path), os.path.basename(path), '', root_entry, parent)
+        finally:
+            os.close(parent)
+
 def _cleanup(db, record):
     targets = json.loads(record.targets_json)
     failed = False
@@ -283,10 +376,10 @@ def _cleanup(db, record):
                 continue
             expected = target['fingerprint']
             actual = current['fingerprint']
-            if expected is None or actual[:2] != expected[:2] or (not target['is_directory'] and actual != expected):
+            if expected is None or current['is_directory'] != target['is_directory'] or actual[:2] != expected[:2] or (not target['is_directory'] and actual != expected):
                 raise HTTPException(409, '删除目标已变化，拒绝清理新文件')
             if current['is_directory']:
-                shutil.rmtree(target['path'])
+                _cleanup_directory(target, current)
             else:
                 os.remove(target['path'])
         except (OSError, HTTPException):

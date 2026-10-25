@@ -20,7 +20,7 @@ from app.x_import import importer
 class MediaDiscardTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         self.engine = create_engine('sqlite:///' + str(self.root / 'test.db'))
         @event.listens_for(self.engine, 'connect')
         def foreign_keys(conn, _):
@@ -91,7 +91,10 @@ class MediaDiscardTest(unittest.TestCase):
             media.absolute_path = target; self.db.commit()
             with self.assertRaises(HTTPException): service.build_plan(self.db, 'media', media.id)
         link = Path(self.folder.path) / 'link.jpg'
-        link.symlink_to(path)
+        try:
+            link.symlink_to(path)
+        except OSError as exc:
+            self.skipTest(f'Symlinks unavailable: {exc}')
         media.absolute_path = str(link); self.db.commit()
         with self.assertRaises(HTTPException): service.build_plan(self.db, 'media', media.id)
         self.assertTrue(path.exists())
@@ -131,6 +134,180 @@ class MediaDiscardTest(unittest.TestCase):
         path.write_bytes(b'a replacement file')
         self.assertEqual(service.retry_cleanup(self.db, result['id'])['cleanup_status'], 'failed')
         self.assertEqual(path.read_bytes(), b'a replacement file')
+
+    def failed_directory_cleanup(self):
+        media, page = self.media('work/page.jpg')
+        chapter = page.parent / 'chapter'
+        chapter.mkdir()
+        (chapter / 'second.jpg').write_bytes(b'original second page')
+        media.absolute_path = str(page.parent)
+        media.extension = '.dir'
+        self.db.commit()
+        with patch.object(service.os, 'unlink', side_effect=PermissionError('test only')):
+            result = self.discard('media', media.id)
+        self.assertEqual(result['cleanup_status'], 'failed')
+        return result['id'], page.parent
+
+    def test_retry_preserves_new_files_inside_original_directory(self):
+        record_id, work = self.failed_directory_cleanup()
+        new_file = work / 'chapter/new.jpg'
+        new_file.write_bytes(b'not approved for deletion')
+        result = service.retry_cleanup(self.db, record_id)
+        self.assertEqual(result['cleanup_status'], 'failed')
+        self.assertEqual(new_file.read_bytes(), b'not approved for deletion')
+        self.assertTrue((work / 'page.jpg').exists())
+        self.assertTrue(service.has_identity(self.db, service.path_key(str(work))))
+        with self.assertRaises(HTTPException): service.allow_download(self.db, record_id)
+
+    def test_retry_preserves_modified_files_inside_original_directory(self):
+        record_id, work = self.failed_directory_cleanup()
+        page = work / 'chapter/second.jpg'
+        page.write_bytes(b'new contents at the same path')
+        self.assertEqual(service.retry_cleanup(self.db, record_id)['cleanup_status'], 'failed')
+        self.assertEqual(page.read_bytes(), b'new contents at the same path')
+
+    def test_retry_can_finish_after_partial_directory_cleanup(self):
+        record_id, work = self.failed_directory_cleanup()
+        (work / 'chapter/second.jpg').unlink()
+        self.assertEqual(service.retry_cleanup(self.db, record_id)['cleanup_status'], 'completed')
+        self.assertFalse(work.exists())
+
+    def test_retry_preserves_new_file_after_partial_directory_cleanup(self):
+        record_id, work = self.failed_directory_cleanup()
+        (work / 'page.jpg').unlink()
+        new_file = work / 'new.jpg'
+        new_file.write_bytes(b'new file after partial cleanup')
+        self.assertEqual(service.retry_cleanup(self.db, record_id)['cleanup_status'], 'failed')
+        self.assertEqual(new_file.read_bytes(), b'new file after partial cleanup')
+
+    def test_cleanup_never_recursively_sweeps_files_created_during_deletion(self):
+        record_id, work = self.failed_directory_cleanup()
+        original_unlink = os.unlink
+        injected = False
+        new_file = work / 'chapter/new.jpg'
+
+        def concurrent_file(*args, **kwargs):
+            nonlocal injected
+            if not injected:
+                injected = True
+                new_file.write_bytes(b'created after cleanup validation')
+            return original_unlink(*args, **kwargs)
+
+        with patch.object(service.os, 'unlink', side_effect=concurrent_file):
+            result = service.retry_cleanup(self.db, record_id)
+        self.assertTrue(injected)
+        self.assertEqual(result['cleanup_status'], 'failed')
+        self.assertEqual(new_file.read_bytes(), b'created after cleanup validation')
+
+    def legacy_cleanup_record(self, record_id):
+        record = self.db.get(models.DiscardedContent, record_id)
+        targets = json.loads(record.targets_json)
+        for target in targets:
+            target.pop('entries', None)
+        record.targets_json = json.dumps(targets)
+        self.db.commit()
+
+    def test_legacy_directory_record_can_retry_unchanged_tree(self):
+        record_id, work = self.failed_directory_cleanup()
+        self.legacy_cleanup_record(record_id)
+        self.assertEqual(service.retry_cleanup(self.db, record_id)['cleanup_status'], 'completed')
+        self.assertFalse(work.exists())
+
+    def test_legacy_directory_record_refuses_changed_tree(self):
+        record_id, work = self.failed_directory_cleanup()
+        self.legacy_cleanup_record(record_id)
+        new_file = work / 'new.jpg'
+        new_file.write_bytes(b'new legacy file')
+        self.assertEqual(service.retry_cleanup(self.db, record_id)['cleanup_status'], 'failed')
+        self.assertEqual(new_file.read_bytes(), b'new legacy file')
+
+    def test_legacy_directory_record_refuses_partial_tree_without_entry_evidence(self):
+        record_id, work = self.failed_directory_cleanup()
+        self.legacy_cleanup_record(record_id)
+        (work / 'page.jpg').unlink()
+        self.assertEqual(service.retry_cleanup(self.db, record_id)['cleanup_status'], 'failed')
+        self.assertTrue((work / 'chapter/second.jpg').exists())
+
+    def test_startup_recovery_preserves_new_files_in_pending_directory(self):
+        record_id, work = self.failed_directory_cleanup()
+        record = self.db.get(models.DiscardedContent, record_id)
+        record.cleanup_status = 'pending'
+        self.db.commit()
+        new_file = work / 'new.jpg'
+        new_file.write_bytes(b'new content before restart')
+        with patch.object(service.database, 'SessionLocal', self.Session):
+            service.recover_pending_cleanup()
+        self.db.expire_all()
+        self.assertEqual(self.db.get(models.DiscardedContent, record_id).cleanup_status, 'failed')
+        self.assertEqual(new_file.read_bytes(), b'new content before restart')
+
+    def test_directory_cleanup_without_descriptor_apis_keeps_same_allowlist(self):
+        record_id, work = self.failed_directory_cleanup()
+        with patch.object(service, '_DIRECTORY_FDS', False):
+            self.assertEqual(service.retry_cleanup(self.db, record_id)['cleanup_status'], 'completed')
+        self.assertFalse(work.exists())
+
+    def test_directory_cleanup_closes_descriptors_after_partial_failure(self):
+        record_id, work = self.failed_directory_cleanup()
+        with patch.object(service.os, 'close', wraps=os.close) as closed, patch.object(
+            service.os, 'unlink', side_effect=PermissionError('test only')
+        ):
+            self.assertEqual(service.retry_cleanup(self.db, record_id)['cleanup_status'], 'failed')
+        if service._DIRECTORY_FDS:
+            self.assertGreaterEqual(closed.call_count, 2)
+            for call in closed.call_args_list:
+                with self.assertRaises(OSError): os.fstat(call.args[0])
+        self.assertTrue(work.exists())
+
+    def test_directory_snapshot_limit_refuses_before_discard(self):
+        media, page = self.media('work/page.jpg')
+        media.absolute_path = str(page.parent)
+        self.db.commit()
+        with patch.object(service, 'MAX_CLEANUP_ENTRIES_BYTES', 1):
+            with self.assertRaises(HTTPException): service.build_plan(self.db, 'media', media.id)
+        self.assertTrue(page.exists())
+        self.assertEqual(self.db.query(models.DiscardedContent).count(), 0)
+
+    def test_directory_cleanup_only_unlinks_nested_symlinks(self):
+        media, page = self.media('work/page.jpg')
+        outside = self.root / 'outside'
+        outside.mkdir()
+        original = outside / 'keep.jpg'
+        original.write_bytes(b'outside the approved tree')
+        try:
+            (page.parent / 'file-link.jpg').symlink_to(original)
+            (page.parent / 'directory-link').symlink_to(outside, target_is_directory=True)
+        except OSError as exc:
+            self.skipTest(f'Symlinks unavailable: {exc}')
+        media.absolute_path = str(page.parent)
+        media.extension = '.dir'
+        self.db.commit()
+        self.assertEqual(self.discard('media', media.id)['cleanup_status'], 'completed')
+        self.assertFalse(page.parent.exists())
+        self.assertEqual(original.read_bytes(), b'outside the approved tree')
+
+    def test_directory_descriptor_stays_inside_tree_if_parent_is_replaced_by_link(self):
+        if not service._DIRECTORY_FDS:
+            self.skipTest('Directory descriptor APIs unavailable')
+        record_id, work = self.failed_directory_cleanup()
+        outside = self.root / 'outside'
+        outside.mkdir()
+        original = outside / 'second.jpg'
+        original.write_bytes(b'outside the approved tree')
+        original_open = os.open
+
+        def replace_after_open(path, *args, **kwargs):
+            fd = original_open(path, *args, **kwargs)
+            if path == 'chapter':
+                (work / 'chapter').rename(work / 'moved')
+                (work / 'chapter').symlink_to(outside, target_is_directory=True)
+            return fd
+
+        with patch.object(service.os, 'open', side_effect=replace_after_open):
+            result = service.retry_cleanup(self.db, record_id)
+        self.assertEqual(result['cleanup_status'], 'failed')
+        self.assertEqual(original.read_bytes(), b'outside the approved tree')
+        self.assertTrue((work / 'moved').exists())
 
     def test_delete_is_blocked_while_downloader_holds_mutation_lease(self):
         media, path = self.media()
