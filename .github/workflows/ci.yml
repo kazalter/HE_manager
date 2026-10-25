@@ -94,9 +94,9 @@ jobs:
       - name: Install backend dependencies
         run: python -m pip install -r backend/requirements-dev.txt
 
-      - name: Run Pawchive backend tests
+      - name: Run Pawchive and discard backend tests
         working-directory: backend
-        run: python -m pytest tests/test_pawchive_provider.py tests/test_pawchive_streaming.py tests/test_pawchive_downloads.py
+        run: python -m pytest tests/test_pawchive_provider.py tests/test_pawchive_streaming.py tests/test_pawchive_downloads.py tests/test_media_discard.py
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
