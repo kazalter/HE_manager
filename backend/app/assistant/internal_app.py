@@ -16,7 +16,7 @@ from sqlalchemy import inspect
 from starlette.concurrency import run_in_threadpool
 from ..database import get_db
 from . import schemas
-from .identity import authenticate_tool_token, require_tool_context
+from .identity import authenticate_tool_token, require_tool_context, current_read_context
 from .readonly import execute_read_tool, READ_TOOLS
 from .proposals import create_proposal, PROPOSAL_TOOLS
 from .store import MAX_TOOL_RESULTS_BYTES, canonical_json, write_transaction
@@ -58,7 +58,7 @@ def record_tool_result(db, principal, context, name, result):
     try:
         result = bounded_result(name, result)
         validated = schemas.ToolResultDTO(
-            tool_call_id=uuid4(), tool_name=name, result=result
+            tool_call_id=uuid4(), tool_name=name, context=context, result=result
         ).model_dump(mode="json")
     except (ValidationError, ValueError, TypeError):
         raise HTTPException(502, "assistant_invalid_tool_result") from None
@@ -74,6 +74,7 @@ def record_tool_result(db, principal, context, name, result):
             validated = schemas.ToolResultDTO(
                 tool_call_id=validated["tool_call_id"],
                 tool_name=name,
+                context=context,
                 result=schemas.TruncatedDTO().model_dump(),
             ).model_dump(mode="json")
         else:
@@ -83,20 +84,35 @@ def record_tool_result(db, principal, context, name, result):
 
 def execute_and_record(db, token, body, name):
     principal = authenticate_tool_token(db, token)
+    if TOOL_CATALOG[name].mode == "read":
+        body = body.model_copy(update={"context": current_read_context(db, principal, body.context)})
     require_tool_context(db, principal, body.context)
     try:
         TOOL_CATALOG[name].args_type.model_validate(body.args)
     except ValidationError:
         raise HTTPException(422, "assistant_invalid_tool_args") from None
-    if name == "get_project_status":
+    if name in {"get_project_status", "manage_library"}:
         import urllib.request
-        request = urllib.request.Request("http://backend:8010/assistant/internal/project-state", data=canonical_json({"context": body.context.model_dump(mode="json")}).encode(), headers={"Authorization":"Bearer "+token, "Content-Type":"application/json"})
+        target = "project-state" if name == "get_project_status" else "manage-library"
+        payload = {"context": body.context.model_dump(mode="json")}
+        if name == "manage_library":
+            payload["args"] = body.args
+        request = urllib.request.Request("http://backend:8010/assistant/internal/" + target, data=canonical_json(payload).encode(), headers={"Authorization":"Bearer "+token, "Content-Type":"application/json"})
         try:
-            with urllib.request.urlopen(request, timeout=5) as response:
+            with urllib.request.urlopen(request, timeout=20 if name == "manage_library" else 5) as response:
                 raw=response.read(131073)
             if len(raw)>131072:
                 raise ValueError
             result=json.loads(raw)
+        except urllib.error.HTTPError as exc:
+            from .tool_errors import MESSAGES
+            try:
+                error = json.loads(exc.read(8192)).get("detail")
+            except (ValueError, OSError):
+                error = None
+            if isinstance(error, str) and error in MESSAGES:
+                raise HTTPException(exc.code, error) from None
+            raise HTTPException(503, "assistant_tool_unavailable") from None
         except Exception:
             raise HTTPException(503,"assistant_tool_unavailable") from None
     elif name in FILE_TOOLS:

@@ -17,7 +17,7 @@ class ToolSpec:
     args_type: type[s.DTO]
     result_type: type[s.DTO]
     description: str
-    mode: Literal["read", "proposal"]
+    mode: Literal["read", "proposal", "action"]
 
 TOOL_CATALOG = {}
 def register(name, args_type, description, mode="read"):
@@ -47,5 +47,6 @@ register("propose_tag_rename", s.TagRenameArgs, "提出标签改名，展示关�
 register("propose_tag_merge", s.TagMergeArgs, "提出标签合并，原标签删除但不删除媒体；网页批准后执行。", "proposal")
 register("propose_maintenance", s.MaintenanceArgs, "提出缺失/重复复查、缩略图重建或备份任务；网页批准后执行。", "proposal")
 register("propose_file_move", s.FileMoveArgs, "提出单媒体文件/漫画目录改名或移动，目标必须为登记目录相对路径；网页批准后执行。", "proposal")
+register("manage_library", s.ManageLibraryArgs, "仅在用户当前聊天明确要求执行时，直接修改媒体资料/评分/收藏/已读/关联标签、批量资料（最多50项）、标签改名，或启动扫描/维护/新备份；无需网页审批。仅要建议或预览时用propose工具。禁止删除媒体、清库、覆盖文件、文件移动和标签合并。结果applied才表示完成，queued需查任务。使用最近工具返回的runtime_context，不能重放旧轮次修改。", "action")
 READ_TOOLS = frozenset(k for k,v in TOOL_CATALOG.items() if v.mode == "read")
 PROPOSAL_TOOLS = frozenset(k for k,v in TOOL_CATALOG.items() if v.mode == "proposal")

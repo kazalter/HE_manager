@@ -8,7 +8,7 @@ MESSAGES = {
     "assistant_invalid_proposal": "变更参数不正确。",
     "assistant_invalid_tool_token": "工具身份不可用，请检查管家连接配置。",
     "assistant_tool_context_invalid": "对话或运行上下文不可用。",
-    "assistant_run_unavailable": "运行已停止或过期，请重新发起。",
+    "assistant_run_unavailable": "调用的运行上下文已失效。请先用同一会话的读取工具获取最新 runtime_context，再重试一次；不要据此推断运行时间过短。",
     "assistant_media_not_found": "媒体不存在或不符合查询范围。",
     "assistant_folder_not_found": "目录不存在。",
     "assistant_not_found": "对象不存在或当前用户无权访问。",

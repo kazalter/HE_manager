@@ -78,9 +78,10 @@ class HeToolClient:
         except (ValidationError, TypeError, ValueError):
             raise ToolError("he_invalid_tool_arguments") from None
         attempts = 2 if name in READ_TOOLS else 1
+        timeout = 30 if TOOL_CATALOG[name].mode == "action" else 10
         for attempt in range(attempts):
             try:
-                async with asyncio.timeout(12):
+                async with asyncio.timeout(timeout + 2):
                     async with self.http.stream(
                         "POST",
                         self.base_url + "/tools/" + name,
@@ -90,6 +91,7 @@ class HeToolClient:
                             "Accept-Encoding": "identity",
                         },
                         content=payload,
+                        timeout=timeout,
                     ) as response:
                         if response.status_code in (429, 500, 502, 503, 504):
                             if attempt + 1 < attempts:
@@ -124,7 +126,10 @@ class HeToolClient:
                                 raise ValueError
                         except (ValidationError, ValueError, TypeError):
                             raise ToolError("he_invalid_tool_response") from None
-                        return result.result.model_dump(mode="json", exclude_unset=True)
+                        value = result.result.model_dump(mode="json", exclude_unset=True)
+                        if result.context is not None:
+                            value["runtime_context"] = result.context.model_dump(mode="json")
+                        return value
             except (httpx2.HTTPError, TimeoutError):
                 if attempt + 1 >= attempts:
                     raise ToolError("he_tool_unavailable") from None

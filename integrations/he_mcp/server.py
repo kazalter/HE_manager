@@ -79,7 +79,7 @@ def create_app(*, client=None):
             annotations=ToolAnnotations(
                 read_only_hint=name in READ_TOOLS,
                 destructive_hint=False,
-                idempotent_hint=True,
+                idempotent_hint=TOOL_CATALOG[name].mode != "action",
                 open_world_hint=False,
             ),
             structured_output=True,

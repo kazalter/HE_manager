@@ -102,7 +102,8 @@ PROPOSAL_ARGS = {
         "destination_relative_path": "new.cbz",
     },
 }
-NAMES = set(READ_CASES) | set(PROPOSAL_ARGS)
+ACTION_ARGS = {"manage_library": {"operation": {"kind": "media_update", "media_id": 1, "patch": {"rating": 4}}}}
+NAMES = set(READ_CASES) | set(PROPOSAL_ARGS) | set(ACTION_ARGS)
 CONTEXT = {"session_id": str(uuid4()), "run_id": str(uuid4())}
 TOKEN_A = "test-admin-a-" + "a" * 32
 TOKEN_B = "test-admin-b-" + "b" * 32
@@ -172,7 +173,9 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
             )
         if body["context"] != CONTEXT:
             return JSONResponse({"detail": "foreign run secret"}, status_code=404)
-        if name.startswith("propose_"):
+        if name == "manage_library":
+            result = {"proposal_id": str(uuid4()), "state": "applied", "media_id": 1}
+        elif name.startswith("propose_"):
             result = {
                 "id": str(uuid4()),
                 "kind": name.removeprefix("propose_"),
@@ -183,9 +186,10 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
             }
         else:
             result = READ_CASES[name][1]
-        return JSONResponse(
-            {"tool_name": name, "tool_call_id": str(uuid4()), "result": result}
-        )
+        reply = {"tool_name": name, "tool_call_id": str(uuid4()), "result": result}
+        if getattr(self, "return_context", False):
+            reply["context"] = CONTEXT
+        return JSONResponse(reply)
 
     @asynccontextmanager
     async def bridge(self):
@@ -205,7 +209,7 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
                 for tool in tools:
                     self.assertEqual(
                         tool.annotations.read_only_hint,
-                        not tool.name.startswith("propose_"),
+                        tool.name in READ_CASES,
                     )
                     self.assertFalse(tool.annotations.open_world_hint)
                     self.assertFalse(tool.annotations.destructive_hint)
@@ -230,6 +234,7 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
                         result = await session.call_tool(
                             name, {"context": CONTEXT, "args": args}
                         )
+
                         self.assertFalse(result.is_error, str(result))
                         self.assertEqual(result.structured_content, expected)
                         self.assertEqual(
@@ -241,8 +246,24 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
                             ),
                         )
 
+    async def test_routine_action_is_available_without_read_retry(self):
+        async with self.bridge() as (url, _):
+            async with sdk(url, TOKEN_A) as session:
+                result = await session.call_tool("manage_library", {"context": CONTEXT, "args": ACTION_ARGS["manage_library"]})
+                self.assertFalse(result.is_error, str(result))
+                self.assertEqual(result.structured_content["state"], "applied")
+                self.assertEqual(len(self.calls), 1)
+
+    async def test_server_runtime_context_is_exposed_for_followup_calls(self):
+        self.return_context = True
+        async with self.bridge() as (url, _):
+            async with sdk(url, TOKEN_A) as session:
+                result = await session.call_tool("search_media", {"context": CONTEXT, "args": {}})
+                self.assertFalse(result.is_error, str(result))
+                self.assertEqual(result.structured_content["runtime_context"], CONTEXT)
+
     async def test_every_tool_rejects_extra_identity_before_upstream(self):
-        cases = {name: args for name, (args, _) in READ_CASES.items()} | PROPOSAL_ARGS
+        cases = {name: args for name, (args, _) in READ_CASES.items()} | PROPOSAL_ARGS | ACTION_ARGS
         async with self.bridge() as (url, _):
             async with sdk(url, TOKEN_A) as session:
                 for name, args in cases.items():

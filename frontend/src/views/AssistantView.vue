@@ -297,7 +297,7 @@ onBeforeUnmount(() => {
               <p v-if="!availability.enabled" class="mb-2 text-xs leading-relaxed text-muted">管家暂未启用，历史和停止操作仍可使用。</p>
               <div class="flex items-start gap-2 text-xs leading-relaxed text-subtle">
                 <ShieldCheck :size="15" class="mt-0.5 shrink-0 text-muted" aria-hidden="true" />
-                <p>可读取 HE 项目；修改需你批准。账号凭据默认隐藏。</p>
+                <p>可读取 HE 项目；明确要求的日常修改可直接执行。账号凭据默认隐藏。</p>
               </div>
             </div>
           </aside>
@@ -357,7 +357,19 @@ onBeforeUnmount(() => {
               @click="chat.loadOlder"
               >更早的消息</UiButton
             >
-            <details class="rounded-xl border border-line bg-surface/70 px-3 text-sm text-muted"><summary class="flex min-h-11 cursor-pointer items-center gap-2 focus-ring"><ShieldCheck :size="15" aria-hidden="true" />可读取 HE 项目 · 修改需要你批准</summary><div class="space-y-2 pb-3 leading-relaxed"><template v-if="capabilities"><p>查询媒体资料、作者、文件目录、任务、日志和存储状态。</p><p>文件读取范围：{{ readableRoots || '暂无可读目录' }}</p><p>可提出资料修改、标签整理、维护任务与文件改名 / 移动。每次批准只执行审批卡中列出的操作。</p><p v-if="!capabilities.image_analysis_supported">可查看媒体预览；当前模型未分析图片、音视频内容。</p></template><p v-else>能力信息暂不可用，请稍后重新连接。</p></div></details>
+            <details class="rounded-xl border border-line bg-surface/70 px-3 text-sm text-muted">
+              <summary class="flex min-h-11 cursor-pointer items-center gap-2 focus-ring"><ShieldCheck :size="15" aria-hidden="true" />读取无需审批 · 日常修改按你的要求执行</summary>
+              <div class="space-y-2 pb-3 leading-relaxed">
+                <template v-if="capabilities">
+                  <p>可连续查询媒体资料、作者、文件目录、任务、日志和存储状态。</p>
+                  <p>文件读取范围：{{ readableRoots || '暂无可读目录' }}</p>
+                  <p v-if="capabilities.action_tools?.length">你在聊天中明确要求后，资料、评分、收藏、已读状态、标签改名与扫描维护可直接执行，并保留执行记录。</p>
+                  <p>只要建议或预览时不会修改。文件改名 / 移动与标签合并仍需审批；不支持永久删除媒体、清库或覆盖文件。</p>
+                  <p v-if="!capabilities.image_analysis_supported">可查看媒体预览；当前模型未分析图片、音视频内容。</p>
+                </template>
+                <p v-else>能力信息暂不可用，请稍后重新连接。</p>
+              </div>
+            </details>
             <ChatMessages :messages="messages" :disabled="!availability.enabled || sending" @suggest="useSuggestion" />
             <p v-if="toolStatus" role="status" class="inline-flex max-w-full items-center gap-2 rounded-full border border-line bg-surface/70 px-3 py-1.5 text-sm text-muted">
               <Loader2 v-if="active" :size="14" class="shrink-0 animate-spin text-accent motion-reduce:animate-none" aria-hidden="true" />

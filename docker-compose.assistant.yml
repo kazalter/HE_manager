@@ -62,7 +62,7 @@ services:
 
   assistant-mcp:
     build: {context: ., dockerfile: integrations/he_mcp/Dockerfile}
-    image: he-manager-mcp:hermes-2.0.0
+    image: ${HE_ASSISTANT_MCP_IMAGE:-he-manager-mcp:hermes-2.0.0}
     restart: unless-stopped
     environment: {HE_TOOLS_URL: "http://he-tools:8021"}
     networks:

@@ -11,17 +11,17 @@ providers:
     default_model: deepseek-flash
     transport: chat_completions
     extra_body:
-      max_tokens: 2048
+      max_tokens: 4096
       thinking:
         type: disabled
 agent:
-  max_turns: 8
-  run_budget_seconds: 180
+  max_turns: 32
+  run_budget_seconds: 900
   api_max_retries: 1
   agent_cache:
     max_size: 2
     protect_recent: 0
-# Explicitly disable tool-search bridge; 24 HE schemas plus profile memory.
+# Explicitly disable tool-search bridge; HE schemas plus profile memory.
 tools:
   tool_search:
     enabled: "off"
@@ -42,6 +42,7 @@ mcp_servers:
     tools:
       include:
         - search_media
+        - manage_library
         - get_media_detail
         - get_library_stats
         - recommend_media

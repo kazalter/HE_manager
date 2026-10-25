@@ -208,6 +208,20 @@ async def events(
 class ProjectStateRequest(schemas.DTO):
     context: schemas.ToolContext
 
+
+class ManageLibraryRequest(ProjectStateRequest):
+    args: schemas.ManageLibraryArgs
+
+
+@router.post("/internal/manage-library", response_model=schemas.ActionResultDTO, include_in_schema=False)
+def internal_manage_library(body: ManageLibraryRequest, authorization: str = Header(default=""), db=Depends(get_db)):
+    from ..assistant.identity import authenticate_tool_token
+    from ..assistant.direct_actions import manage_library
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(401, "assistant_invalid_tool_token")
+    principal = authenticate_tool_token(db, authorization[7:])
+    return manage_library(db, principal, body.context, body.args.model_dump(mode="json", exclude_unset=True))
+
 @router.post("/internal/project-state", response_model=schemas.ProjectStatusDTO, include_in_schema=False)
 def internal_project_state(body: ProjectStateRequest, authorization: str = Header(default=""), db=Depends(get_db)):
     from ..assistant.identity import authenticate_tool_token, require_tool_context

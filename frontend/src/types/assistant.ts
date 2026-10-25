@@ -94,9 +94,10 @@ export interface RequestOptions {
 
 export interface ApprovalPageDTO extends Page<ProposalDTO> { pending_count: number }
 export interface CapabilitiesDTO {
+  action_tools?: string[]
   read_tools: string[]
   proposal_tools: string[]
   file_roots: { id: number; display_name: string; path: string; readable: boolean }[]
   image_analysis_supported: boolean
-  writes_require_approval: true
+  writes_require_approval: boolean
 }

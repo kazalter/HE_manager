@@ -229,8 +229,8 @@ class AssistantProxyTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(str(first.id), envelope.instructions)
         self.assertIn(self.f.sid, envelope.instructions)
         self.assertNotIn(self.binding.api_key.get_secret_value(), envelope.instructions)
-        self.assertEqual(envelope.max_turns, 8)
-        self.assertEqual(envelope.output_tokens, 2048)
+        self.assertEqual(envelope.max_turns, 32)
+        self.assertEqual(envelope.output_tokens, 4096)
 
     async def test_timeout_after_acceptance_replays_same_key_and_body(self):
         self.fake.timeout = True

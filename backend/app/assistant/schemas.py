@@ -44,6 +44,7 @@ ToolName = Literal[
     "propose_maintenance",
     "propose_file_move",
     "propose_scan",
+    "manage_library",
 ]
 
 
@@ -85,9 +86,9 @@ class SubmissionEnvelope(DTO):
     session_id: str = Field(min_length=1, max_length=100)
     idempotency_key: str = Field(min_length=1, max_length=100)
     api_key_generation: PositiveID
-    max_turns: Literal[8] = 8
-    output_tokens: Literal[2048] = 2048
-    deadline_seconds: Literal[180] = 180
+    max_turns: Annotated[int, Field(ge=1, le=32)] = 32
+    output_tokens: Annotated[int, Field(ge=1, le=4096)] = 4096
+    deadline_seconds: Annotated[int, Field(ge=1, le=900)] = 900
 
 
 class RunRequest(DTO):
@@ -521,6 +522,25 @@ class FileMoveArgs(ProposalReason):
     media_id: PositiveID
     destination_folder_id: PositiveID
     destination_relative_path: str = Field(min_length=1,max_length=4096)
+
+class DirectMediaUpdate(DTO):
+    kind: Literal['media_update']
+    media_id: PositiveID
+    patch: MediaPatch
+class DirectBatchUpdate(BatchUpdateArgs):
+    kind: Literal['media_batch_update']
+class DirectTagRename(TagRenameArgs):
+    kind: Literal['tag_rename']
+class DirectScan(DTO):
+    kind: Literal['scan']
+    folder_id: PositiveID
+class DirectMaintenance(MaintenanceArgs):
+    kind: Literal['maintenance']
+class ManageLibraryArgs(DTO):
+    operation: Annotated[
+        DirectMediaUpdate | DirectBatchUpdate | DirectTagRename | DirectScan | DirectMaintenance,
+        Field(discriminator='kind'),
+    ]
 class OperationPreviewDTO(DTO):
     kind: str
     target_id: Count = 0
@@ -536,6 +556,7 @@ class SelectionRequest(DTO):
 
 
 RESULT_TYPES = {
+    "manage_library": ActionResultDTO,
     "search_media": MediaPageDTO,
     "get_media_detail": MediaDetailDTO,
     "get_library_stats": StatsDTO,
@@ -566,8 +587,10 @@ RESULT_TYPES = {
 class ToolResultDTO(DTO):
     tool_call_id: UUID
     tool_name: ToolName
+    context: ToolContext | None = None
     result: (
-        MediaPageDTO
+        ActionResultDTO
+        | MediaPageDTO
         | MediaDetailDTO
         | StatsDTO
         | RecommendationDTO
@@ -679,6 +702,7 @@ class ApprovalPageDTO(ProposalPageDTO):
 class CapabilitiesDTO(DTO):
     read_tools: list[str]
     proposal_tools: list[str]
+    action_tools: list[str] = Field(default_factory=list)
     file_roots: list[FolderDTO] = Field(max_length=50)
     image_analysis_supported: bool = False
-    writes_require_approval: Literal[True] = True
+    writes_require_approval: bool = False

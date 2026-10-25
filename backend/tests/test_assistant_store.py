@@ -189,7 +189,7 @@ class AssistantStoreTests(unittest.TestCase):
     def test_run_deadline_and_results_are_persisted(self):
         run = self.reserve(self.session())
         self.assertAlmostEqual(
-            (run.deadline_at - run.created_at).total_seconds(), 180, delta=0.01
+            (run.deadline_at - run.created_at).total_seconds(), 900, delta=0.01
         )
         self.assertEqual(json.loads(run.tool_results_json), [])
         self.assertIsNone(run.stop_requested_at)

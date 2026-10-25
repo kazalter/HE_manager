@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from . import config
 from .models import AssistantRun, AssistantSession, AssistantToolIdentity
-from .schemas import ProfileBinding, ToolPrincipal
+from .schemas import ProfileBinding, ToolPrincipal, ToolContext
 from .store import require_admin, utcnow, write_transaction
 
 
@@ -85,6 +85,36 @@ def require_tool_context(db, principal, context):
     return row
 
 
+def current_read_context(db, principal, context):
+    """Refresh stale same-session read attribution without reviving old runs.
+
+    Hermes history can retain a previous turn's IDs. Ownership and credential
+    checks still run against that reference; only reads may bind to the one
+    currently active executor. Writes must explicitly use the returned context.
+    """
+    try:
+        require_tool_context(db, principal, context)
+        return context
+    except HTTPException as exc:
+        if exc.detail != "assistant_run_unavailable":
+            raise
+    session = db.get(AssistantSession, str(context.session_id))
+    if session.state != "active":
+        raise HTTPException(409, "assistant_run_unavailable")
+    row = db.execute(select(AssistantRun).where(
+        AssistantRun.user_id == principal.user_id,
+        AssistantRun.session_id == str(context.session_id),
+        AssistantRun.status.in_(("submitting", "running")),
+        AssistantRun.stop_requested_at.is_(None),
+        AssistantRun.executor_exited_at.is_(None),
+    ).execution_options(populate_existing=True)).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(409, "assistant_run_unavailable")
+    refreshed = ToolContext(session_id=context.session_id, run_id=row.id)
+    require_tool_context(db, principal, refreshed)
+    return refreshed
+
+
 def _read_env(path):
     if path.is_symlink() or (os.name != "nt" and path.stat().st_mode & 0o077):
         raise HTTPException(503, "assistant_storage_unavailable")
@@ -145,8 +175,8 @@ def prepare_gateway_root(root: Path):
             "tools": {"tool_search": {"enabled": "off"}},
             "platform_toolsets": {"api_server": []},
             "agent": {
-                "max_turns": 8,
-                "run_budget_seconds": 180,
+                "max_turns": 32,
+                "run_budget_seconds": 900,
                 "agent_cache": {"max_size": 2, "protect_recent": 0},
             },
             "gateway": {

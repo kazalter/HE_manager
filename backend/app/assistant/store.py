@@ -222,7 +222,7 @@ def reserve_run(
             api_key_generation=envelope.api_key_generation,
             created_at=now,
             updated_at=now,
-            deadline_at=now + timedelta(seconds=180),
+            deadline_at=now + timedelta(seconds=envelope.deadline_seconds),
             status="submitting",
         )
         local.add(row)

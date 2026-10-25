@@ -37,7 +37,7 @@ def capabilities(db,user_id):
         try:root_path(db,row.id)
         except HTTPException:readable=False
         roots.append(s.FolderDTO(id=row.id,display_name=row.path.replace('\\','/').rstrip('/').split('/')[-1] or '媒体目录',path=row.path,status=row.status or 'idle',readable=readable))
-    return s.CapabilitiesDTO(read_tools=[k for k,v in TOOL_CATALOG.items() if v.mode=='read'],proposal_tools=[k for k,v in TOOL_CATALOG.items() if v.mode=='proposal'],file_roots=roots)
+    return s.CapabilitiesDTO(read_tools=[k for k,v in TOOL_CATALOG.items() if v.mode=='read'],proposal_tools=[k for k,v in TOOL_CATALOG.items() if v.mode=='proposal'],action_tools=[k for k,v in TOOL_CATALOG.items() if v.mode=='action'],file_roots=roots)
 
 def proposal_targets(db,user_id,proposal_id,limit,offset):
     row=owned(db,user_id,proposal_id)
