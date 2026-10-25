@@ -435,6 +435,7 @@ watch(favoritesError, message => { errorMessage.value = message })
 
 <template>
   <ExternalSourceLayout
+    source-name="ASMR"
     :status="statusText"
     :status-tone="statusTone"
     :meta="activeSource?.last_synced_at ? `上次同步 ${formatTime(activeSource.last_synced_at)}` : '尚未同步喜欢列表'"

@@ -250,7 +250,8 @@ onBeforeUnmount(() => { browse.dispose(); sequence.close() })
 
 <template>
   <ExternalSourceLayout
-    title="Pawchive 账号"
+    source-name="Pawchive"
+    title="账号设置"
     :status="accountLoading ? '' : accountConnected ? '已连接' : '未登录'"
     :status-tone="accountConnected ? 'success' : 'neutral'"
     :meta="accountLoading ? '正在检查登录状态…' : accountConnected ? '账号收藏的作者会显示在作者页' : '登录后可查看账号收藏的作者'"

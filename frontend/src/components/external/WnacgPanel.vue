@@ -348,6 +348,7 @@ watch(favoritesError, message => {
 
 <template>
   <ExternalSourceLayout
+    source-name="WNACG"
     :status="statusText"
     :status-tone="statusTone"
     :meta="activeSource?.last_synced_at ? `上次同步 ${formatTime(activeSource.last_synced_at)}` : '尚未同步收藏夹'"

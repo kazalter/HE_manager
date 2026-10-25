@@ -199,6 +199,8 @@ const handleAutoSyncUpdate = updateAutoSync
 
 <template>
   <ExternalSourceLayout
+    source-name="X"
+    title="同步与导入"
     :status="source?.cookie_saved ? '已登录' : '归档模式'"
     :status-tone="source?.cookie_saved ? 'success' : 'neutral'"
     :meta="source?.last_archive_imported_at ? `归档导入于 ${formatTime(source?.last_archive_imported_at)}` : '尚未上传归档'"
