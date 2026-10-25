@@ -5,13 +5,27 @@ public metadata on demand and does not write `Media` rows. A user must confirm
 an attachment, post, or selected-post download before files are stored under
 `HE_PAWCHIVE_DOWNLOAD_ROOT/pawchive/{service}/{creator_id}/{post_id}`.
 
-On the Pawchive page, sign in to the Pawchive account to see its favorite
-authors. Select an author to browse their posts; search results can also be
-grouped by author, and an author page URL or `service/creator_id` opens that
-author directly. Favorite buttons update the Pawchive account. The password is
-used only for login. Session cookies stay in backend memory per HE Manager user
-and are sent only to the fixed Pawchive account endpoints. After a backend
-restart or expired session, sign in again.
+The Pawchive author page has **我的收藏** and **发现作者**. Discovery searches all
+public authors by name/ID, filters platforms, and sorts by real site favorite
+count or update date. It works without a Pawchive login. An author page URL or
+`service/creator_id` opens that author directly. Returning from posts preserves
+the author query, filters, page, scroll position and focus. Favorite buttons update
+the Pawchive account; when signed out, settings open and login resumes the requested
+favorite. Closing settings cancels the pending action. The password is used only
+for login. Session cookies stay in the local database per HE Manager user and are
+sent only to fixed account endpoints. Restarting HE restores them; expired
+Pawchive sessions require login again.
+
+The public directory refreshes once per hour on demand, with a seven-day stale
+fallback during source outages. Only 30 authors are returned to the browser per
+page. A bounded public snapshot persists at
+`/mnt/hdd/.he-manager/pawchive-creators/catalog.json` when `/mnt/hdd/.mounted`
+exists; otherwise caching uses process memory without a system-disk fallback.
+Deleting this public cache is safe and triggers a fresh source fetch. Source
+failures are shown as errors, or a stale notice when a valid previous snapshot
+exists. The first uncached request can take longer because it downloads the full
+source directory; subsequent searches use that snapshot. No schema migration
+or additional settings are needed.
 
 ## Linux Compose configuration
 
@@ -53,8 +67,14 @@ After `docker compose up -d --build`, check:
 4. Download one small image, then verify its task completes and the linked
    ordinary media item opens in the library. Repeating it should report an
    already downloaded attachment without a duplicate media row.
-5. Sign in to Pawchive and confirm the account's favorite authors appear. Open
-   an author, search for an author, and add or remove a favorite.
+5. Without a Pawchive session, open discovery and search an author, filter platforms,
+   sort, paginate, open posts and return. Check
+   `GET /external/pawchive/creators?sort=popular&page=1` for real counts and
+   decreasing order, then search by an ID from that response.
+6. Sign in to Pawchive and confirm the account's favorite authors appear. Test
+   favorite/unfavorite with an author chosen by the account owner. Mocked browser
+   QA also covers login resumption, canceling the pending action, and an author
+   already saved in the newly connected account.
 
 Media URLs use short-lived signed references and the same HE Manager access
 token as other binary routes. A reference's expiry is rounded up to a 6-hour

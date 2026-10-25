@@ -6,6 +6,7 @@ import { UiButton, UiInput, UiSpinner, fieldHintClass, fieldLabelClass } from '.
 import ExternalSourceLayout from '../ExternalSourceLayout.vue'
 import { useRoute, useRouter } from 'vue-router'
 import PawchiveBrowser from './PawchiveBrowser.vue'
+import PawchiveAuthors from './PawchiveAuthors.vue'
 import PawchiveDownloads from './PawchiveDownloads.vue'
 import PawchiveMediaViewer from './PawchiveMediaViewer.vue'
 import { usePawchiveBrowse } from '../../../composables/usePawchiveBrowse'
@@ -16,6 +17,7 @@ import {
   fetchPawchiveAccountFavorites,
   fetchPawchiveAccountStatus,
   fetchPawchiveCapabilities,
+  fetchPawchiveCreator,
   loginPawchiveAccount,
   logoutPawchiveAccount,
   pawchiveError,
@@ -49,8 +51,15 @@ const accountFavorites = ref<PawchiveCreatorFavorite[]>([])
 const accountFavoriteBusyKeys = ref<string[]>([])
 const accountError = ref('')
 const accountMessage = ref('')
-const lastAuthorQuery = ref('')
+const sourceLayoutRef = ref<InstanceType<typeof ExternalSourceLayout> | null>(null)
+const authorsRef = ref<InstanceType<typeof PawchiveAuthors> | null>(null)
+const selectedCreator = ref<PawchiveCreator | null>(null)
+const pendingFavorite = ref<{ creator: PawchiveCreator; favorite: boolean } | null>(null)
+let authorScrollTop = 0
+let authorOpener: HTMLElement | null = null
 let opener: HTMLElement | null = null
+const cancelPendingFavorite = () => { pendingFavorite.value = null }
+const showAccount = () => sourceLayoutRef.value?.openSettings()
 
 function favoriteCreatorKey(creator: Pick<PawchiveCreatorFavorite, 'service' | 'creator_id'>) {
   return `${creator.service}:${creator.creator_id}`
@@ -102,6 +111,13 @@ const loginAccount = async () => {
     accountFavorites.value = result.items || []
     accountPassword.value = ''
     accountMessage.value = '已连接 Pawchive 账号。会话状态会在 HE Manager 重启后恢复。'
+    const pending = pendingFavorite.value
+    pendingFavorite.value = null
+    if (pending) {
+      const exists = accountFavorites.value.some(x => favoriteCreatorKey(x) === favoriteCreatorKey(pending.creator))
+      if (exists !== pending.favorite) await toggleAccountFavorite(pending.creator)
+      if (!accountError.value) sourceLayoutRef.value?.closeSettings()
+    }
   } catch (cause) {
     accountError.value = pawchiveError(cause) || 'Pawchive 登录失败，请检查账号信息。'
   } finally {
@@ -114,6 +130,7 @@ const logoutAccount = async () => {
   accountBusy.value = true
   accountError.value = ''
   accountMessage.value = ''
+  pendingFavorite.value = null
   try {
     await logoutPawchiveAccount()
     accountConnected.value = false
@@ -129,7 +146,10 @@ const logoutAccount = async () => {
 
 const toggleAccountFavorite = async (post: Pick<PawchiveCreatorFavorite, 'service' | 'creator_id' | 'creator_name' | 'source_url'>) => {
   if (!accountConnected.value) {
-    accountError.value = '请先登录 Pawchive 账号。'
+    pendingFavorite.value = { creator: post, favorite: true }
+    accountError.value = ''
+    accountMessage.value = `登录后继续收藏作者 ${post.creator_name}。`
+    showAccount()
     return
   }
   const creator = { service: post.service, creator_id: post.creator_id }
@@ -146,16 +166,17 @@ const toggleAccountFavorite = async (post: Pick<PawchiveCreatorFavorite, 'servic
       accountMessage.value = `已取消收藏作者 ${post.creator_name}。`
     } else {
       await setPawchiveAccountFavorite(creator)
-      accountFavorites.value = [...accountFavorites.value, {
-        ...creator,
-        creator_name: post.creator_name,
-        source_url: post.source_url,
-      }]
-      await refreshAccountFavorites()
+      accountFavorites.value = [...accountFavorites.value, { ...post }]
       accountMessage.value = `已收藏作者 ${post.creator_name}。`
     }
   } catch (cause) {
     accountError.value = pawchiveError(cause)
+    if (axios.isAxiosError(cause) && cause.response?.status === 401) {
+      pendingFavorite.value = { creator: post, favorite: !accountFavorites.value.some(x => favoriteCreatorKey(x) === key) }
+      accountConnected.value = false
+      accountFavorites.value = []
+      showAccount()
+    }
   } finally {
     accountFavoriteBusyKeys.value = accountFavoriteBusyKeys.value.filter(item => item !== key)
   }
@@ -166,20 +187,34 @@ const changeScope = (scope: PawchiveScope) => {
   selectedKeys.value = []
   if (scope.creatorId) {
     void browse.setScope(scope)
-  } else if (scope.query.trim()) {
-    lastAuthorQuery.value = scope.query.trim()
-    void browse.setScope(scope)
   } else {
-    lastAuthorQuery.value = ''
     browse.resetScope()
   }
 }
-const returnToAuthors = (fromCreator: boolean) => changeScope({
-  query: fromCreator ? lastAuthorQuery.value : '', service: '', creatorId: '', tag: '', mediaType: 'all',
-})
-const openCreator = (creator: PawchiveCreator) => changeScope({
-  query: '', service: creator.service, creatorId: creator.creator_id, tag: '', mediaType: 'all',
-})
+const returnToAuthors = async () => {
+  sequence.close()
+  selectedKeys.value = []
+  browse.resetScope()
+  selectedCreator.value = null
+  await nextTick()
+  document.getElementById('he-main-content')?.scrollTo({ top: authorScrollTop, behavior: 'instant' as ScrollBehavior })
+  authorOpener?.focus({ preventScroll: true })
+}
+const openCreator = async (creator: PawchiveCreator) => {
+  authorScrollTop = document.getElementById('he-main-content')?.scrollTop || 0
+  authorOpener = document.activeElement as HTMLElement | null
+  selectedCreator.value = creator
+  changeScope({ query: '', service: creator.service, creatorId: creator.creator_id, tag: '', mediaType: 'all' })
+  await nextTick()
+  document.getElementById('he-main-content')?.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
+  if (creator.creator_name === creator.creator_id) {
+    void fetchPawchiveCreator(creator.service, creator.creator_id).then(profile => {
+      if (selectedCreator.value && favoriteCreatorKey(selectedCreator.value) === favoriteCreatorKey(creator)) {
+        selectedCreator.value = { ...creator, creator_name: profile.name || creator.creator_id }
+      }
+    }).catch(() => {})
+  }
+}
 const toggleSelected = (post: PawchivePost) => {
   selectedKeys.value = selectedKeys.value.includes(post.post_key)
     ? selectedKeys.value.filter(key => key !== post.post_key)
@@ -244,18 +279,19 @@ onMounted(() => {
   void fetchPawchiveCapabilities().then(value => { capabilities.value = value }).catch(() => { capabilities.value = null })
   void refreshAccountStatus()
 })
-onDeactivated(() => { sequence.close(); autoplay.value = false })
+onDeactivated(() => { sequence.close(); autoplay.value = false; pendingFavorite.value = null })
 onBeforeUnmount(() => { browse.dispose(); sequence.close() })
 </script>
 
 <template>
   <ExternalSourceLayout
+    ref="sourceLayoutRef"
     source-name="Pawchive"
     title="账号设置"
     :status="accountLoading ? '' : accountConnected ? '已连接' : '未登录'"
     :status-tone="accountConnected ? 'success' : 'neutral'"
-    :meta="accountLoading ? '正在检查登录状态…' : accountConnected ? '账号收藏的作者会显示在作者页' : '登录后可查看账号收藏的作者'"
-    :default-open="!accountLoading && !accountConnected"
+    :meta="accountLoading ? '正在检查登录状态…' : accountConnected ? '账号收藏的作者会显示在我的收藏中' : '发现和浏览无需连接 Pawchive；收藏时再登录'"
+    @settings-closed="cancelPendingFavorite"
   >
     <template #config>
       <section aria-label="Pawchive 账号连接" class="space-y-4">
@@ -295,8 +331,11 @@ onBeforeUnmount(() => { browse.dispose(); sequence.close() })
       </button>
     </nav>
     <p v-if="downloadMessage && !sequence.active.value" :role="downloadError ? 'alert' : 'status'" class="rounded-lg border px-3.5 py-3 text-meta" :class="downloadError ? 'border-danger/25 bg-danger/10 text-danger' : 'border-success/25 bg-success/10 text-success'">{{ downloadMessage }}</p>
-      <PawchiveBrowser v-if="tab === 'browse'" :scope="browse.scope.value" :posts="browse.posts.value" :favorites="accountFavorites" :favorites-loading="accountFavoritesLoading || accountLoading" :account-connected="accountConnected" :favorite-busy-keys="accountFavoriteBusyKeys" :favorite-message="accountError" :status="browse.status.value" :loading-more="browse.loadingMore.value" :has-more="browse.hasMore.value" :error="browse.error.value" :warnings="browse.warnings.value" :capabilities="capabilities" :selected-keys="selectedKeys" :download-busy="downloadBusy" @scope="changeScope" @home="returnToAuthors" @more="browse.loadMore" @open="open" @open-creator="openCreator" @favorite="toggleAccountFavorite" @refresh="refreshAccountFavorites" @select="toggleSelected" @download-selected="downloadSelected" />
-      <PawchiveDownloads v-else :refresh-key="refreshKey" />
+    <p v-if="accountError" role="alert" class="rounded-lg border border-danger/25 bg-danger/10 px-3.5 py-3 text-meta text-danger">{{ accountError }}</p>
+    <p v-else-if="accountMessage" role="status" class="text-meta text-subtle">{{ accountMessage }}</p>
+    <PawchiveAuthors v-show="tab === 'browse' && !browse.scope.value.creatorId" ref="authorsRef" :favorites="accountFavorites" :favorites-loading="accountFavoritesLoading || accountLoading" :account-connected="accountConnected" :favorite-busy-keys="accountFavoriteBusyKeys" @open-creator="openCreator" @favorite="toggleAccountFavorite" @refresh="refreshAccountFavorites" @login="showAccount" />
+    <PawchiveBrowser v-if="tab === 'browse' && browse.scope.value.creatorId" :creator="selectedCreator" :back-label="authorsRef?.backLabel" :scope="browse.scope.value" :posts="browse.posts.value" :favorites="accountFavorites" :account-connected="accountConnected" :favorite-busy-keys="accountFavoriteBusyKeys" :status="browse.status.value" :loading-more="browse.loadingMore.value" :has-more="browse.hasMore.value" :error="browse.error.value" :warnings="browse.warnings.value" :capabilities="capabilities" :selected-keys="selectedKeys" :download-busy="downloadBusy" @scope="changeScope" @home="returnToAuthors" @more="browse.loadMore" @open="open" @favorite="toggleAccountFavorite" @select="toggleSelected" @download-selected="downloadSelected" />
+    <PawchiveDownloads v-if="tab === 'downloads'" :refresh-key="refreshKey" />
     <Teleport to="body">
     <PawchiveMediaViewer v-if="sequence.active.value && sequence.current.value" :post="sequence.current.value.post" :attachment="sequence.current.value.attachment" :attachment-index="sequence.current.value.index" :attachment-total="sequence.current.value.total" :attachments="sequence.postAttachments.value" :next-post-key="sequence.nextPost.value?.post_key || null" :next-post-attachments="sequence.nextPostAttachments.value" :scope-label="sequence.scopeLabel.value" :busy="sequence.busy.value" :error="playbackError || sequence.error.value" :notice="sequence.notice.value" :skipped="sequence.skipped.value" :reload-media="sequence.reloadCurrent" :has-previous="sequence.history.value.length > 0" :ended="sequence.ended.value" :autoplay="autoplay" :interval="interval" :download-busy="downloadBusy" :download-message="downloadMessage" :download-error="downloadError" @close="close" @next="advance" @previous="sequence.previous" @select-attachment="selectAttachment" @update:autoplay="autoplay = $event" @update:interval="interval = $event" @playback-error="playbackError = $event" @download-current="downloadCurrent" @download-post="downloadPost" />
     <div v-else-if="sequence.active.value" role="dialog" aria-modal="true" aria-label="正在打开 Pawchive 帖子" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 p-6 text-white">

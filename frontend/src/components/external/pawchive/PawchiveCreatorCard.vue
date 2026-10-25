@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { CalendarDays, Heart, UserRound } from 'lucide-vue-next'
-import { iconButtonClass } from '../../ui'
+import { CalendarDays, Heart, Users, UserRound } from 'lucide-vue-next'
+import { UiButton } from '../../ui'
 import type { PawchiveCreator, PawchivePost } from '../../../types/pawchive'
 
 const props = defineProps<{
@@ -31,6 +31,8 @@ const updateLabel = computed(() => {
   if (Number.isNaN(date.getTime())) return '暂无更新时间'
   return `更新 ${new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)}`
 })
+const favoriteCount = computed(() => props.creator.favorite_count == null ? null :
+  new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 1 }).format(props.creator.favorite_count))
 </script>
 
 <template>
@@ -49,19 +51,20 @@ const updateLabel = computed(() => {
         <h4 class="truncate text-body font-medium text-ink" :title="creator.creator_name || creator.creator_id">{{ creator.creator_name || creator.creator_id }}</h4>
         <p class="mt-0.5 truncate text-meta text-subtle" :title="creator.creator_id">{{ creator.creator_id }}<span v-if="postCount" class="tabular-nums"> · {{ postCount }} 篇匹配</span></p>
         <p v-if="latestPost" class="mt-0.5 truncate text-meta text-muted" :title="latestPost.title || '无标题帖子'">{{ latestPost.title || '无标题帖子' }}</p>
+        <p v-if="favoriteCount !== null" class="mt-2 flex items-center gap-1.5 text-meta text-subtle" :title="`${creator.favorite_count?.toLocaleString('zh-CN')} 人站内收藏`"><Users :size="14" aria-hidden="true" /><span class="tabular-nums">{{ favoriteCount }} 人收藏</span></p>
       </div>
     </button>
-    <div class="mt-auto flex items-center justify-between gap-1 py-1 pl-3 pr-1.5">
+    <div class="mt-auto flex flex-wrap items-center justify-between gap-2 px-3 pb-3 pt-1">
       <p class="flex min-w-0 items-center gap-1.5 truncate text-caption text-subtle tabular-nums" :title="updateLabel"><CalendarDays :size="13" class="shrink-0" aria-hidden="true" />{{ updateLabel }}</p>
-      <button
-        type="button"
-        :disabled="busy || !canFavorite"
-        :class="[iconButtonClass('ghost', 'md'), favorite ? 'text-accent-glow' : '']"
+      <UiButton
+        size="sm"
+        :loading="busy"
+        :class="favorite ? '!border-accent/30 !bg-accent/10 !text-accent-glow' : ''"
         :aria-label="favorite ? `取消收藏作者 ${creator.creator_name}` : `收藏作者 ${creator.creator_name}`"
         :aria-pressed="favorite"
-        :title="canFavorite ? (favorite ? '取消收藏作者' : '收藏作者') : '登录 Pawchive 账号后可收藏作者'"
+        :title="canFavorite ? (favorite ? '取消收藏作者' : '收藏作者') : '登录 Pawchive 后继续收藏'"
         @click="emit('favorite')"
-      ><Heart :size="18" :fill="favorite ? 'currentColor' : 'none'" aria-hidden="true" /></button>
+      ><template #icon><Heart :size="14" :fill="favorite ? 'currentColor' : 'none'" aria-hidden="true" /></template>{{ favorite ? '已收藏' : '收藏' }}</UiButton>
     </div>
   </article>
 </template>

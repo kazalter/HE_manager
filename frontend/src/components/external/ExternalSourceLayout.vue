@@ -27,6 +27,8 @@ const props = withDefaults(defineProps<{
 })
 
 const open = ref(props.defaultOpen)
+const emit = defineEmits<{ settingsClosed: [] }>()
+defineExpose({ openSettings: () => { open.value = true }, closeSettings: () => { open.value = false } })
 let active = true
 watch(() => props.defaultOpen, value => { if (value && active) open.value = true })
 onActivated(() => { active = true })
@@ -55,7 +57,7 @@ onDeactivated(() => { active = false; open.value = false })
       <slot />
     </div>
 
-    <UiModal v-model:open="open" :title="title" :description="sourceName" placement="right">
+    <UiModal v-model:open="open" :title="title" :description="sourceName" placement="right" @close="emit('settingsClosed')">
       <div class="space-y-5 pt-2">
         <slot name="config" />
       </div>

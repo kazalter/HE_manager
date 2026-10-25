@@ -52,6 +52,7 @@ export interface PawchiveCapabilities {
   search: boolean
   creator_scope: boolean
   creator_search: boolean
+  creator_sort?: string[]
   global_tags: boolean
   creator_tags: boolean
   media_filter: string
@@ -66,12 +67,27 @@ export interface PawchiveCreator {
   creator_name: string
   source_url: string
   updated_at?: string | null
+  favorite_count?: number | null
   banner_url?: string
   icon_url?: string
 }
 
 export interface PawchiveCreatorFavorite extends PawchiveCreator {
   created_at?: string | null
+}
+
+export type PawchiveCreatorSort = 'popular' | 'updated' | 'relevance'
+export interface PawchiveCreatorPage {
+  items: PawchiveCreator[]
+  total: number
+  page: number
+  page_size: number
+  has_more: boolean
+  services: string[]
+  applied_sort: PawchiveCreatorSort
+  popularity_available: boolean
+  fetched_at: string
+  stale: boolean
 }
 
 export interface PawchiveAccountStatus {

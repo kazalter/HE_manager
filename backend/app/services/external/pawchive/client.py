@@ -29,6 +29,7 @@ IMAGE_HOST = "img.pawchive.pw"
 JSON_LIMIT = 8 * 1024 * 1024
 CACHE_LIMIT = 16 * 1024 * 1024
 CACHE_TTL = 300
+CREATOR_JSON_LIMIT = 32 * 1024 * 1024
 _cache: OrderedDict[str, tuple[float, bytes]] = OrderedDict()
 _cache_bytes = 0
 _cache_lock = threading.Lock()
@@ -252,6 +253,31 @@ def _read_account_body(response, sock, limit: int, timeout: float, deadline: flo
             break
     _deadline_timeout(timeout, deadline)
     return bytes(body)
+
+
+def get_creator_directory():
+    """One bounded public directory fetch; indexed/cached by creators.py."""
+    _throttle_api()
+    connection, response = _request(API_HOST, "/api/v1/creators")
+    try:
+        _raise_for_status(response)
+        if not (response.getheader("Content-Type") or "").lower().startswith("application/json"):
+            raise PawchiveError("UPSTREAM_INVALID", "Pawchive 作者目录格式无效", 502)
+        declared = response.getheader("Content-Length")
+        if declared and declared.isdigit() and int(declared) > CREATOR_JSON_LIMIT:
+            raise PawchiveError("UPSTREAM_INVALID", "Pawchive 作者目录超出大小限制", 502)
+        body = response.read(CREATOR_JSON_LIMIT + 1)
+        if len(body) > CREATOR_JSON_LIMIT:
+            raise PawchiveError("UPSTREAM_INVALID", "Pawchive 作者目录超出大小限制", 502)
+        try:
+            value = json.loads(body)
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise PawchiveError("UPSTREAM_INVALID", "Pawchive 作者目录无法解析", 502) from exc
+        if not isinstance(value, list) or len(value) > 250_000:
+            raise PawchiveError("UPSTREAM_INVALID", "Pawchive 作者目录格式无效", 502)
+        return value
+    finally:
+        connection.close()
 
 
 def get_json(path: str, params: dict[str, str | int] | None = None):

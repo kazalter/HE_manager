@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { API_BASE_URL, authUrl } from '../config'
-import type { PawchiveAccountStatus, PawchiveCapabilities, PawchiveCreatorFavorite, PawchiveDownloadJob, PawchiveDownloadPreview, PawchiveDownloadSelection, PawchivePage, PawchivePost, PawchiveScope } from '../types/pawchive'
+import type { PawchiveAccountStatus, PawchiveCapabilities, PawchiveCreatorFavorite, PawchiveCreatorPage, PawchiveCreatorSort, PawchiveDownloadJob, PawchiveDownloadPreview, PawchiveDownloadSelection, PawchivePage, PawchivePost, PawchiveScope } from '../types/pawchive'
 
 const root = `${API_BASE_URL}/external/pawchive`
 // Upstream calls are throttled to one per second, so allow queueing but never hang forever.
@@ -17,6 +17,18 @@ export const withRetryParam = (url: string, attempt: number) => {
 
 export async function fetchPawchiveCapabilities(signal?: AbortSignal): Promise<PawchiveCapabilities> {
   const response = await axios.get<PawchiveCapabilities>(`${root}/capabilities`, { signal })
+  return response.data
+}
+
+export async function fetchPawchiveCreators(query: string, service: string, sort: PawchiveCreatorSort, page: number, signal?: AbortSignal): Promise<PawchiveCreatorPage> {
+  const response = await axios.get<PawchiveCreatorPage>(`${root}/creators`, {
+    params: { q: query || undefined, service: service || undefined, sort, page }, signal, timeout: 60_000,
+  })
+  return response.data
+}
+
+export async function fetchPawchiveCreator(service: string, creatorId: string, signal?: AbortSignal): Promise<{ name: string }> {
+  const response = await axios.get(`${root}/creators/${encodeURIComponent(service)}/${encodeURIComponent(creatorId)}`, { signal, timeout: METADATA_TIMEOUT })
   return response.data
 }
 

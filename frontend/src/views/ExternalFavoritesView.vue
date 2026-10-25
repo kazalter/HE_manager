@@ -15,7 +15,7 @@ const sites: (SegmentedOption<SiteKey> & { description: string })[] = [
   { value: 'wnacg', label: 'WNACG', icon: BookOpen, description: '同步 WNACG 收藏夹，批量下载漫画入库' },
   { value: 'x', label: 'X', icon: AtSign, description: '导入 X 喜欢的帖子，转存图片与视频' },
   { value: 'asmr', label: 'ASMR', icon: Headphones, description: '同步 asmr.one 喜欢列表，按格式筛选下载音声' },
-  { value: 'pawchive', label: 'Pawchive', icon: PawPrint, description: '浏览收藏的 Patreon / Fanbox 作者，归档原图' },
+  { value: 'pawchive', label: 'Pawchive', icon: PawPrint, description: '发现 Patreon / Fanbox 作者，收藏喜欢的创作，归档原图' },
 ]
 
 const route = useRoute()

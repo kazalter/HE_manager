@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from .. import auth, models
 from ..database import get_db
 from ..services import job_lifecycle
-from ..services.external.pawchive import account, client, downloader, media_fetch, normalize, provider, refs, sources
+from ..services.external.pawchive import account, client, creators, downloader, media_fetch, normalize, provider, refs, sources
 from ..services.external.pawchive.media_cache import CacheLease, media_cache
 
 router = APIRouter(prefix="/external/pawchive", tags=["pawchive"])
@@ -97,6 +97,12 @@ def get_posts(q: str = "", service: str = "", creator_id: str = "", tag: str = "
               media_type: str = "all", cursor: str = ""):
     return _run(provider.list_posts, query=q, service=service, creator_id=creator_id,
                 tag=tag, media_type=media_type, cursor=cursor)
+
+
+@router.get("/creators")
+def get_creators(q: str = Query(default='', max_length=200), service: str = '',
+                 sort: str = 'popular', page: int = Query(default=1, ge=1, le=10000)):
+    return _run(creators.list_creators, query=q, service=service, sort=sort, page=page)
 
 
 @router.get("/creators/{service}/{creator_id}")

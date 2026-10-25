@@ -1,4 +1,4 @@
-# Pawchive public API contract (metadata verified 2026-09-27; media updated 2026-10-25)
+# Pawchive public API contract (authors verified 2026-10-26; media updated 2026-10-25)
 
 This records observed Pawchive behavior used by the HE Manager adapter. The
 site's OpenAPI document is embedded in `https://pawchive.pw/api/swagger_schema`
@@ -10,15 +10,30 @@ Pawchive account login and favorite-author endpoints.
 
 | Operation | Public endpoint | Observed behavior |
 | --- | --- | --- |
+| Author directory | `GET /creators` | Public JSON array; 97,564 entries observed on 2026-10-26, 15,731,235 bytes. Fields include `id`, `name`, `service`, Unix-second `updated`, and integer `favorited`. |
 | Recent/search | `GET /posts?q={query}&o={offset}` | JSON array; `q` has minimum length 3; offset steps by 50. Both parameters can be omitted. |
 | Creator posts | `GET /{service}/user/{creator_id}?q={query}&tag={tag}&o={offset}` | JSON array; 50 items observed at offset 0. `tag` is documented only for this scope. |
 | Creator profile | `GET /{service}/user/{creator_id}/profile` | Creator display name and stable service/ID. |
 | Post detail | `GET /{service}/user/{creator_id}/post/{post_id}` | JSON object with `file` (main file), ordered `attachments`, `tags`, and metadata. |
 
 The global `/creators` endpoint returns the entire creator set and its own API
-description warns against loading it in the Swagger browser. HE Manager does
-not load that full set. Keyword author search groups public post-search results;
-a creator profile URL or `service/ID` can also be entered directly.
+description warns against loading it in the Swagger browser. HE Manager fetches
+one bounded server snapshot (32 MiB / 250,000 entries maximum), caches it for
+one hour, and serves name/ID search, platform filters, popularity/update/relevance
+sorting and 30-author pages from that snapshot. Concurrent initial requests share
+one fetch; stale snapshots remain readable for up to seven days while one background
+refresh runs. Failed refreshes back off. The frontend never downloads the full set.
+The public metadata snapshot can persist at
+`/mnt/hdd/.he-manager/pawchive-creators/catalog.json` only with the mounted-disk
+sentinel present; otherwise the cache stays in memory. Invalid/empty source
+responses do not replace a valid snapshot.
+
+HE route: `GET /external/pawchive/creators?q={name_or_id}&service={platform}&sort={popular|updated|relevance}&page={1-based}`.
+Responses include `items`, `total`, `page`, `page_size`, `has_more`, `services`,
+`applied_sort`, `popularity_available`, `fetched_at`, and `stale`. `favorite_count`
+is the site's `favorited` count, not this user's favorites. Missing counts stay
+null; if all counts are absent, popular sort falls back to updated with an
+explicit UI notice. A creator profile URL or `service/ID` can also be opened directly.
 
 ## Pawchive account favorites
 
@@ -31,10 +46,13 @@ requires the account owner.
 
 HE Manager shows the signed-in account's favorite authors and lets the user
 open each author's posts. Favorite buttons update that Pawchive account. The
-password is used only for login and is not stored. Session cookies are kept in
-backend process memory per HE Manager user and sent only to the fixed account
-endpoints, never to media hosts. A backend restart or expired Pawchive session
-requires logging in again.
+password is used only for login and is not stored. Session cookies are kept per
+HE Manager user in the local database and sent only to the fixed account
+endpoints, never to public metadata or media hosts. Sessions restore after a
+backend restart; expired Pawchive sessions require logging in again. Public
+discovery/author browsing does not need a Pawchive login. An anonymous favorite
+opens account settings and resumes once after login; closing settings cancels
+that pending action. Already-favorited authors are never toggled off by resumption.
 
 The site does not expose a documented total or next cursor in these list
 responses. HE Manager probes the next offset before reporting `has_more` and
@@ -111,7 +129,8 @@ access works.
 | --- | --- |
 | Recent posts, keyword search, creator posts, details | Verified public endpoints |
 | Creator-scoped tag filtering | Documented; only enable in creator scope |
-| Global tag filtering, global creator search, server media-type filter | Not available from verified contract |
+| Global author name/ID search, popularity/update sorting | Verified public directory; HE caches and paginates locally |
+| Global tag filtering, server media-type filter | Not available from verified contract |
 | JPEG and MP4 range delivery | Verified on one public sample each |
 | HLS/DASH, audio, archives, PDF, model files | Outside initial playback/download scope |
 
