@@ -5,7 +5,7 @@ import { authState, logout } from './auth'
 import { ChevronUp } from 'lucide-vue-next'
 import { desktopBridge, desktopSession } from './desktop'
 import DesktopToolbar from './components/DesktopToolbar.vue'
-import Sidebar from './components/Sidebar.vue'
+import TopBar from './components/TopBar.vue'
 import MobileNavigation from './components/MobileNavigation.vue'
 import AuthView from './views/AuthView.vue'
 import AppUpdateNotice from './components/AppUpdateNotice.vue'
@@ -15,8 +15,6 @@ import { useCompactViewport } from './composables/useCompactViewport'
 import { useStandaloneViewport } from './composables/useStandaloneViewport'
 const compact = useCompactViewport()
 useStandaloneViewport()
-const desktopCollapsed = ref(localStorage.getItem('he_sidebar_collapsed') === 'true')
-watch(desktopCollapsed, value => localStorage.setItem('he_sidebar_collapsed', String(value)))
 const route = useRoute(), router = useRouter()
 watch(() => desktopSession.generation, () => {
   audioPlaybackStore.stop()
@@ -58,11 +56,11 @@ onBeforeUnmount(() => { window.removeEventListener('online', retryProgress); win
 <template>
   <DesktopToolbar v-if="desktopBridge" />
   <AuthView v-if="authState.ready && !authState.user" :has-users="authState.hasUsers" :startup-error="authState.error" />
-  <div v-else-if="authState.ready" :key="desktopBridge ? desktopSession.generation : undefined" class="he-app-shell w-full bg-background text-ink font-sans relative overflow-hidden flex" :class="{ 'he-compact-shell': compact && !isEmbed, 'he-has-mini': audioPlaybackStore.state.media && !audioPlaybackStore.state.expanded }">
+  <div v-else-if="authState.ready" :key="desktopBridge ? desktopSession.generation : undefined" class="he-app-shell w-full bg-background text-ink font-sans relative overflow-hidden flex flex-col" :class="{ 'he-compact-shell': compact && !isEmbed, 'he-has-mini': audioPlaybackStore.state.media && !audioPlaybackStore.state.expanded }">
     <a href="#he-main-content" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-accent focus:px-4 focus:py-3 focus:text-on-accent">跳转到主要内容</a>
     <div v-if="!isEmbed" class="he-ambient" aria-hidden="true"></div>
-    <Sidebar v-if="!isEmbed && !compact" v-model:collapsed="desktopCollapsed" class="shrink-0 relative z-40" :user="authState.user" @logout="logout" />
-    <main id="he-main-content" ref="mainScrollRef" :inert="audioPlaybackStore.state.expanded || !!route.query.media" tabindex="-1" @scroll="handleMainScroll" class="flex-1 min-w-0 relative z-10 box-border main-scroll-container focus:outline-none" :class="isEmbed ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden custom-scrollbar'">
+    <TopBar v-if="!isEmbed && !compact" :user="authState.user" @logout="logout" />
+    <main id="he-main-content" ref="mainScrollRef" :inert="audioPlaybackStore.state.expanded || !!route.query.media" tabindex="-1" @scroll="handleMainScroll" class="flex-1 min-h-0 min-w-0 relative z-10 box-border main-scroll-container focus:outline-none" :class="isEmbed ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden custom-scrollbar'">
       <router-view v-slot="{ Component }"><transition name="page-fade" mode="out-in"><component :is="Component" /></transition></router-view>
       <div v-if="!isEmbed" class="h-8 w-full"></div>
     </main>
@@ -74,6 +72,11 @@ onBeforeUnmount(() => { window.removeEventListener('online', retryProgress); win
 <style>
 .main-scroll-container {
   overscroll-behavior-y: contain;
+}
+
+/* Top-bar layout: the scroll area shares the shell height with the header. */
+.he-app-shell.flex-col > .main-scroll-container {
+  height: auto;
 }
 
 /* The one ambient accent wash: static, behind everything, never animated. */

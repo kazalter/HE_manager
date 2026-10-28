@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, h, nextTick, ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import axios from 'axios'
-import Sidebar from '../components/Sidebar.vue'
+import TopBar from '../components/TopBar.vue'
 import MobileNavigation from '../components/MobileNavigation.vue'
 import GlobalAudioPlayer from '../components/GlobalAudioPlayer.vue'
 import AudioPlayer from '../components/media-detail/AudioPlayer.vue'
@@ -56,17 +56,25 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-describe('Sidebar /downloads navigation entrance', () => {
+describe('TopBar /downloads navigation entrance', () => {
+  const openOrganize = async (wrapper: ReturnType<typeof mount>) => {
+    const organizeButton = wrapper.findAll('button').find(b => b.text().includes('整理'))
+    expect(organizeButton).toBeTruthy()
+    await organizeButton!.trigger('click')
+    await nextTick()
+  }
+
   it('provides a download task link under 系统与工具 accessible to all users', async () => {
     const router = createTestRouter('/')
     await router.isReady()
 
     const normalUser: User = { id: 2, username: 'member', is_admin: false, is_active: true, created_at: '' }
-    const wrapper = mount(Sidebar, {
-      props: { collapsed: false, user: normalUser },
+    const wrapper = mount(TopBar, {
+      props: { user: normalUser },
       global: { plugins: [router] },
     })
     wrappers.push(wrapper)
+    await openOrganize(wrapper)
 
     const downloadLink = wrapper.findAll('a').find(a => a.text().includes('下载任务'))
     expect(downloadLink).toBeTruthy()
@@ -76,19 +84,22 @@ describe('Sidebar /downloads navigation entrance', () => {
     expect(router.currentRoute.value.path).toBe('/downloads')
   })
 
-  it('highlights the download task navigation item when on /downloads route', async () => {
-    const router = createTestRouter('/downloads')
+  it('keeps admin-only organize entries hidden from non-admin users', async () => {
+    const router = createTestRouter('/')
     await router.isReady()
 
     const normalUser: User = { id: 2, username: 'member', is_admin: false, is_active: true, created_at: '' }
-    const wrapper = mount(Sidebar, {
-      props: { collapsed: false, user: normalUser },
+    const wrapper = mount(TopBar, {
+      props: { user: normalUser },
       global: { plugins: [router] },
     })
     wrappers.push(wrapper)
+    await openOrganize(wrapper)
 
-    const downloadLink = wrapper.findAll('a').find(a => a.text().includes('下载任务'))
-    expect(downloadLink?.attributes('aria-current')).toBe('page')
+    const texts = wrapper.findAll('a').map(a => a.text())
+    expect(texts).toContain('下载任务')
+    expect(texts).not.toContain('设置')
+    expect(texts).not.toContain('用户管理')
   })
 })
 

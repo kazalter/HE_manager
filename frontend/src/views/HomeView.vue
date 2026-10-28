@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import { ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, LayoutGrid, List, Rows3, Search, SlidersHorizontal, Star, Tag as TagIcon, TriangleAlert, Trash2, X } from 'lucide-vue-next'
+import { ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, LayoutGrid, List, Play, Rows3, Search, SlidersHorizontal, Star, Tag as TagIcon, TriangleAlert, Trash2, X } from 'lucide-vue-next'
 import { API_BASE_URL, thumbnailUrl } from '../config'
 import { authHeaders, authIdentity, authState } from '../auth'
 import { desktopBridge } from '../desktop'
@@ -190,6 +190,23 @@ const recentlyOpened = computed(() => {
     })
     .slice(0, 8)
 })
+
+const featuredContinue = computed(() => recentlyOpened.value[0] ?? null)
+
+const organizeItems = computed(() => ([
+  { to: '/creators', label: '创作者', desc: '按创作者浏览全部作品' },
+  { to: '/tags', label: '标签管理', desc: '合并、重命名、清理标签' },
+  { to: '/recommend', label: 'AI 推荐', desc: '按偏好推荐下一部' },
+  { to: '/external', label: '外部收藏', desc: 'X / WNACG / ASMR / Pawchive 来源', admin: true },
+  { to: '/assistant', label: '媒体库管家', desc: '自然语言查库与整理建议', admin: true },
+  { to: '/downloads', label: '下载任务', desc: '外部下载进度与队列' },
+  { to: '/bd2-spine', label: 'BD2 动态', desc: 'Spine 动态资源浏览' },
+  { to: '/stats', label: '统计看板', desc: '分布、活跃度与待处理项' },
+  { to: '/discarded', label: '丢弃记录', desc: '已删除并标记丢弃的内容', admin: true },
+  { to: '/dedup', label: '重复管理', desc: '感知哈希找出的相似项', admin: true },
+  { to: '/settings', label: '设置', desc: '扫描目录、主题与 DeepSeek', admin: true },
+  { to: '/users', label: '用户管理', desc: '账号与权限', admin: true },
+] as { to: string; label: string; desc: string; admin?: boolean }[]).filter(item => !item.admin || authState.user?.is_admin))
 
 const pageSize = desktopBridge ? 60 : 36
 const totalItems = ref(0)
@@ -828,6 +845,38 @@ onMounted(async () => {
       </nav>
     </PageHeader>
 
+    <section v-if="featuredContinue && !searchQuery && !selectedTag" class="page-gutter mt-6" aria-label="今晚继续">
+      <div class="page-container">
+        <div class="grid overflow-hidden rounded-3xl border border-line bg-surface sm:grid-cols-[240px_1fr]">
+          <button type="button" class="group relative min-h-44 overflow-hidden bg-surface-2 text-left focus-ring sm:min-h-full" :aria-label="`打开媒体：${featuredContinue.title}`" @click="openMedia(featuredContinue)">
+            <img :src="featuredContinue.cover_path ? thumbnailUrl(featuredContinue.cover_path) : mediaPlaceholderUrl" :alt="featuredContinue.title" class="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+            <span class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></span>
+            <span class="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1.5 text-caption font-medium text-white"><Play :size="13" fill="currentColor" aria-hidden="true" />继续</span>
+          </button>
+          <div class="flex min-w-0 flex-col justify-center gap-3 p-5 sm:p-6">
+            <p class="text-caption font-medium uppercase tracking-wider text-accent-glow">今晚继续 · {{ continueTitle }}</p>
+            <h2 class="line-clamp-2 text-title font-semibold leading-tight text-ink">{{ featuredContinue.title }}</h2>
+            <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-meta text-subtle tabular-nums">
+              <span>{{ typeLabel(featuredContinue.media_type) }}</span>
+              <span v-if="continueMeta(featuredContinue)" aria-hidden="true">·</span>
+              <span v-if="continueMeta(featuredContinue)">{{ continueMeta(featuredContinue) }}</span>
+              <span v-if="featuredContinue.rating" aria-hidden="true">·</span>
+              <span v-if="featuredContinue.rating">★ {{ featuredContinue.rating }}</span>
+              <span v-if="featuredContinue.tags?.length" aria-hidden="true">·</span>
+              <span v-if="featuredContinue.tags?.length" class="truncate">{{ featuredContinue.tags.slice(0, 3).map(tag => tag.name).join(' / ') }}</span>
+            </p>
+            <div v-if="progressPercent(featuredContinue) > 0" class="h-1.5 w-full max-w-md overflow-hidden rounded-full bg-surface-3" role="progressbar" :aria-label="`${featuredContinue.title}观看进度`" :aria-valuenow="progressPercent(featuredContinue)" aria-valuemin="0" aria-valuemax="100">
+              <div class="h-full rounded-full bg-accent" :style="{ width: `${progressPercent(featuredContinue)}%` }"></div>
+            </div>
+            <div class="flex flex-wrap gap-2 pt-1">
+              <UiButton variant="primary" @click="openMedia(featuredContinue)"><template #icon><Play :size="15" fill="currentColor" aria-hidden="true" /></template>继续{{ featuredContinue.media_type === 'manga' ? '阅读' : featuredContinue.media_type === 'audio' ? '收听' : '观看' }}</UiButton>
+              <UiButton variant="secondary" @click="continueScrollRef?.scrollIntoView({ behavior: 'smooth', block: 'start' })">看看其他继续项</UiButton>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section v-if="recentlyOpened.length > 0 && !searchQuery && !selectedTag" class="page-gutter mt-6 select-none" aria-label="继续观看">
       <div class="page-container">
         <SectionHeader :title="continueTitle">
@@ -941,6 +990,23 @@ onMounted(async () => {
         </EmptyState>
       </div>
     </div>
+
+    <section class="page-gutter pb-4" aria-label="整理">
+      <div class="page-container">
+        <SectionHeader title="整理" />
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <router-link
+            v-for="item in organizeItems"
+            :key="item.label"
+            :to="item.to"
+            class="rounded-2xl border border-line bg-surface p-4 transition-colors duration-150 hover:border-line-strong hover:bg-surface-2 focus-ring"
+          >
+            <span class="block text-body font-medium text-ink">{{ item.label }}</span>
+            <span class="mt-1 block text-meta leading-snug text-subtle">{{ item.desc }}</span>
+          </router-link>
+        </div>
+      </div>
+    </section>
 
     <Teleport to="body">
       <UiToast v-if="openingError" :message="openingError" urgent overlay class="fixed bottom-6 left-1/2 z-[240] max-w-[90%] -translate-x-1/2" />

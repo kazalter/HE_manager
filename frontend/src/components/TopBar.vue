@@ -1,0 +1,166 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRoute, type RouteLocationRaw } from 'vue-router'
+import { Book, ChevronDown, Film, Headphones, Home, Image as ImageIcon, LogOut, Star } from 'lucide-vue-next'
+import ColorModeToggle from './ColorModeToggle.vue'
+import type { User } from '../types'
+
+const props = defineProps<{ user: User | null }>()
+const emit = defineEmits<{ logout: [] }>()
+
+const route = useRoute()
+const organizeOpen = ref(false)
+const organizeRoot = ref<HTMLElement | null>(null)
+
+const isHomeActive = computed(() => route.path === '/' && route.query.favorite !== 'true')
+const isFavoriteActive = computed(() => route.path === '/' && route.query.favorite === 'true')
+
+interface NavItem {
+  to: RouteLocationRaw
+  label: string
+  icon: typeof Home
+  active?: boolean
+  admin?: boolean
+}
+
+const libraryItems: NavItem[] = [
+  { to: '/', label: '全部媒体', icon: Home, active: isHomeActive.value },
+  { to: '/type/video', label: '视频', icon: Film },
+  { to: '/type/manga', label: '漫画', icon: Book },
+  { to: '/type/image', label: '杂图', icon: ImageIcon },
+  { to: '/type/audio', label: '音频', icon: Headphones },
+  { to: { path: '/', query: { favorite: 'true' } }, label: '收藏', icon: Star, active: isFavoriteActive.value },
+]
+
+// Recomputed (not a plain const) so the home/favorite active state follows the route.
+const library = computed(() => libraryItems.map(item => ({
+  ...item,
+  active: item.label === '全部媒体' ? isHomeActive.value : item.label === '收藏' ? isFavoriteActive.value : undefined,
+})))
+
+const organizeSections = computed(() => ([
+  {
+    label: '发现与整理',
+    items: [
+      { to: '/creators', label: '创作者' },
+      { to: '/tags', label: '标签管理' },
+      { to: '/recommend', label: 'AI 推荐' },
+      { to: '/external', label: '外部收藏', admin: true },
+      { to: '/assistant', label: '媒体库管家', admin: true },
+    ] as NavItem[],
+  },
+  {
+    label: '系统与工具',
+    items: [
+      { to: '/downloads', label: '下载任务' },
+      { to: '/bd2-spine', label: 'BD2 动态' },
+      { to: '/stats', label: '统计看板' },
+      { to: '/discarded', label: '丢弃记录', admin: true },
+      { to: '/dedup', label: '重复管理', admin: true },
+    ] as NavItem[],
+  },
+  {
+    label: '管理',
+    items: [
+      { to: '/settings', label: '设置', admin: true },
+      { to: '/users', label: '用户管理', admin: true },
+    ] as NavItem[],
+  },
+] as { label: string; items: NavItem[] }[]).map(section => ({
+  ...section,
+  items: section.items.filter(item => !item.admin || props.user?.is_admin),
+})).filter(section => section.items.length > 0))
+
+const isActive = (item: NavItem) => {
+  if (item.active !== undefined) return item.active
+  if (typeof item.to === 'string') return route.path === item.to
+  return false
+}
+
+const closeOrganize = () => { organizeOpen.value = false }
+const onDocPointer = (event: MouseEvent) => {
+  if (organizeRoot.value && !organizeRoot.value.contains(event.target as Node)) closeOrganize()
+}
+watch(organizeOpen, open => {
+  if (open) document.addEventListener('mousedown', onDocPointer)
+  else document.removeEventListener('mousedown', onDocPointer)
+})
+onBeforeUnmount(() => document.removeEventListener('mousedown', onDocPointer))
+
+const handleLogout = () => {
+  if (window.confirm('确定要退出登录当前账号吗？')) emit('logout')
+}
+</script>
+
+<template>
+  <header class="he-topbar relative z-40 flex h-16 shrink-0 items-center gap-4 border-b border-line bg-sidebar px-4 lg:px-6">
+    <router-link to="/" class="flex shrink-0 items-center gap-3 focus-ring rounded-lg">
+      <span class="grid size-8 place-items-center rounded-lg bg-accent text-[13px] font-semibold tracking-wide text-on-accent">HE</span>
+      <span class="min-w-0">
+        <span class="block truncate text-body font-semibold leading-tight text-ink">HE Manager</span>
+        <span class="block truncate text-caption text-subtle">个人媒体中心</span>
+      </span>
+    </router-link>
+
+    <nav aria-label="主导航" class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto scrollbar-none">
+      <router-link
+        v-for="item in library"
+        :key="item.label"
+        :to="item.to"
+        :aria-current="isActive(item) ? 'page' : undefined"
+        class="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-body font-medium transition-colors duration-150 focus-ring"
+        :class="isActive(item) ? 'bg-accent/12 text-ink' : 'text-muted hover:bg-surface-2 hover:text-ink'"
+      >
+        <component :is="item.icon" :size="16" aria-hidden="true" />
+        <span>{{ item.label }}</span>
+      </router-link>
+
+      <div ref="organizeRoot" class="relative shrink-0">
+        <button
+          type="button"
+          class="flex items-center gap-1.5 rounded-lg px-3 py-2 text-body font-medium transition-colors duration-150 focus-ring"
+          :class="organizeOpen ? 'bg-surface-2 text-ink' : 'text-muted hover:bg-surface-2 hover:text-ink'"
+          :aria-expanded="organizeOpen"
+          aria-haspopup="menu"
+          @click="organizeOpen = !organizeOpen"
+          @keydown.esc="closeOrganize"
+        >
+          整理
+          <ChevronDown :size="15" class="transition-transform duration-150" :class="organizeOpen ? 'rotate-180' : ''" aria-hidden="true" />
+        </button>
+        <div
+          v-if="organizeOpen"
+          role="menu"
+          aria-label="整理工具"
+          class="absolute left-0 top-full z-50 mt-2 w-64 rounded-2xl border border-line-strong bg-surface-3 p-1.5 shadow-pop"
+        >
+          <template v-for="section in organizeSections" :key="section.label">
+            <p class="px-2.5 pb-1 pt-2 text-caption font-medium text-subtle">{{ section.label }}</p>
+            <router-link
+              v-for="item in section.items"
+              :key="item.label"
+              :to="item.to"
+              role="menuitem"
+              class="block rounded-lg px-2.5 py-2 text-body text-muted transition-colors hover:bg-surface-2 hover:text-ink focus-ring"
+              @click="closeOrganize"
+            >{{ item.label }}</router-link>
+          </template>
+        </div>
+      </div>
+    </nav>
+
+    <div class="flex shrink-0 items-center gap-1">
+      <ColorModeToggle compact />
+      <span v-if="user" class="hidden max-w-32 truncate px-2 text-meta text-muted xl:block" :title="user.username">{{ user.username }}</span>
+      <button
+        type="button"
+        class="grid size-10 place-items-center rounded-lg text-subtle transition-colors hover:bg-surface-2 hover:text-ink focus-ring"
+        title="退出登录"
+        aria-label="退出登录"
+        @click="handleLogout"
+      >
+        <LogOut :size="18" aria-hidden="true" />
+      </button>
+    </div>
+  </header>
+</template>
