@@ -154,7 +154,7 @@ const handleLogout = () => {
       </div>
 
     <div class="flex shrink-0 items-center gap-1">
-      <div class="hidden xl:block"><ClockWeather compact /></div>
+      <ClockWeather compact />
       <ColorModeToggle compact generated-icon :show-tooltip="false" />
       <span v-if="user" class="hidden max-w-32 truncate px-2 text-meta text-muted xl:block" :title="user.username">{{ user.username }}</span>
       <button

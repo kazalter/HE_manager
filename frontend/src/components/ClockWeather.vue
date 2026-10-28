@@ -13,7 +13,7 @@ const searchText = ref('')
 const searchResults = ref<Place[]>([])
 const searching = ref(false)
 let clockTimer: number | undefined, weatherTimer: number | undefined
-let weatherRequest = 0, searchRequest = 0, disposed = false
+let weatherRequest = 0, searchRequest = 0, locationRequest = 0, disposed = false
 const dateText = computed(() => new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short' }).format(now.value))
 const timeText = computed(() => new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(now.value))
 const description = computed(() => {
@@ -58,16 +58,18 @@ const refreshWeather = async () => {
   }
 }
 const selectPlace = (value: Place) => {
+  locationRequest++
   place.value = value; weather.value = null; message.value = '正在获取天气…'; searchResults.value = []
   try { localStorage.setItem('he-weather-place', JSON.stringify(value)) } catch { /* optional */ }
   void refreshWeather()
 }
 const locate = () => {
+  const request = ++locationRequest
   if (!window.isSecureContext || !navigator.geolocation) { message.value = '当前地址无法自动定位，请选择城市'; return }
   message.value = '正在定位…'
   navigator.geolocation.getCurrentPosition(position => {
-    if (!disposed) selectPlace({ name: '当前位置', latitude: position.coords.latitude, longitude: position.coords.longitude, auto: true })
-  }, () => { if (!disposed) message.value = '定位不可用，请选择城市' }, { timeout: 10000, maximumAge: 1800000 })
+    if (!disposed && request === locationRequest) selectPlace({ name: '当前位置', latitude: position.coords.latitude, longitude: position.coords.longitude, auto: true })
+  }, () => { if (!disposed && request === locationRequest) message.value = '定位不可用，请选择城市' }, { timeout: 10000, maximumAge: 1800000 })
 }
 const searchPlaces = async () => {
   const name = searchText.value.trim()
@@ -99,7 +101,7 @@ onMounted(() => {
   else locate()
   weatherTimer = window.setInterval(() => { void refreshWeather() }, 30 * 60 * 1000)
 })
-onBeforeUnmount(() => { disposed = true; weatherRequest++; searchRequest++; window.clearInterval(clockTimer); window.clearInterval(weatherTimer) })
+onBeforeUnmount(() => { disposed = true; weatherRequest++; searchRequest++; locationRequest++; window.clearInterval(clockTimer); window.clearInterval(weatherTimer) })
 </script>
 
 <template>
@@ -111,7 +113,7 @@ onBeforeUnmount(() => { disposed = true; weatherRequest++; searchRequest++; wind
     <details class="he-weather">
       <summary class="he-weather-trigger focus-ring" :title="weather ? `${place?.name} ${description} ${Math.round(weather.temperature)}°C` : message">
         <component :is="weatherIcon" :size="18" aria-hidden="true" />
-        <span v-if="weather">{{ Math.round(weather.temperature) }}° <span class="he-weather-place">{{ place?.name }}</span></span>
+        <span v-if="weather" class="he-weather-label">{{ Math.round(weather.temperature) }}° <span class="he-weather-place">{{ place?.name }}</span></span>
         <span v-else>天气</span>
       </summary>
       <div class="he-weather-popover">
@@ -146,6 +148,8 @@ onBeforeUnmount(() => { disposed = true; weatherRequest++; searchRequest++; wind
 .he-weather { position: relative; }
 .he-weather-trigger { display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 8px; border-radius: 8px; cursor: pointer; font-size: 12px; white-space: nowrap; list-style: none; }
 .he-weather-trigger::-webkit-details-marker { display: none; }
+.he-weather-label { display: flex; gap: 4px; align-items: center; }
+.he-weather-place { display: inline-block; max-width: 64px; overflow: hidden; text-overflow: ellipsis; }
 .he-weather-trigger:hover { background: rgb(var(--color-surface-2)); color: rgb(var(--color-ink)); }
 .he-weather-popover { position: absolute; z-index: 80; top: calc(100% + 8px); right: 0; width: min(288px, calc(100vw - 32px)); padding: 14px; border: 1px solid rgb(var(--color-line-strong)); border-radius: 14px; background: rgb(var(--color-surface)); box-shadow: var(--he-shadow-pop); }
 .he-weather-action { display: inline-flex; align-items: center; gap: 4px; padding: 6px; border-radius: 6px; color: rgb(var(--color-muted)); font-size: 12px; }
