@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, MapPin, Moon, RefreshCw, Sun } from 'lucide-vue-next'
+import { chinaProvinces, findProvince, normalizeRegion, type CityHint, type ProvinceHint } from '../utils/chinaWeatherPlaces'
 
 withDefaults(defineProps<{ compact?: boolean }>(), { compact: false })
-type Place = { name: string; latitude: number; longitude: number; admin1?: string; country?: string; auto?: boolean }
+type Place = { name: string; latitude: number; longitude: number; admin1?: string; admin2?: string; country?: string; population?: number; feature_code?: string; auto?: boolean }
 type Weather = { temperature: number; code: number; isDay: boolean; observedAt: string }
 const now = ref(new Date())
 const place = ref<Place | null>(null)
@@ -11,6 +12,7 @@ const weather = ref<Weather | null>(null)
 const message = ref('正在定位…')
 const searchText = ref('')
 const searchResults = ref<Place[]>([])
+const provinceResults = ref<ProvinceHint | null>(null)
 const searching = ref(false)
 let clockTimer: number | undefined, weatherTimer: number | undefined
 let weatherRequest = 0, searchRequest = 0, locationRequest = 0, disposed = false
@@ -59,7 +61,7 @@ const refreshWeather = async () => {
 }
 const selectPlace = (value: Place) => {
   locationRequest++
-  place.value = value; weather.value = null; message.value = '正在获取天气…'; searchResults.value = []
+  place.value = value; weather.value = null; message.value = '正在获取天气…'; searchResults.value = []; provinceResults.value = null
   try { localStorage.setItem('he-weather-place', JSON.stringify(value)) } catch { /* optional */ }
   void refreshWeather()
 }
@@ -71,18 +73,32 @@ const locate = () => {
     if (!disposed && request === locationRequest) selectPlace({ name: '当前位置', latitude: position.coords.latitude, longitude: position.coords.longitude, auto: true })
   }, () => { if (!disposed && request === locationRequest) message.value = '定位不可用，请选择城市' }, { timeout: 10000, maximumAge: 1800000 })
 }
-const searchPlaces = async () => {
+const searchPlaces = async (city?: CityHint, province?: ProvinceHint) => {
   const name = searchText.value.trim()
   if (name.length < 2) { searchResults.value = []; message.value = '请输入至少两个字符'; return }
   const request = ++searchRequest
+  searchResults.value = []
+  const matchedProvince = !city && findProvince(name)
+  if (matchedProvince) {
+    provinceResults.value = matchedProvince
+    message.value = matchedProvince.cities.length === 1 ? '请选择省会，或输入具体城市名称' : '请选择省内城市'
+    searching.value = false
+    return
+  }
+  provinceResults.value = null
+  const cityMatches = !city ? chinaProvinces.flatMap(p => p.cities.map(c => ({ city: c, province: p }))).filter(item => normalizeRegion(item.city.name) === normalizeRegion(name)) : []
+  const hint = city && province ? { city, province } : cityMatches.length === 1 ? cityMatches[0] : undefined
   searching.value = true
   try {
-    const params = new URLSearchParams({ name, count: '8', language: 'zh', format: 'json' })
+    const params = new URLSearchParams({ name: hint?.city.query || name, count: '30', language: 'zh', format: 'json' })
+    if (hint && !['香港', '澳门', '台湾'].includes(hint.province.name)) params.set('countryCode', 'CN')
     const response = await fetch(`https://geocoding-api.open-meteo.com/v1/search?${params}`)
     if (!response.ok) throw new Error('search unavailable')
     const data = await response.json()
     if (disposed || request !== searchRequest) return
-    searchResults.value = (data.results || []).filter((p: Place) => p.name && Number.isFinite(p.latitude) && Number.isFinite(p.longitude))
+    const places: Place[] = (data.results || []).filter((p: Place) => p.name && Number.isFinite(p.latitude) && Number.isFinite(p.longitude))
+    const regional = hint ? places.filter(p => normalizeRegion(p.admin1 || '') === hint.province.name) : places
+    searchResults.value = regional.sort((a, b) => (b.population || 0) - (a.population || 0)).slice(0, 8)
     message.value = searchResults.value.length ? '' : '没有找到城市，请尝试其他名称'
   } catch {
     if (!disposed && request === searchRequest) message.value = '城市搜索暂时不可用'
@@ -123,12 +139,15 @@ onBeforeUnmount(() => { disposed = true; weatherRequest++; searchRequest++; loca
         </div>
         <p v-if="weather" class="mt-2 text-meta text-muted">{{ description }} · {{ Math.round(weather.temperature) }}°C <button type="button" class="he-weather-action focus-ring" aria-label="刷新天气" @click="refreshWeather"><RefreshCw :size="13" /></button></p>
         <p v-if="message" role="status" class="mt-2 text-meta text-subtle">{{ message }}</p>
-        <form class="mt-3 flex gap-2" @submit.prevent="searchPlaces">
+        <form class="mt-3 flex gap-2" @submit.prevent="searchPlaces()">
           <input v-model="searchText" class="min-w-0 flex-1 rounded-lg border border-line bg-surface-2 px-2.5 py-2 text-meta text-ink focus-ring" aria-label="搜索城市" placeholder="输入城市名称" />
           <button class="he-weather-action focus-ring" :disabled="searching" type="submit">{{ searching ? '搜索中' : '搜索' }}</button>
         </form>
-        <ul v-if="searchResults.length" class="mt-2 max-h-40 overflow-y-auto">
-          <li v-for="result in searchResults" :key="`${result.latitude},${result.longitude}`"><button type="button" class="w-full rounded-lg px-2 py-2 text-left text-meta text-muted hover:bg-surface-2 focus-ring" @click="selectPlace(result)">{{ [result.name, result.admin1, result.country].filter(Boolean).join(' · ') }}</button></li>
+        <ul v-if="provinceResults" class="mt-2 max-h-40 overflow-y-auto" :aria-label="`${provinceResults.name}城市`">
+          <li v-for="city in provinceResults.cities" :key="city.name"><button type="button" class="w-full rounded-lg px-2 py-2 text-left text-meta text-muted hover:bg-surface-2 focus-ring" @click="searchPlaces(city, provinceResults!)">{{ city.name }} · {{ provinceResults.name }}</button></li>
+        </ul>
+        <ul v-else-if="searchResults.length" class="mt-2 max-h-40 overflow-y-auto">
+          <li v-for="result in searchResults" :key="`${result.latitude},${result.longitude}`"><button type="button" class="w-full rounded-lg px-2 py-2 text-left text-meta text-muted hover:bg-surface-2 focus-ring" @click="selectPlace(result)">{{ [...new Set([result.name, result.admin2, result.admin1, result.country].filter(Boolean))].join(' · ') }}</button></li>
         </ul>
         <p class="mt-3 text-caption text-subtle">天气数据：<a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" class="underline">Open-Meteo</a></p>
       </div>
