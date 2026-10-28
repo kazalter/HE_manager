@@ -203,4 +203,40 @@ describe('media library route interactions', () => {
     await setup('/', 1)
     expect(wrapper!.text()).not.toContain('看看其他继续项')
   })
+  it('uses whole grid rows and keeps pagination contiguous after a resize', async () => {
+    localStorage.setItem('he_media_view_all', 'poster')
+    let columns = 7
+    let resize!: ResizeObserverCallback
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: ResizeObserverCallback) { resize = callback }
+      observe() {}
+      disconnect() {}
+    })
+    const originalStyle = window.getComputedStyle.bind(window)
+    vi.spyOn(window, 'getComputedStyle').mockImplementation(element => {
+      const style = originalStyle(element)
+      return element.hasAttribute('data-media-grid')
+        ? new Proxy(style, { get: (target, key) => key === 'gridTemplateColumns' ? Array(columns).fill('180px').join(' ') : Reflect.get(target, key, target) })
+        : style
+    })
+    try {
+      const { get } = await setup('/')
+      expect(get).toHaveBeenCalledWith('/media', expect.objectContaining({ params: expect.objectContaining({ limit: 35, offset: 0 }) }))
+      await wrapper!.get('button[aria-label="下一页"]').trigger('click')
+      await flushPromises()
+      expect(get).toHaveBeenCalledWith('/media', expect.objectContaining({ params: expect.objectContaining({ limit: 35, offset: 35 }) }))
+      columns = 8
+      vi.useFakeTimers()
+      resize([], {} as ResizeObserver)
+      await vi.advanceTimersByTimeAsync(150)
+      await flushPromises()
+      expect(get).toHaveBeenCalledWith('/media', expect.objectContaining({ params: expect.objectContaining({ limit: 32, offset: 32 }) }))
+      await wrapper!.get('button[aria-label="下一页"]').trigger('click')
+      await flushPromises()
+      expect(get).toHaveBeenCalledWith('/media', expect.objectContaining({ params: expect.objectContaining({ limit: 32, offset: 64 }) }))
+    } finally {
+      vi.useRealTimers()
+      vi.unstubAllGlobals()
+    }
+  })
 })

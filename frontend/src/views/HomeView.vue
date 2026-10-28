@@ -207,9 +207,13 @@ const recentlyOpened = computed(() => {
 
 const featuredContinue = computed(() => recentlyOpened.value[0] ?? null)
 
-const pageSize = desktopBridge ? 60 : 36
+const basePageSize = desktopBridge ? 60 : 36
+const pageSize = ref(basePageSize)
 const totalItems = ref(0)
 const containerRef = ref<HTMLElement | null>(null)
+let gridObserver: ResizeObserver | undefined
+let gridResizeTimer: number | undefined
+let pendingGridMeasurement = false
 
 const routePage = (value: unknown) => {
   const raw = Array.isArray(value) ? value[0] : value
@@ -218,7 +222,7 @@ const routePage = (value: unknown) => {
 }
 
 const currentPage = ref(routePage(route.query.page))
-const pageCount = computed(() => Math.max(1, Math.ceil(totalItems.value / pageSize)))
+const pageCount = computed(() => Math.max(1, Math.ceil(totalItems.value / pageSize.value)))
 const viewerMediaList = ref<Media[]>([])
 const viewerFirstPage = ref(currentPage.value)
 const viewerLastPage = ref(currentPage.value)
@@ -249,8 +253,8 @@ const mediaParamsForPage = (page: number): Record<string, string | number | bool
   favorite: favoriteOnly.value ? true : undefined,
   source_site: sourceFilter.value || undefined,
   sort: sortBy.value,
-  limit: pageSize,
-  offset: (page - 1) * pageSize,
+  limit: pageSize.value,
+  offset: (page - 1) * pageSize.value,
 })
 
 const resetViewerMediaList = (media?: Media) => {
@@ -315,6 +319,31 @@ const posterGridClass = computed(() => props.mediaType === 'video' && cardShape.
 const skeletonAspect = computed(() => viewMode.value === 'wide' || (viewMode.value === 'poster' && props.mediaType === 'video')
   ? 'aspect-video'
   : viewMode.value === 'poster' && props.mediaType === 'audio' ? 'aspect-square' : 'aspect-[2/3]')
+
+const measurePageSize = (refresh = true) => {
+  if (route.query.media || openingMedia.value || selectedMedia.value) { pendingGridMeasurement = true; return }
+  pendingGridMeasurement = false
+  const grid = containerRef.value?.querySelector<HTMLElement>('[data-media-grid]')
+  let columns = 1
+  if ((viewMode.value === 'poster' || viewMode.value === 'wide') && grid) {
+    const tracks = getComputedStyle(grid).gridTemplateColumns
+    if (tracks && tracks !== 'none') columns = Math.max(1, tracks.trim().split(/\s+/).length)
+  }
+  const nextSize = Math.max(columns, Math.floor(basePageSize / columns) * columns)
+  if (nextSize === pageSize.value) return
+  const anchor = (currentPage.value - 1) * pageSize.value
+  pageSize.value = nextSize
+  const nextPage = Math.floor(anchor / nextSize) + 1
+  if (nextPage !== currentPage.value) {
+    currentPage.value = nextPage
+    syncPageQuery(nextPage, true)
+  } else if (refresh) void fetchMedia()
+}
+
+const scheduleGridMeasurement = () => {
+  window.clearTimeout(gridResizeTimer)
+  gridResizeTimer = window.setTimeout(() => measurePageSize(), 150)
+}
 
 const sortDropdownOpen = ref(false)
 const sortDropdownRef = ref<HTMLElement | null>(null)
@@ -391,9 +420,9 @@ const fetchMedia = async (scrollBehavior: ScrollBehavior = 'auto') => {
     const headerTotal = Number(res.headers['x-total-count'])
     totalItems.value = Number.isSafeInteger(headerTotal) && headerTotal >= 0
       ? headerTotal
-      : (currentPage.value - 1) * pageSize + res.data.length
+      : (currentPage.value - 1) * pageSize.value + res.data.length
 
-    const lastPage = Math.max(1, Math.ceil(totalItems.value / pageSize))
+    const lastPage = Math.max(1, Math.ceil(totalItems.value / pageSize.value))
     if (currentPage.value > lastPage) {
       currentPage.value = lastPage
       syncPageQuery(lastPage, true)
@@ -604,6 +633,13 @@ const mobileCategories = [ { label: '全部', path: '/' }, { label: '漫画', pa
 watch(() => route.query.media, () => {
   syncSelectedMediaFromRoute()
 })
+watch([viewMode, () => props.mediaType], async () => {
+  await nextTick()
+  scheduleGridMeasurement()
+})
+watch([selectedMedia, openingMedia, () => route.query.media], () => {
+  if (pendingGridMeasurement && !selectedMedia.value && !openingMedia.value && !route.query.media) scheduleGridMeasurement()
+})
 
 const onGlobalMediaUpdated = (event: Event) => updateMediaInList((event as CustomEvent<Media>).detail)
 const onOpeningKeydown = (event: KeyboardEvent) => {
@@ -615,6 +651,8 @@ onUnmounted(() => {
   window.removeEventListener('he:media-updated', onGlobalMediaUpdated)
   window.removeEventListener('keydown', onOpeningKeydown)
   window.clearTimeout(searchTimer)
+  window.clearTimeout(gridResizeTimer)
+  gridObserver?.disconnect()
   document.removeEventListener('pointerdown', handleTagOutsidePointer)
 })
 
@@ -634,6 +672,12 @@ onMounted(async () => {
   window.addEventListener('he:media-updated', onGlobalMediaUpdated)
   window.addEventListener('keydown', onOpeningKeydown)
   document.addEventListener('pointerdown', handleTagOutsidePointer)
+  await nextTick()
+  measurePageSize(false)
+  if (containerRef.value && typeof ResizeObserver !== 'undefined') {
+    gridObserver = new ResizeObserver(scheduleGridMeasurement)
+    gridObserver.observe(containerRef.value)
+  }
   await Promise.all([fetchMedia(), fetchContinueMedia()])
   await syncSelectedMediaFromRoute()
   void fetchTags()
@@ -943,7 +987,7 @@ onMounted(async () => {
 
     <div ref="containerRef" class="page-gutter pb-12" :class="recentlyOpened.length > 0 && !searchQuery && !selectedTag ? 'mt-8' : 'mt-6'">
       <div class="page-container">
-        <div v-if="loading" :class="viewMode === 'list' ? 'flex flex-col gap-2' : viewMode === 'wide' ? 'grid grid-cols-1 gap-x-5 gap-y-7 md:grid-cols-2 xl:grid-cols-3' : viewMode === 'poster' ? posterGridClass : 'poster-grid'">
+        <div v-if="loading" data-media-grid :class="viewMode === 'list' ? 'flex flex-col gap-2' : viewMode === 'wide' ? 'grid grid-cols-1 gap-x-5 gap-y-7 md:grid-cols-2 xl:grid-cols-3' : viewMode === 'poster' ? posterGridClass : 'poster-grid'">
           <template v-if="viewMode === 'list'">
             <UiSkeleton v-for="i in 8" :key="i" class="h-24 w-full rounded-2xl" />
           </template>
@@ -959,13 +1003,13 @@ onMounted(async () => {
         </EmptyState>
 
         <div v-else-if="mediaList.length > 0" class="flex flex-col gap-10">
-          <div v-if="viewMode === 'poster'" :class="posterGridClass">
+          <div v-if="viewMode === 'poster'" data-media-grid :class="posterGridClass">
             <div v-for="(item, index) in mediaList" :key="item.id" class="he-media-actions relative min-w-0">
               <MediaCard :media="item" :index="index" :shape="cardShape" :show-type="!mediaType" @click="openMedia(item)" />
               <button v-if="authState.user?.is_admin" type="button" class="he-media-delete absolute right-2 top-2 z-10 grid size-11 place-items-center rounded-xl bg-black/75 text-white/85 transition-colors hover:bg-danger hover:text-white focus-ring" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
             </div>
           </div>
-          <div v-else :class="viewMode === 'masonry' ? 'masonry-grid' : viewMode === 'wide' ? 'grid grid-cols-1 gap-x-5 gap-y-7 md:grid-cols-2 xl:grid-cols-3' : 'flex flex-col gap-2'">
+          <div v-else data-media-grid :class="viewMode === 'masonry' ? 'masonry-grid' : viewMode === 'wide' ? 'grid grid-cols-1 gap-x-5 gap-y-7 md:grid-cols-2 xl:grid-cols-3' : 'flex flex-col gap-2'">
             <div v-for="item in mediaList" :key="item.id" class="he-media-actions relative min-w-0" :class="viewMode === 'masonry' ? 'masonry-grid-item' : viewMode === 'list' ? 'flex items-center gap-2' : ''">
               <MediaViewCard :media="item" :mode="viewMode" :class="viewMode === 'list' ? 'min-w-0 flex-1' : ''" @click="openMedia(item)" />
               <button v-if="authState.user?.is_admin" type="button" class="he-media-delete grid size-11 shrink-0 place-items-center rounded-xl transition-colors hover:bg-danger hover:text-white focus-ring" :class="viewMode === 'list' ? 'bg-surface text-subtle' : 'absolute right-2 top-2 z-10 bg-black/75 text-white/85'" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
