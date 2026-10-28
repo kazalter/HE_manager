@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, type RouteLocationRaw } from 'vue-router'
-import { Book, ChevronDown, Film, Headphones, Home, Image as ImageIcon, LogOut, Star } from 'lucide-vue-next'
+import { Book, ChevronDown, Film, Headphones, Home, Image as ImageIcon, Star } from 'lucide-vue-next'
 import ColorModeToggle from './ColorModeToggle.vue'
+import GeneratedNavigationIcon from './GeneratedNavigationIcon.vue'
 import { themeState } from '../theme'
 import type { User } from '../types'
 
@@ -20,18 +21,19 @@ interface NavItem {
   to: RouteLocationRaw
   label: string
   icon: typeof Home
+  art: 'home' | 'video' | 'manga' | 'image' | 'audio' | 'favorite'
   active?: boolean
   admin?: boolean
 }
 interface OrganizeItem { to: string; label: string; x: number; y: number; admin?: boolean }
 
 const libraryItems: NavItem[] = [
-  { to: '/', label: '全部媒体', icon: Home, active: isHomeActive.value },
-  { to: '/type/video', label: '视频', icon: Film },
-  { to: '/type/manga', label: '漫画', icon: Book },
-  { to: '/type/image', label: '杂图', icon: ImageIcon },
-  { to: '/type/audio', label: '音频', icon: Headphones },
-  { to: { path: '/', query: { favorite: 'true' } }, label: '收藏', icon: Star, active: isFavoriteActive.value },
+  { to: '/', label: '全部媒体', icon: Home, art: 'home', active: isHomeActive.value },
+  { to: '/type/video', label: '视频', icon: Film, art: 'video' },
+  { to: '/type/manga', label: '漫画', icon: Book, art: 'manga' },
+  { to: '/type/image', label: '杂图', icon: ImageIcon, art: 'image' },
+  { to: '/type/audio', label: '音频', icon: Headphones, art: 'audio' },
+  { to: { path: '/', query: { favorite: 'true' } }, label: '收藏', icon: Star, art: 'favorite', active: isFavoriteActive.value },
 ]
 
 // Recomputed (not a plain const) so the home/favorite active state follows the route.
@@ -113,7 +115,7 @@ const handleLogout = () => {
         class="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-body font-medium transition-colors duration-150 focus-ring"
         :class="isActive(item) ? 'bg-accent/12 text-ink' : 'text-muted hover:bg-surface-2 hover:text-ink'"
       >
-        <component :is="item.icon" :size="16" aria-hidden="true" />
+        <GeneratedNavigationIcon :name="item.art" />
         <span>{{ item.label }}</span>
       </router-link>
     </nav>
@@ -151,7 +153,7 @@ const handleLogout = () => {
       </div>
 
     <div class="flex shrink-0 items-center gap-1">
-      <ColorModeToggle compact :show-tooltip="false" />
+      <ColorModeToggle compact generated-icon :show-tooltip="false" />
       <span v-if="user" class="hidden max-w-32 truncate px-2 text-meta text-muted xl:block" :title="user.username">{{ user.username }}</span>
       <button
         type="button"
@@ -160,7 +162,7 @@ const handleLogout = () => {
         aria-label="退出登录"
         @click="handleLogout"
       >
-        <LogOut :size="18" aria-hidden="true" />
+        <GeneratedNavigationIcon name="logout" />
       </button>
     </div>
   </header>

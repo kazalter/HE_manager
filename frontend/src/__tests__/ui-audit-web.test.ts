@@ -203,6 +203,20 @@ describe('media library route interactions', () => {
     await setup('/', 1)
     expect(wrapper!.text()).not.toContain('看看其他继续项')
   })
+  it('drags the continue row with a mouse without opening a media item', async () => {
+    const { get } = await setup('/', 8)
+    const row = wrapper!.get('section[aria-label="继续观看"] [class*="overflow-x-auto"]')
+    const element = row.element as HTMLElement
+    element.setPointerCapture = vi.fn()
+    const item = row.get('button[aria-label^="打开媒体"]')
+    await item.trigger('pointerdown', { pointerType: 'mouse', pointerId: 1, button: 0, clientX: 200 })
+    await row.trigger('pointermove', { pointerType: 'mouse', pointerId: 1, clientX: 100 })
+    expect(element.scrollLeft).toBe(100)
+    expect(row.classes()).toContain('cursor-grabbing')
+    await row.trigger('pointerup', { pointerType: 'mouse', pointerId: 1, clientX: 100 })
+    await item.trigger('click', { detail: 1 })
+    expect(get.mock.calls.some(([url]) => String(url) === '/media/1')).toBe(false)
+  })
   it('uses whole grid rows and keeps pagination contiguous after a resize', async () => {
     localStorage.setItem('he_media_view_all', 'poster')
     let columns = 7

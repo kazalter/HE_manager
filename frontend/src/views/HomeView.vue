@@ -143,6 +143,45 @@ const scrollContinue = (direction: -1 | 1) => {
   el.scrollBy({ left: direction * Math.max(220, el.clientWidth * 0.72), behavior: 'smooth' })
 }
 
+const continueDragging = ref(false)
+let continuePointer: { id: number; x: number; scrollLeft: number; moved: boolean } | null = null
+let suppressContinueClick = false
+let continueClickTimer: number | undefined
+const startContinueDrag = (event: PointerEvent) => {
+  if (event.pointerType !== 'mouse' || event.button !== 0 || !continueScrollRef.value) return
+  suppressContinueClick = false
+  window.clearTimeout(continueClickTimer)
+  continuePointer = { id: event.pointerId, x: event.clientX, scrollLeft: continueScrollRef.value.scrollLeft, moved: false }
+}
+const moveContinueDrag = (event: PointerEvent) => {
+  const el = continueScrollRef.value, drag = continuePointer
+  if (!el || !drag || event.pointerId !== drag.id) return
+  const distance = event.clientX - drag.x
+  if (!drag.moved && Math.abs(distance) < 6) return
+  if (!drag.moved) {
+    drag.moved = true
+    continueDragging.value = true
+    el.setPointerCapture(event.pointerId)
+  }
+  event.preventDefault()
+  el.scrollLeft = drag.scrollLeft - distance
+}
+const endContinueDrag = (event: PointerEvent) => {
+  if (!continuePointer || event.pointerId !== continuePointer.id) return
+  if (continuePointer.moved) {
+    suppressContinueClick = true
+    continueClickTimer = window.setTimeout(() => { suppressContinueClick = false }, 0)
+  }
+  continuePointer = null
+  continueDragging.value = false
+}
+const preventDraggedClick = (event: MouseEvent) => {
+  if (!suppressContinueClick || event.detail === 0) return
+  suppressContinueClick = false
+  event.preventDefault()
+  event.stopPropagation()
+}
+
 const showOtherContinueItems = async () => {
   continueCollapsed.value = false
   await nextTick()
@@ -342,6 +381,7 @@ const measurePageSize = (refresh = true) => {
 
 const scheduleGridMeasurement = () => {
   window.clearTimeout(gridResizeTimer)
+  window.clearTimeout(continueClickTimer)
   gridResizeTimer = window.setTimeout(() => measurePageSize(), 150)
 }
 
@@ -934,7 +974,7 @@ onMounted(async () => {
             </template>
           </template>
         </SectionHeader>
-        <div v-show="!continueCollapsed" ref="continueScrollRef" class="-mx-4 flex gap-3 overflow-x-auto scroll-smooth px-4 pb-1 scrollbar-none sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0">
+        <div v-show="!continueCollapsed" ref="continueScrollRef" class="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 scrollbar-none sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0" :class="continueDragging ? 'cursor-grabbing' : 'cursor-grab'" @pointerdown="startContinueDrag" @pointermove="moveContinueDrag" @pointerup="endContinueDrag" @pointercancel="endContinueDrag" @lostpointercapture="endContinueDrag" @click.capture="preventDraggedClick" @dragstart.prevent>
           <div
             v-for="item in recentlyOpened"
             :key="item.id"
