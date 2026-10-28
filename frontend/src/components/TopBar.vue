@@ -129,14 +129,14 @@ const handleLogout = () => {
           aria-controls="organize-tools"
           @click="organizeOpen = !organizeOpen"
         >
-          整理
+          更多
           <ChevronDown :size="15" class="transition-transform duration-150" :class="organizeOpen ? 'rotate-180' : ''" aria-hidden="true" />
         </button>
         <div
           v-if="organizeOpen"
           id="organize-tools"
           role="navigation"
-          aria-label="整理工具"
+          aria-label="更多功能"
           class="custom-scrollbar absolute right-0 top-full z-50 mt-2 max-h-[calc(100dvh-5rem)] w-64 overflow-y-auto rounded-2xl border border-line-strong bg-surface p-1.5 shadow-pop"
         >
           <template v-for="section in organizeSections" :key="section.label">

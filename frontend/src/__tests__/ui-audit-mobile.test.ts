@@ -58,7 +58,7 @@ afterEach(() => {
 
 describe('TopBar /downloads navigation entrance', () => {
   const openOrganize = async (wrapper: ReturnType<typeof mount>) => {
-    const organizeButton = wrapper.findAll('button').find(b => b.text().includes('整理'))
+    const organizeButton = wrapper.findAll('button').find(b => b.text().includes('更多'))
     expect(organizeButton).toBeTruthy()
     await organizeButton!.trigger('click')
     await nextTick()
