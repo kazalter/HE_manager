@@ -34,7 +34,7 @@ const mediaError = ref(''), openingMedia = ref(false), openingError = ref('')
 const discardTarget = ref<DiscardTarget | null>(null)
 const discardNotice = ref('')
 const afterDiscard = async (record: DiscardRecord) => {
-  discardNotice.value = record.cleanup_error || '内容已删除并标记为丢弃，后续扫描和同步会跳过。'
+  discardNotice.value = record.cleanup_error || ''
   closeMedia(); await fetchMedia(); await fetchContinueMedia()
 }
 const selectedMedia = ref<Media | null>(null)
@@ -728,7 +728,7 @@ onMounted(async () => {
 <template>
   <div class="relative z-10 min-h-full">
     <PageHeader sticky data-library-header :title="pageTitle" :count="loading && !totalItems ? undefined : `${totalItems.toLocaleString()} 项`">
-      <p v-if="discardNotice" role="status" class="w-full text-meta text-muted">{{ discardNotice }} <router-link to="/discarded" class="text-accent underline">查看丢弃记录</router-link></p>
+      <p v-if="discardNotice" role="alert" class="w-full text-meta text-warning">文件清理未完成：{{ discardNotice }} <router-link to="/discarded" class="text-accent underline">查看丢弃记录</router-link> <button type="button" class="ml-2 underline focus-ring" @click="discardNotice = ''">关闭提示</button></p>
       <div class="flex flex-wrap items-center gap-2">
         <div class="he-home-search flex min-w-0 items-center gap-2" :class="compact ? 'w-full' : ''">
           <UiInput
