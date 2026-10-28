@@ -23,6 +23,7 @@ const position = computed(() => ({
   width: 24px;
   height: 24px;
   border-radius: 50%;
+  filter: grayscale(1);
   background: url('../assets/navigation-icons-generated.png') no-repeat;
   background-size: 177.4px 88.7px;
   background-position: calc(12px - var(--icon-x) * 0.1px) calc(12px - var(--icon-y) * 0.1px);

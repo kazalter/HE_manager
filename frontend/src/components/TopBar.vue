@@ -176,6 +176,7 @@ const handleLogout = () => {
   width: 24px;
   height: 24px;
   border-radius: 50%;
+  filter: grayscale(1);
   background-image: url('../assets/organize-icons-generated.png');
   background-size: 192px 128px;
   background-position: calc(12px - var(--icon-x) * 0.125px) calc(12px - var(--icon-y) * 0.125px);
