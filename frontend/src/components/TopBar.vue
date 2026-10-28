@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, type RouteLocationRaw } from 'vue-router'
 import { Book, ChevronDown, Film, Headphones, Home, Image as ImageIcon, LogOut, Star } from 'lucide-vue-next'
 import ColorModeToggle from './ColorModeToggle.vue'
+import { themeState } from '../theme'
 import type { User } from '../types'
 
 const props = defineProps<{ user: User | null }>()
@@ -144,7 +145,7 @@ const handleLogout = () => {
               :to="item.to"
               class="flex items-center gap-3 rounded-lg px-2.5 py-2 text-body text-muted transition-colors hover:bg-surface-2 hover:text-ink focus-ring"
               @click="closeOrganize"
-            ><span class="he-organize-icon" :style="{ '--icon-x': item.x, '--icon-y': item.y }" aria-hidden="true"></span><span>{{ item.label }}</span></router-link>
+            ><span class="he-organize-icon" :style="{ '--icon-x': item.x + (themeState.resolvedMode === 'dark' ? 760 : 0), '--icon-y': item.y }" aria-hidden="true"></span><span>{{ item.label }}</span></router-link>
           </template>
         </div>
       </div>
@@ -168,7 +169,6 @@ const handleLogout = () => {
 <style scoped>
 /* The generated sheet contains the same twelve icons in light and dark variants. */
 .he-organize-icon {
-  --mode-offset: 0;
   display: block;
   flex: none;
   width: 24px;
@@ -176,8 +176,7 @@ const handleLogout = () => {
   border-radius: 50%;
   background-image: url('../assets/organize-icons-generated.png');
   background-size: 192px 128px;
-  background-position: calc(12px - (var(--icon-x) + var(--mode-offset)) * 0.125px) calc(12px - var(--icon-y) * 0.125px);
+  background-position: calc(12px - var(--icon-x) * 0.125px) calc(12px - var(--icon-y) * 0.125px);
   background-repeat: no-repeat;
 }
-:global(html[data-color-mode='dark']) .he-organize-icon { --mode-offset: 760; }
 </style>
