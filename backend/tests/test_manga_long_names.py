@@ -1,5 +1,6 @@
 """Long names must be importable without renaming the user's files."""
 from contextlib import ExitStack
+import os
 from pathlib import Path
 import tempfile
 from unittest import mock
@@ -22,7 +23,11 @@ def test_long_directory_names_and_repair_cover_on_rescan():
         library.mkdir()
         # Each title fits the source filesystem, but the old generated thumbnail
         # name adds a prefix, timestamp and extension and exceeds NAME_MAX.
-        names = ['漫' * 78 + '甲', '漫' * 78 + '乙', 'a' * 240]
+        names = ['漫' * 78 + '甲', '漫' * 78 + '乙']
+        # A near-255-character ASCII component plus the temporary parent path
+        # can exceed Windows' total path limit before the scanner sees it.
+        if os.name != 'nt':
+            names.append('a' * 240)
         for name in names:
             work = library / name
             work.mkdir()
