@@ -4,6 +4,7 @@ import { useRoute, type RouteLocationRaw } from 'vue-router'
 import { Book, ChevronDown, Film, Headphones, Home, Image as ImageIcon, Star } from 'lucide-vue-next'
 import ColorModeToggle from './ColorModeToggle.vue'
 import GeneratedNavigationIcon from './GeneratedNavigationIcon.vue'
+import ClockWeather from './ClockWeather.vue'
 import { themeState } from '../theme'
 import type { User } from '../types'
 
@@ -153,6 +154,7 @@ const handleLogout = () => {
       </div>
 
     <div class="flex shrink-0 items-center gap-1">
+      <div class="hidden xl:block"><ClockWeather compact /></div>
       <ColorModeToggle compact generated-icon :show-tooltip="false" />
       <span v-if="user" class="hidden max-w-32 truncate px-2 text-meta text-muted xl:block" :title="user.username">{{ user.username }}</span>
       <button

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ColorModeSelect from '../components/ColorModeSelect.vue'
+import ClockWeather from '../components/ClockWeather.vue'
 import { computed } from 'vue'
 import { ArchiveX, BarChart3, Book, ChevronRight, CopyMinus, Download, LogOut, MessageSquare, Palette, Settings, Smartphone, Sparkles, Tags, Users } from 'lucide-vue-next'
 import { authState, logout } from '../auth'
@@ -37,6 +38,7 @@ const signOut = () => { if (window.confirm('确定退出当前账号吗？')) vo
     <div class="page-gutter pb-12">
       <div class="page-container">
         <div class="max-w-[960px] space-y-8">
+          <ClockWeather />
           <UiCard padding="sm" class="flex items-center gap-3">
             <div class="grid size-11 shrink-0 place-items-center rounded-full bg-surface-3 text-body font-medium text-muted" aria-hidden="true">{{ userInitial }}</div>
             <div class="min-w-0 flex-1">
