@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, type RouteLocationRaw } from 'vue-router'
-import { ArchiveX, BarChart3, Book, Box, ChevronDown, CopyMinus, Download, Film, Globe2, Headphones, Home, Image as ImageIcon, LogOut, MessageSquare, Palette, Settings, Sparkles, Star, Tags, Users } from 'lucide-vue-next'
+import { Book, ChevronDown, Film, Headphones, Home, Image as ImageIcon, LogOut, Star } from 'lucide-vue-next'
 import ColorModeToggle from './ColorModeToggle.vue'
 import type { User } from '../types'
 
@@ -22,6 +22,7 @@ interface NavItem {
   active?: boolean
   admin?: boolean
 }
+interface OrganizeItem { to: string; label: string; x: number; y: number; admin?: boolean }
 
 const libraryItems: NavItem[] = [
   { to: '/', label: '全部媒体', icon: Home, active: isHomeActive.value },
@@ -42,31 +43,31 @@ const organizeSections = computed(() => ([
   {
     label: '发现与整理',
     items: [
-      { to: '/creators', label: '创作者', icon: Palette },
-      { to: '/tags', label: '标签管理', icon: Tags },
-      { to: '/recommend', label: 'AI 推荐', icon: Sparkles },
-      { to: '/external', label: '外部收藏', icon: Globe2, admin: true },
-      { to: '/assistant', label: '媒体库管家', icon: MessageSquare, admin: true },
+      { to: '/creators', label: '创作者', x: 166, y: 164 },
+      { to: '/tags', label: '标签管理', x: 389, y: 164 },
+      { to: '/recommend', label: 'AI 推荐', x: 612, y: 164 },
+      { to: '/external', label: '外部收藏', x: 166, y: 388, admin: true },
+      { to: '/assistant', label: '媒体库管家', x: 389, y: 388, admin: true },
     ],
   },
   {
     label: '系统与工具',
     items: [
-      { to: '/downloads', label: '下载任务', icon: Download },
-      { to: '/bd2-spine', label: 'BD2 动态', icon: Box },
-      { to: '/stats', label: '统计看板', icon: BarChart3 },
-      { to: '/discarded', label: '丢弃记录', icon: ArchiveX, admin: true },
-      { to: '/dedup', label: '重复管理', icon: CopyMinus, admin: true },
+      { to: '/downloads', label: '下载任务', x: 612, y: 388 },
+      { to: '/bd2-spine', label: 'BD2 动态', x: 166, y: 611 },
+      { to: '/stats', label: '统计看板', x: 389, y: 611 },
+      { to: '/discarded', label: '丢弃记录', x: 612, y: 611, admin: true },
+      { to: '/dedup', label: '重复管理', x: 166, y: 835, admin: true },
     ],
   },
   {
     label: '管理',
     items: [
-      { to: '/settings', label: '设置', icon: Settings, admin: true },
-      { to: '/users', label: '用户管理', icon: Users, admin: true },
+      { to: '/settings', label: '设置', x: 389, y: 835, admin: true },
+      { to: '/users', label: '用户管理', x: 612, y: 835, admin: true },
     ],
   },
-] as { label: string; items: NavItem[] }[]).map(section => ({
+] as { label: string; items: OrganizeItem[] }[]).map(section => ({
   ...section,
   items: section.items.filter(item => !item.admin || props.user?.is_admin),
 })).filter(section => section.items.length > 0))
@@ -143,7 +144,7 @@ const handleLogout = () => {
               :to="item.to"
               class="flex items-center gap-3 rounded-lg px-2.5 py-2 text-body text-muted transition-colors hover:bg-surface-2 hover:text-ink focus-ring"
               @click="closeOrganize"
-            ><component :is="item.icon" :size="16" class="shrink-0 text-subtle" aria-hidden="true" /><span>{{ item.label }}</span></router-link>
+            ><span class="he-organize-icon" :style="{ '--icon-x': item.x, '--icon-y': item.y }" aria-hidden="true"></span><span>{{ item.label }}</span></router-link>
           </template>
         </div>
       </div>
@@ -163,3 +164,20 @@ const handleLogout = () => {
     </div>
   </header>
 </template>
+
+<style scoped>
+/* The generated sheet contains the same twelve icons in light and dark variants. */
+.he-organize-icon {
+  --mode-offset: 0;
+  display: block;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-image: url('../assets/organize-icons-generated.png');
+  background-size: 192px 128px;
+  background-position: calc(12px - (var(--icon-x) + var(--mode-offset)) * 0.125px) calc(12px - var(--icon-y) * 0.125px);
+  background-repeat: no-repeat;
+}
+:global(html[data-color-mode='dark']) .he-organize-icon { --mode-offset: 760; }
+</style>
