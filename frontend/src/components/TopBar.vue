@@ -133,6 +133,7 @@ const handleLogout = () => {
           更多
           <ChevronDown :size="15" class="transition-transform duration-150" :class="organizeOpen ? 'rotate-180' : ''" aria-hidden="true" />
         </button>
+        <Transition name="he-pop">
         <div
           v-if="organizeOpen"
           id="organize-tools"
@@ -151,6 +152,7 @@ const handleLogout = () => {
             ><span class="he-organize-icon" :style="{ '--icon-x': item.x + (themeState.resolvedMode === 'dark' ? 760 : 0), '--icon-y': item.y }" aria-hidden="true"></span><span>{{ item.label }}</span></router-link>
           </template>
         </div>
+        </Transition>
       </div>
 
     <div class="flex shrink-0 items-center gap-1">

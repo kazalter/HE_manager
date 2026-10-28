@@ -356,6 +356,10 @@ html.he-mode-transition::view-transition-new(root) { animation: none; mix-blend-
 /* ---------- Shared motion recipes (legacy names kept for old pages) ---------- */
 
 /* Modal transition used by <Transition name="modal-snap"> + .modal-content. */
+.he-pop-enter-active, .he-pop-leave-active { transition: opacity 160ms ease, transform 180ms ease; transform-origin: top right; }
+.he-pop-leave-active { pointer-events: none; }
+.he-pop-enter-from, .he-pop-leave-to { opacity: 0; transform: translateY(-6px) scale(0.98); }
+@media (prefers-reduced-motion: reduce) { .he-pop-enter-active, .he-pop-leave-active { transition: none; } }
 .modal-snap-enter-active {
   transition: opacity var(--duration-base) var(--ease-out);
 }

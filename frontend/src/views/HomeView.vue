@@ -974,7 +974,8 @@ onMounted(async () => {
             </template>
           </template>
         </SectionHeader>
-        <div v-show="!continueCollapsed" ref="continueScrollRef" class="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 scrollbar-none sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0" :class="continueDragging ? 'cursor-grabbing' : 'cursor-grab'" @pointerdown="startContinueDrag" @pointermove="moveContinueDrag" @pointerup="endContinueDrag" @pointercancel="endContinueDrag" @lostpointercapture="endContinueDrag" @click.capture="preventDraggedClick" @dragstart.prevent>
+        <Transition name="he-continue-reveal">
+        <div v-show="!continueCollapsed" ref="continueScrollRef" :inert="continueCollapsed" class="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 scrollbar-none sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0" :class="continueDragging ? 'cursor-grabbing' : 'cursor-grab'" @pointerdown="startContinueDrag" @pointermove="moveContinueDrag" @pointerup="endContinueDrag" @pointercancel="endContinueDrag" @lostpointercapture="endContinueDrag" @click.capture="preventDraggedClick" @dragstart.prevent>
           <div
             v-for="item in recentlyOpened"
             :key="item.id"
@@ -1022,6 +1023,7 @@ onMounted(async () => {
             </button>
           </div>
         </div>
+        </Transition>
       </div>
     </section>
 
@@ -1095,6 +1097,15 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.he-continue-reveal-enter-active, .he-continue-reveal-leave-active {
+  overflow-y: hidden;
+  transition: max-height 220ms ease, opacity 180ms ease;
+}
+.he-continue-reveal-enter-from, .he-continue-reveal-leave-to { max-height: 0; opacity: 0; }
+.he-continue-reveal-enter-to, .he-continue-reveal-leave-from { max-height: 160px; opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .he-continue-reveal-enter-active, .he-continue-reveal-leave-active { transition: none; }
+}
 @media (max-width: 899px) {
   .he-mobile-filters {
     position: fixed;

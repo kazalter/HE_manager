@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 import { Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, MapPin, Moon, RefreshCw, Sun } from 'lucide-vue-next'
 import { chinaProvinces, findProvince, normalizeRegion, type CityHint, type ProvinceHint } from '../utils/chinaWeatherPlaces'
 
@@ -14,6 +14,16 @@ const searchText = ref('')
 const searchResults = ref<Place[]>([])
 const provinceResults = ref<ProvinceHint | null>(null)
 const searching = ref(false)
+const weatherOpen = ref(false)
+const weatherRoot = ref<HTMLElement | null>(null)
+const weatherTrigger = ref<HTMLButtonElement | null>(null)
+const weatherPanelId = `weather-${useId()}`
+const closeOnOutside = (event: PointerEvent) => {
+  if (weatherOpen.value && !weatherRoot.value?.contains(event.target as Node)) weatherOpen.value = false
+}
+const closeOnEscape = (event: KeyboardEvent) => {
+  if (weatherOpen.value && event.key === 'Escape') { weatherOpen.value = false; weatherTrigger.value?.focus() }
+}
 const placeLabel = computed(() => place.value ? [...new Set([place.value.name, place.value.admin2, place.value.admin1, place.value.country].filter(Boolean))].join(' · ') : '天气位置')
 let clockTimer: number | undefined, weatherTimer: number | undefined
 let weatherRequest = 0, searchRequest = 0, locationRequest = 0, disposed = false
@@ -106,6 +116,8 @@ const searchPlaces = async (city?: CityHint, province?: ProvinceHint) => {
   } finally { if (request === searchRequest) searching.value = false }
 }
 onMounted(() => {
+  document.addEventListener('pointerdown', closeOnOutside)
+  document.addEventListener('keydown', closeOnEscape)
   clockTimer = window.setInterval(() => { now.value = new Date() }, 1000)
   try {
     const saved = JSON.parse(localStorage.getItem('he-weather-place') || 'null') as Place | null
@@ -118,7 +130,7 @@ onMounted(() => {
   else locate()
   weatherTimer = window.setInterval(() => { void refreshWeather() }, 30 * 60 * 1000)
 })
-onBeforeUnmount(() => { disposed = true; weatherRequest++; searchRequest++; locationRequest++; window.clearInterval(clockTimer); window.clearInterval(weatherTimer) })
+onBeforeUnmount(() => { disposed = true; weatherRequest++; searchRequest++; locationRequest++; window.clearInterval(clockTimer); window.clearInterval(weatherTimer); document.removeEventListener('pointerdown', closeOnOutside); document.removeEventListener('keydown', closeOnEscape) })
 </script>
 
 <template>
@@ -127,13 +139,14 @@ onBeforeUnmount(() => { disposed = true; weatherRequest++; searchRequest++; loca
       <span class="he-clock-date">{{ dateText }}</span>
       <time class="he-clock-time" :datetime="now.toISOString()">{{ timeText }}</time>
     </div>
-    <details class="he-weather">
-      <summary class="he-weather-trigger focus-ring" :title="weather ? `${placeLabel} ${description} ${Math.round(weather.temperature)}°C` : message">
+    <div ref="weatherRoot" class="he-weather">
+      <button ref="weatherTrigger" type="button" class="he-weather-trigger focus-ring" :aria-expanded="weatherOpen" :aria-controls="weatherPanelId" :title="weather ? `${placeLabel} ${description} ${Math.round(weather.temperature)}°C` : message" @click="weatherOpen = !weatherOpen">
         <component :is="weatherIcon" :size="18" aria-hidden="true" />
         <span v-if="weather" class="he-weather-label">{{ Math.round(weather.temperature) }}° <span class="he-weather-place">{{ place?.name }}</span></span>
         <span v-else>天气</span>
-      </summary>
-      <div class="he-weather-popover">
+      </button>
+      <Transition name="he-pop">
+      <div v-show="weatherOpen" :id="weatherPanelId" :inert="!weatherOpen" class="he-weather-popover">
         <div class="flex items-center justify-between gap-3">
           <span class="min-w-0 text-meta font-medium text-ink">{{ placeLabel }}</span>
           <button type="button" class="he-weather-action focus-ring" @click="locate"><MapPin :size="14" />自动定位</button>
@@ -152,7 +165,8 @@ onBeforeUnmount(() => { disposed = true; weatherRequest++; searchRequest++; loca
         </ul>
         <p class="mt-3 text-caption text-subtle">天气数据：<a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" class="underline">Open-Meteo</a></p>
       </div>
-    </details>
+      </Transition>
+    </div>
   </div>
 </template>
 
