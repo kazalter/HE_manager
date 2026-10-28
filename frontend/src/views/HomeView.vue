@@ -51,6 +51,7 @@ const favoriteOnly = ref(route.query.favorite === 'true')
 const validSource = (value: unknown): '' | 'x' | 'wnacg' | 'local' => value === 'x' || value === 'wnacg' || value === 'local' ? value : ''
 const sourceFilter = ref(validSource(route.query.source))
 const filtersExpanded = ref(false)
+const continueSectionRef = ref<HTMLElement | null>(null)
 const continueScrollRef = ref<HTMLElement | null>(null)
 const continueCollapsed = ref(localStorage.getItem('he_continue_collapsed') === 'true')
 const hiddenContinueIds = ref<Set<number>>(new Set())
@@ -140,6 +141,15 @@ const scrollContinue = (direction: -1 | 1) => {
   const el = continueScrollRef.value
   if (!el) return
   el.scrollBy({ left: direction * Math.max(220, el.clientWidth * 0.72), behavior: 'smooth' })
+}
+
+const showOtherContinueItems = async () => {
+  continueCollapsed.value = false
+  await nextTick()
+  continueSectionRef.value?.scrollIntoView({
+    behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    block: 'start',
+  })
 }
 
 const progressPercent = (media: Media) => {
@@ -855,14 +865,14 @@ onMounted(async () => {
             </div>
             <div class="flex flex-wrap gap-2 pt-1">
               <UiButton variant="primary" @click="openMedia(featuredContinue)"><template #icon><Play :size="15" fill="currentColor" aria-hidden="true" /></template>继续{{ featuredContinue.media_type === 'manga' ? '阅读' : featuredContinue.media_type === 'audio' ? '收听' : '观看' }}</UiButton>
-              <UiButton variant="secondary" @click="continueScrollRef?.scrollIntoView({ behavior: 'smooth', block: 'start' })">看看其他继续项</UiButton>
+              <UiButton v-if="recentlyOpened.length > 1" variant="secondary" @click="showOtherContinueItems">看看其他继续项</UiButton>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <section v-if="recentlyOpened.length > 0 && !searchQuery && !selectedTag" class="page-gutter mt-6 select-none" aria-label="继续观看">
+    <section v-if="recentlyOpened.length > 0 && !searchQuery && !selectedTag" ref="continueSectionRef" class="page-gutter mt-6 select-none" aria-label="继续观看">
       <div class="page-container">
         <SectionHeader :title="continueTitle">
           <template #actions>

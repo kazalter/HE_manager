@@ -147,8 +147,8 @@ describe('ui-audit-web: MediaCard robustness', () => {
 
 describe('media library route interactions', () => {
   let wrapper: ReturnType<typeof mount> | undefined
-  afterEach(() => { wrapper?.unmount(); wrapper = undefined; vi.restoreAllMocks() })
-  const setup = async (url: string) => {
+  afterEach(() => { wrapper?.unmount(); wrapper = undefined; vi.restoreAllMocks(); localStorage.removeItem('he_continue_collapsed') })
+  const setup = async (url: string, continueCount = 0) => {
     authState.user = { id: 1, username: 'reader', is_admin: false, is_active: true, created_at: '' }
     const media = Array.from({ length: 36 }, (_, index) => ({
       id: index + 1, title: 'Sample', relative_path: 'sample.mp4', media_type: 'video',
@@ -157,8 +157,10 @@ describe('media library route interactions', () => {
       progress: 0, last_opened_at: null, source_url: null, source_site: null,
       is_missing: false, missing_since: null, created_at: '', tags: [],
     }))
-    const get = vi.spyOn(axios, 'get').mockImplementation(async url => ({
-      data: String(url).endsWith('/tags') ? [] : media, headers: { 'x-total-count': '100' },
+    const get = vi.spyOn(axios, 'get').mockImplementation(async (url, config) => ({
+      data: String(url).endsWith('/tags') ? [] : config?.params?.sort === 'opened'
+        ? media.slice(0, continueCount).map(item => ({ ...item, last_opened_at: '2026-01-01T00:00:00Z' })) : media,
+      headers: { 'x-total-count': '100' },
     }))
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { template: '<div />' } }] })
     await router.push(url)
@@ -183,5 +185,22 @@ describe('media library route interactions', () => {
     expect(pages).toHaveLength(1)
     expect(pages[0]![1]?.params).toMatchObject({ offset: 36 })
     expect(router.currentRoute.value.query).toEqual({ view: 'list', page: '2' })
+  })
+  it('opens the collapsed continue list before scrolling to it', async () => {
+    localStorage.setItem('he_continue_collapsed', 'true')
+    await setup('/', 2)
+    const section = wrapper!.get('section[aria-label="继续观看"]')
+    const scroll = vi.fn()
+    section.element.scrollIntoView = scroll
+    expect(wrapper!.get('button[title="展开继续观看"]').attributes('aria-expanded')).toBe('false')
+    const button = wrapper!.findAll('button').find(item => item.text().includes('看看其他继续项'))!
+    await button.trigger('click')
+    await nextTick()
+    expect(wrapper!.get('button[title="收起继续观看"]').attributes('aria-expanded')).toBe('true')
+    expect(scroll).toHaveBeenCalledOnce()
+  })
+  it('does not offer other continue items when there is only one', async () => {
+    await setup('/', 1)
+    expect(wrapper!.text()).not.toContain('看看其他继续项')
   })
 })
