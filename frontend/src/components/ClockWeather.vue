@@ -14,6 +14,7 @@ const searchText = ref('')
 const searchResults = ref<Place[]>([])
 const provinceResults = ref<ProvinceHint | null>(null)
 const searching = ref(false)
+const placeLabel = computed(() => place.value ? [...new Set([place.value.name, place.value.admin2, place.value.admin1, place.value.country].filter(Boolean))].join(' · ') : '天气位置')
 let clockTimer: number | undefined, weatherTimer: number | undefined
 let weatherRequest = 0, searchRequest = 0, locationRequest = 0, disposed = false
 const dateText = computed(() => new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short' }).format(now.value))
@@ -127,14 +128,14 @@ onBeforeUnmount(() => { disposed = true; weatherRequest++; searchRequest++; loca
       <time class="he-clock-time" :datetime="now.toISOString()">{{ timeText }}</time>
     </div>
     <details class="he-weather">
-      <summary class="he-weather-trigger focus-ring" :title="weather ? `${place?.name} ${description} ${Math.round(weather.temperature)}°C` : message">
+      <summary class="he-weather-trigger focus-ring" :title="weather ? `${placeLabel} ${description} ${Math.round(weather.temperature)}°C` : message">
         <component :is="weatherIcon" :size="18" aria-hidden="true" />
         <span v-if="weather" class="he-weather-label">{{ Math.round(weather.temperature) }}° <span class="he-weather-place">{{ place?.name }}</span></span>
         <span v-else>天气</span>
       </summary>
       <div class="he-weather-popover">
         <div class="flex items-center justify-between gap-3">
-          <span class="font-medium text-ink">{{ place?.name || '天气位置' }}</span>
+          <span class="min-w-0 text-meta font-medium text-ink">{{ placeLabel }}</span>
           <button type="button" class="he-weather-action focus-ring" @click="locate"><MapPin :size="14" />自动定位</button>
         </div>
         <p v-if="weather" class="mt-2 text-meta text-muted">{{ description }} · {{ Math.round(weather.temperature) }}°C <button type="button" class="he-weather-action focus-ring" aria-label="刷新天气" @click="refreshWeather"><RefreshCw :size="13" /></button></p>
