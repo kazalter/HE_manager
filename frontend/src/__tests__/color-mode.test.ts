@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { applyColorMode, applyTheme, buildThemeTokens, initTheme, themeState, themes, toggleColorMode } from '../theme'
+import { animateColorMode, applyColorMode, applyTheme, buildThemeTokens, initTheme, themeState, themes, toggleColorMode } from '../theme'
 import ColorModeToggle from '../components/ColorModeToggle.vue'
 import ColorModeSelect from '../components/ColorModeSelect.vue'
 
@@ -110,5 +110,42 @@ describe('color modes', () => {
     expect(select.findAll('button')[1]!.attributes('aria-pressed')).toBe('true')
     toggle.unmount()
     select.unmount()
+  })
+
+  it('reveals the selected mode from the clicked control when transitions are available', async () => {
+    const animate = vi.fn()
+    document.documentElement.animate = animate as typeof document.documentElement.animate
+    let finish!: () => void
+    const finished = new Promise<void>(resolve => { finish = resolve })
+    const start = vi.fn((update: () => Promise<void>) => {
+      const updated = Promise.resolve(update())
+      return { ready: updated, finished, skipTransition: vi.fn() }
+    })
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false })))
+    Object.defineProperty(document, 'startViewTransition', { configurable: true, value: start })
+    const button = document.createElement('button')
+    vi.spyOn(button, 'getBoundingClientRect').mockReturnValue({ left: 20, top: 30, width: 40, height: 20 } as DOMRect)
+    button.addEventListener('click', event => animateColorMode('light', event))
+    button.click()
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+    expect(themeState.resolvedMode).toBe('light')
+    expect(start).toHaveBeenCalledOnce()
+    expect(animate).toHaveBeenCalledWith(expect.objectContaining({ clipPath: expect.arrayContaining(['circle(0px at 40px 40px)']) }), expect.objectContaining({ pseudoElement: '::view-transition-new(root)' }))
+    finish(); await Promise.resolve(); await Promise.resolve()
+    delete (document as Partial<Document>).startViewTransition
+    delete (document.documentElement as Partial<HTMLElement>).animate
+    document.documentElement.classList.remove('he-mode-transition')
+    vi.unstubAllGlobals()
+  })
+
+  it('switches immediately when reduced motion is requested', () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+    const start = vi.fn()
+    Object.defineProperty(document, 'startViewTransition', { configurable: true, value: start })
+    animateColorMode('light', new MouseEvent('click'))
+    expect(themeState.resolvedMode).toBe('light')
+    expect(start).not.toHaveBeenCalled()
+    delete (document as Partial<Document>).startViewTransition
+    vi.unstubAllGlobals()
   })
 })

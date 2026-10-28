@@ -1,4 +1,4 @@
-import { reactive, readonly } from 'vue'
+import { nextTick, reactive, readonly } from 'vue'
 
 export type ThemeId = 'midnight' | 'sakura' | 'forest' | 'amber' | string
 
@@ -245,7 +245,37 @@ export const applyColorMode = (mode: ColorMode) => {
   renderTheme()
 }
 
-export const toggleColorMode = () => applyColorMode(state.resolvedMode === 'dark' ? 'light' : 'dark')
+let activeModeTransition: ViewTransition | undefined
+export const animateColorMode = (mode: ColorMode, event: MouseEvent) => {
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  if (!document.startViewTransition || reducedMotion || resolveColorMode(mode) === state.resolvedMode) {
+    applyColorMode(mode)
+    return
+  }
+  activeModeTransition?.skipTransition()
+  const button = event.currentTarget as HTMLElement | null
+  const rect = button?.getBoundingClientRect()
+  const x = event.detail && event.clientX ? event.clientX : (rect ? rect.left + rect.width / 2 : window.innerWidth / 2)
+  const y = event.detail && event.clientY ? event.clientY : (rect ? rect.top + rect.height / 2 : window.innerHeight / 2)
+  const radius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y))
+  const root = document.documentElement
+  root.classList.add('he-mode-transition')
+  const transition = document.startViewTransition(async () => { applyColorMode(mode); await nextTick() })
+  activeModeTransition = transition
+  void transition.ready.then(() => {
+    root.animate({ clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] }, {
+      duration: 500, easing: 'cubic-bezier(0.2, 0, 0, 1)', pseudoElement: '::view-transition-new(root)',
+    })
+  }).catch(() => {})
+  void transition.finished.catch(() => {}).finally(() => {
+    if (activeModeTransition === transition) { activeModeTransition = undefined; root.classList.remove('he-mode-transition') }
+  })
+}
+export const toggleColorMode = (event?: MouseEvent) => {
+  const mode = state.resolvedMode === 'dark' ? 'light' : 'dark'
+  if (event) animateColorMode(mode, event)
+  else applyColorMode(mode)
+}
 
 let initialized = false
 export const initTheme = () => {

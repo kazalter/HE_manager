@@ -178,6 +178,11 @@
   --he-shadow-modal: 0 0 0 1px rgb(15 23 42 / 0.06), 0 20px 56px -16px rgb(15 23 42 / 0.18);
 }
 
+/* The new theme is revealed as one circle; keep browser default fades disabled. */
+html.he-mode-transition::view-transition-image-pair(root) { isolation: auto; }
+html.he-mode-transition::view-transition-old(root),
+html.he-mode-transition::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+
 /* Dark ambient light washes out pale surfaces; use a calm, solid canvas. */
 :root[data-color-mode="light"] .he-ambient,
 :root[data-color-mode="light"] .he-auth-ambient {

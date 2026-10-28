@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, type RouteLocationRaw } from 'vue-router'
-import { Book, ChevronDown, Film, Headphones, Home, Image as ImageIcon, LogOut, Star } from 'lucide-vue-next'
+import { ArchiveX, BarChart3, Book, Box, ChevronDown, CopyMinus, Download, Film, Globe2, Headphones, Home, Image as ImageIcon, LogOut, MessageSquare, Palette, Settings, Sparkles, Star, Tags, Users } from 'lucide-vue-next'
 import ColorModeToggle from './ColorModeToggle.vue'
 import type { User } from '../types'
 
@@ -42,29 +42,29 @@ const organizeSections = computed(() => ([
   {
     label: '发现与整理',
     items: [
-      { to: '/creators', label: '创作者' },
-      { to: '/tags', label: '标签管理' },
-      { to: '/recommend', label: 'AI 推荐' },
-      { to: '/external', label: '外部收藏', admin: true },
-      { to: '/assistant', label: '媒体库管家', admin: true },
-    ] as NavItem[],
+      { to: '/creators', label: '创作者', icon: Palette },
+      { to: '/tags', label: '标签管理', icon: Tags },
+      { to: '/recommend', label: 'AI 推荐', icon: Sparkles },
+      { to: '/external', label: '外部收藏', icon: Globe2, admin: true },
+      { to: '/assistant', label: '媒体库管家', icon: MessageSquare, admin: true },
+    ],
   },
   {
     label: '系统与工具',
     items: [
-      { to: '/downloads', label: '下载任务' },
-      { to: '/bd2-spine', label: 'BD2 动态' },
-      { to: '/stats', label: '统计看板' },
-      { to: '/discarded', label: '丢弃记录', admin: true },
-      { to: '/dedup', label: '重复管理', admin: true },
-    ] as NavItem[],
+      { to: '/downloads', label: '下载任务', icon: Download },
+      { to: '/bd2-spine', label: 'BD2 动态', icon: Box },
+      { to: '/stats', label: '统计看板', icon: BarChart3 },
+      { to: '/discarded', label: '丢弃记录', icon: ArchiveX, admin: true },
+      { to: '/dedup', label: '重复管理', icon: CopyMinus, admin: true },
+    ],
   },
   {
     label: '管理',
     items: [
-      { to: '/settings', label: '设置', admin: true },
-      { to: '/users', label: '用户管理', admin: true },
-    ] as NavItem[],
+      { to: '/settings', label: '设置', icon: Settings, admin: true },
+      { to: '/users', label: '用户管理', icon: Users, admin: true },
+    ],
   },
 ] as { label: string; items: NavItem[] }[]).map(section => ({
   ...section,
@@ -141,9 +141,9 @@ const handleLogout = () => {
               v-for="item in section.items"
               :key="item.label"
               :to="item.to"
-              class="block rounded-lg px-2.5 py-2 text-body text-muted transition-colors hover:bg-surface-2 hover:text-ink focus-ring"
+              class="flex items-center gap-3 rounded-lg px-2.5 py-2 text-body text-muted transition-colors hover:bg-surface-2 hover:text-ink focus-ring"
               @click="closeOrganize"
-            >{{ item.label }}</router-link>
+            ><component :is="item.icon" :size="16" class="shrink-0 text-subtle" aria-hidden="true" /><span>{{ item.label }}</span></router-link>
           </template>
         </div>
       </div>
