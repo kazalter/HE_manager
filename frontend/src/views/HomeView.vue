@@ -146,7 +146,11 @@ const scrollContinue = (direction: -1 | 1) => {
 const showOtherContinueItems = async () => {
   continueCollapsed.value = false
   await nextTick()
-  continueSectionRef.value?.scrollIntoView({
+  const section = continueSectionRef.value
+  if (!section) return
+  const header = section.parentElement?.querySelector<HTMLElement>('[data-library-header]')
+  section.style.scrollMarginTop = `${(header?.offsetHeight ?? 0) + 16}px`
+  section.scrollIntoView({
     behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
     block: 'start',
   })
@@ -639,7 +643,7 @@ onMounted(async () => {
 
 <template>
   <div class="relative z-10 min-h-full">
-    <PageHeader sticky :title="pageTitle" :count="loading && !totalItems ? undefined : `${totalItems.toLocaleString()} 项`">
+    <PageHeader sticky data-library-header :title="pageTitle" :count="loading && !totalItems ? undefined : `${totalItems.toLocaleString()} 项`">
       <p v-if="discardNotice" role="status" class="w-full text-meta text-muted">{{ discardNotice }} <router-link to="/discarded" class="text-accent underline">查看丢弃记录</router-link></p>
       <div class="flex flex-wrap items-center gap-2">
         <div class="he-home-search flex min-w-0 items-center gap-2" :class="compact ? 'w-full' : ''">
