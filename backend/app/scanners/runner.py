@@ -3,6 +3,7 @@ import hashlib
 import logging
 import os
 import traceback
+import uuid
 
 from .. import database, models
 from ..dedup import worker as dedup_worker
@@ -40,6 +41,19 @@ from .video import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _make_folder_manga_cover(root: str, thumbnail_dir: str) -> str | None:
+    # A source name that fits NAME_MAX may exceed it after adding the old
+    # thumbnail prefix/timestamp, especially when UTF-8 characters use 3 bytes.
+    # The short random name avoids collisions and leaves source names untouched.
+    name = f"thumb_dir_{uuid.uuid4().hex}.jpg"
+    try:
+        return name if get_folder_thumbnail(root, os.path.join(thumbnail_dir, name)) else None
+    except Exception:
+        # A preview problem must never stop the work or the rest of the scan.
+        logger.warning("Error generating folder cover for %s", root, exc_info=True)
+        return None
 
 
 def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
@@ -142,10 +156,7 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                                 file_size=directory_size(root),
                                 page_count=page_count, is_missing=False
                             )
-                            thumb_name = f"thumb_dir_{media.title}_{datetime.now().timestamp()}.jpg"
-                            thumb_path = os.path.join(thumbnail_dir, thumb_name)
-                            if get_folder_thumbnail(root, thumb_path):
-                                media.cover_path = thumb_name
+                            media.cover_path = _make_folder_manga_cover(root, thumbnail_dir)
 
                             apply_local_dedup_precheck(media, library_title_index, pending_dedup_paths)
                             media_batch.append(media)
@@ -162,6 +173,10 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                             existing.missing_since = None
                             if existing.page_count is None:
                                 existing.page_count = count_manga_pages(root, ".dir")
+                            # Rebuild covers missed by earlier scans (including
+                            # the long-title bug), without changing existing covers.
+                            if not existing.cover_path:
+                                existing.cover_path = _make_folder_manga_cover(root, thumbnail_dir)
                         dirs[:] = []
                     continue
 
