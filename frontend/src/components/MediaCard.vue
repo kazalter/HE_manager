@@ -118,9 +118,7 @@ const frameStyle = computed(() => {
   <button
     type="button"
     :data-media-id="media.id"
-    :style="{ animationDelay: `${Math.min(24, index) * 30}ms` }"
     :class="{
-      'animate-fluid-entrance': !virtualized && index < 16,
       'virtual-card': virtualized,
     }"
     class="he-media-card lazy-card tap-active group relative flex w-full flex-col rounded-2xl text-left focus:outline-none"

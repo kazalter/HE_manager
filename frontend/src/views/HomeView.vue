@@ -195,6 +195,23 @@ const showOtherContinueItems = async () => {
   })
 }
 
+const continueBeforeEnter = (el: Element) => {
+  const node = el as HTMLElement
+  node.style.height = node.style.height ? `${node.getBoundingClientRect().height}px` : '0px'
+}
+const continueEnter = (el: Element) => {
+  const node = el as HTMLElement
+  void node.offsetHeight
+  node.style.height = `${node.scrollHeight}px`
+}
+const continueBeforeLeave = (el: Element) => {
+  const node = el as HTMLElement
+  node.style.height = `${node.getBoundingClientRect().height}px`
+  void node.offsetHeight
+}
+const continueLeave = (el: Element) => { (el as HTMLElement).style.height = '0px' }
+const continueAfterTransition = (el: Element) => { (el as HTMLElement).style.height = '' }
+
 const progressPercent = (media: Media) => {
   if (media.media_type === 'video' && media.duration && media.duration > 0 && media.progress > 0) {
     return Math.min(100, Math.max(0, Math.round((media.progress / media.duration) * 100)))
@@ -974,8 +991,8 @@ onMounted(async () => {
             </template>
           </template>
         </SectionHeader>
-        <Transition name="he-continue-reveal">
-        <div v-show="!continueCollapsed" ref="continueScrollRef" :inert="continueCollapsed" class="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 scrollbar-none sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0" :class="continueDragging ? 'cursor-grabbing' : 'cursor-grab'" @pointerdown="startContinueDrag" @pointermove="moveContinueDrag" @pointerup="endContinueDrag" @pointercancel="endContinueDrag" @lostpointercapture="endContinueDrag" @click.capture="preventDraggedClick" @dragstart.prevent>
+        <Transition name="he-continue-reveal" @before-enter="continueBeforeEnter" @enter="continueEnter" @after-enter="continueAfterTransition" @before-leave="continueBeforeLeave" @leave="continueLeave" @after-leave="continueAfterTransition">
+        <div v-show="!continueCollapsed" ref="continueScrollRef" :inert="continueCollapsed" class="-mx-4 flex gap-3 overflow-x-auto px-4 scrollbar-none sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0" :class="continueDragging ? 'cursor-grabbing' : 'cursor-grab'" @pointerdown="startContinueDrag" @pointermove="moveContinueDrag" @pointerup="endContinueDrag" @pointercancel="endContinueDrag" @lostpointercapture="endContinueDrag" @click.capture="preventDraggedClick" @dragstart.prevent>
           <div
             v-for="item in recentlyOpened"
             :key="item.id"
@@ -1029,7 +1046,7 @@ onMounted(async () => {
 
     <div ref="containerRef" class="page-gutter pb-12" :class="recentlyOpened.length > 0 && !searchQuery && !selectedTag ? 'mt-8' : 'mt-6'">
       <div class="page-container">
-        <div v-if="loading" data-media-grid :class="viewMode === 'list' ? 'flex flex-col gap-2' : viewMode === 'wide' ? 'grid grid-cols-1 gap-x-5 gap-y-7 md:grid-cols-2 xl:grid-cols-3' : viewMode === 'poster' ? posterGridClass : 'poster-grid'">
+        <div v-if="loading && !mediaList.length" data-media-grid :class="viewMode === 'list' ? 'flex flex-col gap-2' : viewMode === 'wide' ? 'grid grid-cols-1 gap-x-5 gap-y-7 md:grid-cols-2 xl:grid-cols-3' : viewMode === 'poster' ? posterGridClass : 'poster-grid'">
           <template v-if="viewMode === 'list'">
             <UiSkeleton v-for="i in 8" :key="i" class="h-24 w-full rounded-2xl" />
           </template>
@@ -1044,7 +1061,9 @@ onMounted(async () => {
           <UiButton variant="secondary" size="sm" @click="fetchMedia()">重试</UiButton>
         </EmptyState>
 
-        <div v-else-if="mediaList.length > 0" class="flex flex-col gap-10">
+        <div v-else-if="mediaList.length > 0" class="relative flex flex-col gap-10" :aria-busy="loading">
+          <div v-if="loading" role="status" class="absolute right-0 top-0 z-20 rounded-lg border border-line bg-surface px-3 py-2 text-meta text-muted shadow-pop">正在加载媒体…</div>
+          <div :inert="loading">
           <div v-if="viewMode === 'poster'" data-media-grid :class="posterGridClass">
             <div v-for="(item, index) in mediaList" :key="item.id" class="he-media-actions relative min-w-0">
               <MediaCard :media="item" :index="index" :shape="cardShape" :show-type="!mediaType" @click="openMedia(item)" />
@@ -1057,9 +1076,10 @@ onMounted(async () => {
               <button v-if="authState.user?.is_admin" type="button" class="he-media-delete grid size-11 shrink-0 place-items-center rounded-xl transition-colors hover:bg-danger hover:text-white focus-ring" :class="viewMode === 'list' ? 'bg-surface text-subtle' : 'absolute right-2 top-2 z-10 bg-black/75 text-white/85'" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
             </div>
           </div>
+          </div>
 
           <PaginationControl
-            v-if="pageCount > 1"
+            v-if="pageCount > 1 && !loading"
             :page="currentPage"
             :page-count="pageCount"
             :total-items="totalItems"
@@ -1099,10 +1119,9 @@ onMounted(async () => {
 <style scoped>
 .he-continue-reveal-enter-active, .he-continue-reveal-leave-active {
   overflow-y: hidden;
-  transition: max-height 220ms ease, opacity 180ms ease;
+  transition: height 220ms ease, opacity 180ms ease;
 }
-.he-continue-reveal-enter-from, .he-continue-reveal-leave-to { max-height: 0; opacity: 0; }
-.he-continue-reveal-enter-to, .he-continue-reveal-leave-from { max-height: 160px; opacity: 1; }
+.he-continue-reveal-enter-from, .he-continue-reveal-leave-to { opacity: 0; }
 @media (prefers-reduced-motion: reduce) {
   .he-continue-reveal-enter-active, .he-continue-reveal-leave-active { transition: none; }
 }

@@ -186,6 +186,24 @@ describe('media library route interactions', () => {
     expect(pages[0]![1]?.params).toMatchObject({ offset: 36 })
     expect(router.currentRoute.value.query).toEqual({ view: 'list', page: '2' })
   })
+  it('keeps the previous media visible but inactive while the new category loads', async () => {
+    const { get } = await setup('/')
+    const originalGet = get.getMockImplementation()!
+    let finish!: (response: any) => void
+    const pending = new Promise<any>(resolve => { finish = resolve })
+    get.mockImplementation((url, config) => String(url).endsWith('/media') && config?.params?.sort !== 'opened'
+      ? pending : originalGet(url, config))
+
+    await wrapper!.setProps({ mediaType: 'manga' })
+    expect(wrapper!.find('[data-media-id="1"]').exists()).toBe(true)
+    expect(wrapper!.get('[role="status"]').text()).toContain('正在加载媒体')
+    expect(wrapper!.get('[data-media-id="1"]').element.closest('[inert]')).not.toBeNull()
+
+    finish({ data: [], headers: { 'x-total-count': '0' } })
+    await flushPromises()
+    expect(wrapper!.find('[data-media-id="1"]').exists()).toBe(false)
+    expect(wrapper!.text()).toContain('没有找到匹配的媒体')
+  })
   it('opens the collapsed continue list before scrolling to it', async () => {
     localStorage.setItem('he_continue_collapsed', 'true')
     await setup('/', 2)
