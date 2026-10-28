@@ -114,25 +114,26 @@ const handleLogout = () => {
         <component :is="item.icon" :size="16" aria-hidden="true" />
         <span>{{ item.label }}</span>
       </router-link>
+    </nav>
 
-      <div ref="organizeRoot" class="relative shrink-0">
+      <div ref="organizeRoot" class="relative shrink-0" @keydown.esc.stop="closeOrganize">
         <button
           type="button"
           class="flex items-center gap-1.5 rounded-lg px-3 py-2 text-body font-medium transition-colors duration-150 focus-ring"
           :class="organizeOpen ? 'bg-surface-2 text-ink' : 'text-muted hover:bg-surface-2 hover:text-ink'"
           :aria-expanded="organizeOpen"
-          aria-haspopup="menu"
+          aria-controls="organize-tools"
           @click="organizeOpen = !organizeOpen"
-          @keydown.esc="closeOrganize"
         >
           整理
           <ChevronDown :size="15" class="transition-transform duration-150" :class="organizeOpen ? 'rotate-180' : ''" aria-hidden="true" />
         </button>
         <div
           v-if="organizeOpen"
-          role="menu"
+          id="organize-tools"
+          role="navigation"
           aria-label="整理工具"
-          class="absolute left-0 top-full z-50 mt-2 w-64 rounded-2xl border border-line-strong bg-surface-3 p-1.5 shadow-pop"
+          class="custom-scrollbar absolute right-0 top-full z-50 mt-2 max-h-[calc(100dvh-5rem)] w-64 overflow-y-auto rounded-2xl border border-line-strong bg-surface p-1.5 shadow-pop"
         >
           <template v-for="section in organizeSections" :key="section.label">
             <p class="px-2.5 pb-1 pt-2 text-caption font-medium text-subtle">{{ section.label }}</p>
@@ -140,17 +141,15 @@ const handleLogout = () => {
               v-for="item in section.items"
               :key="item.label"
               :to="item.to"
-              role="menuitem"
               class="block rounded-lg px-2.5 py-2 text-body text-muted transition-colors hover:bg-surface-2 hover:text-ink focus-ring"
               @click="closeOrganize"
             >{{ item.label }}</router-link>
           </template>
         </div>
       </div>
-    </nav>
 
     <div class="flex shrink-0 items-center gap-1">
-      <ColorModeToggle compact />
+      <ColorModeToggle compact :show-tooltip="false" />
       <span v-if="user" class="hidden max-w-32 truncate px-2 text-meta text-muted xl:block" :title="user.username">{{ user.username }}</span>
       <button
         type="button"

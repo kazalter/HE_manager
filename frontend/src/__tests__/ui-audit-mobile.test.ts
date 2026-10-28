@@ -101,6 +101,21 @@ describe('TopBar /downloads navigation entrance', () => {
     expect(texts).not.toContain('设置')
     expect(texts).not.toContain('用户管理')
   })
+
+  it('keeps the organize panel outside the scrolling navigation and closes it with Escape', async () => {
+    const router = createTestRouter('/')
+    await router.isReady()
+    const wrapper = mount(TopBar, { props: { user: null }, global: { plugins: [router] } })
+    wrappers.push(wrapper)
+    await openOrganize(wrapper)
+    const panel = wrapper.get('#organize-tools')
+    expect(wrapper.get('nav[aria-label="主导航"]').element.contains(panel.element)).toBe(false)
+    expect(panel.classes()).toContain('overflow-y-auto')
+    expect(wrapper.get('button[aria-controls="organize-tools"]').attributes('aria-expanded')).toBe('true')
+    await panel.trigger('keydown', { key: 'Escape' })
+    expect(wrapper.find('#organize-tools').exists()).toBe(false)
+    expect(wrapper.get('button[aria-controls="organize-tools"]').attributes('aria-expanded')).toBe('false')
+  })
 })
 
 describe('MangaReader mobile webtoon mode and controls', () => {

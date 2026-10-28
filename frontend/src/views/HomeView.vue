@@ -193,21 +193,6 @@ const recentlyOpened = computed(() => {
 
 const featuredContinue = computed(() => recentlyOpened.value[0] ?? null)
 
-const organizeItems = computed(() => ([
-  { to: '/creators', label: '创作者', desc: '按创作者浏览全部作品' },
-  { to: '/tags', label: '标签管理', desc: '合并、重命名、清理标签' },
-  { to: '/recommend', label: 'AI 推荐', desc: '按偏好推荐下一部' },
-  { to: '/external', label: '外部收藏', desc: 'X / WNACG / ASMR / Pawchive 来源', admin: true },
-  { to: '/assistant', label: '媒体库管家', desc: '自然语言查库与整理建议', admin: true },
-  { to: '/downloads', label: '下载任务', desc: '外部下载进度与队列' },
-  { to: '/bd2-spine', label: 'BD2 动态', desc: 'Spine 动态资源浏览' },
-  { to: '/stats', label: '统计看板', desc: '分布、活跃度与待处理项' },
-  { to: '/discarded', label: '丢弃记录', desc: '已删除并标记丢弃的内容', admin: true },
-  { to: '/dedup', label: '重复管理', desc: '感知哈希找出的相似项', admin: true },
-  { to: '/settings', label: '设置', desc: '扫描目录、主题与 DeepSeek', admin: true },
-  { to: '/users', label: '用户管理', desc: '账号与权限', admin: true },
-] as { to: string; label: string; desc: string; admin?: boolean }[]).filter(item => !item.admin || authState.user?.is_admin))
-
 const pageSize = desktopBridge ? 60 : 36
 const totalItems = ref(0)
 const containerRef = ref<HTMLElement | null>(null)
@@ -990,23 +975,6 @@ onMounted(async () => {
         </EmptyState>
       </div>
     </div>
-
-    <section class="page-gutter pb-4" aria-label="整理">
-      <div class="page-container">
-        <SectionHeader title="整理" />
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <router-link
-            v-for="item in organizeItems"
-            :key="item.label"
-            :to="item.to"
-            class="rounded-2xl border border-line bg-surface p-4 transition-colors duration-150 hover:border-line-strong hover:bg-surface-2 focus-ring"
-          >
-            <span class="block text-body font-medium text-ink">{{ item.label }}</span>
-            <span class="mt-1 block text-meta leading-snug text-subtle">{{ item.desc }}</span>
-          </router-link>
-        </div>
-      </div>
-    </section>
 
     <Teleport to="body">
       <UiToast v-if="openingError" :message="openingError" urgent overlay class="fixed bottom-6 left-1/2 z-[240] max-w-[90%] -translate-x-1/2" />

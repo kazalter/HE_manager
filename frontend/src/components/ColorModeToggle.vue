@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Moon, Sun } from 'lucide-vue-next'
 import { themeState, toggleColorMode } from '../theme'
-withDefaults(defineProps<{ compact?: boolean }>(), { compact: false })
+withDefaults(defineProps<{ compact?: boolean; showTooltip?: boolean }>(), { compact: false, showTooltip: true })
 </script>
 
 <template>
@@ -9,6 +9,6 @@ withDefaults(defineProps<{ compact?: boolean }>(), { compact: false })
     <Sun v-if="themeState.resolvedMode === 'dark'" :size="18" class="shrink-0" aria-hidden="true" />
     <Moon v-else :size="18" class="shrink-0" aria-hidden="true" />
     <span v-if="!compact">{{ themeState.resolvedMode === 'dark' ? '白天模式' : '黑夜模式' }}</span>
-    <span v-else class="he-rail-tip">{{ themeState.resolvedMode === 'dark' ? '白天模式' : '黑夜模式' }}</span>
+    <span v-else-if="showTooltip" class="he-rail-tip">{{ themeState.resolvedMode === 'dark' ? '白天模式' : '黑夜模式' }}</span>
   </button>
 </template>
