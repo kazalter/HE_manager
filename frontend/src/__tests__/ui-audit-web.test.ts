@@ -187,7 +187,7 @@ describe('media library route interactions', () => {
     expect(router.currentRoute.value.query).toEqual({ view: 'list', page: '2' })
   })
   it('keeps the previous media visible but inactive while the new category loads', async () => {
-    const { get } = await setup('/')
+    const { get } = await setup('/?view=poster')
     const originalGet = get.getMockImplementation()!
     let finish!: (response: any) => void
     const pending = new Promise<any>(resolve => { finish = resolve })
@@ -215,6 +215,30 @@ describe('media library route interactions', () => {
       await vi.advanceTimersByTimeAsync(300)
       expect(wrapper!.get('[role="status"]').text()).toBe('')
     } finally { vi.useRealTimers() }
+  })
+  it('switches the grid layout and continue content together without reshaping old covers', async () => {
+    const { get } = await setup('/?view=poster', 2)
+    const originalGet = get.getMockImplementation()!
+    const result = await originalGet('/media', { params: {} })
+    let finishList!: (response: any) => void
+    let finishContinue!: (response: any) => void
+    const list = new Promise<any>(resolve => { finishList = resolve })
+    const recent = new Promise<any>(resolve => { finishContinue = resolve })
+    get.mockImplementation((url, config) => String(url).endsWith('/media')
+      ? config?.params?.sort === 'opened' ? recent : list : originalGet(url, config))
+    const oldFrame = wrapper!.get('.he-media-card__frame').attributes('style')
+    await wrapper!.setProps({ mediaType: 'video' })
+    expect(wrapper!.get('.he-media-card__frame').attributes('style')).toBe(oldFrame)
+    expect(wrapper!.find('button[aria-label="下一页"]').exists()).toBe(true)
+    expect(wrapper!.get('button[aria-label="下一页"]').attributes('disabled')).toBeDefined()
+    finishList(result)
+    await flushPromises()
+    expect(wrapper!.get('.he-media-card__frame').attributes('style')).toBe(oldFrame)
+    expect(wrapper!.find('section[aria-label="今晚继续"]').exists()).toBe(true)
+    finishContinue({ data: [], headers: {} })
+    await flushPromises()
+    expect(wrapper!.get('.he-media-card__frame').attributes('style')).toContain('16 / 9')
+    expect(wrapper!.find('section[aria-label="今晚继续"]').exists()).toBe(false)
   })
   it('opens the collapsed continue list before scrolling to it', async () => {
     localStorage.setItem('he_continue_collapsed', 'true')

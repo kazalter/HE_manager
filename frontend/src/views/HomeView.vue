@@ -60,6 +60,10 @@ const hiddenContinueIds = ref<Set<number>>(new Set())
 
 type MediaViewMode = 'poster' | 'list' | 'masonry' | 'wide'
 const viewMode = ref<MediaViewMode>('poster')
+// Keep the visible cards paired with the layout of the committed result.
+const displayedLayout = ref<{ type?: string; mode: MediaViewMode } | null>(null)
+const displayedType = computed(() => displayedLayout.value ? displayedLayout.value.type : props.mediaType)
+const displayedView = computed(() => displayedLayout.value?.mode ?? viewMode.value)
 const viewOptions = computed(() => {
   const options: { mode: MediaViewMode; label: string; icon: typeof LayoutGrid }[] = [
     { mode: 'poster', label: '海报网格', icon: LayoutGrid },
@@ -232,7 +236,7 @@ const continueThumbClass = (media: Media) =>
   media.media_type === 'video' ? 'w-24' : media.media_type === 'audio' ? 'w-16' : 'w-11'
 
 const continueTitle = computed(() =>
-  props.mediaType === 'manga' ? '继续阅读' : props.mediaType === 'audio' ? '继续收听' : props.mediaType === 'image' ? '最近浏览' : '继续观看')
+  displayedType.value === 'manga' ? '继续阅读' : displayedType.value === 'audio' ? '继续收听' : displayedType.value === 'image' ? '最近浏览' : '继续观看')
 
 const recentlyOpened = computed(() => {
   return [...continueMedia.value]
@@ -351,9 +355,9 @@ const viewModeModel = computed<MediaViewMode>({
   set: mode => selectViewMode(mode),
 })
 
-// Single-type pages show each type's own aspect ratio; the mixed wall keeps uniform posters.
-const cardShape = computed(() => props.mediaType && props.mediaType !== 'image' ? 'natural' : 'poster')
-const posterGridClass = computed(() => props.mediaType === 'video' && cardShape.value === 'natural'
+// Single-type pages keep their natural covers, including wide video stills.
+const cardShape = computed(() => displayedType.value && displayedType.value !== 'image' ? 'natural' : 'poster')
+const posterGridClass = computed(() => displayedType.value === 'video' && cardShape.value === 'natural'
   ? 'grid grid-cols-1 gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'
   : 'poster-grid')
 const skeletonAspect = computed(() => viewMode.value === 'wide' || (viewMode.value === 'poster' && props.mediaType === 'video')
@@ -365,7 +369,7 @@ const measurePageSize = (refresh = true) => {
   pendingGridMeasurement = false
   const grid = containerRef.value?.querySelector<HTMLElement>('[data-media-grid]')
   let columns = 1
-  if ((viewMode.value === 'poster' || viewMode.value === 'wide') && grid) {
+  if ((displayedView.value === 'poster' || displayedView.value === 'wide') && grid) {
     const tracks = getComputedStyle(grid).gridTemplateColumns
     if (tracks && tracks !== 'none') columns = Math.max(1, tracks.trim().split(/\s+/).length)
   }
@@ -433,17 +437,23 @@ const fetchTags = async () => {
   }
 }
 
-const fetchContinueMedia = async () => {
+const fetchContinueMedia = async (commit = true) => {
   if (disposed) return
   const scope = requestScope('continue'), identity = authIdentity()
   try {
     const res = await axios.get<Media[]>(`${API_BASE_URL}/media`, {
       ...scope, params: { media_type: props.mediaType, sort: 'opened', ...(desktopBridge ? { view_status: 'viewing' } : {}), limit: 12, offset: 0 },
     })
-    if (!disposed && !scope.signal.aborted && identity === authIdentity()) continueMedia.value = res.data
+    if (!disposed && !scope.signal.aborted && identity === authIdentity()) {
+      if (commit) continueMedia.value = res.data
+      return res.data
+    }
   } catch (err) {
-    if (!disposed && !scope.signal.aborted && identity === authIdentity()) continueMedia.value = []
     if (!axios.isCancel(err)) console.error('Failed to fetch continue-watching media:', err)
+    if (!disposed && !scope.signal.aborted && identity === authIdentity()) {
+      if (commit) continueMedia.value = []
+      return [] as Media[]
+    }
   }
 }
 
@@ -451,6 +461,8 @@ const fetchMedia = async (scrollBehavior: ScrollBehavior = 'auto') => {
   if (disposed) return
   const scope = requestScope('list'), identity = authIdentity()
   const requestId = ++mediaRequestId
+  const requestedType = props.mediaType
+  const refreshContinue = !displayedLayout.value || displayedLayout.value.type !== requestedType
   if (hasCompletedInitialFetch && scrollBehavior !== 'auto') scrollToTop(scrollBehavior)
   loading.value = true
   window.clearTimeout(loadingNoticeTimer)
@@ -460,7 +472,10 @@ const fetchMedia = async (scrollBehavior: ScrollBehavior = 'auto') => {
   }, 300)
   mediaError.value = ''
   try {
-    const res = await axios.get<Media[]>(`${API_BASE_URL}/media`, { ...scope, params: mediaParamsForPage(currentPage.value) })
+    const [res, nextContinue] = await Promise.all([
+      axios.get<Media[]>(`${API_BASE_URL}/media`, { ...scope, params: mediaParamsForPage(currentPage.value) }),
+      refreshContinue ? fetchContinueMedia(false) : Promise.resolve(undefined),
+    ])
     if (disposed || scope.signal.aborted || identity !== authIdentity() || requestId !== mediaRequestId) return
 
     const headerTotal = Number(res.headers['x-total-count'])
@@ -475,6 +490,8 @@ const fetchMedia = async (scrollBehavior: ScrollBehavior = 'auto') => {
       await fetchMedia()
       return
     }
+    displayedLayout.value = { type: requestedType, mode: viewMode.value }
+    if (nextContinue !== undefined) continueMedia.value = nextContinue
     mediaList.value = res.data
   } catch (err: any) {
     if (disposed || scope.signal.aborted || identity !== authIdentity() || requestId !== mediaRequestId) return
@@ -650,7 +667,6 @@ watch(searchQuery, () => {
   searchTimer = window.setTimeout(syncFilters, 250)
 })
 watch([selectedTag, sortBy, sourceFilter], syncFilters)
-watch(() => props.mediaType, () => { void fetchContinueMedia() })
 watch(() => JSON.stringify([props.mediaType, route.query.search, route.query.tag, route.query.sort, route.query.source, route.query.favorite, route.query.page]), () => {
   window.clearTimeout(searchTimer)
   searchQuery.value = typeof route.query.search === 'string' ? route.query.search : ''
@@ -681,7 +697,12 @@ const mobileCategories = [ { label: '全部', path: '/' }, { label: '漫画', pa
 watch(() => route.query.media, () => {
   syncSelectedMediaFromRoute()
 })
-watch([viewMode, () => props.mediaType], async () => {
+watch(viewMode, mode => {
+  if (!loading.value && displayedLayout.value?.type === props.mediaType) {
+    displayedLayout.value = { type: props.mediaType, mode }
+  }
+})
+watch([displayedView, displayedType], async () => {
   await nextTick()
   scheduleGridMeasurement()
 })
@@ -727,7 +748,7 @@ onMounted(async () => {
     gridObserver = new ResizeObserver(scheduleGridMeasurement)
     gridObserver.observe(containerRef.value)
   }
-  await Promise.all([fetchMedia(), fetchContinueMedia()])
+  await fetchMedia()
   await syncSelectedMediaFromRoute()
   void fetchTags()
   await triggerMissingRecheck()
@@ -950,8 +971,8 @@ onMounted(async () => {
           </button>
           <div class="flex min-w-0 flex-col justify-center gap-3 p-5 sm:p-6">
             <p class="text-caption font-medium uppercase tracking-wider text-accent-glow">今晚继续 · {{ continueTitle }}</p>
-            <h2 class="line-clamp-2 text-title font-semibold leading-tight text-ink">{{ featuredContinue.title }}</h2>
-            <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-meta text-subtle tabular-nums">
+            <h2 class="line-clamp-2 min-h-[2.5em] text-title font-semibold leading-tight text-ink">{{ featuredContinue.title }}</h2>
+            <p class="flex h-5 min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap text-meta text-subtle tabular-nums">
               <span>{{ typeLabel(featuredContinue.media_type) }}</span>
               <span v-if="continueMeta(featuredContinue)" aria-hidden="true">·</span>
               <span v-if="continueMeta(featuredContinue)">{{ continueMeta(featuredContinue) }}</span>
@@ -960,7 +981,7 @@ onMounted(async () => {
               <span v-if="featuredContinue.tags?.length" aria-hidden="true">·</span>
               <span v-if="featuredContinue.tags?.length" class="truncate">{{ featuredContinue.tags.slice(0, 3).map(tag => tag.name).join(' / ') }}</span>
             </p>
-            <div v-if="progressPercent(featuredContinue) > 0" class="h-1.5 w-full max-w-md overflow-hidden rounded-full bg-surface-3" role="progressbar" :aria-label="`${featuredContinue.title}观看进度`" :aria-valuenow="progressPercent(featuredContinue)" aria-valuemin="0" aria-valuemax="100">
+            <div :class="{ invisible: progressPercent(featuredContinue) === 0 }" :aria-hidden="progressPercent(featuredContinue) === 0" class="h-1.5 w-full max-w-md overflow-hidden rounded-full bg-surface-3" role="progressbar" :aria-label="`${featuredContinue.title}观看进度`" :aria-valuenow="progressPercent(featuredContinue)" aria-valuemin="0" aria-valuemax="100">
               <div class="h-full rounded-full bg-accent" :style="{ width: `${progressPercent(featuredContinue)}%` }"></div>
             </div>
             <div class="flex flex-wrap gap-2 pt-1">
@@ -1060,22 +1081,22 @@ onMounted(async () => {
 
         <div v-else-if="mediaList.length > 0" class="relative flex flex-col gap-10" :aria-busy="loading">
           <div :inert="loading">
-          <div v-if="viewMode === 'poster'" data-media-grid :class="posterGridClass">
+          <div v-if="displayedView === 'poster'" data-media-grid :class="posterGridClass">
             <div v-for="(item, index) in mediaList" :key="item.id" class="he-media-actions relative min-w-0">
-              <MediaCard :media="item" :index="index" :shape="cardShape" :show-type="!mediaType" @click="openMedia(item)" />
+              <MediaCard :media="item" :index="index" :shape="cardShape" :show-type="!displayedType" @click="openMedia(item)" />
               <button v-if="authState.user?.is_admin" type="button" class="he-media-delete absolute right-2 top-2 z-10 grid size-11 place-items-center rounded-xl bg-black/75 text-white/85 transition-colors hover:bg-danger hover:text-white focus-ring" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
             </div>
           </div>
-          <div v-else data-media-grid :class="viewMode === 'masonry' ? 'masonry-grid' : viewMode === 'wide' ? 'grid grid-cols-1 gap-x-5 gap-y-7 md:grid-cols-2 xl:grid-cols-3' : 'flex flex-col gap-2'">
-            <div v-for="item in mediaList" :key="item.id" class="he-media-actions relative min-w-0" :class="viewMode === 'masonry' ? 'masonry-grid-item' : viewMode === 'list' ? 'flex items-center gap-2' : ''">
-              <MediaViewCard :media="item" :mode="viewMode" :class="viewMode === 'list' ? 'min-w-0 flex-1' : ''" @click="openMedia(item)" />
-              <button v-if="authState.user?.is_admin" type="button" class="he-media-delete grid size-11 shrink-0 place-items-center rounded-xl transition-colors hover:bg-danger hover:text-white focus-ring" :class="viewMode === 'list' ? 'bg-surface text-subtle' : 'absolute right-2 top-2 z-10 bg-black/75 text-white/85'" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
+          <div v-else data-media-grid :class="displayedView === 'masonry' ? 'masonry-grid' : displayedView === 'wide' ? 'grid grid-cols-1 gap-x-5 gap-y-7 md:grid-cols-2 xl:grid-cols-3' : 'flex flex-col gap-2'">
+            <div v-for="item in mediaList" :key="item.id" class="he-media-actions relative min-w-0" :class="displayedView === 'masonry' ? 'masonry-grid-item' : displayedView === 'list' ? 'flex items-center gap-2' : ''">
+              <MediaViewCard :media="item" :mode="displayedView" :class="displayedView === 'list' ? 'min-w-0 flex-1' : ''" @click="openMedia(item)" />
+              <button v-if="authState.user?.is_admin" type="button" class="he-media-delete grid size-11 shrink-0 place-items-center rounded-xl transition-colors hover:bg-danger hover:text-white focus-ring" :class="displayedView === 'list' ? 'bg-surface text-subtle' : 'absolute right-2 top-2 z-10 bg-black/75 text-white/85'" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
             </div>
           </div>
           </div>
 
           <PaginationControl
-            v-if="pageCount > 1 && !loading"
+            v-if="pageCount > 1"
             :page="currentPage"
             :page-count="pageCount"
             :total-items="totalItems"
