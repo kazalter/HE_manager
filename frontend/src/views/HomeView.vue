@@ -30,6 +30,8 @@ const mediaList = ref<Media[]>([])
 const continueMedia = ref<Media[]>([])
 const tags = ref<Tag[]>([])
 const loading = ref(true)
+const delayedLoading = ref(false)
+let loadingNoticeTimer: number | undefined
 const mediaError = ref(''), openingMedia = ref(false), openingError = ref('')
 const discardTarget = ref<DiscardTarget | null>(null)
 const discardNotice = ref('')
@@ -451,6 +453,11 @@ const fetchMedia = async (scrollBehavior: ScrollBehavior = 'auto') => {
   const requestId = ++mediaRequestId
   if (hasCompletedInitialFetch && scrollBehavior !== 'auto') scrollToTop(scrollBehavior)
   loading.value = true
+  window.clearTimeout(loadingNoticeTimer)
+  delayedLoading.value = false
+  loadingNoticeTimer = window.setTimeout(() => {
+    if (!disposed && requestId === mediaRequestId && mediaList.value.length) delayedLoading.value = true
+  }, 300)
   mediaError.value = ''
   try {
     const res = await axios.get<Media[]>(`${API_BASE_URL}/media`, { ...scope, params: mediaParamsForPage(currentPage.value) })
@@ -482,6 +489,8 @@ const fetchMedia = async (scrollBehavior: ScrollBehavior = 'auto') => {
         : '无法加载媒体列表，请检查后端连接。'
   } finally {
     if (!disposed && requestId === mediaRequestId) {
+      window.clearTimeout(loadingNoticeTimer)
+      delayedLoading.value = false
       loading.value = false
       hasCompletedInitialFetch = true
       await nextTick()
@@ -685,6 +694,7 @@ const onOpeningKeydown = (event: KeyboardEvent) => {
   if (openingMedia.value && event.key === 'Escape') closeMedia()
 }
 onUnmounted(() => {
+  window.clearTimeout(loadingNoticeTimer)
   disposed = true; ++mediaRequestId; ++detailRequestId; ++viewerPageRequestId
   for (const controller of controllers.values()) controller.abort()
   window.removeEventListener('he:media-updated', onGlobalMediaUpdated)
@@ -727,6 +737,9 @@ onMounted(async () => {
 <template>
   <div class="relative z-10 min-h-full">
     <PageHeader class="border-b border-line" :title="pageTitle" :count="loading && !totalItems ? undefined : `${totalItems.toLocaleString()} 项`">
+      <template #actions>
+        <div role="status" class="min-h-5 w-28 text-right text-meta text-subtle"><span v-if="delayedLoading">正在加载媒体…</span></div>
+      </template>
       <p v-if="discardNotice" role="alert" class="w-full text-meta text-warning">文件清理未完成：{{ discardNotice }} <router-link to="/discarded" class="text-accent underline">查看丢弃记录</router-link> <button type="button" class="ml-2 underline focus-ring" @click="discardNotice = ''">关闭提示</button></p>
       <div class="flex flex-wrap items-center gap-2">
         <div class="he-home-search flex min-w-0 items-center gap-2" :class="compact ? 'w-full' : ''">
@@ -1046,7 +1059,6 @@ onMounted(async () => {
         </EmptyState>
 
         <div v-else-if="mediaList.length > 0" class="relative flex flex-col gap-10" :aria-busy="loading">
-          <div v-if="loading" role="status" class="absolute right-0 top-0 z-20 rounded-lg border border-line bg-surface px-3 py-2 text-meta text-muted shadow-pop">正在加载媒体…</div>
           <div :inert="loading">
           <div v-if="viewMode === 'poster'" data-media-grid :class="posterGridClass">
             <div v-for="(item, index) in mediaList" :key="item.id" class="he-media-actions relative min-w-0">

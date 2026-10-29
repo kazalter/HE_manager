@@ -194,15 +194,27 @@ describe('media library route interactions', () => {
     get.mockImplementation((url, config) => String(url).endsWith('/media') && config?.params?.sort !== 'opened'
       ? pending : originalGet(url, config))
 
-    await wrapper!.setProps({ mediaType: 'manga' })
-    expect(wrapper!.find('[data-media-id="1"]').exists()).toBe(true)
-    expect(wrapper!.get('[role="status"]').text()).toContain('正在加载媒体')
-    expect(wrapper!.get('[data-media-id="1"]').element.closest('[inert]')).not.toBeNull()
+    vi.useFakeTimers()
+    try {
+      await wrapper!.setProps({ mediaType: 'manga' })
+      expect(wrapper!.find('[data-media-id="1"]').exists()).toBe(true)
+      expect(wrapper!.get('[role="status"]').text()).toBe('')
+      expect(wrapper!.get('[data-media-id="1"]').element.closest('[inert]')).not.toBeNull()
+      await vi.advanceTimersByTimeAsync(300)
+      expect(wrapper!.get('.he-page-header [role="status"]').text()).toContain('正在加载媒体')
 
-    finish({ data: [], headers: { 'x-total-count': '0' } })
-    await flushPromises()
-    expect(wrapper!.find('[data-media-id="1"]').exists()).toBe(false)
-    expect(wrapper!.text()).toContain('没有找到匹配的媒体')
+      finish({ data: [], headers: { 'x-total-count': '0' } })
+      await flushPromises()
+      expect(wrapper!.get('[role="status"]').text()).toBe('')
+      expect(wrapper!.find('[data-media-id="1"]').exists()).toBe(false)
+      expect(wrapper!.text()).toContain('没有找到匹配的媒体')
+
+      get.mockImplementation(originalGet)
+      await wrapper!.setProps({ mediaType: 'video' })
+      await flushPromises()
+      await vi.advanceTimersByTimeAsync(300)
+      expect(wrapper!.get('[role="status"]').text()).toBe('')
+    } finally { vi.useRealTimers() }
   })
   it('opens the collapsed continue list before scrolling to it', async () => {
     localStorage.setItem('he_continue_collapsed', 'true')
