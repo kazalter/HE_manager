@@ -194,23 +194,6 @@ const showOtherContinueItems = async () => {
   })
 }
 
-const continueBeforeEnter = (el: Element) => {
-  const node = el as HTMLElement
-  node.style.height = node.style.height ? `${node.getBoundingClientRect().height}px` : '0px'
-}
-const continueEnter = (el: Element) => {
-  const node = el as HTMLElement
-  void node.offsetHeight
-  node.style.height = `${node.scrollHeight}px`
-}
-const continueBeforeLeave = (el: Element) => {
-  const node = el as HTMLElement
-  node.style.height = `${node.getBoundingClientRect().height}px`
-  void node.offsetHeight
-}
-const continueLeave = (el: Element) => { (el as HTMLElement).style.height = '0px' }
-const continueAfterTransition = (el: Element) => { (el as HTMLElement).style.height = '' }
-
 const progressPercent = (media: Media) => {
   if (media.media_type === 'video' && media.duration && media.duration > 0 && media.progress > 0) {
     return Math.min(100, Math.max(0, Math.round((media.progress / media.duration) * 100)))
@@ -984,14 +967,15 @@ onMounted(async () => {
               {{ continueCollapsed ? '展开' : '收起' }}
               <template #trailing><ChevronDown :size="14" class="transition-transform duration-150" :class="{ '-rotate-90': continueCollapsed }" aria-hidden="true" /></template>
             </UiButton>
-            <template v-if="!continueCollapsed && !compact">
+            <span v-if="!compact" class="flex items-center gap-2 transition-opacity duration-150" :class="continueCollapsed ? 'invisible pointer-events-none opacity-0' : 'opacity-100'" :inert="continueCollapsed" :aria-hidden="continueCollapsed">
               <UiIconButton label="向左滚动" variant="secondary" size="sm" @click="scrollContinue(-1)"><ChevronLeft :size="16" aria-hidden="true" /></UiIconButton>
               <UiIconButton label="向右滚动" variant="secondary" size="sm" @click="scrollContinue(1)"><ChevronRight :size="16" aria-hidden="true" /></UiIconButton>
-            </template>
+            </span>
           </template>
         </SectionHeader>
-        <Transition name="he-continue-reveal" @before-enter="continueBeforeEnter" @enter="continueEnter" @after-enter="continueAfterTransition" @before-leave="continueBeforeLeave" @leave="continueLeave" @after-leave="continueAfterTransition">
-        <div v-show="!continueCollapsed" ref="continueScrollRef" :inert="continueCollapsed" class="-mx-4 flex gap-3 overflow-x-auto px-4 scrollbar-none sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0" :class="continueDragging ? 'cursor-grabbing' : 'cursor-grab'" @pointerdown="startContinueDrag" @pointermove="moveContinueDrag" @pointerup="endContinueDrag" @pointercancel="endContinueDrag" @lostpointercapture="endContinueDrag" @click.capture="preventDraggedClick" @dragstart.prevent>
+        <div class="he-continue-reveal" :class="{ 'is-expanded': !continueCollapsed }" :inert="continueCollapsed" :aria-hidden="continueCollapsed">
+        <div class="he-continue-reveal-clip">
+        <div ref="continueScrollRef" class="-mx-4 flex gap-3 overflow-x-auto px-4 scrollbar-none sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0" :class="continueDragging ? 'cursor-grabbing' : 'cursor-grab'" @pointerdown="startContinueDrag" @pointermove="moveContinueDrag" @pointerup="endContinueDrag" @pointercancel="endContinueDrag" @lostpointercapture="endContinueDrag" @click.capture="preventDraggedClick" @dragstart.prevent>
           <div
             v-for="item in recentlyOpened"
             :key="item.id"
@@ -1039,7 +1023,8 @@ onMounted(async () => {
             </button>
           </div>
         </div>
-        </Transition>
+        </div>
+        </div>
       </div>
     </section>
 
@@ -1116,13 +1101,23 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.he-continue-reveal-enter-active, .he-continue-reveal-leave-active {
-  overflow-y: hidden;
-  transition: height 220ms ease, opacity 180ms ease;
+/* Animate the space around the row, keeping cards at their intrinsic height.
+   Native interpolation also reverses smoothly during repeated clicks. */
+.he-continue-reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 240ms cubic-bezier(.22, 1, .36, 1);
 }
-.he-continue-reveal-enter-from, .he-continue-reveal-leave-to { opacity: 0; }
+.he-continue-reveal.is-expanded { grid-template-rows: 1fr; }
+.he-continue-reveal-clip {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 160ms ease-out;
+}
+.he-continue-reveal.is-expanded > .he-continue-reveal-clip { opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
-  .he-continue-reveal-enter-active, .he-continue-reveal-leave-active { transition: none; }
+  .he-continue-reveal, .he-continue-reveal-clip { transition: none; }
 }
 @media (max-width: 899px) {
   .he-mobile-filters {

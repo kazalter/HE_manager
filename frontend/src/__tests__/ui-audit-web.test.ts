@@ -221,6 +221,20 @@ describe('media library route interactions', () => {
     await setup('/', 1)
     expect(wrapper!.text()).not.toContain('看看其他继续项')
   })
+  it('preserves the continue row and its scroll position across repeated toggles', async () => {
+    await setup('/', 8)
+    const row = wrapper!.get('section[aria-label="继续观看"] [class*="overflow-x-auto"]')
+    const element = row.element as HTMLElement
+    element.scrollLeft = 180
+    for (let i = 0; i < 4; i++) {
+      const toggle = wrapper!.get('section[aria-label="继续观看"] button[aria-expanded]')
+      const wasExpanded = toggle.attributes('aria-expanded') === 'true'
+      await toggle.trigger('click')
+      expect(element.closest('[inert]') !== null).toBe(wasExpanded)
+      expect(row.element).toBe(element)
+      expect(element.scrollLeft).toBe(180)
+    }
+  })
   it('drags the continue row with a mouse without opening a media item', async () => {
     const { get } = await setup('/', 8)
     const row = wrapper!.get('section[aria-label="继续观看"] [class*="overflow-x-auto"]')
