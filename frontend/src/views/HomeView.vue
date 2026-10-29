@@ -187,8 +187,7 @@ const showOtherContinueItems = async () => {
   await nextTick()
   const section = continueSectionRef.value
   if (!section) return
-  const header = section.parentElement?.querySelector<HTMLElement>('[data-library-header]')
-  section.style.scrollMarginTop = `${(header?.offsetHeight ?? 0) + 16}px`
+  section.style.scrollMarginTop = '16px'
   section.scrollIntoView({
     behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
     block: 'start',
@@ -744,7 +743,7 @@ onMounted(async () => {
 
 <template>
   <div class="relative z-10 min-h-full">
-    <PageHeader sticky data-library-header :title="pageTitle" :count="loading && !totalItems ? undefined : `${totalItems.toLocaleString()} 项`">
+    <PageHeader class="border-b border-line" :title="pageTitle" :count="loading && !totalItems ? undefined : `${totalItems.toLocaleString()} 项`">
       <p v-if="discardNotice" role="alert" class="w-full text-meta text-warning">文件清理未完成：{{ discardNotice }} <router-link to="/discarded" class="text-accent underline">查看丢弃记录</router-link> <button type="button" class="ml-2 underline focus-ring" @click="discardNotice = ''">关闭提示</button></p>
       <div class="flex flex-wrap items-center gap-2">
         <div class="he-home-search flex min-w-0 items-center gap-2" :class="compact ? 'w-full' : ''">
