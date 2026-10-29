@@ -85,6 +85,28 @@ async function create() {
   return { router, reader, viewport, container, scroll, pending, get }
 }
 
+it('toggles image autoplay with Space, ignores repeats and preserves editing and button keys', async () => {
+  await create()
+  const press = (target: EventTarget = window, options: KeyboardEventInit = {}) => {
+    const event = new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true, cancelable: true, ...options })
+    target.dispatchEvent(event)
+    return event
+  }
+  expect(press().defaultPrevented).toBe(true)
+  await flushPromises()
+  expect(!!document.querySelector('button[aria-label="暂停自动播放"]')).toBe(true)
+  press(window, { repeat: true })
+  const input = document.querySelector('input[aria-label="自动播放间隔，秒"]')!
+  expect(press(input).defaultPrevented).toBe(false)
+  expect(press(document.querySelector('button[aria-label="暂停自动播放"]')!).defaultPrevented).toBe(false)
+  expect(press(window, { ctrlKey: true }).defaultPrevented).toBe(false)
+  await flushPromises()
+  expect(!!document.querySelector('button[aria-label="暂停自动播放"]')).toBe(true)
+  press()
+  await flushPromises()
+  expect(!!document.querySelector('button[aria-label="开始自动播放"]')).toBe(true)
+})
+
 it('keeps the actual mobile reader, scroll offset and hidden controls alive across delayed and out-of-order route verification', async () => {
   const { router, reader, container, scroll, pending } = await create()
   await ControlledImage.instances[0]!.onload!(); await flushPromises()

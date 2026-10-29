@@ -42,7 +42,6 @@ const emit = defineEmits<{
   downloadPost: []
 }>()
 const viewerRef = ref<HTMLDivElement | null>(null)
-const closeRef = ref<HTMLButtonElement | null>(null)
 const nativeFullscreen = ref(false)
 const fallbackFullscreen = ref(false)
 const isFullscreen = computed(() => nativeFullscreen.value || fallbackFullscreen.value)
@@ -423,7 +422,15 @@ const onKeydown = (event: KeyboardEvent) => {
     return
   }
   const target = event.target as HTMLElement | null
-  if (target?.closest('input, textarea, select, video, [contenteditable="true"]')) return
+  if (target?.closest('input, textarea, select, video, [contenteditable]:not([contenteditable="false"])')) return
+  if ((event.key === ' ' || event.code === 'Space') && props.attachment.media_type === 'image'
+    && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.isComposing) {
+    if (target?.closest('button, a[href]')) return
+    event.preventDefault()
+    event.stopPropagation()
+    if (!event.repeat && (props.autoplay || !props.ended)) emit('update:autoplay', !props.autoplay)
+    return
+  }
   if (event.key === 'Escape') {
     if (isFullscreen.value) {
       event.preventDefault()
@@ -464,7 +471,7 @@ watch(() => [props.autoplay, props.interval, props.busy], () => { scheduleImage(
 onMounted(() => {
   startLoadWatch()
   void loadCurrentImage()
-  closeRef.value?.focus()
+  viewerRef.value?.focus()
   document.addEventListener('visibilitychange', onVisibility)
   document.addEventListener('fullscreenchange', syncFullscreen)
   window.addEventListener('keydown', onKeydown)
@@ -486,9 +493,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="viewerRef" role="dialog" aria-modal="true" :aria-label="`Pawchive 查看器：${post.title}`" :class="nativeFullscreen ? 'h-screen w-screen' : ''" class="he-pawchive-viewer fixed inset-0 z-[70] bg-black/95 text-white flex flex-col">
+  <div ref="viewerRef" tabindex="-1" role="dialog" aria-modal="true" :aria-label="`Pawchive 查看器：${post.title}`" :class="nativeFullscreen ? 'h-screen w-screen' : ''" class="he-pawchive-viewer fixed inset-0 z-[70] bg-black/95 text-white flex flex-col">
     <header :class="isFullscreen ? ['absolute inset-x-0 top-0 z-30 bg-gradient-to-b from-black/90 via-black/65 to-transparent border-b-0', controlsVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'] : ''" class="shrink-0 px-3 sm:px-5 py-3 border-b border-white/15 flex items-center gap-3 transition-[transform,opacity] duration-300" @mouseenter="onControlsHover(true)" @mouseleave="onControlsHover(false)">
-      <button ref="closeRef" type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" aria-label="返回列表" @click="emit('close')"><X :size="21" /></button>
+      <button type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" aria-label="返回列表" @click="emit('close')"><X :size="21" /></button>
       <div class="min-w-0 flex-1"><p class="text-xs text-white/55 truncate">{{ post.creator_name }} · {{ scopeLabel }}</p><h2 class="text-sm sm:text-base font-bold truncate">{{ post.title }}</h2></div>
       <a :href="post.source_url" target="_blank" rel="noopener noreferrer" class="min-h-11 px-3 rounded-lg text-meta font-medium flex items-center gap-2 text-white/90 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent"><ExternalLink :size="15" />来源</a>
       <button
@@ -593,7 +600,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="grid grid-cols-3 gap-2 sm:flex sm:items-center">
             <button type="button" :disabled="!hasPrevious || busy" class="min-h-11 px-3 rounded-lg border border-white/15 flex items-center justify-center gap-1 text-sm disabled:opacity-40 cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" @click="emit('previous')"><ArrowLeft :size="16" />上一项</button>
-            <button type="button" class="min-h-11 px-3 rounded-lg border border-white/15 flex items-center justify-center gap-2 text-sm cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" :class="autoplay ? 'border-accent/60 bg-accent/15 text-accent-glow' : ''" :aria-pressed="autoplay" @click="emit('update:autoplay', !autoplay)"><Pause v-if="autoplay" :size="16" /><Play v-else :size="16" />{{ autoplay ? '暂停连播' : '自动连播' }}</button>
+            <button type="button" class="min-h-11 px-3 rounded-lg border border-white/15 flex items-center justify-center gap-2 text-sm cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" :class="autoplay ? 'border-accent/60 bg-accent/15 text-accent-glow' : ''" :aria-pressed="autoplay" :aria-keyshortcuts="attachment.media_type === 'image' ? 'Space' : undefined" :title="attachment.media_type === 'image' ? '空格：开始或暂停自动连播' : undefined" @click="emit('update:autoplay', !autoplay)"><Pause v-if="autoplay" :size="16" /><Play v-else :size="16" />{{ autoplay ? '暂停连播' : '自动连播' }}</button>
             <button type="button" :disabled="ended || busy" class="min-h-11 px-3 rounded-lg bg-accent text-on-accent hover:bg-accent/90 flex items-center justify-center gap-1 text-sm font-medium disabled:opacity-40 cursor-pointer focus-visible:ring-2 focus-visible:ring-white" @click="emit('next')">{{ ended ? '范围末尾' : '下一项' }}<ArrowRight :size="16" /></button>
           </div>
         </div>

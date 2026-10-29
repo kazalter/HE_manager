@@ -638,6 +638,14 @@ const handleKeydown = (e: KeyboardEvent) => {
     return
   }
 
+  if ((e.key === ' ' || e.code === 'Space') && (isImage.value || isManga.value)
+    && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.isComposing) {
+    e.preventDefault()
+    e.stopImmediatePropagation()
+    if (!e.repeat && (isAutoAdvancing.value || canAutoAdvance.value)) isAutoAdvancing.value = !isAutoAdvancing.value
+    return
+  }
+
   if (e.key === 'ArrowRight') {
     if (isManga.value) {
       reader.value?.nextPage()
@@ -766,7 +774,8 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
                   :disabled="!isAutoAdvancing && !canAutoAdvance"
                   :aria-label="isAutoAdvancing ? '暂停自动播放' : '开始自动播放'"
                   :aria-pressed="isAutoAdvancing"
-                  :title="isAutoAdvancing ? '暂停自动播放' : canAutoAdvance ? '开始自动播放' : isManga ? '已到最后一页' : '没有下一张图片'"
+                  aria-keyshortcuts="Space"
+                  :title="isAutoAdvancing ? '暂停自动播放（空格）' : canAutoAdvance ? '开始自动播放（空格）' : isManga ? '已到最后一页' : '没有下一张图片'"
                   @click="toggleAutoAdvance"
                 >
                   <Pause v-if="isAutoAdvancing" :size="16" aria-hidden="true" />

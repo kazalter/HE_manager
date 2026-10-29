@@ -29,6 +29,35 @@ describe('Pawchive fullscreen viewer', () => {
     vi.unstubAllGlobals()
   })
 
+  it('toggles image autoplay with Space without repeats or stealing input and button keys', async () => {
+    const wrapper = mount(PawchiveMediaViewer, { attachTo: document.body, props: {
+      post, attachment, attachments: [attachment], attachmentIndex: 0, attachmentTotal: 1,
+      scopeLabel: 'Example', busy: false, error: '', hasPrevious: false, ended: false,
+      autoplay: false, interval: 5, downloadBusy: false, downloadMessage: '', downloadError: false,
+    } })
+    const press = (target: EventTarget, options: KeyboardEventInit = {}) => {
+      const event = new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true, cancelable: true, ...options })
+      target.dispatchEvent(event)
+      return event
+    }
+    try {
+      expect(document.activeElement).toBe(wrapper.element)
+      expect(press(wrapper.element).defaultPrevented).toBe(true)
+      expect(wrapper.emitted('update:autoplay')).toEqual([[true]])
+      await wrapper.setProps({ autoplay: true })
+      press(wrapper.element, { repeat: true })
+      expect(press(wrapper.get('input').element).defaultPrevented).toBe(false)
+      expect(press(wrapper.get('button[aria-label="返回列表"]').element).defaultPrevented).toBe(false)
+      expect(press(wrapper.element, { ctrlKey: true }).defaultPrevented).toBe(false)
+      expect(wrapper.emitted('update:autoplay')).toHaveLength(1)
+      press(wrapper.element)
+      expect(wrapper.emitted('update:autoplay')).toEqual([[true], [false]])
+      await wrapper.setProps({ attachment: { ...attachment, media_type: 'video' }, autoplay: false })
+      expect(press(wrapper.element).defaultPrevented).toBe(false)
+      expect(wrapper.emitted('update:autoplay')).toHaveLength(2)
+    } finally { wrapper.unmount() }
+  })
+
   it.each(['missing', 'rejected'])('uses immersive image mode when fullscreen is %s', async (failure) => {
     const wrapper = mount(PawchiveMediaViewer, {
       attachTo: document.body,
