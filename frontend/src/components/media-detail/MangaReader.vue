@@ -7,7 +7,6 @@ import {
   Columns2,
   GalleryHorizontal,
   Keyboard,
-  Loader2,
   RotateCcw,
   ScrollText,
   Square,
@@ -26,6 +25,7 @@ import { useReaderPager } from '../../composables/useReaderPager'
 import { useReaderImageBuffer } from '../../composables/useReaderImageBuffer'
 import { readerImageWindow } from '../../utils/readerImageWindow'
 import { useCompactViewport } from '../../composables/useCompactViewport'
+import ReaderLoading from './ReaderLoading.vue'
 
 export type MangaReadMode = 'single' | 'double' | 'webtoon'
 
@@ -867,10 +867,7 @@ function onReaderViewportResize() { preloadAdjacentPages() }
             @touchcancel.passive="slot.current && pagedZoom.onTouchEnd($event)"
             @gesturestart="pagedZoom.onGesture" @gesturechange="pagedZoom.onGesture"
           >
-            <div v-if="slot.edge" class="flex h-full flex-col items-center justify-center gap-3 text-meta text-white/75" role="status" aria-live="polite">
-              <Loader2 :size="28" class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
-              <span>{{ slot.edge === 'end' ? '正在加载后面的图片…' : '正在加载前面的图片…' }}</span>
-            </div>
+            <ReaderLoading v-if="slot.edge" class="h-full" :active="slot.index === pager.visualSlot.value" :label="slot.edge === 'end' ? '正在加载后面的图片…' : '正在加载前面的图片…'" />
             <!-- Centred while it fits, scrollable once zoomed past the viewport. -->
             <div v-else class="grid min-h-full min-w-full place-items-center" style="width: max-content">
               <!-- Key each page by its source, so a pending page never retains the previous bitmap. -->
@@ -897,8 +894,7 @@ function onReaderViewportResize() { preloadAdjacentPages() }
                     class="h-full w-full pointer-events-none"
                     :alt="imagePages?.[pageIndex]?.title || pageLabel(pageIndex)"
                   />
-                  <div v-else class="flex flex-col items-center justify-center gap-3 px-4 text-center text-meta text-white/75" role="status" aria-live="polite">
-                    <template v-if="pageFailed(pageIndex)">
+                  <div v-else-if="pageFailed(pageIndex)" class="flex flex-col items-center justify-center gap-3 px-4 text-center text-meta text-white/75" role="status" aria-live="polite">
                       <span>{{ pageLabel(pageIndex) }}加载失败</span>
                       <button
                         type="button"
@@ -906,12 +902,8 @@ function onReaderViewportResize() { preloadAdjacentPages() }
                         @mousedown.stop @touchstart.stop @dblclick.stop
                         @click.stop="imageBuffer.retry(pageUrlFor(pageIndex))"
                       >重新加载</button>
-                    </template>
-                    <template v-else>
-                      <Loader2 :size="28" class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                      <span>正在加载{{ pageLabel(pageIndex) }}…</span>
-                    </template>
                   </div>
+                  <ReaderLoading v-else :active="slot.current" :label="`正在加载${pageLabel(pageIndex)}…`" />
                 </div>
               </div>
             </div>

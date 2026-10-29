@@ -311,6 +311,7 @@ describe('MangaReader mobile webtoon mode and controls', () => {
   })
 
   it('turns pages with a native swipe, by spread in double mode, and reaches the next batch from the end slot', async () => {
+    vi.useFakeTimers()
     window.innerWidth = 390
     localStorage.setItem('he_image_read_mode_mobile', 'double')
     const pages = Array.from({ length: 5 }, (_, id) => ({ id: id + 300, title: `Image ${id}`, media_type: 'image' })) as Media[]
@@ -337,6 +338,8 @@ describe('MangaReader mobile webtoon mode and controls', () => {
     // Spreads [0,1] [2,3] [4]: slot 3 loads the next batch instead of a page.
     await swipeTo(3)
     expect(wrapper.emitted('boundary')).toEqual([[1]])
+    expect(wrapper.text()).not.toContain('正在加载后面的图片')
+    await vi.advanceTimersByTimeAsync(300)
     expect(wrapper.text()).toContain('正在加载后面的图片')
   })
 })

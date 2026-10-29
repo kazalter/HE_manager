@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, defineComponent } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import MangaReader from '../components/media-detail/MangaReader.vue'
@@ -125,6 +125,7 @@ const finishImage = async (index: number) => {
 }
 
 describe('canvas reader loading feedback', () => {
+  beforeEach(() => vi.useFakeTimers())
   it('uses new cache identities for manga pages and strip thumbnails', async () => {
     const wrapper = mountCanvasReader(false)
     await wrapper.setProps({ showControls: true })
@@ -141,14 +142,20 @@ describe('canvas reader loading feedback', () => {
     }
   })
 
-  it('replaces the old image with loading feedback until the next image has decoded', async () => {
+  it('delays feedback until the requested image has spent 300ms loading or decoding', async () => {
     const wrapper = mountCanvasReader()
+    expect(wrapper.text()).not.toContain('正在加载')
+    await vi.advanceTimersByTimeAsync(299)
+    expect(wrapper.text()).not.toContain('正在加载')
+    await vi.advanceTimersByTimeAsync(1)
     expect(wrapper.text()).toContain('正在加载第 1 张')
     expect(wrapper.findAll('.he-reader-canvas-page img')).toHaveLength(0)
     await finishImage(0)
     const first = wrapper.get('.he-reader-canvas-page img').element
     expect(wrapper.find('.he-reader-canvas-page [role="status"]').exists()).toBe(false)
     await wrapper.setProps({ currentPage: 1 })
+    expect(wrapper.text()).not.toContain('正在加载')
+    await vi.advanceTimersByTimeAsync(300)
     expect(wrapper.text()).toContain('正在加载第 2 张')
     expect(wrapper.get('.he-reader-canvas-page').attributes('aria-busy')).toBe('true')
     expect(wrapper.findAll('.he-reader-canvas-page img')).toHaveLength(0)
@@ -169,10 +176,27 @@ describe('canvas reader loading feedback', () => {
     await wrapper.setProps({ currentPage: 2 })
     await finishImage(0)
     await finishImage(1)
+    await vi.advanceTimersByTimeAsync(300)
     expect(wrapper.text()).toContain('正在加载第 3 张')
     expect(wrapper.findAll('.he-reader-canvas-page img')).toHaveLength(0)
     await finishImage(2)
     expect(wrapper.get('.he-reader-canvas-page img').attributes('src')).toContain('/stream/102')
+  })
+
+  it('never flashes feedback for fast images or after leaving a pending page', async () => {
+    const wrapper = mountCanvasReader()
+    await finishImage(0)
+    await wrapper.setProps({ currentPage: 1 })
+    await vi.advanceTimersByTimeAsync(100)
+    await finishImage(1)
+    await vi.advanceTimersByTimeAsync(400)
+    expect(wrapper.text()).not.toContain('正在加载')
+    await wrapper.setProps({ currentPage: 2 })
+    await vi.advanceTimersByTimeAsync(100)
+    await wrapper.setProps({ currentPage: 0 })
+    await vi.advanceTimersByTimeAsync(400)
+    expect(wrapper.text()).not.toContain('正在加载')
+    expect(wrapper.get('.he-reader-canvas-page img').attributes('src')).toContain('/stream/100')
   })
 
   it('shows cached decoded pages immediately when navigating back', async () => {
@@ -192,6 +216,8 @@ describe('canvas reader loading feedback', () => {
     expect(wrapper.text()).toContain('第 1 页加载失败')
     const retry = wrapper.get('.he-reader-canvas-page button')
     await retry.trigger('click')
+    expect(wrapper.text()).not.toContain('正在加载')
+    await vi.advanceTimersByTimeAsync(300)
     expect(wrapper.text()).toContain('正在加载第 1 页')
     expect(wrapper.emitted('viewerClick')).toBeUndefined()
     expect(wrapper.emitted('update:currentPage')).toBeUndefined()
@@ -207,11 +233,14 @@ describe('canvas reader loading feedback', () => {
     await wrapper.get('[title="双页跨页模式"]').trigger('click')
     await finishImage(0)
     expect(wrapper.findAll('.he-reader-canvas-page img')).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(300)
     expect(wrapper.text()).toContain('正在加载第 2 张')
     await wrapper.get('[title="普通从左往右翻 (LTR)"]').trigger('click')
     expect(wrapper.findAll('.he-reader-canvas-page').map(page => page.attributes('aria-label'))).toEqual(['第 2 张', '第 1 张'])
     await wrapper.setProps({ currentPage: 8 })
     expect(wrapper.findAll('.he-reader-canvas-page')).toHaveLength(1)
+    expect(wrapper.text()).not.toContain('正在加载')
+    await vi.advanceTimersByTimeAsync(300)
     expect(wrapper.text()).toContain('正在加载第 9 张')
   })
 })
