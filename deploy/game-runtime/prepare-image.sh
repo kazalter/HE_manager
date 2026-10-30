@@ -49,6 +49,7 @@ context="$mount_real/he-game-runtime-build"
 mkdir -p -- "$context/debs"
 cp -- "$(dirname -- "$0")/Dockerfile" "$context/Dockerfile"
 cp -- "$(dirname -- "$0")/stream-relay.py" "$context/stream-relay.py"
+cp -- "$(dirname -- "$0")/fix-pulse-owner.sh" "$context/fix-pulse-owner.sh"
 base='https://mirrors.aliyun.com/debian/pool/main'
 fetch() {
   local url="$1" target="$2" digest="$3" temporary="$2.download"

@@ -2,6 +2,8 @@
 FROM lscr.io/linuxserver/winegui@sha256:11b54e3c42d7b9cef20f22ba7cea4dc9767edca36794515ba766c5395bef8e2d
 
 COPY stream-relay.py /usr/local/bin/he-game-stream-relay
+COPY fix-pulse-owner.sh /custom-cont-init.d/99-he-manager-pulse-owner
+RUN chmod 0755 /custom-cont-init.d/99-he-manager-pulse-owner
 
 # Debian's Wine 8 is kept alongside WineHQ: this game's PlayDRM launcher
 # does not initialize correctly with the newer Wine shipped in the base.

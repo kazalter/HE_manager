@@ -180,16 +180,17 @@ def _validate_host_path(path: str, storage: Path, *, must_exist: bool = True) ->
     return candidate
 
 
-def _exec(container_id: str, command: list[str], *, working_dir: str = "/") -> None:
+def _exec(container_id: str, command: list[str], *, working_dir: str = "/",
+          user: str = "root", env: list[str] | None = None) -> None:
     result = _docker("POST", f"/containers/{container_id}/exec", body={
         "AttachStdin": False,
         "AttachStdout": False,
         "AttachStderr": False,
         "Detach": False,
         "Tty": False,
-        "User": "root",
+        "User": user,
         "WorkingDir": working_dir,
-        "Env": ["DISPLAY=:1", "WINEDEBUG=-all"],
+        "Env": ["DISPLAY=:0", "WINEDEBUG=-all", *(env or [])],
         "Cmd": command,
     })
     exec_id = (result or {}).get("Id")
@@ -198,25 +199,74 @@ def _exec(container_id: str, command: list[str], *, working_dir: str = "/") -> N
     _docker("POST", f"/exec/{exec_id}/start", body={"Detach": True, "Tty": False})
 
 
-def _run_launcher(container_id: str, launcher: str, wine: str, prefix: str) -> None:
-    prefix_path = Path(prefix)
-    if prefix_path.is_absolute() or ".." in prefix_path.parts:
-        raise GameRuntimeError("Wine 环境名称无效")
+def _exec_wait(container_id: str, command: list[str], *, user: str = "root",
+               working_dir: str = "/", timeout: float = 300.0) -> None:
     result = _docker("POST", f"/containers/{container_id}/exec", body={
         "AttachStdin": False,
         "AttachStdout": False,
         "AttachStderr": False,
-        "Detach": True,
+        "Detach": False,
         "Tty": False,
-        "User": "root",
-        "WorkingDir": "/games/dohnadohna",
-        "Env": ["DISPLAY=:1", "WINEDEBUG=-all", f"WINEPREFIX=/config/{prefix_path.as_posix()}"],
-        "Cmd": ["/bin/sh", "-c", "sleep 6; exec \"$1\" \"$2\"", "he-game-launcher", wine, launcher],
+        "User": user,
+        "WorkingDir": working_dir,
+        "Env": ["DISPLAY=:0", "WINEDEBUG=-all"],
+        "Cmd": command,
     })
     exec_id = (result or {}).get("Id")
     if not exec_id:
-        raise GameRuntimeError("无法启动游戏")
+        raise GameRuntimeError("无法准备游戏桌面")
     _docker("POST", f"/exec/{exec_id}/start", body={"Detach": True, "Tty": False})
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        inspected = _docker("GET", f"/exec/{exec_id}/json")
+        if not (inspected or {}).get("Running"):
+            if (inspected or {}).get("ExitCode") == 0:
+                return
+            raise GameRuntimeError("无法准备游戏桌面")
+        time.sleep(0.4)
+    raise GameRuntimeError("准备游戏桌面超时")
+
+
+def _run_launcher(container_id: str, launcher: str, wine: str, prefix: str,
+                  uid: int, gid: int, render_gid: str) -> None:
+    prefix_path = Path(prefix)
+    if prefix_path.is_absolute() or ".." in prefix_path.parts:
+        raise GameRuntimeError("Wine 环境名称无效")
+    uid_text, gid_text = str(uid), str(gid)
+    if uid < 0 or gid < 0 or (render_gid and not render_gid.isdecimal()):
+        raise GameRuntimeError("Wine 环境用户配置无效")
+
+    # XWayland belongs to abc. Grant only the Wine prefix owner access, then
+    # run Wine with that same identity so it accepts and can update the prefix.
+    grant_access = (
+        'set -eu; account="$(getent passwd "$1" | cut -d: -f1)"; '
+        '[ -n "$account" ]; exec xhost "+SI:localuser:$account"'
+    )
+    _exec_wait(container_id, ["/bin/sh", "-c", grant_access, "he-game-xhost", uid_text], user="abc")
+
+    groups = gid_text
+    if render_gid and render_gid != gid_text:
+        groups = f"{groups},{render_gid}"
+    home = f"/tmp/he-game-home-{uid_text}"
+    prepare_writable_copy = (
+        'set -eu; expected="$1:$2"; actual="$(stat -c "%u:%g" /games/dohnadohna)"; '
+        'if [ "$actual" != "$expected" ]; then chown -R "$expected" /games/dohnadohna; fi; '
+        'mkdir -p "$3"; chown -R "$expected" "$3"'
+    )
+    _exec_wait(container_id, [
+        "/bin/sh", "-c", prepare_writable_copy, "he-game-permissions",
+        uid_text, gid_text, home,
+    ])
+
+    start_wine = (
+        'sleep 6; exec setpriv --reuid="$1" --regid="$2" --groups="$3" '
+        'env DISPLAY=:0 WINEDEBUG=-all HOME="$4" WINEPREFIX="$5" "$6" "$7"'
+    )
+    _exec(container_id, [
+        "/bin/sh", "-c", start_wine, "he-game-launcher",
+        uid_text, gid_text, groups, home,
+        f"/config/{prefix_path.as_posix()}", wine, launcher,
+    ], working_dir="/games/dohnadohna")
 
 
 def _wait_for_desktop(container_id: str) -> None:
@@ -311,10 +361,10 @@ def start(media: models.Media, launcher: str, launchers: list[str]) -> tuple[dic
         session_id = secrets.token_urlsafe(18)
         subfolder = f"/games/session/{session_id}/"
         env = [
-            "DISPLAY=:1",
+            "DISPLAY=:0",
             "SUBFOLDER=" + subfolder,
             "SELKIES_DESKTOP=true",
-            "SELKIES_VIDEO_STREAMING_MODE=false",
+            "SELKIES_VIDEO_STREAMING_MODE=true",
             "SELKIES_ENABLE_BASIC_AUTH=false",
             "SELKIES_MANUAL_WIDTH=1280",
             "SELKIES_MANUAL_HEIGHT=720",
@@ -354,7 +404,11 @@ def start(media: models.Media, launcher: str, launchers: list[str]) -> tuple[dic
             _exec(container_id, ["/lsiopy/bin/python3", "/usr/local/bin/he-game-stream-relay",
                                  "--socket", "/run/he-game-stream/active.sock", "--port", "3000"])
             _wait_for_desktop(container_id)
-            _run_launcher(container_id, launcher, settings["wine"], settings["prefix"])
+            prefix_owner = prefix.stat()
+            _run_launcher(
+                container_id, launcher, settings["wine"], settings["prefix"],
+                prefix_owner.st_uid, prefix_owner.st_gid, settings["render_gid"],
+            )
         except Exception:
             try:
                 _docker("POST", f"/containers/{container_id}/stop", params={"t": "5"})
