@@ -258,7 +258,7 @@ def _run_launcher(container_id: str, launcher: str, wine: str, prefix: str,
     prepare_writable_copy = (
         'set -eu; expected="$1:$2"; actual="$(stat -c "%u:%g" /games/dohnadohna)"; '
         'if [ "$actual" != "$expected" ]; then chown -R "$expected" /games/dohnadohna; fi; '
-        'mkdir -p "$3"; chown -R "$expected" "$3"'
+        'mkdir -p "$3"; chown -R "$expected" "$3"; chmod 755 /defaults 2>/dev/null || true'
     )
     _exec_wait(container_id, [
         "/bin/sh", "-c", prepare_writable_copy, "he-game-permissions",
@@ -267,7 +267,7 @@ def _run_launcher(container_id: str, launcher: str, wine: str, prefix: str,
 
     start_wine = (
         'sleep 6; exec setpriv --reuid="$1" --regid="$2" --groups="$3" '
-        'env DISPLAY=:1 WINEDEBUG=-all LANG=ja_JP.UTF-8 LC_ALL=ja_JP.UTF-8 HOME="$4" WINEPREFIX="$5" "$6" "$7"'
+        'env DISPLAY=:1 WINEDEBUG=-all LANG=ja_JP.UTF-8 LC_ALL=ja_JP.UTF-8 PULSE_SERVER=unix:/defaults/native HOME="$4" WINEPREFIX="$5" "$6" "$7"'
     )
     _exec(container_id, [
         "/bin/sh", "-c", start_wine, "he-game-launcher",
