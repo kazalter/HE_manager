@@ -267,7 +267,7 @@ def _run_launcher(container_id: str, launcher: str, wine: str, prefix: str,
 
     start_wine = (
         'sleep 6; exec setpriv --reuid="$1" --regid="$2" --groups="$3" '
-        'env DISPLAY=:1 WINEDEBUG=-all HOME="$4" WINEPREFIX="$5" "$6" "$7"'
+        'env DISPLAY=:1 WINEDEBUG=-all LANG=ja_JP.UTF-8 LC_ALL=ja_JP.UTF-8 HOME="$4" WINEPREFIX="$5" "$6" "$7"'
     )
     _exec(container_id, [
         "/bin/sh", "-c", start_wine, "he-game-launcher",
@@ -373,6 +373,7 @@ def start(media: models.Media, launcher: str, launchers: list[str]) -> tuple[dic
             "PIXELFLUX_WAYLAND=false",
             "SELKIES_DESKTOP=false",
             "SELKIES_VIDEO_STREAMING_MODE=true",
+            "SELKIES_USE_CPU=true|locked",
             "SELKIES_ENABLE_BASIC_AUTH=false",
             "SELKIES_MANUAL_WIDTH=1280",
             "SELKIES_MANUAL_HEIGHT=720",
