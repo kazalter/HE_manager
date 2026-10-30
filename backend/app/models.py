@@ -17,7 +17,7 @@ class Folder(Base):
     id = Column(Integer, primary_key=True, index=True)
     path = Column(String, unique=True, index=True)
     status = Column(String, default="idle")  # idle, scanning, error
-    # auto / manga / video / image
+    # auto / manga / video / image / game
     # / audio       — single-file audio (one Media per .mp3/.wav/etc., scanner walks tree)
     # / audio_work  — folder-of-audio (one Media per work folder; identified by
     #                 tracks.json / source.txt / direct audio files. ASMR
@@ -37,7 +37,7 @@ class Media(Base):
     title = Column(String, index=True)
     relative_path = Column(String)
     absolute_path = Column(String, unique=True)
-    media_type = Column(String, index=True)  # 'video', 'manga', 'image', or 'audio'
+    media_type = Column(String, index=True)  # video, manga, image, audio, or game
     extension = Column(String)
     file_size = Column(Integer)
     cover_path = Column(String, nullable=True)  # Path to the generated thumbnail

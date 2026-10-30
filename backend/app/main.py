@@ -22,6 +22,7 @@ from .routers import bd2 as bd2_routes
 from .routers import creators as creators_routes
 from .routers import dedup as dedup_routes
 from .routers import external as external_routes
+from .routers import games as game_routes
 from .routers import discard as discard_routes
 from .routers import media as media_routes
 from .routers import pawchive as pawchive_routes
@@ -111,6 +112,7 @@ app.include_router(stats_routes.router)
 app.include_router(creators_routes.router)
 app.include_router(dedup_routes.router)
 app.include_router(external_routes.router)
+app.include_router(game_routes.router)
 app.include_router(pawchive_routes.router)
 app.include_router(auto_sync_routes.router)
 app.include_router(bd2_routes.router)
@@ -135,6 +137,7 @@ PUBLIC_PATHS = {
 ADMIN_PREFIXES = (
     "/users",
     "/folders",
+    "/games",
     "/search-folder",
     "/system",
     "/external",
