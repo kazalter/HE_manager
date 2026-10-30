@@ -190,7 +190,7 @@ def _exec(container_id: str, command: list[str], *, working_dir: str = "/",
         "Tty": False,
         "User": user,
         "WorkingDir": working_dir,
-        "Env": ["DISPLAY=:0", "WINEDEBUG=-all", *(env or [])],
+        "Env": ["DISPLAY=:1", "WINEDEBUG=-all", *(env or [])],
         "Cmd": command,
     })
     exec_id = (result or {}).get("Id")
@@ -209,7 +209,7 @@ def _exec_wait(container_id: str, command: list[str], *, user: str = "root",
         "Tty": False,
         "User": user,
         "WorkingDir": working_dir,
-        "Env": ["DISPLAY=:0", "WINEDEBUG=-all"],
+        "Env": ["DISPLAY=:1", "WINEDEBUG=-all"],
         "Cmd": command,
     })
     exec_id = (result or {}).get("Id")
@@ -240,8 +240,8 @@ def _run_launcher(container_id: str, launcher: str, wine: str, prefix: str,
     if uid < 0 or gid < 0 or (render_gid and not render_gid.isdecimal()):
         raise GameRuntimeError("Wine 环境用户配置无效")
 
-    # XWayland belongs to abc. Grant only the Wine prefix owner access, then
-    # run Wine with that same identity so it accepts and can update the prefix.
+    # The X11 server belongs to abc. Grant only the Wine prefix owner access,
+    # then run Wine with that same identity so it accepts and can update the prefix.
     grant_access = (
         'set -eu; account="$(getent passwd "$1" | cut -d: -f1)"; '
         '[ -n "$account" ]; attempt=0; '
@@ -267,7 +267,7 @@ def _run_launcher(container_id: str, launcher: str, wine: str, prefix: str,
 
     start_wine = (
         'sleep 6; exec setpriv --reuid="$1" --regid="$2" --groups="$3" '
-        'env DISPLAY=:0 WINEDEBUG=-all HOME="$4" WINEPREFIX="$5" "$6" "$7"'
+        'env DISPLAY=:1 WINEDEBUG=-all HOME="$4" WINEPREFIX="$5" "$6" "$7"'
     )
     _exec(container_id, [
         "/bin/sh", "-c", start_wine, "he-game-launcher",
@@ -368,9 +368,10 @@ def start(media: models.Media, launcher: str, launchers: list[str]) -> tuple[dic
         session_id = secrets.token_urlsafe(18)
         subfolder = f"/games/session/{session_id}/"
         env = [
-            "DISPLAY=:0",
+            "DISPLAY=:1",
             "SUBFOLDER=" + subfolder,
-            "SELKIES_DESKTOP=true",
+            "PIXELFLUX_WAYLAND=false",
+            "SELKIES_DESKTOP=false",
             "SELKIES_VIDEO_STREAMING_MODE=true",
             "SELKIES_ENABLE_BASIC_AUTH=false",
             "SELKIES_MANUAL_WIDTH=1280",
