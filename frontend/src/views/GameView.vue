@@ -55,7 +55,7 @@ const load = async () => {
     const [mediaRes, launchersRes, sessionRes] = await Promise.all([
       axios.get<Media>(`${API_BASE_URL}/media/${mediaId.value}`),
       axios.get<{ launchers: string[]; suggested: string | null }>(`${API_BASE_URL}/games/${mediaId.value}/launchers`),
-      axios.get<GameSession>(`${API_BASE_URL}/games/session`),
+      axios.get<GameSession>(`${API_BASE_URL}/games/status`),
     ])
     if (current !== requestId.value) return
     if (mediaRes.data.media_type !== 'game') throw new Error('该媒体不是游戏文件夹')
@@ -81,7 +81,7 @@ const start = async () => {
   } catch (err: any) {
     error.value = detailError(err)
     if (err?.response?.status === 409) {
-      try { session.value = (await axios.get<GameSession>(`${API_BASE_URL}/games/session`)).data } catch { /* Keep the launch error visible. */ }
+      try { session.value = (await axios.get<GameSession>(`${API_BASE_URL}/games/status`)).data } catch { /* Keep the launch error visible. */ }
     }
   } finally {
     starting.value = false

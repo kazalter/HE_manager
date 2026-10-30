@@ -23,7 +23,7 @@ def _runtime_call(fn, *args):
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
-@router.get("/session")
+@router.get("/status")
 def get_game_session(request: Request, response: Response):
     try:
         return game_runtime.status(request, response)
