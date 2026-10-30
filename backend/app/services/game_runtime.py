@@ -222,6 +222,10 @@ def _exec_wait(container_id: str, command: list[str], *, user: str = "root",
         if not (inspected or {}).get("Running"):
             if (inspected or {}).get("ExitCode") == 0:
                 return
+            logger.warning(
+                "Game container preparation command exited with code %s",
+                (inspected or {}).get("ExitCode"),
+            )
             raise GameRuntimeError("无法准备游戏桌面")
         time.sleep(0.4)
     raise GameRuntimeError("准备游戏桌面超时")
@@ -240,7 +244,10 @@ def _run_launcher(container_id: str, launcher: str, wine: str, prefix: str,
     # run Wine with that same identity so it accepts and can update the prefix.
     grant_access = (
         'set -eu; account="$(getent passwd "$1" | cut -d: -f1)"; '
-        '[ -n "$account" ]; exec xhost "+SI:localuser:$account"'
+        '[ -n "$account" ]; attempt=0; '
+        'while [ "$attempt" -lt 30 ]; do '
+        'if xhost "+SI:localuser:$account" >/dev/null 2>&1; then exit 0; fi; '
+        'attempt=$((attempt + 1)); sleep 1; done; exit 1'
     )
     _exec_wait(container_id, ["/bin/sh", "-c", grant_access, "he-game-xhost", uid_text], user="abc")
 
