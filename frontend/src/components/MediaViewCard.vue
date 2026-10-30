@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Book, Check, Film, Headphones, Image as ImageIcon, Play, Star } from 'lucide-vue-next'
+import { Book, Check, Film, Gamepad2, Headphones, Image as ImageIcon, Play, Star } from 'lucide-vue-next'
 import { thumbnailUrl } from '../config'
 import mediaPlaceholderUrl from '../assets/media-placeholder.svg?no-inline'
 import type { Media } from '../types'
@@ -23,6 +23,7 @@ const typeLabel = computed(() => {
   if (props.media.media_type === 'video') return '视频'
   if (props.media.media_type === 'manga') return '漫画'
   if (props.media.media_type === 'audio') return '音频'
+  if (props.media.media_type === 'game') return '游戏'
   return '杂图'
 })
 
@@ -153,6 +154,7 @@ const imageAspect = computed(() => {
         <Film v-if="media.media_type === 'video'" :size="12" aria-hidden="true" />
         <Book v-else-if="media.media_type === 'manga'" :size="12" aria-hidden="true" />
         <Headphones v-else-if="media.media_type === 'audio'" :size="12" aria-hidden="true" />
+        <Gamepad2 v-else-if="media.media_type === 'game'" :size="12" aria-hidden="true" />
         <ImageIcon v-else :size="12" aria-hidden="true" />
         <span>{{ typeLabel }}</span>
         <template v-if="progressPercent"><span class="text-faint" aria-hidden="true">·</span><span>已看 {{ progressPercent }}%</span></template>

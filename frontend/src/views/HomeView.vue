@@ -212,7 +212,7 @@ const progressPercent = (media: Media) => {
 }
 
 const typeLabel = (type: Media['media_type']) =>
-  type === 'video' ? '视频' : type === 'manga' ? '漫画' : type === 'audio' ? '音频' : '杂图'
+  type === 'video' ? '视频' : type === 'manga' ? '漫画' : type === 'audio' ? '音频' : type === 'game' ? '游戏' : '杂图'
 
 const formatClock = (seconds: number) => {
   const total = Math.max(0, Math.floor(seconds))
@@ -236,7 +236,7 @@ const continueThumbClass = (media: Media) =>
   media.media_type === 'video' ? 'w-24' : media.media_type === 'audio' ? 'w-16' : 'w-11'
 
 const continueTitle = computed(() =>
-  displayedType.value === 'manga' ? '继续阅读' : displayedType.value === 'audio' ? '继续收听' : displayedType.value === 'image' ? '最近浏览' : '继续观看')
+  displayedType.value === 'manga' ? '继续阅读' : displayedType.value === 'audio' ? '继续收听' : displayedType.value === 'image' ? '最近浏览' : displayedType.value === 'game' ? '最近玩过' : '继续观看')
 
 const recentlyOpened = computed(() => {
   return [...continueMedia.value]
@@ -327,6 +327,7 @@ const pageTitle = computed(() => {
   if (props.mediaType === 'manga') return '所有漫画'
   if (props.mediaType === 'image') return '所有杂图'
   if (props.mediaType === 'audio') return '所有音频'
+  if (props.mediaType === 'game') return '所有游戏'
   if (favoriteOnly.value) return '我的收藏'
   return '全部媒体'
 })
@@ -583,6 +584,10 @@ const canKeepImageReader = (mediaId: number) => !desktopBridge && selectedMedia.
   && viewerMediaList.value.some(item => item.id === mediaId && item.media_type === 'image' && !item.is_missing)
 
 const openMedia = (media: Media, replace = false) => {
+  if (media.media_type === 'game') {
+    void router.push({ name: 'game', params: { mediaId: media.id } })
+    return
+  }
   if (!replace || viewerMediaList.value.length === 0) resetViewerMediaList(media)
   if (!replace || !canKeepImageReader(media.id)) selectedMedia.value = null
   const location = {
@@ -693,7 +698,7 @@ const filterKeydown = (event: KeyboardEvent) => {
   if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
 }
-const mobileCategories = [ { label: '全部', path: '/' }, { label: '漫画', path: '/type/manga' }, { label: '视频', path: '/type/video' }, { label: '音频', path: '/type/audio' }, { label: '图片', path: '/type/image' } ]
+const mobileCategories = [ { label: '全部', path: '/' }, { label: '漫画', path: '/type/manga' }, { label: '视频', path: '/type/video' }, { label: '音频', path: '/type/audio' }, { label: '图片', path: '/type/image' }, { label: '游戏', path: '/type/game' } ]
 watch(() => route.query.media, () => {
   syncSelectedMediaFromRoute()
 })
@@ -985,7 +990,7 @@ onMounted(async () => {
               <div class="h-full rounded-full bg-accent" :style="{ width: `${progressPercent(featuredContinue)}%` }"></div>
             </div>
             <div class="flex flex-wrap gap-2 pt-1">
-              <UiButton variant="primary" @click="openMedia(featuredContinue)"><template #icon><Play :size="15" fill="currentColor" aria-hidden="true" /></template>继续{{ featuredContinue.media_type === 'manga' ? '阅读' : featuredContinue.media_type === 'audio' ? '收听' : '观看' }}</UiButton>
+              <UiButton variant="primary" @click="openMedia(featuredContinue)"><template #icon><Play :size="15" fill="currentColor" aria-hidden="true" /></template>继续{{ featuredContinue.media_type === 'manga' ? '阅读' : featuredContinue.media_type === 'audio' ? '收听' : featuredContinue.media_type === 'game' ? '游玩' : '观看' }}</UiButton>
               <UiButton v-if="recentlyOpened.length > 1" variant="secondary" @click="showOtherContinueItems">看看其他继续项</UiButton>
             </div>
           </div>

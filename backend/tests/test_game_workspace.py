@@ -21,7 +21,8 @@ class GameWorkspaceTest(unittest.TestCase):
         self.temp.cleanup()
 
     def prepare(self):
-        return prepare_game_copy(self.library, self.source, self.mount, self.workspaces, reserve_bytes=10)
+        with patch("app.services.game_workspace._is_system_filesystem", return_value=False):
+            return prepare_game_copy(self.library, self.source, self.mount, self.workspaces, reserve_bytes=10)
 
     def test_unmounted_disk_is_rejected_before_creating_a_directory(self):
         with patch("app.services.game_workspace.os.path.ismount", return_value=False):
@@ -36,6 +37,11 @@ class GameWorkspaceTest(unittest.TestCase):
             with self.assertRaises(GameWorkspaceError):
                 self.prepare()
         self.assertEqual(list(self.workspaces.iterdir()), [])
+
+    def test_system_disk_is_rejected(self):
+        with patch("app.services.game_workspace.os.path.ismount", return_value=True):
+            with self.assertRaises(GameWorkspaceError):
+                prepare_game_copy(self.library, self.source, self.mount, self.workspaces, reserve_bytes=0)
 
     def test_copy_is_reused_and_never_overwrites_player_changes(self):
         with patch("app.services.game_workspace.os.path.ismount", return_value=True):
@@ -56,7 +62,8 @@ class GameWorkspaceTest(unittest.TestCase):
                 self.prepare()
 
     def test_source_outside_library_and_workspace_outside_mount_are_rejected(self):
-        with patch("app.services.game_workspace.os.path.ismount", return_value=True):
+        with patch("app.services.game_workspace.os.path.ismount", return_value=True), \
+             patch("app.services.game_workspace._is_system_filesystem", return_value=False):
             with self.assertRaises(GameWorkspaceError):
                 prepare_game_copy(self.library, self.mount, self.mount, self.workspaces, reserve_bytes=0)
             with self.assertRaises(GameWorkspaceError):

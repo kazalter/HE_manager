@@ -133,6 +133,8 @@ PUBLIC_PATHS = {
     "/auth/status",
     "/auth/login",
     "/auth/bootstrap",
+    # Nginx uses this narrow capability check for the game WebSocket/stream.
+    "/games/stream-auth",
 }
 ADMIN_PREFIXES = (
     "/users",

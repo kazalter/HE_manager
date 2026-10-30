@@ -15,6 +15,11 @@ class GameWorkspaceError(RuntimeError):
     pass
 
 
+def _is_system_filesystem(mount: Path) -> bool:
+    system_root = Path(os.environ.get("SystemDrive", "C:") + os.sep) if os.name == "nt" else Path(os.sep)
+    return mount.stat().st_dev == system_root.stat().st_dev
+
+
 def _contained_directory(root: Path, source: Path) -> tuple[Path, Path]:
     if source.is_symlink():
         raise GameWorkspaceError("游戏目录不能是符号链接")
@@ -53,6 +58,8 @@ def prepare_game_copy(library_root: Path, source: Path, storage_mount: Path,
     mount = storage_mount.resolve(strict=True)
     if not os.path.ismount(mount):
         raise GameWorkspaceError("游戏存储磁盘未挂载")
+    if _is_system_filesystem(mount):
+        raise GameWorkspaceError("游戏工作目录不能使用系统磁盘")
     _root, source = _contained_directory(library_root, source)
     workspace_root = workspace_root.resolve(strict=False)
     if workspace_root == mount or mount not in workspace_root.parents:
