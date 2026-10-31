@@ -1,0 +1,374 @@
+{
+  "environment": "Desktop Chrome 156, mobile emulation 390x844 DPR3; controlled API/image replay; not iPhone Safari",
+  "before": [
+    {
+      "kind": "image-known",
+      "metrics": {
+        "LayoutCount": 59,
+        "RecalcStyleCount": 55,
+        "LayoutDuration": 0.010227,
+        "RecalcStyleDuration": 0.007897,
+        "ScriptDuration": 0.031596,
+        "TaskDuration": 0.329011,
+        "JSHeapUsedSize": 6201020,
+        "Nodes": 2208
+      },
+      "dom": {
+        "mutations": 297,
+        "removedImages": 19,
+        "addedImages": 19,
+        "shifts": [
+          {
+            "value": 0.00015902445777532816,
+            "recent": false
+          }
+        ],
+        "longtasks": [],
+        "frameP95": 16.799999999999272,
+        "slowFrames": 2,
+        "rootHeight": 16672,
+        "rootScroll": 3521,
+        "scale": 2.42608642578125,
+        "domImages": 63,
+        "readerImages": 3,
+        "readerNodes": 108
+      },
+      "errors": []
+    },
+    {
+      "kind": "image-unknown",
+      "metrics": {
+        "LayoutCount": 95,
+        "RecalcStyleCount": 85,
+        "LayoutDuration": 0.014297,
+        "RecalcStyleDuration": 0.010047,
+        "ScriptDuration": 0.039738,
+        "TaskDuration": 0.469094,
+        "JSHeapUsedSize": 6411080,
+        "Nodes": 2210
+      },
+      "dom": {
+        "mutations": 464,
+        "removedImages": 45,
+        "addedImages": 45,
+        "shifts": [
+          {
+            "value": 0.19253554502369669,
+            "recent": false
+          },
+          {
+            "value": 0.11552132701421801,
+            "recent": false
+          },
+          {
+            "value": 0.19253554502369669,
+            "recent": false
+          },
+          {
+            "value": 0.11552132701421801,
+            "recent": false
+          },
+          {
+            "value": 0.11552132701421801,
+            "recent": false
+          },
+          {
+            "value": 0.19253554502369669,
+            "recent": false
+          },
+          {
+            "value": 0.19253554502369669,
+            "recent": false
+          },
+          {
+            "value": 0.11552132701421801,
+            "recent": false
+          }
+        ],
+        "longtasks": [],
+        "frameP95": 16.800000000000182,
+        "slowFrames": 4,
+        "rootHeight": 17517,
+        "rootScroll": 3677,
+        "scale": 2.42608642578125,
+        "domImages": 63,
+        "readerImages": 3,
+        "readerNodes": 108
+      },
+      "errors": []
+    },
+    {
+      "kind": "manga",
+      "metrics": {
+        "LayoutCount": 184,
+        "RecalcStyleCount": 160,
+        "LayoutDuration": 0.028505,
+        "RecalcStyleDuration": 0.021662,
+        "ScriptDuration": 0.036598,
+        "TaskDuration": 0.86788,
+        "JSHeapUsedSize": 6902972,
+        "Nodes": 2441
+      },
+      "dom": {
+        "mutations": 509,
+        "removedImages": 20,
+        "addedImages": 21,
+        "shifts": [
+          {
+            "value": 0.00015902445777532816,
+            "recent": false
+          },
+          {
+            "value": 0.48918926602052965,
+            "recent": false
+          },
+          {
+            "value": 0.48918926602052965,
+            "recent": false
+          }
+        ],
+        "longtasks": [],
+        "frameP95": 16.800000000000182,
+        "slowFrames": 7,
+        "rootHeight": 16672,
+        "rootScroll": 3687,
+        "scale": 2.42608642578125,
+        "domImages": 86,
+        "readerImages": 4,
+        "readerNodes": 191
+      },
+      "errors": []
+    }
+  ],
+  "after": [
+    {
+      "kind": "image-known",
+      "metrics": {
+        "LayoutCount": 58,
+        "RecalcStyleCount": 41,
+        "LayoutDuration": 0.011772,
+        "RecalcStyleDuration": 0.011147,
+        "ScriptDuration": 0.051561,
+        "TaskDuration": 0.41054,
+        "JSHeapUsedSize": 6255408,
+        "Nodes": 2207
+      },
+      "dom": {
+        "mutations": 235,
+        "removedImages": 6,
+        "addedImages": 7,
+        "shifts": [
+          {
+            "value": 6.973264993356635e-05,
+            "recent": true
+          }
+        ],
+        "longtasks": [],
+        "frameP95": 16.800000000000182,
+        "slowFrames": 2,
+        "rootHeight": 32500,
+        "rootScroll": 3807,
+        "scale": 2.42608642578125,
+        "domImages": 64,
+        "readerImages": 4,
+        "readerNodes": 109
+      },
+      "errors": []
+    },
+    {
+      "kind": "image-unknown",
+      "metrics": {
+        "LayoutCount": 61,
+        "RecalcStyleCount": 45,
+        "LayoutDuration": 0.01139,
+        "RecalcStyleDuration": 0.01161,
+        "ScriptDuration": 0.056854,
+        "TaskDuration": 0.470348,
+        "JSHeapUsedSize": 6312892,
+        "Nodes": 2207
+      },
+      "dom": {
+        "mutations": 254,
+        "removedImages": 8,
+        "addedImages": 9,
+        "shifts": [
+          {
+            "value": 6.973264993356635e-05,
+            "recent": true
+          }
+        ],
+        "longtasks": [],
+        "frameP95": 16.800000000000182,
+        "slowFrames": 1,
+        "rootHeight": 34710,
+        "rootScroll": 3700,
+        "scale": 2.42608642578125,
+        "domImages": 64,
+        "readerImages": 4,
+        "readerNodes": 109
+      },
+      "errors": []
+    },
+    {
+      "kind": "manga",
+      "metrics": {
+        "LayoutCount": 101,
+        "RecalcStyleCount": 96,
+        "LayoutDuration": 0.013881,
+        "RecalcStyleDuration": 0.01419,
+        "ScriptDuration": 0.044199999999999996,
+        "TaskDuration": 0.5378769999999999,
+        "JSHeapUsedSize": 7809912,
+        "Nodes": 2538
+      },
+      "dom": {
+        "mutations": 321,
+        "removedImages": 6,
+        "addedImages": 7,
+        "shifts": [
+          {
+            "value": 0.0005349247459712184,
+            "recent": false
+          },
+          {
+            "value": 6.973264993356635e-05,
+            "recent": false
+          }
+        ],
+        "longtasks": [],
+        "frameP95": 16.799999999999272,
+        "slowFrames": 2,
+        "rootHeight": 32500,
+        "rootScroll": 3352,
+        "scale": 2.42608642578125,
+        "domImages": 82,
+        "readerImages": 4,
+        "readerNodes": 179
+      },
+      "errors": []
+    }
+  ],
+  "wnacg_reference": [
+    {
+      "kind": "wnacg-reference",
+      "metrics": {
+        "LayoutCount": 28,
+        "RecalcStyleCount": 174,
+        "LayoutDuration": 0.009,
+        "RecalcStyleDuration": 0.0168,
+        "ScriptDuration": 0.010692,
+        "TaskDuration": 0.157609,
+        "JSHeapUsedSize": 2446268,
+        "Nodes": 314
+      },
+      "dom": {
+        "mutations": 45,
+        "removedImages": 0,
+        "addedImages": 9,
+        "shifts": [],
+        "longtasks": [
+          90
+        ],
+        "frameP95": 16.799999999999272,
+        "slowFrames": 1,
+        "rootHeight": 32884,
+        "rootScroll": 4095,
+        "scale": 2.42608642578125,
+        "domImages": 30,
+        "readerImages": 30,
+        "readerNodes": 93
+      },
+      "errors": []
+    }
+  ],
+  "geometry_regression": [
+    {
+      "type": "image",
+      "standalone": false,
+      "before": {
+        "top": 0,
+        "height": 35100,
+        "documentHeight": 35100,
+        "library": "none",
+        "first": 0,
+        "scrollY": 0
+      },
+      "zoomed": {
+        "scale": 2.42608642578125,
+        "transform": "",
+        "top": 0
+      },
+      "closed": {
+        "active": false,
+        "scale": 1,
+        "library": "block"
+      }
+    },
+    {
+      "type": "image",
+      "standalone": true,
+      "before": {
+        "top": 0,
+        "height": 35100,
+        "documentHeight": 35100,
+        "library": "none",
+        "first": 0,
+        "scrollY": 0
+      },
+      "zoomed": {
+        "scale": 2.42608642578125,
+        "transform": "",
+        "top": 0
+      },
+      "closed": {
+        "active": false,
+        "scale": 1,
+        "library": "block"
+      }
+    },
+    {
+      "type": "manga",
+      "standalone": false,
+      "before": {
+        "top": 0,
+        "height": 35100,
+        "documentHeight": 35100,
+        "library": "none",
+        "first": 0,
+        "scrollY": 0
+      },
+      "zoomed": {
+        "scale": 2.42608642578125,
+        "transform": "",
+        "top": 0
+      },
+      "closed": {
+        "active": false,
+        "scale": 1,
+        "library": "block"
+      }
+    },
+    {
+      "type": "manga",
+      "standalone": true,
+      "before": {
+        "top": 0,
+        "height": 35100,
+        "documentHeight": 35100,
+        "library": "none",
+        "first": 0,
+        "scrollY": 0
+      },
+      "zoomed": {
+        "scale": 2.42608642578125,
+        "transform": "",
+        "top": 0
+      },
+      "closed": {
+        "active": false,
+        "scale": 1,
+        "library": "block"
+      }
+    }
+  ]
+}

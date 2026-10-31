@@ -270,6 +270,10 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                     if existing:
                         existing.is_missing = False
                         existing.missing_since = None
+                        if target_type == 'image' and (not existing.width or not existing.height):
+                            metadata = get_image_metadata(file_path)
+                            if metadata['width'] and metadata['height']:
+                                existing.width, existing.height = metadata['width'], metadata['height']
                         continue
 
                     rel_path = os.path.relpath(file_path, folder.path)

@@ -499,10 +499,14 @@ html.he-webtoon-document body {
   overflow: visible !important;
 }
 .he-webtoon-document .he-media-overlay {
-  position: absolute;
-  bottom: auto;
+  position: relative;
+  display: block;
+  inset: auto;
+  height: auto;
   min-height: 100dvh;
 }
+/* Teleported reading content is the entire document; the library is suspended underneath. */
+.he-webtoon-document #app { display: none; }
 .he-webtoon-document .he-media-layout,
 .he-webtoon-document .he-media-layout > section,
 .he-native-webtoon,

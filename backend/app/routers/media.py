@@ -208,7 +208,19 @@ def list_media(
     if offset is not None:
         query = query.offset(max(0, offset))
 
-    return query.all()
+    items = query.all()
+    # Old imports can lack geometry. The reader needs it before laying out the
+    # strip, not after each full image finishes downloading and decoding.
+    dimensions_changed = False
+    for item in items:
+        if item.media_type == 'image' and (not item.width or not item.height) and not item.is_missing:
+            dimensions = scanner.get_image_metadata(item.absolute_path)
+            if dimensions['width'] and dimensions['height']:
+                item.width, item.height = dimensions['width'], dimensions['height']
+                dimensions_changed = True
+    if dimensions_changed:
+        db.commit()
+    return items
 
 
 @router.get("/mobile/media", response_model=List[schemas.Media])
@@ -277,6 +289,11 @@ def get_media(media_id: int, db: Session = Depends(get_db)):
     if media.is_missing and os.path.exists(media.absolute_path):
         media.is_missing = False
         media.missing_since = None
+
+    if media.media_type == 'image' and (not media.width or not media.height):
+        dimensions = scanner.get_image_metadata(media.absolute_path)
+        if dimensions['width'] and dimensions['height']:
+            media.width, media.height = dimensions['width'], dimensions['height']
 
     media.last_opened_at = datetime.utcnow()
     if media.view_status == "unviewed":

@@ -579,7 +579,9 @@ const pageDimensionsFor = (page: number): [number, number] => {
   const state = imageBuffer.states.get(pageUrlFor(page))
   return state?.width && state.height ? [state.width, state.height] : [2, 3]
 }
-const pageReady = (page: number) => imageBuffer.isDecoded(pageUrlFor(page))
+const pageReady = (page: number) => readMode.value === 'webtoon'
+  ? imageBuffer.states.get(pageUrlFor(page))?.status === 'ready'
+  : imageBuffer.isDecoded(pageUrlFor(page))
 const pageResident = (page: number) => imageBuffer.isResident(pageUrlFor(page))
 const pageFailed = (page: number) => imageBuffer.states.get(pageUrlFor(page))?.status === 'error'
 const pageAtOffset = (offset: number) => {

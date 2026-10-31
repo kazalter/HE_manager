@@ -71,6 +71,18 @@ it('ignores a canceled decode after jumping to a different window', async () => 
   buffer.dispose()
 })
 
+it('keeps a nearby loaded DOM image resident when the separate decoded bitmap budget evicts it', async () => {
+  vi.stubGlobal('Image', ControlledImage)
+  const buffer = useReaderImageBuffer(undefined, { maxImages: 1 })
+  buffer.requestWindow(['visible', 'neighbor'])
+  await finish(0); await finish(1)
+  expect(buffer.isDecoded('neighbor')).toBe(false)
+  expect(buffer.isResident('neighbor')).toBe(true)
+  buffer.requestWindow(['far'])
+  expect(buffer.isResident('neighbor')).toBe(false)
+  buffer.dispose()
+})
+
 it('prioritizes every visible page and keeps prefetch balanced when reversing direction', () => {
   const down = readerImageWindow(40, 10, 14, 1, () => [800, 1200])
   const up = readerImageWindow(40, 10, 14, -1, () => [800, 1200])

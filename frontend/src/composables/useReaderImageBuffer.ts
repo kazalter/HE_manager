@@ -159,6 +159,9 @@ export function useReaderImageBuffer(
   const dispose = () => { clear(); disposed = true }
   return { states, requestWindow, retry, clear, dispose,
     isDecoded: (url: string) => decoded.has(url),
-    isResident: (url: string) => decoded.has(url) || loading.has(url),
+    // Decoder LRU eviction is not a reason to detach a nearby displayed img.
+    // Let the browser retain its own pixels until it leaves the request window.
+    isResident: (url: string) => decoded.has(url) || loading.has(url)
+      || (wanted.has(url) && states.get(url)?.status === 'ready'),
   }
 }
