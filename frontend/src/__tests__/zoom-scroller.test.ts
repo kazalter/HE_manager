@@ -180,6 +180,82 @@ describe('pinch', () => {
   })
 })
 
+describe('bounded continuous columns', () => {
+  const column = () => create({ centered: false, boundedPinch: true }, surface({ width: 400, height: 800 }, { width: 400, height: 60000 }, false))
+
+  it('stays at fit while fingers are down and responds immediately when reversing at the minimum', () => {
+    const { zoom, screenOf, scroller } = column()
+    scroller.scrollTop = 25000
+    pinch(zoom, [[100, 400], [300, 400]], [[190, 400], [210, 400]])
+    expect(screenOf(400, 0).x - screenOf(0, 0).x).toBeCloseTo(400)
+    expect(screenOf(200, 25400).y).toBeCloseTo(400)
+    zoom.onTouchMove(touchEvent([[185, 400], [215, 400]])); flushFrames(1)
+    expect(screenOf(400, 0).x - screenOf(0, 0).x).toBeCloseTo(600)
+    release(zoom, [[185, 400], [215, 400]])
+    expect(zoom.scale.value).toBeCloseTo(1.5)
+    expect(zoom.isGesturing.value).toBe(false)
+    expect(screenOf(200, 25400).y).toBeCloseTo(400)
+  })
+
+  it('keeps the focal point through repeated deep-chapter layout commits', () => {
+    const { zoom, scroller, screenOf, content } = column()
+    scroller.scrollTop = 58000
+    pinch(zoom, [[150, 400], [250, 400]], [[100, 420], [300, 420]])
+    expect(screenOf(200, 58400).x).toBeCloseTo(200)
+    expect(screenOf(200, 58400).y).toBeCloseTo(420)
+    release(zoom, [[100, 420], [300, 420]])
+    expect(screenOf(200, 58400).x).toBeCloseTo(200)
+    expect(screenOf(200, 58400).y).toBeCloseTo(420)
+    expect(content.style.transform).toBe('')
+    pinch(zoom, [[100, 420], [300, 420]], [[150, 420], [250, 420]])
+    release(zoom, [[150, 420], [250, 420]])
+    expect(zoom.scale.value).toBeCloseTo(1)
+    expect(screenOf(200, 58400).y).toBeCloseTo(420)
+  })
+
+  it('clamps the maximum and pan edges live without bouncing after release', () => {
+    const { zoom, scroller, screenOf } = column()
+    pinch(zoom, [[190, 400], [210, 400]], [[0, 400], [400, 400]])
+    expect(screenOf(400, 0).x - screenOf(0, 0).x).toBeCloseTo(2000)
+    zoom.onTouchMove(touchEvent([[1000, 400], [1400, 400]])); flushFrames(1)
+    expect(screenOf(0, 0).x).toBeCloseTo(0)
+    release(zoom, [[1000, 400], [1400, 400]])
+    expect(zoom.scale.value).toBe(5)
+    expect(scroller.scrollLeft).toBe(0)
+    expect(zoom.isGesturing.value).toBe(false)
+  })
+
+  it('continues panning with the remaining finger until all fingers lift, then restores native scrolling', () => {
+    const { zoom, scroller } = column()
+    scroller.scrollTop = 25000
+    pinch(zoom, [[150, 400], [250, 400]], [[100, 400], [300, 400]])
+    zoom.onTouchEnd(touchEvent([[300, 400]], [[100, 400]], 'touchend'))
+    const left = scroller.scrollLeft, top = scroller.scrollTop
+    const listener = vi.spyOn(scroller, 'removeEventListener')
+    zoom.onTouchMove(touchEvent([[250, 300]]))
+    expect(scroller.scrollLeft).toBeCloseTo(left + 50)
+    expect(scroller.scrollTop).toBeCloseTo(top + 100)
+    release(zoom, [[250, 300]])
+    expect(listener).toHaveBeenCalledWith('touchmove', expect.any(Function))
+    expect(zoom.wasGesture()).toBe(true)
+    zoom.onTouchStart(touchEvent([[200, 400]], [], 'touchstart'))
+    zoom.onTouchMove(touchEvent([[200, 300]]))
+    // Fresh one-finger gestures are native; no scripted scroll writes.
+    expect(scroller.scrollTop).toBeCloseTo(top + 100)
+    expect(scroller.style.overflowY).toBe('auto')
+  })
+
+  it('releases move blocking on cancellation', () => {
+    const { zoom, scroller } = column()
+    pinch(zoom, [[150, 400], [250, 400]], [[100, 400], [300, 400]])
+    const remove = vi.spyOn(scroller, 'removeEventListener')
+    zoom.onTouchEnd(touchEvent([[300, 400]], [[100, 400]], 'touchcancel'))
+    expect(zoom.isGesturing.value).toBe(false)
+    expect(remove).toHaveBeenCalledWith('touchmove', expect.any(Function))
+    expect(scroller.style.overflowY).toBe('auto')
+  })
+})
+
 describe('double-tap', () => {
   const tap = (zoom: ReturnType<typeof useZoomScroller>, x: number, y: number) => {
     zoom.onTouchStart(touchEvent([[x, y]], [], 'touchstart'))

@@ -10,6 +10,8 @@ export interface ZoomScrollerOptions {
   applyScale: (content: HTMLElement, scale: number) => void
   /** Content smaller than the scroller is centred (a page) rather than pinned to the start (a column). */
   centered?: boolean
+  /** Continuous columns keep their fit size and pan bounds even while fingers are down. */
+  boundedPinch?: boolean
   maxScale?: () => number
   doubleTapScale?: () => number
   zoomStep?: number
@@ -259,8 +261,15 @@ export function useZoomScroller(options: ZoomScrollerOptions) {
   let suppressClick = false
   let doubleTapAt = 0
 
-  // Installed only while two fingers are down, so ordinary scrolling never waits for script.
-  const blockMove = (event: TouchEvent) => { if (pinch && event.cancelable) event.preventDefault() }
+  // Block only a pinch and its remaining finger; fresh one-finger scrolling stays native.
+  let touchPan: { x: number; y: number; left: number; top: number } | null = null
+  const blockMove = (event: TouchEvent) => { if ((pinch || touchPan) && event.cancelable) event.preventDefault() }
+  const startBlockingMoves = () => {
+    if (!blockTarget && scroller.value) {
+      blockTarget = scroller.value
+      blockTarget.addEventListener('touchmove', blockMove, { passive: false })
+    }
+  }
   function stopBlockingMoves() {
     blockTarget?.removeEventListener('touchmove', blockMove)
     blockTarget = null
@@ -271,6 +280,7 @@ export function useZoomScroller(options: ZoomScrollerOptions) {
     distance: Math.max(1, Math.hypot(touches[0]!.clientX - touches[1]!.clientX, touches[0]!.clientY - touches[1]!.clientY)),
   })
   const startPinch = (touches: TouchList) => {
+    touchPan = null
     const state = begin(true)
     if (!state) return
     cancelAnimation()
@@ -278,10 +288,7 @@ export function useZoomScroller(options: ZoomScrollerOptions) {
     const point = midpoint(touches, state)
     pinch = { distance: point.distance, x: point.x, y: point.y, k: state.k, tx: state.tx, ty: state.ty }
     lastMidX = point.x; lastMidY = point.y
-    if (!blockTarget && scroller.value) {
-      blockTarget = scroller.value
-      blockTarget.addEventListener('touchmove', blockMove, { passive: false })
-    }
+    startBlockingMoves()
   }
 
   const onTouchStart = (event: TouchEvent) => {
@@ -294,6 +301,8 @@ export function useZoomScroller(options: ZoomScrollerOptions) {
     }
     // A settling zoom finishes at once, so this finger can scroll natively.
     if (!pinch) finishNow()
+    touchPan = null
+    stopBlockingMoves()
     // Browsers send no click after a pinch, so a new touch starts with nothing to suppress.
     if (!pinch && event.touches.length === 1) suppressClick = false
     const touch = event.touches[0]
@@ -303,17 +312,30 @@ export function useZoomScroller(options: ZoomScrollerOptions) {
     const state = session
     if (pinch && state && event.touches.length >= 2) {
       const point = midpoint(event.touches, state)
-      const k = resist(state.s0 * pinch.k * point.distance / pinch.distance) / state.s0
+      const raw = state.s0 * pinch.k * point.distance / pinch.distance
+      const k = (options.boundedPinch ? clamp(raw, 1, maxScale()) : resist(raw)) / state.s0
       // The content point that started under the fingers' midpoint follows it.
       const anchorX = state.offsetX - state.left, anchorY = state.offsetY - state.top
       state.tx = point.x - anchorX - k * (pinch.x - anchorX - pinch.tx) / pinch.k
       state.ty = point.y - anchorY - k * (pinch.y - anchorY - pinch.ty) / pinch.k
       state.k = k
+      if (options.boundedPinch) {
+        Object.assign(state, boundedTarget(state, state.s0 * k, point.x, point.y))
+        // Rebase at the limits: reversing the fingers responds immediately,
+        // without having to undo an invisible overshoot first.
+        pinch = { distance: point.distance, x: point.x, y: point.y, k: state.k, tx: state.tx, ty: state.ty }
+      }
       lastMidX = point.x; lastMidY = point.y
       scheduleRender()
       return
     }
     const touch = event.touches[0]
+    if (touchPan && touch && scroller.value) {
+      scroller.value.scrollLeft = touchPan.left + touchPan.x - touch.clientX
+      scroller.value.scrollTop = touchPan.top + touchPan.y - touch.clientY
+      touchPan = { x: touch.clientX, y: touch.clientY, left: scroller.value.scrollLeft, top: scroller.value.scrollTop }
+      return
+    }
     if (tap && touch && Math.hypot(touch.clientX - tap.x, touch.clientY - tap.y) > TAP_SLOP) tap.moved = true
   }
   const onTouchEnd = (event: TouchEvent) => {
@@ -321,7 +343,21 @@ export function useZoomScroller(options: ZoomScrollerOptions) {
       if (event.type !== 'touchcancel' && event.touches.length >= 2) { startPinch(event.touches); return }
       pinch = null
       stopBlockingMoves()
-      settle(lastMidX, lastMidY)
+      if (options.boundedPinch) {
+        // The live transform is already inside the bounds. Commit without a
+        // settling animation, preserving its focal point and the remaining finger.
+        commit()
+        const touch = event.touches[0], element = scroller.value
+        if (event.type !== 'touchcancel' && touch && element) {
+          touchPan = { x: touch.clientX, y: touch.clientY, left: element.scrollLeft, top: element.scrollTop }
+          startBlockingMoves()
+        }
+      } else settle(lastMidX, lastMidY)
+      tap = null
+      return
+    }
+    if (touchPan) {
+      if (!event.touches.length || event.type === 'touchcancel') { touchPan = null; stopBlockingMoves() }
       tap = null
       return
     }
@@ -414,6 +450,8 @@ export function useZoomScroller(options: ZoomScrollerOptions) {
     }
     if (target) options.applyScale(target, scale.value)
     if (element) setOverflow(element, false)
+    touchPan = null
+    stopBlockingMoves()
   }, { flush: 'post', immediate: true })
 
   onMounted(() => window.addEventListener('keydown', onKeydown))

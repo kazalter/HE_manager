@@ -324,6 +324,22 @@ describe('continuous reading without interruptions', () => {
     expect(wrapper.emitted('viewerClick')).toEqual([[]])
   })
 
+  it.each([true, false])('uses the same mobile column and gesture suppression for imageLibrary=%s', async imageLibrary => {
+    vi.stubGlobal('innerWidth', 390)
+    const wrapper = mountCanvasReader(imageLibrary)
+    const viewport = wrapper.get('.he-webtoon-viewport')
+    expect(wrapper.get('.he-webtoon-content').attributes('style')).toContain('padding: 0')
+    await viewport.trigger('touchstart', { touches: touch([[150, 300]]) })
+    await viewport.trigger('touchmove', { touches: touch([[150, 200]]) })
+    await viewport.trigger('touchend', { touches: [], changedTouches: touch([[150, 200]]) })
+    await viewport.trigger('click')
+    expect(wrapper.emitted('viewerClick')).toBeUndefined()
+    await viewport.trigger('touchstart', { touches: touch([[150, 300]]) })
+    await viewport.trigger('touchend', { touches: [], changedTouches: touch([[150, 300]]) })
+    await viewport.trigger('click')
+    expect(wrapper.emitted('viewerClick')).toEqual([[]])
+  })
+
   it('updates reading progress during scrolling without snapping back or revealing controls', async () => {
     vi.useFakeTimers()
     const wrapper = createWebtoon()

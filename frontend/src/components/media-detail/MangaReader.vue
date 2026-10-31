@@ -21,6 +21,7 @@ import { authIdentity } from '../../auth'
 import { API_BASE_URL, authUrl } from '../../config'
 import type { Media } from '../../types'
 import { useZoomScroller } from '../../composables/useZoomScroller'
+import { useWebtoonScroller } from '../../composables/useWebtoonScroller'
 import { useReaderPager } from '../../composables/useReaderPager'
 import { useReaderImageBuffer } from '../../composables/useReaderImageBuffer'
 import { readerImageWindow } from '../../utils/readerImageWindow'
@@ -86,8 +87,9 @@ const compactViewport = useCompactViewport()
 // Every size inside a zoomable surface is multiplied by --he-zoom, so a zoom level is a real layout.
 const applyZoomScale = (content: HTMLElement, scale: number) => content.style.setProperty('--he-zoom', String(scale))
 const hideControlsForZoom = () => { if (compactViewport.value && !desktopBridge) emit('hideControls') }
-const webtoonZoom = useZoomScroller({
+const webtoonZoom = useWebtoonScroller({
   scroller: webtoonContainerRef, content: webtoonContentRef, applyScale: applyZoomScale,
+  onScroll: () => trackWebtoonPage(),
   doubleTapScale: () => 2, keyboard: () => readMode.value === 'webtoon',
   onPinchStart: hideControlsForZoom, onDoubleTap: hideControlsForZoom,
   // Page tracking pauses while the column is transformed and resumes on its committed layout.
@@ -112,10 +114,6 @@ let webtoonScrollRafId: number | null = null
 let scrollRafId: number | null = null
 let dragRafId: number | null = null
 let pendingDragScroll = 0
-let webtoonTouchX = 0
-let webtoonTouchY = 0
-let webtoonTouchActive = false
-let suppressWebtoonClick = false
 let scrollDirection: -1 | 1 = 1
 let lastWebtoonScrollTop = 0
 
@@ -475,10 +473,6 @@ const onWheel = (event: WheelEvent) => {
   delta > 0 ? nextPage() : previousPage()
 }
 
-const onWebtoonScroll = () => {
-  if (webtoonTouchActive) suppressWebtoonClick = true
-  trackWebtoonPage()
-}
 const trackWebtoonPage = () => {
   scheduleVisiblePage()
   if (isProgrammaticScroll || readMode.value !== 'webtoon' || webtoonScrollRafId !== null) return
@@ -527,36 +521,6 @@ const scrollWebtoonToPage = (page: number) => {
   }, 100)
 }
 
-// Observe native scrolling without preventing it or invoking paged-mode swipes.
-const onWebtoonTouchStart = (event: TouchEvent) => {
-  webtoonZoom.onTouchStart(event)
-  if (!webtoonTouchActive) {
-    suppressWebtoonClick = false
-    webtoonTouchX = event.touches[0]?.clientX ?? 0
-    webtoonTouchY = event.touches[0]?.clientY ?? 0
-  }
-  webtoonTouchActive = true
-  if (event.touches.length !== 1) suppressWebtoonClick = true
-}
-const onWebtoonTouchMove = (event: TouchEvent) => {
-  webtoonZoom.onTouchMove(event)
-  const touch = event.touches[0]
-  if (event.touches.length !== 1 || (touch && Math.hypot(touch.clientX - webtoonTouchX, touch.clientY - webtoonTouchY) > 8)) {
-    suppressWebtoonClick = true
-  }
-}
-const onWebtoonTouchEnd = (event: TouchEvent) => {
-  webtoonZoom.onTouchEnd(event)
-  const touch = event.changedTouches[0]
-  if (event.type === 'touchcancel' || (touch && Math.hypot(touch.clientX - webtoonTouchX, touch.clientY - webtoonTouchY) > 8)) {
-    suppressWebtoonClick = true
-  }
-  webtoonTouchActive = event.touches.length > 0
-  if (!webtoonTouchActive) void nextTick(onWebtoonScroll)
-}
-const onWebtoonGesture = (event: Event) => {
-  if (compactViewport.value && !desktopBridge) event.preventDefault()
-}
 const activeZoom = () => readMode.value === 'webtoon' ? webtoonZoom : pagedZoom
 // A touch double-tap zooms; only a mouse double-click toggles fullscreen.
 const onViewerDoubleClick = () => {
@@ -564,10 +528,7 @@ const onViewerDoubleClick = () => {
   emit('viewerDoubleClick')
 }
 const onViewerClick = () => {
-  const scrolled = readMode.value === 'webtoon' && suppressWebtoonClick
-  suppressWebtoonClick = false
-  // Both flags are consumed, so neither can swallow a later deliberate tap.
-  if (activeZoom().wasGesture() || scrolled) return
+  if (activeZoom().wasGesture()) return
   emit('viewerClick')
 }
 
@@ -786,22 +747,22 @@ function onReaderViewportResize() { preloadAdjacentPages() }
       <div
         v-if="readMode === 'webtoon'"
         ref="webtoonContainerRef"
-        style="overflow-anchor: none; overscroll-behavior: contain; touch-action: pan-x pan-y; scroll-axis-lock: none"
+        style="overflow-anchor: none; overscroll-behavior: contain; touch-action: pan-x pan-y"
         class="he-webtoon-viewport w-full h-full overflow-y-auto overflow-x-hidden custom-scrollbar select-none"
         :style="{ cursor: webtoonZoom.isZoomed.value ? (webtoonZoom.isDragging.value ? 'grabbing' : 'grab') : undefined }"
-        @scroll="onWebtoonScroll"
+        @scroll="webtoonZoom.onScroll"
         @mousedown="webtoonZoom.onMouseDown"
-        @touchstart.passive="onWebtoonTouchStart"
-        @touchmove.passive="onWebtoonTouchMove"
-        @touchend.passive="onWebtoonTouchEnd"
-        @touchcancel.passive="onWebtoonTouchEnd"
-        @gesturestart="onWebtoonGesture" @gesturechange="onWebtoonGesture"
+        @touchstart.passive="webtoonZoom.onTouchStart"
+        @touchmove.passive="webtoonZoom.onTouchMove"
+        @touchend.passive="webtoonZoom.onTouchEnd"
+        @touchcancel.passive="webtoonZoom.onTouchEnd"
+        @gesturestart="webtoonZoom.onGesture" @gesturechange="webtoonZoom.onGesture"
       >
         <!-- Every size is multiplied by --he-zoom, so a zoomed column is laid out, not stretched. -->
         <div
           ref="webtoonContentRef"
           class="he-webtoon-content relative flex flex-col items-center"
-          style="width: calc(100% * var(--he-zoom, 1)); padding: calc(24px * var(--he-zoom, 1)) calc(8px * var(--he-zoom, 1))"
+          :style="{ width: 'calc(100% * var(--he-zoom, 1))', padding: compactViewport ? '0' : 'calc(24px * var(--he-zoom, 1)) calc(8px * var(--he-zoom, 1))' }"
         >
           <div
             v-for="pageIndex in totalPagesList"
@@ -809,8 +770,8 @@ function onReaderViewportResize() { preloadAdjacentPages() }
             :id="`webtoon-page-${pageIndex}`"
             :data-page="pageIndex"
             class="he-reader-page w-full shrink-0 relative group bg-white/5"
-            style="max-width: calc(840px * var(--he-zoom, 1)); margin-block: calc(4px * var(--he-zoom, 1))"
-            :style="{ aspectRatio: `${pageDimensionsFor(pageIndex)[0]} / ${pageDimensionsFor(pageIndex)[1]}` }"
+            style="max-width: calc(840px * var(--he-zoom, 1))"
+            :style="{ aspectRatio: `${pageDimensionsFor(pageIndex)[0]} / ${pageDimensionsFor(pageIndex)[1]}`, marginBlock: compactViewport ? '0' : 'calc(4px * var(--he-zoom, 1))' }"
             :aria-busy="!pageReady(pageIndex) && !pageFailed(pageIndex)"
           >
             <img
@@ -821,7 +782,8 @@ function onReaderViewportResize() { preloadAdjacentPages() }
               :height="pageDimensionsFor(pageIndex)[1]"
               loading="eager"
               decoding="async"
-              class="w-full h-full object-contain block rounded-sm"
+              class="w-full h-full object-contain block"
+              :class="{ 'rounded-sm': !compactViewport }"
               :alt="imagePages?.[pageIndex]?.title || `第 ${pageIndex + 1} 页`"
             />
             <div v-else-if="pageFailed(pageIndex)" class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-meta text-white/60" role="status">
