@@ -2,7 +2,7 @@
 
 2026-10-31。范围：手机竖屏 Web 的图片序列、漫画章节。
 
-图片和漫画都从 `MediaDetail.vue` 进入同一个 `MangaReader.vue`。图片 URL、尺寸与进度来源不同，卷轴行为共用 `useWebtoonScroller.ts` 和 `useWebtoonDocument.ts`。
+图片和漫画都从 `MediaDetail.vue` 进入同一个 `MangaReader.vue`。图片 URL、尺寸与进度来源不同，手机卷轴共用 `NativeWebtoonPages.vue`、`useWebtoonScroller.ts` 和 `useWebtoonDocument.ts`。
 
 ## WNACG 的实际实现
 
@@ -13,7 +13,7 @@
 - 阅读页 viewport 声明 `initial-scale=1.0, maximum-scale=5.0, user-scalable=yes`。
 - HTML 内联样式针对竖向模式放开 body 的纵向滚动，把 `#viewport` 设为 `overflow:visible;height:auto;position:static`。只看外部 CSS 中的 `overflow-y:auto` 会漏掉这层覆盖。
 - 阅读器主脚本不注册双指 touch/pinch/gesture 缩放处理。竖向模式跳页和自动滚动调用 `window.scrollTo` / `window.scrollBy`。
-- 图片使用 `max-width:100%`，按原图尺寸预留高度；只挂载阅读位置附近的图片。
+- 图片使用 `width:auto;height:auto;max-width:100%`，按 min(原宽, 列宽) 预留高度，不放大小图。当前页前 1 页、后 20 页参与预取，最多两张并行；已加载图片保持挂载，不随窗口移动拆掉。
 
 由此推断，卷轴的捏合与平移主要交给浏览器原生视口处理，而不是脚本在手指移动时缩放整列、松手再重排。这与之前 HE 的实现有实质区别。
 
@@ -34,10 +34,10 @@ REA 成功解析本地捕获的 5 个 JavaScript 文件、6329 个 AST 节点，
 
 - 手机 Web 卷轴改用文档滚动和浏览器原生捏合，声明 1–5 倍视口缩放、`touch-action:manipulation`。浏览器负责缩放边界、平移与惯性。
 - 不再拦截手机卷轴的 touchmove / Safari gesture，不冻结滚动，不在捏合或松手时改变图片列尺寸或 transform。
-- 图片按屏宽布局，手机端不额外添加页缝、外边距和圆角。预留尺寸、解码缓存和前后预取仍复用原有实现。
+- 手机卷轴采用独立的原生图片加载器：全部页先创建固定占位、两路下载、原 Image 节点直接展示，不经过通用解码 LRU 或第二个展示 img。宽图缩到屏宽，小图保留原宽；保持 HE 连续拼接所需的零页缝。
 - 从 `visualViewport.pageTop/height` 计算阅读位置和可见预取范围；放大平移时即使 `window.scrollY` 不变，也能更新进度。跳页补偿 `visualViewport.offsetTop`。
 - 根滚动样式仅在手机 Web 卷轴激活期间启用；退出或切换模式时恢复滚动、监听器及原始 viewport 声明。放大状态退出时先改变 initial-scale，再恢复原声明，避免媒体库留在放大状态。
-- 捏合、滚动、取消和触摸双击不会误触全屏。和 WNACG 的 manipulation 设置一致，手机卷轴以捏合缩放为主，触摸双击不再触发脚本 2 倍缩放。
+- 手机卷轴根本不注册 touch/pointer/gesture 处理；浏览器负责滑动后的 click 抑制，双击也不触发全屏。和 WNACG 的 manipulation 设置一致，手机卷轴以捏合缩放为主，触摸双击不再触发脚本 2 倍缩放。
 - 桌面卷轴及单/双页继续使用 `useZoomScroller`，不改变原有翻页交互。
 
 ## 验证与边界
@@ -91,3 +91,29 @@ REA 成功解析本地捕获的 5 个 JavaScript 文件、6329 个 AST 节点，
 检查覆盖图片/漫画 × 浏览器/主屏幕布局四种组合：首屏位置、完整滚动范围、后台库隐藏、路由进度不重建阅读器、原生捏合不改图片列 transform、关闭还原。它在旧生产版本 a36676e 上稳定因负坐标失败，在修复构建上通过。所有业务 API 都由脚本本地回放，不使用真实账号或写入真实进度。
 
 本轮上线前已在 HDD2 保存一致性 SQLite 备份，回填 1992 条记录；回读确认 1994/1994 张杂图均有尺寸，未改原文件及进度/收藏等字段。验证：267 项前端测试、29 项相关后端测试，以及四种完整浏览器场景通过。
+
+## 横拖后纵向停住：按 WNACG 的整套卷轴机制重做
+
+修改前再次确认本地、GitHub main、服务器源码均为 `d1dc7ad`，本地无未提交改动；服务器只有既有 macOS `frontend/._dist` 元数据文件。
+
+### 重新取得的证据
+
+- REA 捕获目录分析 parent：`ev_f1d951905fbd5e15e887b5eb9128f629ba811b5a3f25686e7d7f0a6ce9de106e`；summary view：`ev_6f24a3ce19447f11f060103a40a0c2f742e91c18035b2640d7207686498abde8`。9 个相关文件、7 个 JS 成功解析、38218 AST 节点、0 解析失败；加入 jQuery 后语义图受到 heap 限制，不能据此声称整个站点的静态关系已全部恢复。
+- 另外逐行核对竖排加载器：`AHEAD=20`、`BEHIND=1`、`MAX_INFLIGHT=2`、60 秒超时、占位至少 300ms 后换图。onload 后将同一个 Image 放进 DOM，没有显式 decode()；只清理遥远的排队/失败占位，保留已加载图片。这修正了此前“远离窗口便卸载所有图片”的理解。
+- 运行时 REA 检查新生产构建 `.he-webtoon-viewport` 的直接监听器，结果为空：`ev_c44914456fdc90b9fcda077153ee910d04e146ea22357aae4ba4cdc4e75674d0`。祖先 `.he-reader-surface` 只有 click / dblclick：`ev_88cd6f2eae91cf840addf091cdcdccb832552ede8b27041fceab6d7b15a80b2d`。这是所选节点直接监听器的观察，不代表 REA 检查了整个应用所有委托监听器，也不代表它模拟了手势。
+
+### 落地实现与 HE 集成差异
+
+`NativeWebtoonPages.vue` 共用于图片和漫画。按上述队列、尺寸占位、同节点显示、保留已加载节点、超时/手动重试、300ms 占位以及 200ms 转屏重算实现；尺寸未知时用列宽 × 1.4 兜底，加载后若修正的是视口上方的高度，只补偿差值。切书和退出清理旧请求回调及定时器。
+
+原生分支与桌面分支的模板分开，手机节点没有触摸监听、`overflow-x:hidden` 或 `overscroll-behavior:contain`。html 使用 overflow:visible，让 body 的 x:hidden / y:auto 传播到浏览器视口，与 WNACG 的文档结构一致。缩放时只通过 passive visualViewport 观察隐藏控件，不干预输入。
+
+HE 保留原有界面、零页缝、路由/进度协议和显式跳页方式；WNACG 的广告、素材和站点导航没有复制。页码仍按 visualViewport 的中线计算，避免 WNACG 的 IntersectionObserver 只观察布局视口时漏掉放大平移；这是 HE 接入进度所需的集成差异。整个手机卷轴不再调用通用图片解码缓存。桌面及单/双页沿用现有实现。
+
+### 验证
+
+271 项前端测试通过，生产构建通过。完整页面检查现在支持 `HE_READER_VIEWPORT_WIDTH` / `HE_READER_VIEWPORT_HEIGHT`，覆盖 390×844、420×912，各自图片/漫画 × 浏览器/主屏幕共 8 个场景。每个场景放大到约 2.43 倍后，执行横拖→纵滑→反向横拖→再纵滑，并追加同一手指不松手横转纵；断言两轴都能移动、缩放不变、控件保持隐藏、阅读器不重建、退出恢复库。
+
+390px 四场景中，横向位移 144–162px；紧接着纵向位移 243–373px；反向横拖后再纵滑 351–379px；同一手指横转纵均移动 250px。捕获的 WNACG 主脚本在受控本地回放中，横向位移 162px，随后纵滑 366px，同一手指横转纵 250px。测量来自 Chrome 156 的 Playwright/CDP 输入，脚本与原始结果保存在 `frontend/scripts/check-mobile-webtoon.cjs` 和 `docs/qa/mobile-reader-native-panning.json`。
+
+已观察到的是两个实现都能在该环境连续两轴移动；不能据此确认旧版在 iOS 上卡住的唯一原因，也不能声称已经通过 iPhone Air / Safari 真机手感验证。Safari 的原生缩放/惯性最终由其浏览器内核实现。

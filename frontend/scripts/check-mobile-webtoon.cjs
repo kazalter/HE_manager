@@ -6,6 +6,8 @@ const { chromium } = require(process.env.HE_PLAYWRIGHT_MODULE || 'playwright')
 const assert = require('node:assert/strict')
 const base = process.env.HE_READER_BASE_URL || 'http://127.0.0.1:5180'
 const count = 60
+const width = Number(process.env.HE_READER_VIEWPORT_WIDTH || 390)
+const height = Number(process.env.HE_READER_VIEWPORT_HEIGHT || 844)
 const image = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1200"><rect width="800" height="1200" fill="#c7d2df"/><text x="100" y="400" font-size="90">Reader QA</text></svg>')
 
 async function run() {
@@ -13,7 +15,7 @@ async function run() {
   const results = []
   try {
     for (const type of ['image', 'manga']) for (const standalone of [false, true]) {
-      const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true })
+      const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 3, isMobile: true, hasTouch: true })
       const page = await context.newPage()
       const errors = []
       page.on('pageerror', error => errors.push(error.message))
@@ -51,7 +53,7 @@ async function run() {
       assert(Math.abs(before.documentHeight - before.height) <= 1, 'document omits part of the strip')
       assert.equal(before.library, 'none', 'library still participates in reader layout')
       assert.equal(before.scrollY, 0, 'opening the first page scrolled to another page')
-      await page.evaluate(() => window.scrollTo(0, 30 * 585))
+      await page.evaluate(width => window.scrollTo(0, 30 * width * 1.5), width)
       await page.waitForTimeout(300)
       const navigated = await page.evaluate(() => ({ same: window.qaReaderRoot === document.querySelector('.he-manga-reader'), hash: location.hash }))
       assert(navigated.same, 'reading progress remounted the reader')
@@ -66,13 +68,49 @@ async function run() {
       assert(zoomed.scale > 1.2, 'native pinch did not zoom')
       assert.equal(zoomed.transform, '', 'pinch transformed the whole strip')
       assert(Math.abs(zoomed.top) <= 1, 'pinch/release changed the strip origin')
+      const position = () => page.evaluate(() => ({ x: visualViewport.pageLeft, y: visualViewport.pageTop, scale: visualViewport.scale }))
+      const swipe = async points => {
+        await touch('touchStart', [points[0]])
+        for (const point of points.slice(1)) await touch('touchMove', [point])
+        await touch('touchEnd', [])
+        await page.waitForTimeout(250)
+      }
+      const points = (x, y, dx, dy) => Array.from({ length: 11 }, (_, i) => [x + dx * i, y + dy * i])
+      await page.waitForTimeout(250)
+      const panStart = await position()
+      // Repeated horizontal -> vertical -> horizontal -> vertical without unzooming.
+      await swipe(points(width * .75, 420, -15, 0))
+      const horizontal = await position()
+      await swipe(points(width * .5, 650, 0, -25))
+      const vertical = await position()
+      await swipe(points(width * .25, 420, 15, 0))
+      const back = await position()
+      await swipe(points(width * .5, 650, 0, -25))
+      const verticalAgain = await position()
+      assert(Math.abs(horizontal.x - panStart.x) > 15, 'zoomed horizontal pan did not move')
+      assert(vertical.y - horizontal.y > 30, 'vertical scrolling stuck after horizontal pan')
+      assert(Math.abs(back.x - vertical.x) > 15, 'reversed horizontal pan did not move')
+      assert(verticalAgain.y - back.y > 30, 'vertical scrolling stuck after reversing horizontal pan')
+      assert(Math.abs(verticalAgain.scale - zoomed.scale) < .01, 'panning unexpectedly changed zoom')
+      // Native gesture routing must never expose app controls or cause fullscreen.
+      assert.equal(await page.locator('.he-manga-controls').getAttribute('inert'), '', 'panning revealed controls')
+      assert(!await page.evaluate(() => !!document.fullscreenElement), 'native touch toggled fullscreen')
+      // Change direction without lifting the same finger, as well as separate swipes.
+      await touch('touchStart', [[width * .75, 650]])
+      for (const point of points(width * .75, 650, -15, 0).slice(1)) await touch('touchMove', [point])
+      const sameFingerHorizontal = await position()
+      for (const point of points(width * .75 - 150, 650, 0, -25).slice(1)) await touch('touchMove', [point])
+      const sameFingerVertical = await position()
+      await touch('touchEnd', [])
+      assert(sameFingerVertical.y - sameFingerHorizontal.y > 30, 'same-finger horizontal -> vertical pan stuck')
+      const pans = { panStart, horizontal, vertical, back, verticalAgain, sameFingerHorizontal, sameFingerVertical }
       await page.getByRole('button', { name: '返回媒体列表', exact: true }).evaluate(button => button.click())
       await page.waitForTimeout(250)
       const closed = await page.evaluate(() => ({ active: document.documentElement.classList.contains('he-webtoon-document'), scale: visualViewport.scale,
         library: getComputedStyle(document.querySelector('#app')).display }))
       assert(!closed.active && Math.abs(closed.scale - 1) < 0.01 && closed.library !== 'none', 'close did not restore the library')
       assert.deepEqual(errors, [])
-      results.push({ type, standalone, before, zoomed, closed })
+      results.push({ type, standalone, width, height, before, zoomed, pans, closed })
       await context.close()
     }
     console.log(JSON.stringify(results, null, 2))

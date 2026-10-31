@@ -27,6 +27,7 @@ import { useReaderImageBuffer } from '../../composables/useReaderImageBuffer'
 import { readerImageWindow } from '../../utils/readerImageWindow'
 import { useCompactViewport } from '../../composables/useCompactViewport'
 import ReaderLoading from './ReaderLoading.vue'
+import NativeWebtoonPages from './NativeWebtoonPages.vue'
 
 export type MangaReadMode = 'single' | 'double' | 'webtoon'
 
@@ -83,6 +84,7 @@ const slideScrollerRef = ref<HTMLElement | null>(null)
 const slideContentRef = ref<HTMLElement | null>(null)
 const webtoonContainerRef = ref<HTMLDivElement | null>(null)
 const webtoonContentRef = ref<HTMLDivElement | null>(null)
+const nativePagesRef = ref<InstanceType<typeof NativeWebtoonPages> | null>(null)
 const compactViewport = useCompactViewport()
 const nativeWebtoon = computed(() => compactViewport.value && !desktopBridge && readMode.value === 'webtoon')
 const webtoonScrollElement = () => nativeWebtoon.value
@@ -543,9 +545,9 @@ const scrollWebtoonToPage = (page: number) => {
 }
 
 const activeZoom = () => readMode.value === 'webtoon' ? webtoonZoom : pagedZoom
-// A touch double-tap zooms; only a mouse double-click toggles fullscreen.
+// Mobile document gestures belong to the browser; desktop double-click toggles fullscreen.
 const onViewerDoubleClick = () => {
-  if (activeZoom().wasDoubleTap()) return
+  if (nativeWebtoon.value || activeZoom().wasDoubleTap()) return
   emit('viewerDoubleClick')
 }
 const onViewerClick = () => {
@@ -594,8 +596,13 @@ const pageAtOffset = (offset: number) => {
   }
   return low
 }
+const nativePages = computed(() => totalPagesList.value.map(index => ({
+  url: pageUrlFor(index), width: props.pageDimensions[index]?.[0], height: props.pageDimensions[index]?.[1],
+  alt: props.imagePages?.[index]?.title || `第 ${index + 1} 页`,
+})))
 const preloadAdjacentPages = (page = props.currentPage, fromViewport = false) => {
   if (!props.totalPages || authIdentity() !== openedIdentity) return
+  if (nativeWebtoon.value) { nativePagesRef.value?.warm(page); return }
   let first = page, last = readMode.value === 'double' ? Math.min(page + 1, props.totalPages - 1) : page
   const view = webtoonViewport()
   if (readMode.value === 'webtoon' && view.height && (webtoonContentRef.value?.children[0] as HTMLElement | undefined)?.offsetHeight) {
@@ -700,6 +707,8 @@ watch(() => props.media.id, () => {
   scrollToPage(props.currentPage, false)
 })
 
+watch(nativeWebtoon, enabled => { if (enabled) imageBuffer.clear(); else preloadAdjacentPages() }, { flush: 'post' })
+
 watch(isStripOpen, (open) => {
   if (open) {
     nextTick(() => {
@@ -746,7 +755,7 @@ function onReaderViewportResize() { preloadAdjacentPages() }
     <UiToast v-if="enhancementError || desktopImages.message.value" :message="enhancementError || desktopImages.message.value" :urgent="!!enhancementError" overlay class="pointer-events-none absolute left-1/2 top-16 z-30 max-w-[90%] -translate-x-1/2" />
     <div
       class="he-reader-surface flex-1 min-h-0 flex items-center justify-center w-full relative group overflow-hidden"
-      @wheel="onWheel"
+      v-on="nativeWebtoon ? {} : { wheel: onWheel }"
       @click="onViewerClick"
       @dblclick="onViewerDoubleClick"
     >
@@ -766,13 +775,19 @@ function onReaderViewportResize() { preloadAdjacentPages() }
         <ChevronLeft :size="26" aria-hidden="true" />
       </button>
 
-      <!-- Webtoon Continuous Scroll Mode: native scrolling on both axes; only zoom changes run in script. -->
+      <!-- Mobile: the browser owns the document, pinch zoom and both pan axes. -->
+      <div v-if="nativeWebtoon" ref="webtoonContainerRef" class="he-webtoon-viewport">
+        <NativeWebtoonPages ref="nativePagesRef" :pages="nativePages" :current-page="currentPage"
+          @content="element => webtoonContentRef = element" />
+      </div>
+
+      <!-- Desktop column retains its keyboard/mouse zoom controls. -->
       <div
-        v-if="readMode === 'webtoon'"
+        v-else-if="readMode === 'webtoon'"
         ref="webtoonContainerRef"
         style="overflow-anchor: none; overscroll-behavior: contain"
         class="he-webtoon-viewport w-full h-full overflow-y-auto overflow-x-hidden custom-scrollbar select-none"
-        :style="{ touchAction: nativeWebtoon ? 'manipulation' : 'pan-x pan-y', cursor: webtoonZoom.isZoomed.value ? (webtoonZoom.isDragging.value ? 'grabbing' : 'grab') : undefined }"
+        :style="{ touchAction: 'pan-x pan-y', cursor: webtoonZoom.isZoomed.value ? (webtoonZoom.isDragging.value ? 'grabbing' : 'grab') : undefined }"
         @scroll="webtoonZoom.onScroll"
         @mousedown="webtoonZoom.onMouseDown"
         @touchstart.passive="webtoonZoom.onTouchStart"

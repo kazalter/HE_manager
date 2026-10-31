@@ -1,0 +1,542 @@
+{
+  "date": "2026-10-31",
+  "environment": "macOS Chrome 156 headless; mobile viewport with real CDP touch input; controlled business API replay; not iPhone Safari",
+  "baseline": "d1dc7ad",
+  "local": [
+    {
+      "type": "image",
+      "standalone": false,
+      "width": 390,
+      "height": 844,
+      "before": {
+        "top": 0,
+        "height": 35100,
+        "documentHeight": 35100,
+        "library": "none",
+        "first": 0,
+        "scrollY": 0
+      },
+      "zoomed": {
+        "scale": 2.42608642578125,
+        "transform": "",
+        "top": 0
+      },
+      "pans": {
+        "panStart": {
+          "x": 67,
+          "y": 17714,
+          "scale": 2.42608642578125
+        },
+        "horizontal": {
+          "x": 229,
+          "y": 17714,
+          "scale": 2.42608642578125
+        },
+        "vertical": {
+          "x": 229,
+          "y": 18061,
+          "scale": 2.42608642578125
+        },
+        "back": {
+          "x": 13,
+          "y": 18066,
+          "scale": 2.42608642578125
+        },
+        "verticalAgain": {
+          "x": 11,
+          "y": 18445,
+          "scale": 2.42608642578125
+        },
+        "sameFingerHorizontal": {
+          "x": 155,
+          "y": 18448,
+          "scale": 2.42608642578125
+        },
+        "sameFingerVertical": {
+          "x": 155,
+          "y": 18698,
+          "scale": 2.42608642578125
+        }
+      },
+      "closed": {
+        "active": false,
+        "scale": 1,
+        "library": "block"
+      }
+    },
+    {
+      "type": "image",
+      "standalone": true,
+      "width": 390,
+      "height": 844,
+      "before": {
+        "top": 0,
+        "height": 35100,
+        "documentHeight": 35100,
+        "library": "none",
+        "first": 0,
+        "scrollY": 0
+      },
+      "zoomed": {
+        "scale": 2.42608642578125,
+        "transform": "",
+        "top": 0
+      },
+      "pans": {
+        "panStart": {
+          "x": 67,
+          "y": 17714,
+          "scale": 2.42608642578125
+        },
+        "horizontal": {
+          "x": 229,
+          "y": 17714,
+          "scale": 2.42608642578125
+        },
+        "vertical": {
+          "x": 229,
+          "y": 18087,
+          "scale": 2.42608642578125
+        },
+        "back": {
+          "x": 85,
+          "y": 18091,
+          "scale": 2.42608642578125
+        },
+        "verticalAgain": {
+          "x": 85,
+          "y": 18464,
+          "scale": 2.42608642578125
+        },
+        "sameFingerHorizontal": {
+          "x": 229,
+          "y": 18467,
+          "scale": 2.42608642578125
+        },
+        "sameFingerVertical": {
+          "x": 229,
+          "y": 18717,
+          "scale": 2.42608642578125
+        }
+      },
+      "closed": {
+        "active": false,
+        "scale": 1,
+        "library": "block"
+      }
+    },
+    {
+      "type": "manga",
+      "standalone": false,
+      "width": 390,
+      "height": 844,
+      "before": {
+        "top": 0,
+        "height": 35100,
+        "documentHeight": 35100,
+        "library": "none",
+        "first": 0,
+        "scrollY": 0
+      },
+      "zoomed": {
+        "scale": 2.42608642578125,
+        "transform": "",
+        "top": 0
+      },
+      "pans": {
+        "panStart": {
+          "x": 67,
+          "y": 17714,
+          "scale": 2.42608642578125
+        },
+        "horizontal": {
+          "x": 211,
+          "y": 17714,
+          "scale": 2.42608642578125
+        },
+        "vertical": {
+          "x": 211,
+          "y": 17957,
+          "scale": 2.42608642578125
+        },
+        "back": {
+          "x": 0,
+          "y": 17957,
+          "scale": 2.42608642578125
+        },
+        "verticalAgain": {
+          "x": 0,
+          "y": 18308,
+          "scale": 2.42608642578125
+        },
+        "sameFingerHorizontal": {
+          "x": 144,
+          "y": 18313,
+          "scale": 2.42608642578125
+        },
+        "sameFingerVertical": {
+          "x": 144,
+          "y": 18563,
+          "scale": 2.42608642578125
+        }
+      },
+      "closed": {
+        "active": false,
+        "scale": 1,
+        "library": "block"
+      }
+    },
+    {
+      "type": "manga",
+      "standalone": true,
+      "width": 390,
+      "height": 844,
+      "before": {
+        "top": 0,
+        "height": 35100,
+        "documentHeight": 35100,
+        "library": "none",
+        "first": 0,
+        "scrollY": 0
+      },
+      "zoomed": {
+        "scale": 2.42608642578125,
+        "transform": "",
+        "top": 0
+      },
+      "pans": {
+        "panStart": {
+          "x": 67,
+          "y": 17714,
+          "scale": 2.42608642578125
+        },
+        "horizontal": {
+          "x": 229,
+          "y": 17714,
+          "scale": 2.42608642578125
+        },
+        "vertical": {
+          "x": 229,
+          "y": 18081,
+          "scale": 2.42608642578125
+        },
+        "back": {
+          "x": 17,
+          "y": 18084,
+          "scale": 2.42608642578125
+        },
+        "verticalAgain": {
+          "x": 14,
+          "y": 18449,
+          "scale": 2.42608642578125
+        },
+        "sameFingerHorizontal": {
+          "x": 157,
+          "y": 18452,
+          "scale": 2.42608642578125
+        },
+        "sameFingerVertical": {
+          "x": 157,
+          "y": 18702,
+          "scale": 2.42608642578125
+        }
+      },
+      "closed": {
+        "active": false,
+        "scale": 1,
+        "library": "block"
+      }
+    },
+    {
+      "type": "image",
+      "standalone": false,
+      "width": 420,
+      "height": 912,
+      "before": {
+        "top": 0,
+        "height": 37800,
+        "documentHeight": 37800,
+        "library": "none",
+        "first": 0,
+        "scrollY": 0
+      },
+      "zoomed": {
+        "scale": 2.42608642578125,
+        "transform": "",
+        "top": 0
+      },
+      "pans": {
+        "panStart": {
+          "x": 67,
+          "y": 19064,
+          "scale": 2.42608642578125
+        },
+        "horizontal": {
+          "x": 246,
+          "y": 19064,
+          "scale": 2.42608642578125
+        },
+        "vertical": {
+          "x": 246,
+          "y": 19433,
+          "scale": 2.42608642578125
+        },
+        "back": {
+          "x": 31,
+          "y": 19440,
+          "scale": 2.42608642578125
+        },
+        "verticalAgain": {
+          "x": 28,
+          "y": 19807,
+          "scale": 2.42608642578125
+        },
+        "sameFingerHorizontal": {
+          "x": 172,
+          "y": 19810,
+          "scale": 2.42608642578125
+        },
+        "sameFingerVertical": {
+          "x": 172,
+          "y": 20060,
+          "scale": 2.42608642578125
+        }
+      },
+      "closed": {
+        "active": false,
+        "scale": 1,
+        "library": "block"
+      }
+    },
+    {
+      "type": "image",
+      "standalone": true,
+      "width": 420,
+      "height": 912,
+      "before": {
+        "top": 0,
+        "height": 37800,
+        "documentHeight": 37800,
+        "library": "none",
+        "first": 0,
+        "scrollY": 0
+      },
+      "zoomed": {
+        "scale": 2.42608642578125,
+        "transform": "",
+        "top": 0
+      },
+      "pans": {
+        "panStart": {
+          "x": 67,
+          "y": 19064,
+          "scale": 2.42608642578125
+        },
+        "horizontal": {
+          "x": 246,
+          "y": 19064,
+          "scale": 2.42608642578125
+        },
+        "vertical": {
+          "x": 246,
+          "y": 19440,
+          "scale": 2.42608642578125
+        },
+        "back": {
+          "x": 33,
+          "y": 19443,
+          "scale": 2.42608642578125
+        },
+        "verticalAgain": {
+          "x": 31,
+          "y": 19782,
+          "scale": 2.42608642578125
+        },
+        "sameFingerHorizontal": {
+          "x": 175,
+          "y": 19785,
+          "scale": 2.42608642578125
+        },
+        "sameFingerVertical": {
+          "x": 175,
+          "y": 20035,
+          "scale": 2.42608642578125
+        }
+      },
+      "closed": {
+        "active": false,
+        "scale": 1,
+        "library": "block"
+      }
+    },
+    {
+      "type": "manga",
+      "standalone": false,
+      "width": 420,
+      "height": 912,
+      "before": {
+        "top": 0,
+        "height": 37800,
+        "documentHeight": 37800,
+        "library": "none",
+        "first": 0,
+        "scrollY": 0
+      },
+      "zoomed": {
+        "scale": 2.42608642578125,
+        "transform": "",
+        "top": 0
+      },
+      "pans": {
+        "panStart": {
+          "x": 67,
+          "y": 19064,
+          "scale": 2.42608642578125
+        },
+        "horizontal": {
+          "x": 246,
+          "y": 19064,
+          "scale": 2.42608642578125
+        },
+        "vertical": {
+          "x": 246,
+          "y": 19453,
+          "scale": 2.42608642578125
+        },
+        "back": {
+          "x": 103,
+          "y": 19457,
+          "scale": 2.42608642578125
+        },
+        "verticalAgain": {
+          "x": 103,
+          "y": 19828,
+          "scale": 2.42608642578125
+        },
+        "sameFingerHorizontal": {
+          "x": 246,
+          "y": 19835,
+          "scale": 2.42608642578125
+        },
+        "sameFingerVertical": {
+          "x": 246,
+          "y": 20085,
+          "scale": 2.42608642578125
+        }
+      },
+      "closed": {
+        "active": false,
+        "scale": 1,
+        "library": "block"
+      }
+    },
+    {
+      "type": "manga",
+      "standalone": true,
+      "width": 420,
+      "height": 912,
+      "before": {
+        "top": 0,
+        "height": 37800,
+        "documentHeight": 37800,
+        "library": "none",
+        "first": 0,
+        "scrollY": 0
+      },
+      "zoomed": {
+        "scale": 2.42608642578125,
+        "transform": "",
+        "top": 0
+      },
+      "pans": {
+        "panStart": {
+          "x": 67,
+          "y": 19064,
+          "scale": 2.42608642578125
+        },
+        "horizontal": {
+          "x": 246,
+          "y": 19064,
+          "scale": 2.42608642578125
+        },
+        "vertical": {
+          "x": 246,
+          "y": 19441,
+          "scale": 2.42608642578125
+        },
+        "back": {
+          "x": 22,
+          "y": 19445,
+          "scale": 2.42608642578125
+        },
+        "verticalAgain": {
+          "x": 20,
+          "y": 19810,
+          "scale": 2.42608642578125
+        },
+        "sameFingerHorizontal": {
+          "x": 164,
+          "y": 19813,
+          "scale": 2.42608642578125
+        },
+        "sameFingerVertical": {
+          "x": 164,
+          "y": 20063,
+          "scale": 2.42608642578125
+        }
+      },
+      "closed": {
+        "active": false,
+        "scale": 1,
+        "library": "block"
+      }
+    }
+  ],
+  "wnacg_reference": [
+    {
+      "kind": "wnacg-reference",
+      "panStart": {
+        "x": 67,
+        "y": 4450,
+        "scale": 2.42608642578125
+      },
+      "horizontal": {
+        "x": 229,
+        "y": 4450,
+        "scale": 2.42608642578125
+      },
+      "vertical": {
+        "x": 229,
+        "y": 4816,
+        "scale": 2.42608642578125
+      },
+      "back": {
+        "x": 11,
+        "y": 4820,
+        "scale": 2.42608642578125
+      },
+      "verticalAgain": {
+        "x": 9,
+        "y": 5181,
+        "scale": 2.42608642578125
+      },
+      "sameFinger": {
+        "lHorizontal": {
+          "x": 153,
+          "y": 5187,
+          "scale": 2.42608642578125
+        },
+        "lVertical": {
+          "x": 153,
+          "y": 5437,
+          "scale": 2.42608642578125
+        }
+      },
+      "errors": []
+    }
+  ],
+  "rea": {
+    "viewport_listeners": "ev_c44914456fdc90b9fcda077153ee910d04e146ea22357aae4ba4cdc4e75674d0",
+    "surface_listeners": "ev_88cd6f2eae91cf840addf091cdcdccb832552ede8b27041fceab6d7b15a80b2d"
+  }
+}

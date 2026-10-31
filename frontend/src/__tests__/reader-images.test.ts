@@ -108,7 +108,13 @@ describe('reader images and controls', () => {
 
 
 const mountCanvasReader = (imageLibrary = true) => {
-  vi.stubGlobal('Image', ControlledImage)
+  vi.stubGlobal('Image', window.innerWidth < 900 ? function () {
+    const image = document.createElement('img')
+    Object.defineProperties(image, { naturalWidth: { value: 800 }, naturalHeight: { value: 1200 } })
+    image.decode = vi.fn().mockResolvedValue(undefined)
+    ControlledImage.instances.push(image as unknown as ControlledImage)
+    return image
+  } : ControlledImage)
   const pages = Array.from({ length: 9 }, (_, id) => ({ id: id + 100, title: `Image ${id}`, media_type: 'image' })) as Media[]
   const wrapper = mount(MangaReader, { props: {
     media: pages[0]!, imagePages: imageLibrary ? pages : undefined,
@@ -277,6 +283,7 @@ it('prioritizes both visible pages over a stalled speculative request when advan
 
 describe('continuous reading without interruptions', () => {
   const createWebtoon = () => {
+    vi.stubGlobal('innerWidth', 1200)
     localStorage.setItem('he_image_read_mode', 'webtoon')
     localStorage.setItem('he_image_read_mode_mobile', 'webtoon')
     return mountCanvasReader()
@@ -324,18 +331,16 @@ describe('continuous reading without interruptions', () => {
     expect(wrapper.emitted('viewerClick')).toEqual([[]])
   })
 
-  it.each([true, false])('uses the same mobile column and gesture suppression for imageLibrary=%s', async imageLibrary => {
+  it.each([true, false])('uses an unhandled native document column for imageLibrary=%s', async imageLibrary => {
     vi.stubGlobal('innerWidth', 390)
+    const listeners = vi.spyOn(HTMLElement.prototype, 'addEventListener')
     const wrapper = mountCanvasReader(imageLibrary)
     const viewport = wrapper.get('.he-webtoon-viewport')
-    expect(wrapper.get('.he-webtoon-content').attributes('style')).toContain('padding: 0')
-    await viewport.trigger('touchstart', { touches: touch([[150, 300]]) })
-    await viewport.trigger('touchmove', { touches: touch([[150, 200]]) })
-    await viewport.trigger('touchend', { touches: [], changedTouches: touch([[150, 200]]) })
-    await viewport.trigger('click')
-    expect(wrapper.emitted('viewerClick')).toBeUndefined()
-    await viewport.trigger('touchstart', { touches: touch([[150, 300]]) })
-    await viewport.trigger('touchend', { touches: [], changedTouches: touch([[150, 300]]) })
+    expect(wrapper.find('.he-native-pages').exists()).toBe(true)
+    const gestures = listeners.mock.calls.filter(([type], index) =>
+      listeners.mock.contexts[index] === viewport.element && /^(touch|gesture|pointer)/.test(type))
+    expect(gestures).toEqual([])
+    expect((viewport.element as HTMLElement).style.overflow).toBe('')
     await viewport.trigger('click')
     expect(wrapper.emitted('viewerClick')).toEqual([[]])
   })

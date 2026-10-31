@@ -51,6 +51,7 @@ afterEach(() => {
   wrappers.length = 0
   audioPlaybackStore.stop()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   localStorage.clear()
   sessionStorage.clear()
   document.body.innerHTML = ''
@@ -119,7 +120,7 @@ describe('TopBar /downloads navigation entrance', () => {
 })
 
 describe('MangaReader mobile webtoon mode and controls', () => {
-  it('registers ordinary webtoon touch observers as passive so scrolling does not wait for them', () => {
+  it('registers no touch or Safari gesture listeners on the mobile reading document', () => {
     window.innerWidth = 390
     localStorage.setItem('he_manga_read_mode_mobile', 'webtoon')
     const listeners = vi.spyOn(HTMLElement.prototype, 'addEventListener')
@@ -130,9 +131,8 @@ describe('MangaReader mobile webtoon mode and controls', () => {
     wrappers.push(wrapper)
     const viewport = wrapper.get('.he-webtoon-viewport').element
     const touches = listeners.mock.calls.filter(([type], index) =>
-      listeners.mock.contexts[index] === viewport && type.startsWith('touch'))
-    expect(touches.map(([type]) => type).sort()).toEqual(['touchcancel', 'touchend', 'touchmove', 'touchstart'])
-    for (const [, , options] of touches) expect(options).toMatchObject({ passive: true })
+      listeners.mock.contexts[index] === viewport && /^(touch|gesture|pointer)/.test(type))
+    expect(touches).toEqual([])
   })
 
   it('correctly reports final page completion when scrolling to bottom on mobile web', async () => {
@@ -173,8 +173,13 @@ describe('MangaReader mobile webtoon mode and controls', () => {
     Object.defineProperty(container, 'clientHeight', { value: 800, configurable: true })
     Object.defineProperty(container, 'scrollTop', { value: 5200, configurable: true }) // 5200 + 800 = 6000 (at bottom)
 
-    // Trigger scroll handler
-    container.dispatchEvent(new Event('scroll'))
+    const content = wrapper.get('.he-webtoon-content').element as HTMLElement
+    Object.defineProperty(content, 'offsetHeight', { value: 6000 })
+    vi.stubGlobal('scrollY', 5200)
+    vi.stubGlobal('visualViewport', Object.assign(new EventTarget(), { pageTop: 5200, height: 800, scale: 1 }))
+    vi.spyOn(content, 'getBoundingClientRect').mockReturnValue({ top: -5200 } as DOMRect)
+    // The scroll belongs to the document, including at the end of the chapter.
+    window.dispatchEvent(new Event('scroll'))
 
     // Wait for requestAnimationFrame
     await new Promise(resolve => requestAnimationFrame(resolve))
@@ -287,7 +292,7 @@ describe('MangaReader mobile webtoon mode and controls', () => {
     for (const spread of [60, 80, 100]) { await viewport.trigger('touchmove', fingers([150 - spread, 100], [150 + spread, 100])); flushFrames() }
     expect(content.style.transform).toBe('')
     expect(content.style.getPropertyValue('--he-zoom')).toBe('1')
-    expect((viewport.element as HTMLElement).style.touchAction).toBe('manipulation')
+    expect((viewport.element as HTMLElement).style.touchAction).toBe('')
     expect(renderedTree(wrapper)).toBe(tree)
   })
 
@@ -305,6 +310,12 @@ describe('MangaReader mobile webtoon mode and controls', () => {
     }
     flushFrames()
     expect(content.style.getPropertyValue('--he-zoom')).toBe(mode === 'webtoon' ? '1' : '2.5')
+    if (mode === 'webtoon') {
+      expect(wrapper.emitted('hideControls')).toBeUndefined()
+      await surface.trigger('dblclick'); await surface.trigger('dblclick')
+      expect(wrapper.emitted('viewerDoubleClick')).toBeUndefined()
+      return
+    }
     expect(wrapper.emitted('hideControls')).toEqual([[]])
     await surface.trigger('dblclick')
     expect(wrapper.emitted('viewerDoubleClick')).toBeUndefined()

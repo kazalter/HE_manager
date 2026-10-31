@@ -42,8 +42,8 @@ describe('native mobile webtoon', () => {
     reader.onTouchMove(event([[50, 400], [350, 400]]))
     const gesture = new Event('gesturechange', { cancelable: true })
     reader.onGesture(gesture)
-    expect(reader.isGesturing.value).toBe(true)
-    expect(onPinchStart).toHaveBeenCalled()
+    expect(reader.isGesturing.value).toBe(false)
+    expect(onPinchStart).not.toHaveBeenCalled()
     expect(gesture.defaultPrevented).toBe(false)
     expect(listen).not.toHaveBeenCalled()
     expect(content.style.transform).toBe('')
@@ -51,7 +51,17 @@ describe('native mobile webtoon', () => {
     expect(scroller.style.overflow).toBe('')
     reader.onTouchEnd(event([], 'touchend'))
     expect(reader.isGesturing.value).toBe(false)
-    expect(reader.wasGesture()).toBe(true)
+    expect(reader.wasGesture()).toBe(false)
+  })
+
+  it('hides controls from observed native zoom changes without listening to touch input', () => {
+    const { viewport, onPinchStart } = create()
+    viewport.scale = 2; viewport.dispatchEvent(new Event('resize'))
+    viewport.scale = 3; viewport.dispatchEvent(new Event('resize'))
+    expect(onPinchStart).toHaveBeenCalledTimes(1)
+    viewport.scale = 1; viewport.dispatchEvent(new Event('resize'))
+    viewport.scale = 2; viewport.dispatchEvent(new Event('resize'))
+    expect(onPinchStart).toHaveBeenCalledTimes(2)
   })
 
   it('tracks document and visual viewport changes, then restores the original viewport and listeners', async () => {

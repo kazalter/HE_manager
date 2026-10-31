@@ -484,19 +484,23 @@ html.he-standalone, .he-standalone body, .he-standalone #app { height: var(--he-
 .he-app-shell { height: var(--he-app-height); }
 .main-scroll-container { height: 100%; }
 /* The mobile long strip is a document, so pinch/pan/momentum belong to the browser. */
-html.he-webtoon-document,
-html.he-webtoon-document body {
+html.he-webtoon-document {
   height: auto !important;
   min-height: 100%;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
-  touch-action: manipulation;
+  /* Body supplies the viewport scrolling, matching WNACG's vertical document. */
+  overflow: visible !important;
   background: black;
 }
 html.he-webtoon-document body {
-  /* A positioned body in Home Screen mode would trap the absolute reader's overflow. */
   position: static;
-  overflow: visible !important;
+  width: 100vw;
+  height: auto !important;
+  min-height: 100vh;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  touch-action: manipulation;
+  -webkit-overflow-scrolling: touch;
+  background: black;
 }
 .he-webtoon-document .he-media-overlay {
   position: relative;
@@ -516,6 +520,7 @@ html.he-webtoon-document body {
   height: auto;
   min-height: 100dvh;
   overflow: visible;
+  overscroll-behavior: auto;
 }
 .he-webtoon-document .he-viewer-header,
 .he-native-webtoon .he-manga-controls,

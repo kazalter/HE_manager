@@ -19,7 +19,13 @@ class ControlledImage {
   onload: (() => Promise<void>) | null = null
   onerror: (() => void) | null = null
   decode = vi.fn().mockResolvedValue(undefined)
-  constructor() { ControlledImage.instances.push(this) }
+  constructor() {
+    const image = document.createElement('img')
+    Object.defineProperties(image, { naturalWidth: { value: 800 }, naturalHeight: { value: 1200 } })
+    image.decode = vi.fn().mockResolvedValue(undefined)
+    ControlledImage.instances.push(image as unknown as ControlledImage)
+    return image as unknown as ControlledImage
+  }
 }
 const images = Array.from({ length: 5 }, (_, index): Media => ({
   id: index + 1, title: `Image ${index + 1}`, media_type: 'image',
@@ -124,7 +130,7 @@ it('toggles image autoplay with Space, ignores repeats and preserves editing and
 
 it('keeps the actual mobile reader, scroll offset and hidden controls alive across delayed and out-of-order route verification', async () => {
   const { router, reader, scroll, pending } = await create()
-  await ControlledImage.instances[0]!.onload!(); await flushPromises()
+  await ControlledImage.instances[0]!.onload!(); vi.advanceTimersByTime(300); await flushPromises()
   const displayedImage = reader.get('#webtoon-page-0 img').element
   const readerRoot = reader.element
   const scrollTo = vi.mocked(window.scrollTo)
