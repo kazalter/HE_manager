@@ -483,6 +483,41 @@ html.he-standalone, .he-standalone body, .he-standalone #app { height: var(--he-
 .he-standalone .he-auth-view { height: var(--he-app-height); min-height: 0; overflow-y: auto; align-items: safe center; padding-block: 16px; }
 .he-app-shell { height: var(--he-app-height); }
 .main-scroll-container { height: 100%; }
+/* The mobile long strip is a document, so pinch/pan/momentum belong to the browser. */
+html.he-webtoon-document,
+html.he-webtoon-document body {
+  height: auto !important;
+  min-height: 100%;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  touch-action: manipulation;
+  background: black;
+}
+html.he-webtoon-document body {
+  /* A positioned body in Home Screen mode would trap the absolute reader's overflow. */
+  position: static;
+  overflow: visible !important;
+}
+.he-webtoon-document .he-media-overlay {
+  position: absolute;
+  bottom: auto;
+  min-height: 100dvh;
+}
+.he-webtoon-document .he-media-layout,
+.he-webtoon-document .he-media-layout > section,
+.he-native-webtoon,
+.he-native-webtoon .he-reader-surface,
+.he-native-webtoon .he-webtoon-viewport {
+  display: block;
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+}
+.he-webtoon-document .he-viewer-header,
+.he-native-webtoon .he-manga-controls,
+.he-native-webtoon .he-manga-strip,
+.he-native-webtoon .he-page-nav { position: fixed; }
+.he-native-webtoon .he-page-nav { top: 50%; }
 .he-back-top { bottom: 24px; }
 .he-mobile-nav { position: fixed; bottom: 0; inset-inline: 0; z-index: 40; height: calc(var(--he-nav-height) + env(safe-area-inset-bottom)); padding: 8px max(12px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); background: rgb(var(--color-sidebar)); border-top: 1px solid rgb(var(--color-line)); }
 .he-nav-surface { position: relative; isolation: isolate; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); height: 64px; width: min(100%, 520px); margin-inline: auto; padding: 4px; border-radius: 20px; touch-action: pan-y; user-select: none; -webkit-user-select: none; }

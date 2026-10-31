@@ -2,47 +2,49 @@
 
 2026-10-31。范围：手机竖屏 Web 的图片序列、漫画章节。
 
-## 共用入口
+图片和漫画都从 `MediaDetail.vue` 进入同一个 `MangaReader.vue`。图片 URL、尺寸与进度来源不同，卷轴行为共用 `useWebtoonScroller.ts` 和 `useWebtoonDocument.ts`。
 
-`MediaDetail.vue` 的图片和漫画都使用 `MangaReader.vue`，仅图片 URL、页数、尺寸和进度来源不同。卷轴手势集中在 `useWebtoonScroller.ts`，它调用 `useZoomScroller.ts`；不要为图片再复制一套卷轴缩放。
+## WNACG 的实际实现
 
-- 100% 按视口宽度显示；手机端不加页间缝、外边距或圆角。
-- 新的单指手势使用原生滚动，保留浏览器的惯性。
-- 双指捏合使用临时 transform，结束时落成实际宽高和匹配的 scrollTop/scrollLeft，保持手指锚点，静止时清晰显示图片。
-- 卷轴捏合在手指未离开时就限制在 1–5 倍，拖动也限制在内容边界内。每次移动重新建立基准，越界后反向操作立即响应。
-- 捏合结束不再播放回弹。只抬起一指时，剩余手指继续平移；全部松手后恢复普通原生滚动。
-- 双击在 100% 与 200% 之间切换。滚动、捏合和取消手势之后的合成 click 不切换工具栏。
-- 图片尺寸占位、解码缓存、预加载、进度跟踪继续复用阅读器已有实现。
+本次检查了 [WNACG 手机阅读页](https://www.wnacg.com/photos-slide-aid-400249.html)、[阅读器主脚本](https://www.wnacg.com/themes/mo/images/reader.m.mini.2026092201.js?v=1791550966)、[阅读器 CSS](https://www.wnacg.com/themes/mo/images/reader.m1.css) 和 reader-bar 脚本。只检查网页代码，没有保留或复用其漫画内容。
 
-## 公开站点参考
+观察到：
 
-以下为公开发布代码的静态观察，不代表真机运行轨迹。独立实现上述行为，没有引入第三方站点的代码。
+- 阅读页 viewport 声明 `initial-scale=1.0, maximum-scale=5.0, user-scalable=yes`。
+- HTML 内联样式针对竖向模式放开 body 的纵向滚动，把 `#viewport` 设为 `overflow:visible;height:auto;position:static`。只看外部 CSS 中的 `overflow-y:auto` 会漏掉这层覆盖。
+- 阅读器主脚本不注册双指 touch/pinch/gesture 缩放处理。竖向模式跳页和自动滚动调用 `window.scrollTo` / `window.scrollBy`。
+- 图片使用 `max-width:100%`，按原图尺寸预留高度；只挂载阅读位置附近的图片。
 
-### WEBTOON 手机站
+由此推断，卷轴的捏合与平移主要交给浏览器原生视口处理，而不是脚本在手指移动时缩放整列、松手再重排。这与之前 HE 的实现有实质区别。
 
-[阅读页面](https://m.webtoons.com/en/canvas/creator-collabs/intro-episode/viewer?episode_no=1&readingLanguageCode=en&title_no=1013154)；[当日 viewer bundle](https://m.webtoons.com/static/bundle/webToAppScrollViewer-da3437f33dac99d5acbf.js)。
+REA parent Evidence：`ev_60a78c6e9b5eefb35f3999bcd842952408435b42061ba092e8e0c7c2cef8b005`。
 
-`_getSizeInfo` 读取屏宽，以原图宽高计算显示高度和累计高度；`_makePanels` 先建立图片 DOM 和尺寸占位，再按滚动位置加载。此页面最终 viewport 声明允许 1–2 倍浏览器缩放。不能因这个 bundle 没有自定义 pinch 就断言整个站点没有。
+REA 成功解析本地捕获的 5 个 JavaScript 文件、6329 个 AST 节点，无解析失败；静态语义仍有动态关系未知，不能把这些结果解释为完整的站点运行轨迹。上述 CSS/viewport 结论另经 HTML 和样式原文核对。
 
-- bundle SHA-256：`ffafa71ac6bef37e4c84e6e97024e7318f491a336bb3fa426bc7530c17a44b60`
-- REA parent Evidence：`ev_3f66ec4d2d55171eea78412a54bd2a287ef765d6cf411e820acb09bef2e8ea19`
-- AST 解析成功；语义图达到节点上限，覆盖不完整。
+发布文件 SHA-256：
 
-### MANGA Plus
+| 文件 | SHA-256 |
+| --- | --- |
+| 阅读页 HTML | `c098dd01888a3b4dab739a0ac461dc6857dd816d4193c21fed089a1fd93125f0` |
+| reader 主脚本 | `290b91b012d0a60094213dee032a5a7dfb44bb1848a36eb057b78f22b8d6bf99` |
+| reader CSS | `b8b59e81b50181dec7d6bd3b8ea8f1ae9bc26f390ad3ab1542d5ae23709712cd` |
+| reader-bar 脚本 | `67160109301b45d19cbc53e94a2f0369d7d07367cfe26d765079c58d6ac3a00b` |
 
-[站点](https://mangaplus.shueisha.co.jp/)；[当日 app bundle](https://mangaplus.shueisha.co.jp/js/app.b51a50c2.js)。
+## HE 的实现
 
-纵向 surface 设置 `overflowY="scroll"` 并从 scroll 事件更新页码。公共 zoom setter 把比例限制为至少 1、至多 maxPageZoom；`setTransform` 限制 x/y 平移，pinch 事件更新 zoom。这里的缩放代码属于通用阅读器容器，不能据此认定它和 HE 的整列缩放、锚点策略完全相同。
+- 手机 Web 卷轴改用文档滚动和浏览器原生捏合，声明 1–5 倍视口缩放、`touch-action:manipulation`。浏览器负责缩放边界、平移与惯性。
+- 不再拦截手机卷轴的 touchmove / Safari gesture，不冻结滚动，不在捏合或松手时改变图片列尺寸或 transform。
+- 图片按屏宽布局，手机端不额外添加页缝、外边距和圆角。预留尺寸、解码缓存和前后预取仍复用原有实现。
+- 从 `visualViewport.pageTop/height` 计算阅读位置和可见预取范围；放大平移时即使 `window.scrollY` 不变，也能更新进度。跳页补偿 `visualViewport.offsetTop`。
+- 根滚动样式仅在手机 Web 卷轴激活期间启用；退出或切换模式时恢复滚动、监听器及原始 viewport 声明。放大状态退出时先改变 initial-scale，再恢复原声明，避免媒体库留在放大状态。
+- 捏合、滚动、取消和触摸双击不会误触全屏。和 WNACG 的 manipulation 设置一致，手机卷轴以捏合缩放为主，触摸双击不再触发脚本 2 倍缩放。
+- 桌面卷轴及单/双页继续使用 `useZoomScroller`，不改变原有翻页交互。
 
-- bundle SHA-256：`008623e2f29adcf4be3e263d7ef43ee6716ad59e1c694995bb1501ba48a244e1`
-- REA parent Evidence：`ev_67c2d82470e20832c93917914025356282589b068bae077f7a5dd0367abaace2`
-- REA AST 解析成功，后续语义分析耗尽 worker heap，图仅部分可用；上述细节另经直接检查发布代码确认。
+## 验证与边界
 
-HE 的设计取舍：沿用适配屏宽、原生纵向滚动、尺寸占位和实时边界限制；为满足内容最小 100%、工具栏固定及长章节进度跟踪，继续使用阅读器内部缩放。
-
-## 验证
-
-- `zoom-scroller.test.ts`：实时最小/最大比例、边界反向响应、长章节锚点、双指转单指、取消和监听器回收。
-- `reader-images.test.ts`：图片/漫画两个入口在手机宽度下使用同样的卷轴和手势点击抑制。
-- Chrome 手机模拟（390 × 844，真实 CDP touch 输入，50 页模拟内容）：图片与漫画均通过深处放大/缩小、即时边界反向、单指接续、新手势原生滚动、双击还原检查；提交布局前后页位置偏差约 0.55px，无页面异常。
-- 没有进行 iPhone Safari 真机测试。
+- 新增原生手势、viewport 声明、监听器清理、退出/快速重入测试。
+- 更新 Home → verification → detail → reader 的手机回归，确认原生文档滚动期间不重建图片阅读器，不丢失滚动位置或隐藏工具栏状态。
+- 新增 visualViewport 平移回归：文档 scrollY 不变也必须正确更新路由与阅读页码。
+- Chrome 手机模拟（390 × 844、真实 CDP touch 输入、50 页自有模拟图片）验证两个入口：原生放大到 5 倍、图片列仍为 390px 且 transform 为空、纵向/横向平移、放大后进度、切换单页并返回原阅读位置、放大后关闭恢复 1 倍。
+- 另以 Home Screen 的 `he-standalone` 布局重复验证文档滚动、放大平移和模式切换，避免已定位的 body 吞掉长卷轴滚动范围问题。
+- 没有进行 iPhone Safari 真机测试。原生缩放的弹性、最大/最小值最终由浏览器实现，不再承诺脚本硬钳制的手感。

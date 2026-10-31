@@ -270,7 +270,7 @@ describe('MangaReader mobile webtoon mode and controls', () => {
     expect((wrapper.get('.he-pager').element as HTMLElement).style.overflowX).toBe('hidden')
   })
 
-  it('pinches the webtoon column without re-rendering every page on each move', async () => {
+  it('leaves mobile webtoon pinch to the browser without transforming or re-rendering every page', async () => {
     const flushFrames = animationFrames()
     window.innerWidth = 390
     localStorage.setItem('he_manga_read_mode_mobile', 'webtoon')
@@ -285,11 +285,13 @@ describe('MangaReader mobile webtoon mode and controls', () => {
     await viewport.trigger('touchstart', fingers([100, 100], [200, 100]))
     const tree = renderedTree(wrapper)
     for (const spread of [60, 80, 100]) { await viewport.trigger('touchmove', fingers([150 - spread, 100], [150 + spread, 100])); flushFrames() }
-    expect(scaleOf(content)).toBeCloseTo(2)
+    expect(content.style.transform).toBe('')
+    expect(content.style.getPropertyValue('--he-zoom')).toBe('1')
+    expect((viewport.element as HTMLElement).style.touchAction).toBe('manipulation')
     expect(renderedTree(wrapper)).toBe(tree)
   })
 
-  it.each(['single', 'webtoon'])('uses a touch double-tap to zoom %s reading and keeps a mouse double-click for fullscreen', async mode => {
+  it.each(['single', 'webtoon'])('handles touch double-tap in %s reading and keeps a mouse double-click for fullscreen', async mode => {
     const flushFrames = animationFrames()
     const wrapper = mode === 'webtoon'
       ? (() => { localStorage.setItem('he_manga_read_mode_mobile', 'webtoon'); window.innerWidth = 390; const reader = mount(MangaReader, { props: { media: sampleMangaMedia, currentPage: 0, totalPages: 3, pageDimensions: [], showControls: false, clickOnlyControls: true, progressText: '', progressPercent: 0 } }); wrappers.push(reader); return reader })()
@@ -302,7 +304,7 @@ describe('MangaReader mobile webtoon mode and controls', () => {
       await surface.trigger('touchend', lifted([195, 300]))
     }
     flushFrames()
-    expect(content.style.getPropertyValue('--he-zoom')).toBe(mode === 'webtoon' ? '2' : '2.5')
+    expect(content.style.getPropertyValue('--he-zoom')).toBe(mode === 'webtoon' ? '1' : '2.5')
     expect(wrapper.emitted('hideControls')).toEqual([[]])
     await surface.trigger('dblclick')
     expect(wrapper.emitted('viewerDoubleClick')).toBeUndefined()

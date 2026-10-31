@@ -84,10 +84,25 @@ const slideContentRef = ref<HTMLElement | null>(null)
 const webtoonContainerRef = ref<HTMLDivElement | null>(null)
 const webtoonContentRef = ref<HTMLDivElement | null>(null)
 const compactViewport = useCompactViewport()
+const nativeWebtoon = computed(() => compactViewport.value && !desktopBridge && readMode.value === 'webtoon')
+const webtoonScrollElement = () => nativeWebtoon.value
+  ? document.scrollingElement as HTMLElement | null
+  : webtoonContainerRef.value
+const webtoonViewport = () => {
+  const element = webtoonScrollElement()
+  const content = webtoonContentRef.value
+  if (nativeWebtoon.value && content) {
+    const top = content.getBoundingClientRect().top + window.scrollY
+    return { top: (window.visualViewport?.pageTop ?? window.scrollY) - top,
+      height: window.visualViewport?.height ?? window.innerHeight, total: content.offsetHeight }
+  }
+  return { top: element?.scrollTop ?? 0, height: element?.clientHeight ?? 0, total: element?.scrollHeight ?? 0 }
+}
 // Every size inside a zoomable surface is multiplied by --he-zoom, so a zoom level is a real layout.
 const applyZoomScale = (content: HTMLElement, scale: number) => content.style.setProperty('--he-zoom', String(scale))
 const hideControlsForZoom = () => { if (compactViewport.value && !desktopBridge) emit('hideControls') }
 const webtoonZoom = useWebtoonScroller({
+  native: nativeWebtoon,
   scroller: webtoonContainerRef, content: webtoonContentRef, applyScale: applyZoomScale,
   onScroll: () => trackWebtoonPage(),
   doubleTapScale: () => 2, keyboard: () => readMode.value === 'webtoon',
@@ -252,7 +267,8 @@ const setPage = (page: number) => {
 const previousPage = () => {
   if (props.currentPage === 0 && props.hasPreviousBatch) { emit('boundary', -1); return }
   if (readMode.value === 'webtoon') {
-    if (webtoonContainerRef.value) {
+    if (nativeWebtoon.value) window.scrollBy({ top: -webtoonViewport().height * 0.7, behavior: 'smooth' })
+    else if (webtoonContainerRef.value) {
       webtoonContainerRef.value.scrollBy({ top: -window.innerHeight * 0.7, behavior: 'smooth' })
     }
     return
@@ -263,7 +279,8 @@ const previousPage = () => {
 const nextPage = () => {
   if (props.totalPages && props.currentPage + stepSize.value >= props.totalPages && props.hasNextBatch) { emit('boundary', 1); return }
   if (readMode.value === 'webtoon') {
-    if (webtoonContainerRef.value) {
+    if (nativeWebtoon.value) window.scrollBy({ top: webtoonViewport().height * 0.7, behavior: 'smooth' })
+    else if (webtoonContainerRef.value) {
       webtoonContainerRef.value.scrollBy({ top: window.innerHeight * 0.7, behavior: 'smooth' })
     }
     return
@@ -458,6 +475,7 @@ const onThumbLeave = () => {
 }
 
 const onWheel = (event: WheelEvent) => {
+  if (nativeWebtoon.value) return
   if (event.ctrlKey || event.metaKey) {
     activeZoom().handleWheelZoom(event)
     return
@@ -481,11 +499,12 @@ const trackWebtoonPage = () => {
     if (isProgrammaticScroll || readMode.value !== 'webtoon') return
     const container = webtoonContainerRef.value
     if (!container || !props.totalPages) return
-    const containerTop = container.scrollTop + container.clientHeight / 2
+    const view = webtoonViewport()
+    const containerTop = view.top + view.height / 2
     const children = webtoonContentRef.value?.children
     if (!children?.length) return
-    if (container.scrollTop !== lastWebtoonScrollTop) scrollDirection = container.scrollTop > lastWebtoonScrollTop ? 1 : -1
-    lastWebtoonScrollTop = container.scrollTop
+    if (view.top !== lastWebtoonScrollTop) scrollDirection = view.top > lastWebtoonScrollTop ? 1 : -1
+    lastWebtoonScrollTop = view.top
     let low = 0
     let high = children.length - 1
     while (low < high) {
@@ -494,7 +513,7 @@ const trackWebtoonPage = () => {
       if (el.offsetTop + el.offsetHeight < containerTop) low = mid + 1
       else high = mid
     }
-    if (container.scrollTop + container.clientHeight >= container.scrollHeight - 2) low = children.length - 1
+    if (view.top + view.height >= view.total - 2) low = children.length - 1
     // Warm the actual viewport before waiting for parent/router progress updates.
     preloadAdjacentPages(low, true)
     if (!webtoonZoom.isGesturing.value && low !== props.currentPage) {
@@ -512,9 +531,11 @@ const scrollWebtoonToPage = (page: number) => {
   if (!container || !el) return
   isProgrammaticScroll = true
   window.clearTimeout(programmaticScrollTimer)
-  // Only move the reader. scrollIntoView can also move the surrounding overlay.
-  container.scrollTo({ top: el.offsetTop, behavior: 'auto' })
-  lastWebtoonScrollTop = container.scrollTop
+  if (nativeWebtoon.value) window.scrollTo({
+    top: el.getBoundingClientRect().top + window.scrollY - (window.visualViewport?.offsetTop ?? 0), behavior: 'auto',
+  })
+  else container.scrollTo({ top: el.offsetTop, behavior: 'auto' })
+  lastWebtoonScrollTop = webtoonViewport().top
   preloadAdjacentPages(page, true)
   programmaticScrollTimer = window.setTimeout(() => {
     isProgrammaticScroll = false
@@ -533,9 +554,9 @@ const onViewerClick = () => {
 }
 
 // Compensate once per render when decoded dimensions above the viewport change.
-let pendingAnchor: { container: HTMLDivElement; element: HTMLElement; top: number } | null = null
+let pendingAnchor: { container: HTMLElement; element: HTMLElement; top: number } | null = null
 const imageBuffer = useReaderImageBuffer(update => {
-  const container = webtoonContainerRef.value
+  const container = webtoonScrollElement()
   const element = webtoonContentRef.value?.children[props.currentPage] as HTMLElement | undefined
   const anchor = !pendingAnchor && container && element && container.scrollTop > 0
     ? { container, element, top: element.offsetTop } : null
@@ -543,7 +564,7 @@ const imageBuffer = useReaderImageBuffer(update => {
   update()
   if (anchor) {
     void nextTick(() => {
-      if (!webtoonZoom.isGesturing.value && webtoonContainerRef.value === anchor.container && anchor.element.isConnected) {
+      if (!webtoonZoom.isGesturing.value && webtoonScrollElement() === anchor.container && anchor.element.isConnected) {
         const delta = anchor.element.offsetTop - anchor.top
         if (delta) anchor.container.scrollTop += delta
       }
@@ -574,10 +595,10 @@ const pageAtOffset = (offset: number) => {
 const preloadAdjacentPages = (page = props.currentPage, fromViewport = false) => {
   if (!props.totalPages || authIdentity() !== openedIdentity) return
   let first = page, last = readMode.value === 'double' ? Math.min(page + 1, props.totalPages - 1) : page
-  const container = webtoonContainerRef.value
-  if (readMode.value === 'webtoon' && container?.clientHeight && (webtoonContentRef.value?.children[0] as HTMLElement | undefined)?.offsetHeight) {
-    const visibleFirst = pageAtOffset(container.scrollTop)
-    const visibleLast = pageAtOffset(container.scrollTop + container.clientHeight - 1)
+  const view = webtoonViewport()
+  if (readMode.value === 'webtoon' && view.height && (webtoonContentRef.value?.children[0] as HTMLElement | undefined)?.offsetHeight) {
+    const visibleFirst = pageAtOffset(view.top)
+    const visibleLast = pageAtOffset(view.top + view.height - 1)
     if (fromViewport || (page >= visibleFirst && page <= visibleLast)) { first = visibleFirst; last = visibleLast }
   }
   const planned = readerImageWindow(props.totalPages, first, last, scrollDirection, page => {
@@ -719,10 +740,10 @@ function onReaderViewportResize() { preloadAdjacentPages() }
 </script>
 
 <template>
-  <div class="he-manga-reader flex-1 min-h-0 flex flex-col bg-black overflow-hidden relative">
+  <div class="he-manga-reader flex-1 min-h-0 flex flex-col bg-black overflow-hidden relative" :class="{ 'he-native-webtoon': nativeWebtoon }">
     <UiToast v-if="enhancementError || desktopImages.message.value" :message="enhancementError || desktopImages.message.value" :urgent="!!enhancementError" overlay class="pointer-events-none absolute left-1/2 top-16 z-30 max-w-[90%] -translate-x-1/2" />
     <div
-      class="flex-1 min-h-0 flex items-center justify-center w-full relative group overflow-hidden"
+      class="he-reader-surface flex-1 min-h-0 flex items-center justify-center w-full relative group overflow-hidden"
       @wheel="onWheel"
       @click="onViewerClick"
       @dblclick="onViewerDoubleClick"
@@ -747,9 +768,9 @@ function onReaderViewportResize() { preloadAdjacentPages() }
       <div
         v-if="readMode === 'webtoon'"
         ref="webtoonContainerRef"
-        style="overflow-anchor: none; overscroll-behavior: contain; touch-action: pan-x pan-y"
+        style="overflow-anchor: none; overscroll-behavior: contain"
         class="he-webtoon-viewport w-full h-full overflow-y-auto overflow-x-hidden custom-scrollbar select-none"
-        :style="{ cursor: webtoonZoom.isZoomed.value ? (webtoonZoom.isDragging.value ? 'grabbing' : 'grab') : undefined }"
+        :style="{ touchAction: nativeWebtoon ? 'manipulation' : 'pan-x pan-y', cursor: webtoonZoom.isZoomed.value ? (webtoonZoom.isDragging.value ? 'grabbing' : 'grab') : undefined }"
         @scroll="webtoonZoom.onScroll"
         @mousedown="webtoonZoom.onMouseDown"
         @touchstart.passive="webtoonZoom.onTouchStart"

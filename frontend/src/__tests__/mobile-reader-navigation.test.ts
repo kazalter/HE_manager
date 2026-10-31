@@ -31,11 +31,20 @@ const images = Array.from({ length: 5 }, (_, index): Media => ({
 }))
 const frames = new Map<number, FrameRequestCallback>()
 let frame = 0, wrapper: ReturnType<typeof mount> | undefined
+let visualViewport: EventTarget & { pageTop: number; height: number; scale: number }
 const originalWidth = window.innerWidth
 const response = (data: unknown) => ({ data, headers: { 'x-total-count': '5' } })
 beforeEach(() => {
   vi.useFakeTimers(); localStorage.clear(); frames.clear(); ControlledImage.instances = []
   window.innerWidth = 390
+  vi.stubGlobal('innerHeight', 600)
+  vi.stubGlobal('scrollY', 0)
+  visualViewport = Object.assign(new EventTarget(), { pageTop: 0, height: 600, scale: 1 })
+  vi.stubGlobal('visualViewport', visualViewport)
+  vi.spyOn(window, 'scrollTo').mockImplementation(((x: number | ScrollToOptions, y?: number) => {
+    window.scrollY = typeof x === 'number' ? y ?? 0 : x.top ?? 0
+    visualViewport.pageTop = window.scrollY
+  }) as typeof window.scrollTo)
   authState.token = 'mobile-reader-test'
   authState.user = { id: 1, username: 'reader', is_active: true, is_admin: false, created_at: '' }
   vi.stubGlobal('Image', ControlledImage)
@@ -44,6 +53,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   wrapper?.unmount(); wrapper = undefined
+  for (let i = 0; i < 2; i++) { const callbacks = [...frames.values()]; frames.clear(); callbacks.forEach(callback => callback(0)) }
   vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); localStorage.clear()
   window.innerWidth = originalWidth; document.body.innerHTML = ''
 })
@@ -68,16 +78,21 @@ async function create() {
   await wrapper.get('.test-card').trigger('click'); await flushPromises()
   const reader = wrapper.getComponent(MangaReader)
   const viewport = reader.find({ ref: 'webtoonContainerRef' })
-  const container = viewport.element as HTMLElement
+  const container = document.documentElement
+  const content = reader.get('.he-webtoon-content').element as HTMLElement
+  Object.defineProperties(content, { offsetHeight: { value: 5000 } })
+  vi.spyOn(content, 'getBoundingClientRect').mockImplementation(() => ({ top: -window.scrollY }) as DOMRect)
   Object.defineProperties(container, { clientHeight: { value: 600 }, scrollHeight: { value: 5000 } })
-  Array.from(container.querySelectorAll('.he-reader-page')).forEach((child, index) => {
+  Array.from(content.querySelectorAll('.he-reader-page')).forEach((child, index) => {
     Object.defineProperties(child, { offsetTop: { value: index * 1000 }, offsetHeight: { value: 1000 } })
+    vi.spyOn(child, 'getBoundingClientRect').mockImplementation(() => ({ top: index * 1000 - window.scrollY }) as DOMRect)
   })
   // Hide controls by tapping, then let the initial scroll lock expire.
   await viewport.trigger('click'); vi.advanceTimersByTime(250); await flushPromises()
   const scroll = async (top: number) => {
-    container.scrollTop = top
-    await viewport.trigger('scroll')
+    window.scrollY = top
+    visualViewport.pageTop = top
+    window.dispatchEvent(new Event('scroll'))
     const callbacks = [...frames.values()]; frames.clear()
     callbacks.forEach(callback => callback(0))
     await flushPromises()
@@ -108,11 +123,12 @@ it('toggles image autoplay with Space, ignores repeats and preserves editing and
 })
 
 it('keeps the actual mobile reader, scroll offset and hidden controls alive across delayed and out-of-order route verification', async () => {
-  const { router, reader, container, scroll, pending } = await create()
+  const { router, reader, scroll, pending } = await create()
   await ControlledImage.instances[0]!.onload!(); await flushPromises()
   const displayedImage = reader.get('#webtoon-page-0 img').element
   const readerRoot = reader.element
-  const scrollTo = vi.spyOn(container, 'scrollTo')
+  const scrollTo = vi.mocked(window.scrollTo)
+  scrollTo.mockClear()
   await scroll(1100)
   expect(router.currentRoute.value.query.media).toBe('2')
   expect(pending.has(2)).toBe(true)
@@ -127,7 +143,7 @@ it('keeps the actual mobile reader, scroll offset and hidden controls alive acro
   expect(wrapper!.getComponent(MangaReader).element).toBe(readerRoot)
   expect(reader.props('currentPage')).toBe(2)
   expect(reader.get('#webtoon-page-0 img').element).toBe(displayedImage)
-  expect(container.scrollTop).toBe(2100)
+  expect(window.scrollY).toBe(2100)
   expect(scrollTo).not.toHaveBeenCalled()
   expect(reader.get('.he-manga-controls').attributes('inert')).toBeDefined()
   // Browser route navigation reuses the reader and synchronizes its selected page.
@@ -159,4 +175,15 @@ it('closes on failed background verification and ignores a response arriving aft
   pending.get(3)!.resolve(response(images[2])); await flushPromises()
   expect(wrapper!.findComponent(MangaReader).exists()).toBe(false)
   expect(router.currentRoute.value.query.media).toBeUndefined()
+})
+
+it('tracks native zoom panning through the visual viewport even when document scrollY stays unchanged', async () => {
+  const { router, pending } = await create()
+  visualViewport.scale = 2; visualViewport.height = 300; visualViewport.pageTop = 1100
+  visualViewport.dispatchEvent(new Event('scroll'))
+  const callbacks = [...frames.values()]; frames.clear()
+  callbacks.forEach(callback => callback(0)); await flushPromises()
+  expect(window.scrollY).toBe(0)
+  expect(router.currentRoute.value.query.media).toBe('2')
+  expect(pending.has(2)).toBe(true)
 })
