@@ -34,7 +34,6 @@ from .manga import (
     get_image_thumbnail,
     get_manga_thumbnail,
 )
-from .game import game_launchers
 from .video import (
     generate_sprite_vtt,
     get_video_metadata,
@@ -140,34 +139,6 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                 discarded_root, discarded_files = discarded_source_files(root, files, discard_identities)
                 if discarded_root:
                     dirs[:] = []
-                    continue
-
-                # A game is a directory, not each executable or each asset.
-                # Only the explicitly selected game scan mode considers EXEs.
-                if folder.scan_mode == "game":
-                    if game_launchers(root):
-                        scanned_paths.add(root)
-                        existing = existing_media.get(root)
-                        if existing is None:
-                            rel_path = os.path.relpath(root, folder.path)
-                            title = os.path.basename(os.path.normpath(root)) or folder.path
-                            media = models.Media(
-                                folder_id=folder.id, title=title, relative_path=rel_path,
-                                absolute_path=root, media_type="game", extension=".dir",
-                                file_size=directory_size(root), is_missing=False,
-                                duplicate_status="unique",
-                            )
-                            media_batch.append(media)
-                            existing_media[root] = media
-                            processed_count += 1
-                            if len(media_batch) >= BATCH_SIZE:
-                                db.add_all(media_batch)
-                                db.commit()
-                                media_batch = []
-                        else:
-                            existing.is_missing = False
-                            existing.missing_since = None
-                        dirs[:] = []
                     continue
 
                 # --- MANGA FOLDER LOGIC ---

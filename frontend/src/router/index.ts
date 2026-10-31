@@ -84,11 +84,6 @@ const router = createRouter({
       component: () => import('../views/EmbedSpineView.vue')
     },
     {
-      path: '/game/:mediaId',
-      name: 'game',
-      component: () => import('../views/GameView.vue')
-    },
-    {
       path: '/:pathMatch(.*)*',
       redirect: '/'
     }

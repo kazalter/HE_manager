@@ -46,7 +46,6 @@ const modes: Array<{ id: Folder['scan_mode']; label: string; description: string
   { id: 'manga', label: '漫画', description: '把包含图片的文件夹识别为一本漫画' },
   { id: 'audio', label: '音频（单文件）', description: '每个 .mp3/.wav/.flac 单独入库（散装音乐收藏）' },
   { id: 'audio_work', label: '音频作品', description: '把每个文件夹识别为一个音频作品（ASMR 等，含 tracks.json 时优先读取）' },
-  { id: 'game', label: '游戏', description: '将包含 Windows 启动程序的文件夹识别为游戏，不会自动运行程序' },
 ]
 
 const scanModeLabel = (mode: Folder['scan_mode']) => {

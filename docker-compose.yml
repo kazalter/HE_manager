@@ -4,8 +4,7 @@
 #   On the real host:      mount the media HDD first (see below), then the same.
 #
 # The backend stays directly reachable on port 8010. The web frontend is served
-# directly on the LAN (port 8011); game streaming also has a LAN-only HTTPS
-# entry point on port 8444 for browsers that require a secure context.
+# by nginx directly on the LAN (default port 8011); no host-name mapping needed.
 services:
   backend:
     build:
@@ -25,16 +24,6 @@ services:
       HE_ENABLE_DOCS: "0"           # keep /docs /redoc /openapi.json closed on the public net
       # HE_ALLOWED_ORIGINS: "https://<your-sakura-subdomain>"  # only if you ever expose the web UI
       HE_DATABASE_URL: "sqlite:////data/library.db"
-      # Dedicated offline game runner. Its Docker daemon and images stay on HDD2.
-      HE_GAME_DOCKER_SOCKET: "/run/he-game-docker/docker.sock"
-      HE_GAME_STORAGE_MOUNT: "/mnt/hdd2"
-      HE_GAME_WORKSPACE_ROOT: "/mnt/hdd2/he-game-test/workspaces"
-      HE_GAME_CONFIG_ROOT: "/mnt/hdd2/he-game-test/config"
-      HE_GAME_WINEPREFIX: "prefix8b"
-      HE_GAME_RUNTIME_IMAGE: "he-game-runtime:wine8"
-      HE_GAME_DRI_DEVICE: "/dev/dri/renderD128"
-      HE_GAME_RENDER_GID: "993"
-      HE_GAME_STREAM_SOCKET_DIR: "/mnt/hdd2/he-game-test/stream"
       HE_PAWCHIVE_ENABLED: "${HE_PAWCHIVE_ENABLED:-0}"
       # Legacy migration fallback; use Settings → 外部收藏代理 after upgrading.
       HE_PAWCHIVE_PROXY: "${HE_PAWCHIVE_PROXY:-}"
@@ -67,8 +56,6 @@ services:
       # container path == host path == /mnt/hdd, the DB's download_root_path /
       # absolute_path columns are rewritten to /mnt/hdd/... once and stay valid.
       - /mnt/hdd:/mnt/hdd
-      - /mnt/hdd2:/mnt/hdd2
-      - /run/he-game-docker/docker.sock:/run/he-game-docker/docker.sock
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/healthz', timeout=3).read()"]
       interval: 30s
@@ -88,24 +75,9 @@ services:
     volumes:
       - ./frontend/dist:/usr/share/nginx/html:ro
       - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - /mnt/hdd2/he-game-test/stream:/run/he-game-stream:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 5s
-
-  game_https:
-    image: nginx:1.27-alpine
-    container_name: he-manager-https
-    restart: unless-stopped
-    depends_on:
-      frontend:
-        condition: service_healthy
-    ports:
-      - "${HE_GAME_HTTPS_BIND_IP:-192.168.0.101}:${HE_GAME_HTTPS_PORT:-8444}:443"
-    volumes:
-      - ./deploy/game-https/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - /mnt/hdd2/he-game-test/tls/server.crt:/etc/nginx/certs/server.crt:ro
-      - /mnt/hdd2/he-game-test/tls/server.key:/etc/nginx/certs/server.key:ro

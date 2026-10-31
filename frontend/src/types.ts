@@ -2,7 +2,7 @@ export interface Media {
     id: number;
     title: string;
     relative_path: string;
-    media_type: 'video' | 'manga' | 'image' | 'audio' | 'game';
+    media_type: 'video' | 'manga' | 'image' | 'audio';
     extension: string;
     file_size: number;
     cover_path: string | null;
@@ -184,7 +184,7 @@ export interface Folder {
     id: number;
     path: string;
     status: 'idle' | 'scanning' | 'error';
-    scan_mode: 'auto' | 'manga' | 'video' | 'image' | 'audio' | 'audio_work' | 'game';
+    scan_mode: 'auto' | 'manga' | 'video' | 'image' | 'audio' | 'audio_work';
     thumbnail_enabled: boolean;
     thumbnail_interval: number;
     last_scanned_at: string | null;
