@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { desktopSession } from '../desktop'
 
 const viewer = ref<HTMLIFrameElement | null>(null)
 const immersive = ref(false)
@@ -19,7 +20,7 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="live2d-view" :class="{ immersive }">
-    <iframe ref="viewer" src="/l2d/" title="碧蓝航线 Live2D 皮肤查看器" allow="fullscreen" allowfullscreen></iframe>
+    <iframe :key="desktopSession.generation" ref="viewer" src="/l2d/" title="碧蓝航线 Live2D 皮肤查看器" allow="fullscreen" allowfullscreen></iframe>
   </section>
 </template>
 

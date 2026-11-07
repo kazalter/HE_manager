@@ -300,7 +300,9 @@ async function protocolHandler(request) {
         return Response.json({ detail: "请先配置服务器地址" }, { status: 503 });
       operation = 'proxy-headers';
       const headers = new Headers(request.headers);
-      const generation = headers.get('x-he-generation') || url.searchParams.get('he_session');
+      const isLive2d = url.pathname.startsWith('/l2d/models/');
+      if (isLive2d && !['GET', 'HEAD'].includes(request.method)) return new Response('Method not allowed', { status: 405 });
+      const generation = headers.get('x-he-generation') || url.searchParams.get('he_session') || (isLive2d ? session.snapshot().generation : null);
       if (headers.has('x-he-generation') && url.searchParams.has('he_session') && headers.get('x-he-generation') !== url.searchParams.get('he_session')) throw new SessionError(409, '资源会话已改变');
       url.searchParams.delete('he_session');
       if (/^\/manga\/\d+\/page\/\d+$/.test(url.pathname)) url.searchParams.set('track_progress', 'false');
@@ -334,12 +336,12 @@ async function protocolHandler(request) {
       });
     }
     const response = await net.fetch(
-        pathToFileURL(staticPath(ui, url.pathname)).href,
+        pathToFileURL(staticPath(ui, url.pathname === '/l2d/' ? '/l2d/index.html' : url.pathname)).href,
       ),
       headers = new Headers(response.headers);
     headers.set(
       "Content-Security-Policy",
-      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-src 'none'",
+      `default-src 'self'; script-src 'self'${url.pathname.startsWith('/l2d/') ? " 'wasm-unsafe-eval'" : ''}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-src ${url.pathname.startsWith('/l2d/') ? "'none'" : "'self'"}`,
     );
     return new Response(response.body, { status: response.status, headers });
   } catch (error) {
@@ -429,14 +431,14 @@ async function createWindow(test = false) {
     (wc, permission, callback, details) =>
       callback(
         wc === window?.webContents &&
-          details.isMainFrame !== false &&
+          (details.isMainFrame !== false || (details.requestingUrl || '').startsWith('he://app/l2d/')) &&
           allowPermission(permission, details.requestingUrl || wc.getURL()),
       ),
   );
   window.webContents.session.setPermissionCheckHandler(
     (wc, permission, origin, details) =>
       wc === window?.webContents &&
-      details.isMainFrame !== false &&
+      (details.isMainFrame !== false || (details.requestingUrl || '').startsWith('he://app/l2d/')) &&
       allowPermission(
         permission,
         details.requestingUrl || origin || wc.getURL(),

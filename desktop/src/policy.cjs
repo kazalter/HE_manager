@@ -2,7 +2,7 @@ const path = require("node:path");
 const MEDIA_PATH =
   /^\/(?:stream\/\d+|manga\/\d+\/page\/\d+|external\/pawchive\/media\/[\w./-]+)$/;
 const API_PATH =
-  /^\/(?:auth|users|search-folder|folders|media|mobile|system|tags|ai|recommend|external|manga|x|dedup|stats|creators|bd2|auto-sync|thumbnails|stream|audio|discard|assistant)(?:\/|$)/;
+  /^\/(?:auth|users|search-folder|folders|media|mobile|system|tags|ai|recommend|external|manga|x|dedup|stats|creators|bd2|auto-sync|thumbnails|stream|audio|discard|assistant|l2d\/models)(?:\/|$)/;
 function serverUrl(value) {
   if (typeof value !== "string" || !value.trim() || value.length > 2048)
     throw new Error("请输入服务器地址");

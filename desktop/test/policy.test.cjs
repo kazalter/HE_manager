@@ -6,7 +6,14 @@ const {
   mediaRequest,
   staticPath,
   shaderFiles,
+  API_PATH,
 } = require("../src/policy.cjs");
+test('Live2D model routes use the authenticated proxy without opening other viewer paths', () => {
+  assert.ok(API_PATH.test('/l2d/models/manifest.json'));
+  assert.ok(API_PATH.test('/l2d/models/lafeiii/lafeiii_3/lafeiii_3.moc3'));
+  assert.equal(API_PATH.test('/l2d/assets/app.js'), false);
+  assert.equal(API_PATH.test('/l2d/models-evil'), false);
+});
 test("connection URLs reject credentials, executable schemes and query credentials", () => {
   assert.equal(
     serverUrl("http://192.168.0.101:8011/"),

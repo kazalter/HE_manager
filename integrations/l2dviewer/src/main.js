@@ -4,7 +4,7 @@ import { loadModels } from './utils/models'
 import './style.css'
 
 async function prepareAuthenticatedModelRequests() {
-  if (import.meta.env.DEV) return
+  if (import.meta.env.DEV || window.location.protocol === 'he:') return
   const token = localStorage.getItem('he_manager_token') || ''
   if (!token) throw new Error('请先登录 HE Manager')
   const response = await fetch(`${import.meta.env.BASE_URL}models/session`, {
