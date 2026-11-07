@@ -1,13 +1,20 @@
 name: Desktop clients
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing draft release tag (leave blank for build only)'
+        required: false
+        type: string
   pull_request:
-    paths: ['desktop/**', 'frontend/**', '.gitattributes', '.github/workflows/desktop.yml']
+    paths: ['desktop/**', 'frontend/**', 'integrations/l2dviewer/**', '.gitattributes', '.github/workflows/desktop.yml']
   push:
     branches: [main]
-    paths: ['desktop/**', 'frontend/**', '.gitattributes', '.github/workflows/desktop.yml']
+    paths: ['desktop/**', 'frontend/**', 'integrations/l2dviewer/**', '.gitattributes', '.github/workflows/desktop.yml']
 jobs:
   desktop:
+    permissions:
+      contents: write
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -32,7 +39,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install dependencies
-        run: npm ci --prefix frontend && npm ci --prefix desktop
+        run: npm ci --prefix frontend && npm ci --prefix desktop && npm ci --prefix integrations/l2dviewer
       - name: Test
         run: npm test --prefix desktop && npm test --prefix frontend
       - name: Check embedded prototype sources
@@ -41,6 +48,8 @@ jobs:
           node --check desktop/probe/main.cjs
           node --check desktop/probe/preload.cjs
           node --check desktop/probe/renderer.js
+      - name: Build Live2D viewer
+        run: npm run build:manager --prefix integrations/l2dviewer
       - name: Build shared UI
         run: npm run build:ui --prefix desktop
       - name: Verify and prepare native runtimes
@@ -69,3 +78,13 @@ jobs:
           name: he-manager-${{ matrix.platform }}
           path: desktop/release/*.zip
           retention-days: 14
+      - name: Attach package to draft release
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
+          version=$(node -p "require('./desktop/package.json').version")
+          gh release upload "$RELEASE_TAG" "desktop/release/HE-Manager-${version}-${{ matrix.platform }}-${{ matrix.platform == 'darwin' && 'arm64' || 'x64' }}.zip"
