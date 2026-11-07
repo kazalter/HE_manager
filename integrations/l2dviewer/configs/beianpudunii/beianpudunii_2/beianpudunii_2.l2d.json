@@ -1,0 +1,55 @@
+{
+  "skin_id": 103261,
+  "name": "竞泳之星",
+  "ship_group": 10326,
+  "live2d_offset": [
+    15,
+    -25,
+    0
+  ],
+  "idle_index": {
+    "0": "idle"
+  },
+  "entries": [
+    {
+      "key": 1032611,
+      "listener_data": "",
+      "offset_x": 0,
+      "gyro_y": 0,
+      "action_trigger_active": "",
+      "drag_direct": 2,
+      "react_condition": "",
+      "revert_action_index": 0,
+      "draw_able_name": "TouchDrag1",
+      "ship_skin_id": 103261,
+      "mode": 1,
+      "react_pos_y": 0,
+      "action_trigger": "",
+      "revert": 50,
+      "react_pos_x": 0,
+      "shop_action": 0,
+      "id": 1032611,
+      "offset_y": 4,
+      "revert_smooth": 100,
+      "limit_time": 0,
+      "parts_data": "",
+      "relation_parameter": "",
+      "ignore_react": 1,
+      "gyro": 0,
+      "gyro_x": 0,
+      "ignore_action": 0,
+      "parameter": "touch_drag1",
+      "save_parameter": 0,
+      "revert_idle_index": "",
+      "gyro_z": 0,
+      "smooth": 100,
+      "start_value": 0,
+      "range_abs": 1,
+      "offset_circle": "",
+      "range": [
+        0,
+        30
+      ]
+    }
+  ]
+}

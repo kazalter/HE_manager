@@ -244,11 +244,6 @@ export class InteractionRuntime {
     return true
   }
 
-  /** OnFinishAnim(0) 表示等待后续交互；普通触摸等结束后仍应恢复待机。 */
-  shouldHoldIdle() {
-    return this.lastFinishMode === 0 && !this.isNeutral()
-  }
-
   /**
    * 从网格级命中结果里挑第一个可用分区。入参来自 meshHitTest（已按渲染序排好、视觉最上层在前），本方法只做手势区分（与游戏一致）：一次 raycast 会同时命中 idle/head/body 与 drag 两族分区，控制器按手势挑族——点击取非 drag 分区，拖拽只取 drag 分区。
    * 不做透明度过滤：游戏 GetTouchPart/GetDragPart 与 CubismRaycaster 都是纯几何射线，隐藏但在位的判定网格照样响应（baifeng_2 idle17 隐藏标记实机可拖，见 gestures.js machineZonesAt 注释）。
@@ -358,11 +353,11 @@ export class InteractionRuntime {
 
   /**
    * 命中区名 -> 动作播放（MotionPriority.FORCE）。分区名即动作文件名（见 extract.py 的 HitAreas 生成）：touch_idle3/touch_drag5 等分区各对应组里的具体一支，点哪个部位播哪支；摸头/普通触摸等则恰好有同名组。
-   * 分区对应动作被门控挡下时，在组内随机挑一支当前可达的；组内全部不可达则不播——这还原了游戏"点特定地方进入交互"的状态机行为：菜单收起时点触摸区会播 touch_idle1（摊开菜单），菜单摊开时点对话区播对应分支，点完收尾分支后回到可再进入的状态。
+   * 提示层与点击路径共用此查询；指定动作被拦截或缺失时返回 null，不跳到同组的其他分支。
    *
    * @returns {null | {group: string}} 实际播放的动作组名；无动作/全部被拦下返回 null
    */
-  playHitMotion(name) {
+  resolveHitMotion(name) {
     const motions = this.model.internalModel.settings?.motions ?? {}
     const base = motions[name] ? name : name.replace(/\d+$/, '')
     const defs = motions[base]
@@ -372,13 +367,17 @@ export class InteractionRuntime {
       clip: (d.File ?? '').split('/').pop()?.replace(/\.motion3\.json$/, '') ?? '',
     }))
     const exact = entries.find((e) => e.clip === name)
-    const pool = entries.filter((e) => this.canPlay(e.clip))
-    const pick =
-      exact && this.canPlay(exact.clip)
-        ? exact
-        : pool[Math.floor(Math.random() * pool.length)]
+    if (!exact && !motions[name]) return null
+    // 指定分区只播放对应动作，禁止被门控挡下后随机跳到同组的另一条剧情。
+    const pick = exact ? (this.canPlay(exact.clip) ? exact : null) : entries.find((e) => this.canPlay(e.clip))
     if (!pick) return null
-    this.model.motion(base, pick.index, MotionPriority.FORCE)
-    return { group: base }
+    return { group: base, index: pick.index }
+  }
+
+  playHitMotion(name) {
+    const pick = this.resolveHitMotion(name)
+    if (!pick) return null
+    this.model.motion(pick.group, pick.index, MotionPriority.FORCE)
+    return pick
   }
 }

@@ -388,7 +388,6 @@ export function createInteractionHints(app, getRuntime, getVisible, getOrch = nu
       }
       layer.visible = true
       const core = runtime.model.internalModel.coreModel
-      const hasOpacity = typeof core.getDrawableOpacity === 'function'
       // 提示层直挂 stage，坐标 = 舞台全局 = 画布 CSS px；可视区即画布矩形
       const W = app.screen.width
       const H = app.screen.height
@@ -406,15 +405,10 @@ export function createInteractionHints(app, getRuntime, getVisible, getOrch = nu
           const p = runtime.model.toGlobal({ x: verts[j], y: verts[j + 1] })
           if (p.x >= 0 && p.y >= 0 && p.x <= W && p.y <= H) inView++
         }
-        // 不可交互一律不画：机器分区不按透明度跳过（游戏路由是纯几何射线，隐藏但在位的标记照样可触发，见 gestures.js machineZonesAt 注释），被挡下/未实现触发类型的分区跳过；无机器分区才按隐藏网格跳过（C# 路径的命中层恒可见，此分支兜底摆位零件等）
-        if (!hasMachine && (!hasOpacity || core.getDrawableOpacity(h.idx) <= 0.001)) {
-          h.dot.visible = h.label.visible = false
-          dotReads.push({ name: h.name, status: '网格隐藏', bad: false })
-          continue
-        }
+        // 提示与点击共用动作解析；透明命中网格仍按几何参与交互，不能仅在提示层过滤。
         // 判定与颜色分家时的两套判据（见函数注释）：机器分区看参数机的可触发条件（type 9 点参机 parameter 为空、读的是他参，不能挂在 params 上判），无机器分区看 interaction.json 的起播门控
         const state = hasMachine ? orch.zoneInteractable(h.name) : null
-        const interactable = hasMachine ? state === true : runtime.canPlay(h.name)
+        const interactable = hasMachine ? state === true : !!runtime.resolveHitMotion(h.name)
         if (!interactable) {
           h.dot.visible = h.label.visible = false
           dotReads.push({

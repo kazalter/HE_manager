@@ -1,0 +1,60 @@
+{
+  "skin_id": 403035,
+  "name": "沉醉于夜",
+  "ship_group": 40303,
+  "live2d_offset": [
+    -35,
+    80,
+    0
+  ],
+  "idle_index": {
+    "0": "idle"
+  },
+  "entries": [
+    {
+      "key": 206,
+      "listener_data": "",
+      "offset_x": 0,
+      "gyro_y": 0,
+      "action_trigger_active": "",
+      "drag_direct": 1,
+      "react_condition": "",
+      "revert_action_index": 0,
+      "draw_able_name": "TouchDrag",
+      "ship_skin_id": 403035,
+      "mode": 1,
+      "react_pos_y": 0,
+      "revert": 200,
+      "react_pos_x": 0,
+      "shop_action": 0,
+      "id": 206,
+      "offset_y": 130,
+      "revert_smooth": 200,
+      "limit_time": 0,
+      "parts_data": "",
+      "relation_parameter": "",
+      "ignore_react": 1,
+      "gyro": 0,
+      "gyro_x": 0,
+      "ignore_action": 0,
+      "parameter": "touch_drag",
+      "save_parameter": 0,
+      "revert_idle_index": "",
+      "gyro_z": 0,
+      "smooth": 200,
+      "start_value": 0,
+      "range_abs": 1,
+      "offset_circle": "",
+      "range": [
+        0,
+        1
+      ],
+      "action_trigger": {
+        "time": 0.5,
+        "num": 1,
+        "action": "touch_drag",
+        "type": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "skin_id": 103165,
+  "name": "迅疾的蓝星",
+  "ship_group": 10316,
+  "live2d_offset": [
+    0,
+    -40,
+    0
+  ],
+  "idle_index": {
+    "null": "idle"
+  },
+  "entries": [
+    {
+      "key": 1031651,
+      "listener_data": "",
+      "offset_x": 8,
+      "gyro_y": 0,
+      "action_trigger_active": "",
+      "drag_direct": 2,
+      "react_condition": "",
+      "revert_action_index": 0,
+      "draw_able_name": "TouchDrag1",
+      "ship_skin_id": 1031651,
+      "mode": 2,
+      "react_pos_y": 0,
+      "revert": 30,
+      "react_pos_x": 0,
+      "shop_action": 0,
+      "id": 1031651,
+      "offset_y": 0,
+      "revert_smooth": 100,
+      "limit_time": 0,
+      "parts_data": "",
+      "relation_parameter": "",
+      "ignore_react": 1,
+      "gyro": 0,
+      "gyro_x": 0,
+      "ignore_action": 1,
+      "parameter": "touch_drag1",
+      "save_parameter": 0,
+      "revert_idle_index": "",
+      "gyro_z": 0,
+      "smooth": 100,
+      "start_value": 0,
+      "range_abs": 1,
+      "offset_circle": "",
+      "range": [
+        0,
+        10
+      ],
+      "action_trigger": {
+        "time": 0.1,
+        "num": 10,
+        "action": "touch_drag1",
+        "type": 1
+      }
+    }
+  ]
+}
