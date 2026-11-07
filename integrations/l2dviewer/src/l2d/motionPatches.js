@@ -91,7 +91,7 @@ export function installMotionPatches(ctx) {
   /**
    * idle 确定性选支：库内的空闲回退走 startRandomMotion，用 Math.random 从组里随机挑一支。idle 循环播放（见 createMotion 补丁）后，随机只发生在回落瞬间——触发动作播完后随机换一支 idle 变体，其姿态假定与状态机遗留的开关参数（摊开的菜单、手持道具等）冲突，模型会跳进一个与当前状态不符的动作。
    * 游戏内触发反应结束后回到基础待机，状态参数靠跨动作保留维持（菜单保持摊开直到收尾分支），这里同样确定性回落：idle 组恒取"文件名与组同名"的那支（idle.motion3.json，无则第 0 支）；其余组（触发面板的随机播放）仍走库内随机。
-   * 分支挂起（节点非中性）期间不回落 idle：游戏在 OnFinishAnim(0) 进入等待输入后保持最后一帧姿态，摊开的菜单等维持原状，直到分支由后续手势收尾；若照库内默认立刻重启 idle，motionStart 的复位会把非状态参数清回默认，姿态当场回正、摊开的菜单消失。节点回到中性（收尾分支播完）后这里重新放行 idle。
+   * 无拖拽配置时，仅在 OnFinishAnim(0) 且状态非中性时保持等待交互的姿态；普通触摸等带其他结束标记的动作完成后必须回落 idle。
    */
   const startRandomMotion = Cubism4MotionManager.prototype.startRandomMotion
   Cubism4MotionManager.prototype.startRandomMotion = function (group, priority) {
@@ -123,7 +123,7 @@ export function installMotionPatches(ctx) {
         })
         return playing
       }
-      if (activeCtx.runtime && !activeCtx.runtime.isNeutral()) return Promise.resolve(false)
+      if (activeCtx.runtime?.shouldHoldIdle()) return Promise.resolve(false)
       const defs = this.definitions[group] ?? []
       const base = defs.findIndex(
         (d) => (d.File ?? '').split('/').pop() === `${group}.motion3.json`,

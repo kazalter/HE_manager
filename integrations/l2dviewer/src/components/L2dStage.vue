@@ -15,9 +15,10 @@ const props = defineProps({
   modelUrl: { type: String, required: true },
   /** 内容适配系数：1 = 撑满较短轴，<1 留边，>1 允许少量裁切 */
   fill: { type: Number, default: 1 },
+  immersive: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['motions'])
+const emit = defineEmits(['motions', 'enter-fullscreen'])
 
 const canvasHost = ref(null)
 const status = ref('正在初始化舞台…')
@@ -197,6 +198,13 @@ function toggleAdjust() {
   adjustMode.value = !adjustMode.value
 }
 
+watch(() => props.immersive, (active) => {
+  if (!active) return
+  gestures.onPointerCancel()
+  cameraPointers.clear()
+  adjustMode.value = false
+})
+
 onMounted(async () => {
   // resolution 按设备像素比渲染，否则高分屏上 canvas 被拉伸导致模糊；
   // autoDensity 让 canvas 的 CSS 尺寸仍等于容器尺寸，只是内部像素更密
@@ -228,7 +236,7 @@ onMounted(async () => {
   // 交互点提示逐帧跟随模型（顶点/透明度/门控状态都在变），HUD 取其返回读数；
   // 末参取编排器：提示标签按 l2d.json 显示分区驱动的参数（网格名与反应
   // 编号在部分皮肤是错位的，如 shengluyisi_5 的 TouchDrag23 -> touch_drag25）
-  ctx.hintsCtl = createInteractionHints(app, () => ctx.runtime, () => showHints.value, () => ctx.orch)
+  ctx.hintsCtl = createInteractionHints(app, () => ctx.runtime, () => showHints.value && !props.immersive, () => ctx.orch)
   // 触点涟漪：独立于模型，只依赖 canvas 指针事件；update 走同一 ticker
   rippleCtl = createClickEffect(app, view, () => showRipple.value && !adjustMode.value)
   app.ticker.add(() => rippleCtl.update(app.ticker.deltaMS / 1000))
@@ -283,8 +291,9 @@ defineExpose({ play: (group) => ctx.actions.playMotion(group) })
 <template>
   <div class="stage">
     <div ref="canvasHost" class="canvas-host" />
-    <div class="camera-controls" aria-label="画面调整">
+    <div v-if="!immersive" class="camera-controls" aria-label="画面调整">
       <button type="button" :aria-pressed="adjustMode" @click="toggleAdjust">{{ adjustMode ? '完成调整' : '调整画面' }}</button>
+      <button type="button" @click="emit('enter-fullscreen')">全屏</button>
       <template v-if="adjustMode">
         <button type="button" aria-label="缩小画面" @click="changeZoom(1 / 1.2)">−</button>
         <span>{{ Math.round(zoomLevel * 100) }}%</span>
@@ -293,7 +302,7 @@ defineExpose({ play: (group) => ctx.actions.playMotion(group) })
         <span class="camera-hint">拖动画面 · 滚轮或双指缩放</span>
       </template>
     </div>
-    <HudPanel :hud="hud" :show-hints="showHints" :show-debug="showDebug" :show-inject="showInject" :show-ripple="showRipple"
+    <HudPanel v-if="!immersive" :hud="hud" :show-hints="showHints" :show-debug="showDebug" :show-inject="showInject" :show-ripple="showRipple"
       :lock-frame="lockFrame" :hide-dev="hideDev" :fps="fps" @toggle-hints="showHints = !showHints"
       @toggle-debug="showDebug = !showDebug" @toggle-inject="showInject = !showInject"
       @toggle-ripple="showRipple = !showRipple"

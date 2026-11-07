@@ -65,6 +65,7 @@ export class InteractionRuntime {
       if (this.paramDefault(pid) !== 1) this.gatedPids.delete(pid)
     }
     this.pending = null
+    this.lastFinishMode = null
     // 挂起的动作是否 idle 组:等待态判定用(见 canPlay)。idle 循环算等待态,其他动作播放中不算
     this.idleGroup = model.internalModel.motionManager?.groups?.idle ?? 'idle'
     this.pendingIdle = false
@@ -100,6 +101,7 @@ export class InteractionRuntime {
   /** 起播：先结算被顶掉的挂起动作，再挂起新动作。idle 变体是循环动作、永不 motionFinish，其开关状态（微笑眼等 idle 姿态预设）在起播瞬间即生效并持续整个循环——立即落账进节点，否则变体循环期间节点缺这份状态，依赖它的分支（如 touch_idle14 要求 ParamEyeLSmile=1）会被门控与 HUD 误判成不可达（游戏里参数由曲线实时驱动，起播即为此值） */
   trackMotionStart(group, index) {
     if (this.pending) this.applyEnd(this.pending)
+    this.lastFinishMode = null
     this.pending = this.clipOf(group, index)
     this.pendingIdle = group === this.idleGroup
     if (this.pendingIdle && this.pending) this.applyEnd(this.pending)
@@ -107,6 +109,9 @@ export class InteractionRuntime {
 
   /** 播完：落实挂起动作的转移（游戏 OnFinishAnim 的上报时机） */
   trackMotionFinish() {
+    const events = this.interaction?.clips?.[this.pending]?.events ?? []
+    const finish = events.filter((event) => event.function === 'OnFinishAnim').at(-1)
+    this.lastFinishMode = Number.isFinite(finish?.int) ? finish.int : null
     this.applyEnd(this.pending)
     this.pending = null
     this.pendingIdle = false
@@ -227,6 +232,7 @@ export class InteractionRuntime {
     )
     this.pending = null
     this.pendingIdle = false
+    this.lastFinishMode = null
   }
 
   /** 中性节点：全部开关状态参数都贴着 moc 默认值（无任何跨动作残留）。只查开关参数：连续摆位（姿态/位移）几乎总被某支动作残留，参与判定会让"分支挂起"永不解除、idle 永不回落 */
@@ -236,6 +242,11 @@ export class InteractionRuntime {
       if (Math.abs(value - this.paramDefault(pid)) > this.eps) return false
     }
     return true
+  }
+
+  /** OnFinishAnim(0) 表示等待后续交互；普通触摸等结束后仍应恢复待机。 */
+  shouldHoldIdle() {
+    return this.lastFinishMode === 0 && !this.isNeutral()
   }
 
   /**
