@@ -187,7 +187,7 @@ async function mountModelInner(ctx, url) {
         discard()
         return
       }
-      ctx.camera.fitModel()
+      ctx.camera.fitModel({ refreshScene: true })
       const reveal = () => {
         if (stale()) {
           discard()

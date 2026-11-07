@@ -21,6 +21,8 @@ export function createCamera(ctx) {
   const storageKey = `l2d.camera:${ctx.modelUrl}`
   let state = { zoom: 1, x: 0, y: 0 }
   let baseLayout = null
+  let measuredModel = null
+  let measuredScene = null
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey) || 'null')
     if (saved && Number.isFinite(saved.zoom) && saved.zoom >= 0.05 && saved.zoom <= 20 && Number.isFinite(saved.x) && Number.isFinite(saved.y)) state = saved
@@ -32,7 +34,7 @@ export function createCamera(ctx) {
   /**
    * 按游戏取景适配（live2dpainting.lua 语义，有 live2d_offset 配置时走这条）；没有 live2d_offset（未烘焙/非 L2D 皮肤）时退回 measureScene 的 ROI 拟合。
    */
-  function fitBase() {
+  function fitBase(refreshScene) {
     const model = ctx.model
     const app = ctx.app
     if (!model || !app) return
@@ -40,6 +42,8 @@ export function createCamera(ctx) {
     // DPR 只影响渲染密度、不影响布局，适配与 resolution 彻底解耦
     const viewW = app.screen.width
     const viewH = app.screen.height
+    // 隐藏、切屏及全屏切换时可能短暂出现零尺寸；不要把它写进取景状态。
+    if (!(viewW > 1 && viewH > 1)) return false
     const internal = model.internalModel
     const l2dOffset = ctx.l2dOffset
     if (l2dOffset && internal.coreModel?.getModel?.().canvasinfo) {
@@ -61,7 +65,12 @@ export function createCamera(ctx) {
       )
       return true
     }
-    const scene = measureScene(model)
+    if (measuredModel !== model) {
+      measuredModel = model
+      measuredScene = null
+    }
+    if (!measuredScene || refreshScene) measuredScene = measureScene(model) || measuredScene
+    const scene = measuredScene
     if (!scene) return
     const canvasW = internal.width
     const canvasH = internal.height
@@ -92,8 +101,8 @@ export function createCamera(ctx) {
     return true
   }
 
-  function fitModel() {
-    if (!fitBase()) { baseLayout = null; return }
+  function fitModel({ refreshScene = false } = {}) {
+    if (!fitBase(refreshScene)) return
     const { model, app } = ctx
     baseLayout = {
       model, width: app.screen.width, height: app.screen.height,

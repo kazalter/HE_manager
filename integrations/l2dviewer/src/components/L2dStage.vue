@@ -253,7 +253,12 @@ onMounted(async () => {
     fpsFrames = 0
   }, 500)
   // ResizeObserver 兼顾窗口变化与容器变化（如侧栏收起/展开）
-  resizeObserver = new ResizeObserver(() => ctx.camera.fitModel())
+  resizeObserver = new ResizeObserver(() => {
+    if (!canvasHost.value?.clientWidth || !canvasHost.value?.clientHeight) return
+    // resizeTo 的 window resize 回调不保证先于 ResizeObserver，也不会覆盖所有容器尺寸变化。
+    app.resize()
+    ctx.camera.fitModel()
+  })
   resizeObserver.observe(canvasHost.value)
   await mountModel(ctx, props.modelUrl)
 })
