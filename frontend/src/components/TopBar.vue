@@ -59,7 +59,7 @@ const organizeSections = computed(() => ([
     items: [
       { to: '/downloads', label: '下载任务', x: 612, y: 388 },
       { to: '/bd2-spine', label: 'BD2 动态', x: 166, y: 611 },
-      { to: '/live2d', label: '舰娘 Live2D', x: 166, y: 611 },
+      { to: '/live2d', label: '碧蓝航线', x: 166, y: 611 },
       { to: '/stats', label: '统计看板', x: 389, y: 611 },
       { to: '/discarded', label: '丢弃记录', x: 612, y: 611, admin: true },
       { to: '/dedup', label: '重复管理', x: 166, y: 835, admin: true },

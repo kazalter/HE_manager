@@ -22,6 +22,8 @@ const emit = defineEmits(['motions'])
 const canvasHost = ref(null)
 const status = ref('正在初始化舞台…')
 const currentMotion = ref('')
+const adjustMode = ref(false)
+const zoomLevel = ref(1)
 // 交互点提示（utils/interaction 的 hints 覆盖层）开关
 const showHints = ref(true)
 // 触点涟漪（游戏"触点特效"的复刻，l2d/clickEffect.js）开关；
@@ -70,6 +72,7 @@ let view = null
  *   .value，不 import vue）；fill/emit 回传组件侧的 props 与事件。
  */
 const ctx = {
+  modelUrl: props.modelUrl,
   app: null,
   view: null,
   model: null,
@@ -92,6 +95,7 @@ const ctx = {
 installMotionPatches(ctx)
 // 取景适配与动作播放 API
 ctx.camera = createCamera(ctx)
+zoomLevel.value = ctx.camera.getZoom()
 const actions = createActions(ctx)
 ctx.actions = actions
 
@@ -116,6 +120,82 @@ function onDprChange() {
 }
 
 const gestures = createGestures(ctx)
+const cameraPointers = new Map()
+
+function point(e) {
+  const rect = view.getBoundingClientRect()
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+}
+
+function pointerDown(e) {
+  if (!adjustMode.value) return gestures.onPointerDown(e)
+  if (e.pointerType === 'mouse' && e.button !== 0) return
+  e.preventDefault()
+  view.setPointerCapture?.(e.pointerId)
+  cameraPointers.set(e.pointerId, point(e))
+}
+
+function pointerMove(e) {
+  if (!adjustMode.value) return gestures.onPointerMove(e)
+  if (!cameraPointers.has(e.pointerId)) return
+  e.preventDefault()
+  const before = [...cameraPointers.values()]
+  const previous = cameraPointers.get(e.pointerId)
+  const next = point(e)
+  cameraPointers.set(e.pointerId, next)
+  const after = [...cameraPointers.values()]
+  if (before.length === 1) {
+    ctx.camera.pan(next.x - previous.x, next.y - previous.y)
+  } else if (before.length === 2) {
+    const oldMid = { x: (before[0].x + before[1].x) / 2, y: (before[0].y + before[1].y) / 2 }
+    const newMid = { x: (after[0].x + after[1].x) / 2, y: (after[0].y + after[1].y) / 2 }
+    const oldDistance = Math.hypot(before[0].x - before[1].x, before[0].y - before[1].y)
+    const newDistance = Math.hypot(after[0].x - after[1].x, after[0].y - after[1].y)
+    ctx.camera.pan(newMid.x - oldMid.x, newMid.y - oldMid.y)
+    if (oldDistance > 1) ctx.camera.zoomAt(newDistance / oldDistance, newMid.x, newMid.y)
+  }
+  zoomLevel.value = ctx.camera.getZoom()
+}
+
+function pointerEnd(e) {
+  if (!adjustMode.value) return gestures.onPointerUp(e)
+  cameraPointers.delete(e.pointerId)
+  if (view.hasPointerCapture?.(e.pointerId)) view.releasePointerCapture(e.pointerId)
+}
+
+function pointerCancel(e) {
+  if (!adjustMode.value) return gestures.onPointerCancel(e)
+  cameraPointers.delete(e.pointerId)
+}
+
+function pointerLeave(e) {
+  if (!adjustMode.value) gestures.onPointerCancel(e)
+}
+
+function onWheel(e) {
+  if (!adjustMode.value) return
+  e.preventDefault()
+  const p = point(e)
+  ctx.camera.zoomAt(Math.exp(-e.deltaY * 0.0015), p.x, p.y)
+  zoomLevel.value = ctx.camera.getZoom()
+}
+
+function changeZoom(factor) {
+  if (!ctx.app) return
+  ctx.camera.zoomAt(factor, ctx.app.screen.width / 2, ctx.app.screen.height / 2)
+  zoomLevel.value = ctx.camera.getZoom()
+}
+
+function resetCamera() {
+  ctx.camera.reset()
+  zoomLevel.value = ctx.camera.getZoom()
+}
+
+function toggleAdjust() {
+  gestures.onPointerCancel()
+  cameraPointers.clear()
+  adjustMode.value = !adjustMode.value
+}
 
 onMounted(async () => {
   // resolution 按设备像素比渲染，否则高分屏上 canvas 被拉伸导致模糊；
@@ -139,17 +219,18 @@ onMounted(async () => {
   // 指针交互走原生 DOM 事件（pixi v6 事件管线在本项目里不触发，见
   // scripts/tests/probe/pixi_events.mjs；原生路径只依赖 canvas 本身，语义
   // 与 Unity 端一致：按住跟随、松手判定）
-  view.addEventListener('pointerdown', gestures.onPointerDown)
-  view.addEventListener('pointermove', gestures.onPointerMove)
-  view.addEventListener('pointerup', gestures.onPointerUp)
-  view.addEventListener('pointercancel', gestures.onPointerCancel)
-  view.addEventListener('pointerleave', gestures.onPointerCancel)
+  view.addEventListener('pointerdown', pointerDown)
+  view.addEventListener('pointermove', pointerMove)
+  view.addEventListener('pointerup', pointerEnd)
+  view.addEventListener('pointercancel', pointerCancel)
+  view.addEventListener('pointerleave', pointerLeave)
+  view.addEventListener('wheel', onWheel, { passive: false })
   // 交互点提示逐帧跟随模型（顶点/透明度/门控状态都在变），HUD 取其返回读数；
   // 末参取编排器：提示标签按 l2d.json 显示分区驱动的参数（网格名与反应
   // 编号在部分皮肤是错位的，如 shengluyisi_5 的 TouchDrag23 -> touch_drag25）
   ctx.hintsCtl = createInteractionHints(app, () => ctx.runtime, () => showHints.value, () => ctx.orch)
   // 触点涟漪：独立于模型，只依赖 canvas 指针事件；update 走同一 ticker
-  rippleCtl = createClickEffect(app, view, () => showRipple.value)
+  rippleCtl = createClickEffect(app, view, () => showRipple.value && !adjustMode.value)
   app.ticker.add(() => rippleCtl.update(app.ticker.deltaMS / 1000))
   app.ticker.add(createTickerCallback(ctx))
   // FPS 用 0.5s 窗口帧计数：ticker.FPS 读的 elapsedMS 在节流跳帧期间仍每 rAF 重算，采样会落中
@@ -169,11 +250,12 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  view?.removeEventListener('pointerdown', gestures.onPointerDown)
-  view?.removeEventListener('pointermove', gestures.onPointerMove)
-  view?.removeEventListener('pointerup', gestures.onPointerUp)
-  view?.removeEventListener('pointercancel', gestures.onPointerCancel)
-  view?.removeEventListener('pointerleave', gestures.onPointerCancel)
+  view?.removeEventListener('pointerdown', pointerDown)
+  view?.removeEventListener('pointermove', pointerMove)
+  view?.removeEventListener('pointerup', pointerEnd)
+  view?.removeEventListener('pointercancel', pointerCancel)
+  view?.removeEventListener('pointerleave', pointerLeave)
+  view?.removeEventListener('wheel', onWheel)
   view = null
   dprQuery?.removeEventListener('change', onDprChange)
   dprQuery = null
@@ -201,6 +283,16 @@ defineExpose({ play: (group) => ctx.actions.playMotion(group) })
 <template>
   <div class="stage">
     <div ref="canvasHost" class="canvas-host" />
+    <div class="camera-controls" aria-label="画面调整">
+      <button type="button" :aria-pressed="adjustMode" @click="toggleAdjust">{{ adjustMode ? '完成调整' : '调整画面' }}</button>
+      <template v-if="adjustMode">
+        <button type="button" aria-label="缩小画面" @click="changeZoom(1 / 1.2)">−</button>
+        <span>{{ Math.round(zoomLevel * 100) }}%</span>
+        <button type="button" aria-label="放大画面" @click="changeZoom(1.2)">＋</button>
+        <button type="button" @click="resetCamera">恢复默认</button>
+        <span class="camera-hint">拖动画面 · 滚轮或双指缩放</span>
+      </template>
+    </div>
     <HudPanel :hud="hud" :show-hints="showHints" :show-debug="showDebug" :show-inject="showInject" :show-ripple="showRipple"
       :lock-frame="lockFrame" :hide-dev="hideDev" :fps="fps" @toggle-hints="showHints = !showHints"
       @toggle-debug="showDebug = !showDebug" @toggle-inject="showInject = !showInject"
@@ -228,6 +320,36 @@ defineExpose({ play: (group) => ctx.actions.playMotion(group) })
   touch-action: none;
   /* 按住拖拽属于交互语义，屏蔽浏览器默认手势 */
 }
+
+.camera-controls {
+  position: absolute;
+  z-index: 10;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  padding: 7px;
+  border: 1px solid #ffffff30;
+  border-radius: 12px;
+  background: #15151ddd;
+  color: #fff;
+  font: 13px system-ui, sans-serif;
+  white-space: nowrap;
+}
+.camera-controls button {
+  padding: 7px 10px;
+  border: 1px solid #ffffff35;
+  border-radius: 8px;
+  background: #ffffff18;
+  color: inherit;
+  cursor: pointer;
+}
+.camera-controls button:hover, .camera-controls button[aria-pressed="true"] { background: #ffffff38; }
+.camera-hint { color: #ffffffaa; }
+@media (max-width: 700px) { .camera-hint { display: none; } }
 
 .status {
   position: absolute;

@@ -18,10 +18,21 @@ const DRAG_REF_HEIGHT = Number(localStorage.getItem('l2d_dragRefHeight')) || 192
  * @returns {{ fitModel(): void }} fitModel 按当前视口重新适配，同时更新 ctx.dragScale（拖拽坐标换算系数）
  */
 export function createCamera(ctx) {
+  const storageKey = `l2d.camera:${ctx.modelUrl}`
+  let state = { zoom: 1, x: 0, y: 0 }
+  let baseLayout = null
+  try {
+    const saved = JSON.parse(localStorage.getItem(storageKey) || 'null')
+    if (saved && Number.isFinite(saved.zoom) && saved.zoom >= 0.05 && saved.zoom <= 20 && Number.isFinite(saved.x) && Number.isFinite(saved.y)) state = saved
+  } catch { /* Ignore unavailable or invalid saved settings. */ }
+
+  function save() {
+    try { localStorage.setItem(storageKey, JSON.stringify(state)) } catch { /* Storage is optional. */ }
+  }
   /**
    * 按游戏取景适配（live2dpainting.lua 语义，有 live2d_offset 配置时走这条）；没有 live2d_offset（未烘焙/非 L2D 皮肤）时退回 measureScene 的 ROI 拟合。
    */
-  function fitModel() {
+  function fitBase() {
     const model = ctx.model
     const app = ctx.app
     if (!model || !app) return
@@ -48,7 +59,7 @@ export function createCamera(ctx) {
         viewW / 2 - (internal.width / 2 - l2dOffset[0] * pxPerPt) * scale,
         viewH / 2 - (internal.height / 2 + l2dOffset[1] * pxPerPt) * scale,
       )
-      return
+      return true
     }
     const scene = measureScene(model)
     if (!scene) return
@@ -78,9 +89,59 @@ export function createCamera(ctx) {
       viewW / 2 - anchorX * scale,
       viewH / 2 - (scene.y + scene.height / 2) * scale,
     )
+    return true
   }
 
-  return { fitModel }
+  function fitModel() {
+    if (!fitBase()) { baseLayout = null; return }
+    const { model, app } = ctx
+    baseLayout = {
+      model, width: app.screen.width, height: app.screen.height,
+      x: model.position.x, y: model.position.y, scale: model.scale.x, dragScale: ctx.dragScale,
+    }
+    applyView()
+  }
+
+  function applyView() {
+    const { model, app } = ctx
+    if (!model || !app) return
+    if (!baseLayout || baseLayout.model !== model || baseLayout.width !== app.screen.width || baseLayout.height !== app.screen.height) {
+      fitModel()
+      return
+    }
+    const cx = app.screen.width / 2, cy = app.screen.height / 2
+    model.position.set(
+      cx + (baseLayout.x - cx) * state.zoom + state.x * app.screen.width,
+      cy + (baseLayout.y - cy) * state.zoom + state.y * app.screen.height,
+    )
+    model.scale.set(baseLayout.scale * state.zoom)
+    ctx.dragScale = baseLayout.dragScale / state.zoom
+  }
+
+  function pan(dx, dy) {
+    if (!ctx.model || !ctx.app?.screen.width || !ctx.app?.screen.height) return
+    state.x += dx / ctx.app.screen.width
+    state.y += dy / ctx.app.screen.height
+    applyView(); save()
+  }
+
+  function zoomAt(factor, x, y) {
+    if (!ctx.model || !ctx.app?.screen.width || !ctx.app?.screen.height || !Number.isFinite(factor) || factor <= 0) return
+    const { width, height } = ctx.app.screen
+    const next = Math.max(0.05, Math.min(20, state.zoom * factor))
+    const ratio = next / state.zoom
+    state.x = state.x * ratio + (x - width / 2) * (1 - ratio) / width
+    state.y = state.y * ratio + (y - height / 2) * (1 - ratio) / height
+    state.zoom = next
+    applyView(); save()
+  }
+
+  function reset() {
+    state = { zoom: 1, x: 0, y: 0 }
+    applyView(); save()
+  }
+
+  return { fitModel, pan, zoomAt, reset, getZoom: () => state.zoom }
 }
 
 /**

@@ -95,3 +95,4 @@ Thumbs.db
 
 # Generated Live2D viewer bundle
 /frontend/public/l2d/
+/integrations/l2dviewer/node_modules/
