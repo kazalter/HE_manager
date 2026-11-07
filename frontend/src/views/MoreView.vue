@@ -14,6 +14,7 @@ const links = [
   { to: '/recommend', label: '漫画推荐', hint: '发现想读的作品', icon: Sparkles, group: 'library' },
   { to: '/stats', label: '数据看板', hint: '查看媒体库概览', icon: BarChart3, group: 'tools' },
   { to: '/bd2-spine', label: '角色鉴赏', hint: '浏览角色动画', icon: Palette, group: 'library' },
+  { to: '/live2d', label: '舰娘 Live2D', hint: '浏览碧蓝航线皮肤', icon: Palette, group: 'library' },
   { to: '/settings', label: '设置', hint: '目录、同步与外观', icon: Settings, group: 'tools' },
 ]
 const adminLinks = [

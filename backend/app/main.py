@@ -23,6 +23,7 @@ from .routers import creators as creators_routes
 from .routers import dedup as dedup_routes
 from .routers import external as external_routes
 from .routers import discard as discard_routes
+from .routers import l2d as l2d_routes
 from .routers import media as media_routes
 from .routers import pawchive as pawchive_routes
 from .routers import recommend as recommend_routes
@@ -116,6 +117,7 @@ app.include_router(auto_sync_routes.router)
 app.include_router(bd2_routes.router)
 app.include_router(auth_routes.router)
 app.include_router(media_routes.router)
+app.include_router(l2d_routes.router)
 app.include_router(discard_routes.router)
 app.include_router(audio_routes.router)
 app.include_router(recommend_routes.router)
@@ -190,6 +192,8 @@ async def require_authenticated_request(request: Request, call_next):
             authorization=request.headers.get("authorization"),
             query_token=query_token,
         )
+        if not raw_token and request.method == "GET" and path.startswith("/l2d/models/"):
+            raw_token = request.cookies.get("he_l2d_token")
         if not raw_token:
             logger.warning("Auth intercepted: %s %s", request.method, path)
             return _json_error(401, "Missing access token")

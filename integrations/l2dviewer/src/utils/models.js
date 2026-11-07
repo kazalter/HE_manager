@@ -1,0 +1,90 @@
+import { reactive } from 'vue'
+
+/**
+ * 皮肤清单（reactive 数组，视图直接可用）。
+ * 由 dev server 每次请求实时扫描仓库根目录 models/ 生成（vite.config.js 的 serveModels 中间件），main.js 挂载前经 loadModels() 拉取填充。
+ * 新增皮肤：目录丢进 models/ 后刷新页面即生效，无需重启 dev。
+ *
+ * id    -> 唯一标识（用于标签选中态）
+ * name  -> 侧栏标签显示名
+ * url   -> model3.json 路径（dev server 把 /models/* 映射到根目录 models/）
+ */
+export const MODELS = reactive([])
+
+/** Name grouping used by the original viewer: symbols, digits, Latin, then CJK. */
+function nameClass(ch) {
+  const c = ch.codePointAt(0)
+  if (!c) return 0
+  if (c >= 0x30 && c <= 0x39) return 1
+  if ((c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a)) return 2
+  if ((c >= 0x3400 && c <= 0x9fff) || (c >= 0x3040 && c <= 0x30ff) || c >= 0x20000) return 3
+  return 0
+}
+
+function compareSkinNames(a, b) {
+  const da = nameClass(a[0])
+  const db = nameClass(b[0])
+  if (da !== db) return da - db
+  if (da === 3) return a.localeCompare(b, 'zh')
+  const la = a.toLowerCase()
+  const lb = b.toLowerCase()
+  return la < lb ? -1 : la > lb ? 1 : 0
+}
+
+/** 拉取皮肤清单；失败时仅报错，视图以空清单渲染。 */
+export async function loadModels() {
+  try {
+    const token = localStorage.getItem('he_manager_token') || ''
+    const headers = token ? { Authorization: `Bearer ${token}` } : undefined
+    const r = await fetch(`${import.meta.env.BASE_URL}models/manifest.json`, { headers })
+    if (!r.ok) throw new Error(`HTTP ${r.status}`)
+    const models = await r.json()
+    MODELS.push(...models.sort((a, b) => compareSkinNames(a.name, b.name) || a.id.localeCompare(b.id)))
+  } catch (err) {
+    console.error('皮肤清单加载失败：请确认 models/ 下存在 <角色>/<皮肤>/<皮肤>.model3.json', err)
+  }
+}
+
+/**
+ * 动作组显示名，对齐游戏内起居栏 L2D 界面的叫法；未收录的组在面板里直接显示组名。
+ */
+export const TRIGGER_LABELS = {
+  login: '登录',
+  main_1: '主界面1',
+  main_2: '主界面2',
+  main_3: '主界面3',
+  main_4: '主界面4',
+  main_5: '主界面5',
+  touch_body: '普通触摸',
+  touch_special: '特殊触摸',
+  touch_head: '摸头',
+  mission: '任务提醒',
+  mission_complete: '任务完成',
+  mail: '邮件提醒',
+  home: '回港',
+  wedding: '誓约',
+  complete: '委托完成',
+}
+
+/**
+ * 状态触发面板的展示顺序，与游戏内 L2D 界面一致：
+ * 登录 → 主界面1~4 → 普通触摸/特殊触摸/摸头 → 任务提醒/任务完成 → 邮件提醒 → 回港 → 誓约 → 委托完成。
+ * 未收录的组排在末尾，保持 model3.json 里的相对顺序。
+ */
+export const TRIGGER_ORDER = [
+  'login',
+  'main_1',
+  'main_2',
+  'main_3',
+  'main_4',
+  'main_5',
+  'touch_body',
+  'touch_special',
+  'touch_head',
+  'mission',
+  'mission_complete',
+  'mail',
+  'home',
+  'wedding',
+  'complete',
+]

@@ -83,6 +83,7 @@ const router = createRouter({
       name: 'bd2-spine-embed',
       component: () => import('../views/EmbedSpineView.vue')
     },
+    { path: '/live2d', name: 'live2d', component: () => import('../views/Live2dView.vue') },
     {
       path: '/:pathMatch(.*)*',
       redirect: '/'

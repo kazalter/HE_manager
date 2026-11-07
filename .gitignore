@@ -92,3 +92,6 @@ Thumbs.db
 # Assistant credentials and Hermes profiles
 /data/hermes/
 /data/assistant/
+
+# Generated Live2D viewer bundle
+/frontend/public/l2d/
