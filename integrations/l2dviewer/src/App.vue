@@ -15,10 +15,10 @@ const stageRef = ref(null)
 const layoutRef = ref(null)
 const immersive = ref(false)
 const fallbackFullscreen = ref(false)
-const showExit = ref(false)
+const showControls = ref(false)
 const showFullscreenHint = ref(false)
 let hintTimer = null
-let exitTimer = null
+let hideTimer = null
 let holdTimer = null
 
 function notifyParent(active) {
@@ -41,7 +41,7 @@ async function enterFullscreen() {
     notifyParent(true)
   }
   immersive.value = true
-  showExit.value = false
+  showControls.value = false
   showEntryHint()
 }
 
@@ -50,16 +50,16 @@ async function exitFullscreen() {
   if (fallbackFullscreen.value) notifyParent(false)
   fallbackFullscreen.value = false
   immersive.value = false
-  showExit.value = false
+  showControls.value = false
   showFullscreenHint.value = false
   clearTimeout(holdTimer)
-  clearTimeout(exitTimer)
+  cancelHide()
 }
 
 function onFullscreenChange() {
   if (!document.fullscreenElement && immersive.value && !fallbackFullscreen.value) {
     immersive.value = false
-    showExit.value = false
+    showControls.value = false
     showFullscreenHint.value = false
   }
 }
@@ -68,19 +68,37 @@ function onKeydown(event) {
   if (event.key === 'Escape' && immersive.value && fallbackFullscreen.value) exitFullscreen()
 }
 
-function revealExit() {
-  clearTimeout(exitTimer)
-  showExit.value = true
-  exitTimer = setTimeout(() => { showExit.value = false }, 4000)
+function atEdge(event) {
+  const rect = layoutRef.value.getBoundingClientRect()
+  return event.clientX - rect.left <= 22 || rect.right - event.clientX <= 22 ||
+    event.clientY - rect.top <= 22 || rect.bottom - event.clientY <= 22
 }
 
-function edgeDown(event) {
-  if (event.pointerType !== 'touch') return
-  clearTimeout(holdTimer)
-  holdTimer = setTimeout(revealExit, 650)
+function cancelHide() { clearTimeout(hideTimer); hideTimer = null }
+
+function pointerMove(event) {
+  if (!immersive.value || event.pointerType !== 'mouse') return
+  if (atEdge(event)) {
+    cancelHide()
+    showControls.value = true
+  } else if (event.target.closest('.side-tabs, .trigger-tabs, .camera-controls, .stage-toolbar, .debug-stack')) {
+    cancelHide()
+  } else if (showControls.value && !hideTimer) {
+    hideTimer = setTimeout(() => { showControls.value = false; hideTimer = null }, 1500)
+  }
 }
 
-function edgeUp() { clearTimeout(holdTimer) }
+function pointerDown(event) {
+  if (!immersive.value || event.pointerType !== 'touch') return
+  if (atEdge(event)) {
+    clearTimeout(holdTimer)
+    holdTimer = setTimeout(() => { showControls.value = true }, 650)
+  } else if (event.target.closest('.canvas-host')) {
+    showControls.value = false
+  }
+}
+
+function pointerUp() { clearTimeout(holdTimer) }
 
 onMounted(() => {
   document.addEventListener('fullscreenchange', onFullscreenChange)
@@ -91,7 +109,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('fullscreenchange', onFullscreenChange)
   document.removeEventListener('keydown', onKeydown)
   clearTimeout(hintTimer)
-  clearTimeout(exitTimer)
+  clearTimeout(hideTimer)
   clearTimeout(holdTimer)
 })
 /** 当前模型的可触发动作组（由舞台加载后上报）与最近一次触发项 */
@@ -121,17 +139,15 @@ function playTrigger(id) {
 </script>
 
 <template>
-  <div ref="layoutRef" class="layout" :class="{ immersive }">
+  <div ref="layoutRef" class="layout" :class="{ immersive }" @pointermove="pointerMove"
+    @pointerdown="pointerDown" @pointerup="pointerUp" @pointercancel="pointerUp">
     <!-- 舞台永远占满容器，两侧栏作为蒙板浮在上面 -->
     <L2dStage v-if="activeModel" ref="stageRef" class="stage" :key="activeModel.id" :model-url="activeModel.url"
-      :fill="0.8" :immersive="immersive" @motions="triggers = $event" @enter-fullscreen="enterFullscreen" />
-    <SkinTab v-if="!immersive" v-model="activeId" :tabs="tabs" title="皮肤列表" />
-    <StateTab v-if="!immersive" :items="triggerItems" :active="activeTrigger" title="状态触发" @select="playTrigger" />
+      :fill="0.8" :immersive="immersive" :controls-visible="!immersive || showControls" @motions="triggers = $event" @enter-fullscreen="enterFullscreen" />
+    <SkinTab v-show="!immersive || showControls" v-model="activeId" :tabs="tabs" title="皮肤列表" />
+    <StateTab v-show="!immersive || showControls" :items="triggerItems" :active="activeTrigger" title="状态触发" @select="playTrigger" />
     <template v-if="immersive">
-      <div class="fullscreen-edge" @pointerenter="(e) => e.pointerType === 'mouse' && revealExit()"
-        @pointerdown="edgeDown" @pointerup="edgeUp" @pointercancel="edgeUp" @pointerleave="edgeUp" />
-      <button v-if="showExit" class="fullscreen-exit" type="button" @pointerenter="revealExit" @click="exitFullscreen">退出全屏</button>
-      <p v-if="showFullscreenHint" class="fullscreen-hint">按 Esc 退出；触屏长按顶部边缘显示退出按钮</p>
+      <p v-if="showFullscreenHint" class="fullscreen-hint">鼠标移到边缘显示界面；按 Esc 退出全屏</p>
     </template>
   </div>
 </template>
@@ -150,12 +166,6 @@ function playTrigger(id) {
 }
 
 .layout.immersive { background: #101014; }
-.fullscreen-edge { position: absolute; z-index: 30; top: 0; left: 0; right: 0; height: 22px; touch-action: none; }
-.fullscreen-exit {
-  position: absolute; z-index: 31; top: 12px; left: 50%; transform: translateX(-50%);
-  border: 1px solid #ffffff55; border-radius: 9px; padding: 9px 15px;
-  background: #17171de8; color: white; font: 14px system-ui, sans-serif; cursor: pointer;
-}
 .fullscreen-hint {
   position: absolute; z-index: 29; top: 22px; left: 50%; transform: translateX(-50%);
   color: white; background: #17171dcc; border-radius: 8px; padding: 8px 12px;
