@@ -1,6 +1,6 @@
 {
  "name": "he-manager-desktop",
- "version": "1.0.2",
+ "version": "1.0.3",
  "private": true,
  "description": "HE Manager with local GPU enhancement",
  "main": "src/main.cjs",

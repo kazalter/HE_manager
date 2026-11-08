@@ -50,6 +50,16 @@ export function installMotionPatches(ctx) {
   config.motionFadingDuration = 300
   config.idleMotionFadingDuration = 300
 
+  // The library checks completion only BEFORE evaluating the queue. Drain a
+  // natural completion in the same rendered frame, so the async idle request
+  // is ready for the next tick instead of rendering one empty motion frame.
+  const update = Cubism4MotionManager.prototype.update
+  Cubism4MotionManager.prototype.update = function (model, now) {
+    const updated = update.call(this, model, now)
+    if (updated && this.playing && this.isFinished()) update.call(this, model, now)
+    return updated
+  }
+
   /**
    * 尊重 motion3.json 的 Meta.Loop：本库 CubismMotion.parse 不读取该字段（只暴露 setLoop setter），循环声明被忽略后 idle/login 播完一遍会随机重启另一支 idle、且重启瞬间两套姿态混合；改为循环后同支 idle 无缝衔接，行为与游戏内一致。
    * setIsLoopFadeIn(false) 一并关掉循环回卷点的重淡入（内核在 timeOffset 到达 duration 回卷时会重置 fadeInStartTime，不关的话每循环一圈都对底值做一次 300ms 渐变混合，idle 呈周期性姿态回正再弹回）；起播那次 fade-in 不受影响（isStarted 分支无条件 setFadeInStartTime），交叉渐变照常生效。
@@ -96,6 +106,9 @@ export function installMotionPatches(ctx) {
   const startRandomMotion = Cubism4MotionManager.prototype.startRandomMotion
   Cubism4MotionManager.prototype.startRandomMotion = function (group, priority) {
     if (group === this.groups.idle) {
+      // FinishAction may already have reserved an explicit idle (or a chained
+      // reaction). Do not race it with the engine's automatic fallback.
+      if (this.state.reservedGroup !== undefined) return Promise.resolve(false)
       // 有拖拽参数机时，idle 变体号由机器触发链维护（游戏 changeIdleIndex：Animator SetInteger("idle")），回落恒取当前变体；节点非中性（菜单摊开等状态残留）正是变体姿态的前提，不再拦截
       if (activeCtx.orch) {
         const defs = this.definitions[group] ?? []

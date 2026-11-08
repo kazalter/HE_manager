@@ -10,6 +10,7 @@ import { installPalette } from './palette'
 import { loadAmbient } from '../utils/ambient'
 import { DragOrchestrator, loadL2dConfig } from '../utils/dragmachine'
 import { InteractionRuntime, loadInteraction } from '../utils/interaction'
+import { installMotionDiagnostics } from './diagnostics'
 
 /**
  * @param ctx 舞台上下文（见 L2dStage.vue）：要求 ctx.camera（camera.js）、
@@ -47,6 +48,10 @@ async function mountModelInner(ctx, url) {
   ctx.runtime = null
   ctx.orch = null
   ctx.l2dOffset = null
+  // Idle motions are created during from(); their fade table must already exist.
+  ctx.fades = await fetch(url.replace(/model3\.json$/, 'fades.json'))
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null)
+  if (stale()) return
   const model = await Live2DModel.from(url, {
     autoInteract: false,
     idleMotionGroup: 'idle', // 本项目 idle 组为小写（Cubism 默认是 "Idle"）
@@ -56,6 +61,7 @@ async function mountModelInner(ctx, url) {
     return
   }
   ctx.model = model
+  installMotionDiagnostics(ctx, model)
   // 库默认呼吸层（CubismBreath：AngleX ±7.5 / AngleY ±4 / AngleZ ±5 / BodyAngleX ±2 / ParamBreath ±0.5 正弦逐帧叠加）是查看器库层私货：
   // 游戏 C# 组件清单只有 EyeBlink/HarmonicMotion/Look/Motion/Physics/Pose/Expression/Mouth 控制器，无 Breath——
   // 头部角度参数在动作里直接键控形变链（如 idle5 恒持 AngleZ=20 的肩颈形变），呼吸正弦逐帧把键控值推出范围，姿态周期性偏离游戏
@@ -64,13 +70,6 @@ async function mountModelInner(ctx, url) {
   model.visible = false
   // 逐 clip 转场时长表（<id>.fades.json，extract.py 的 animator_fades 从 bundle 的 AnimatorController 提取）：motionPatches.createMotion 按它设置动作渐入时长，动作起播的复位缓动窗口也取同一值——两处严格同源
   // 缺失时全旁路（渐变走 config 兜底 300ms、复位走 RESET_FADE 兜底）
-  ctx.fades = await fetch(url.replace(/model3\.json$/, 'fades.json'))
-    .then((r) => (r.ok ? r.json() : null))
-    .catch(() => null)
-  if (stale()) {
-    model.destroy()
-    return
-  }
   // 动作起播的参数复位改走平滑路径（见 runtime.beginSmoothReset）：瞬跳会毁掉动作交叉渐变的混合起点
   // 落笔钩子在 runtime 创建后挂（下方 beforeMotionUpdate），这里只登记缓动窗口；窗口取起播 clip 的转场时长（trackMotionStart 尚未结算挂起动作，节点读取时机不变）
   // 首个 motionStart 跳过复位：入口参数已硬写干净态，无遗留可清
@@ -111,7 +110,8 @@ async function mountModelInner(ctx, url) {
   }
   ctx.runtime = new InteractionRuntime(model, interaction)
   // 动作边界预热：节点跟随每支动作实际驱动的状态/摆位参数（表外回零边补账）
-  ctx.runtime.attachMotions(url)
+  await ctx.runtime.attachMotions(url)
+  if (stale()) { model.destroy(); return }
   // 库的 idle 自启挂在 Ticker.shared（Live2DModel.from 的 init 即注册共享 ticker），首个 tick 早于本行——from 之后这里已串行 await 了氛围层/交互数据，auto idle 的 motionStart 已错过且无人监听；循环 idle 永不 motionFinish、重播同支又被 MotionState.reserve 拒绝，此后再无 motionStart
   // 向 state 的当前动作补一次起播结算（此刻 _clipFiles 已注入，表外边界补全一次到位）；reserve 已留位未 start 的场合（currentGroup 仍空）不补——随后的 motionStart 会落在已注册的监听器上
   const mountState = model.internalModel.motionManager.state

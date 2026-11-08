@@ -219,10 +219,9 @@ export class InteractionRuntime {
         if (clip) this._clipFiles.set(clip, d.File)
       }
     }
-    for (const clip of this._clipFiles.keys()) {
-      this.loadMotionBoundary(clip)
-      this.loadMotionDriven(clip)
-    }
+    return Promise.all([...this._clipFiles.keys()].flatMap((clip) => [
+      this.loadMotionBoundary(clip), this.loadMotionDriven(clip),
+    ]))
   }
 
   /** 节点复位到干净默认态（"重置交互状态"用）：清挂起转移，状态参数全部回 moc 默认；配合拖拽参数机编排器的 resetAll 一起调 */
@@ -314,7 +313,12 @@ export class InteractionRuntime {
       this._resetTween = null
       return
     }
-    this._resetTween = { start: performance.now() / 1000, duration: durationSec, entries }
+    this._resetTween = { start: this.resetTime(), duration: durationSec, entries }
+  }
+
+  // Use the animation clock: wallpaper ticker pauses must also pause resets.
+  resetTime() {
+    return (this.model.elapsedTime ?? performance.now()) / 1000
   }
 
   /** 平滑复位缓动是否仍在窗口内：挂载揭幕（mount.js）据此等初始 idle 的复位缓动走完才示人 */
@@ -326,7 +330,7 @@ export class InteractionRuntime {
   applySmoothReset() {
     const tween = this._resetTween
     if (!tween) return
-    const t = (performance.now() / 1000 - tween.start) / tween.duration
+    const t = (this.resetTime() - tween.start) / tween.duration
     const core = this.model.internalModel.coreModel
     if (t >= 1) {
       // 末帧补齐目标值再收窗：t 一旦越窗（帧尖峰）最后一笔 k 可能未到 1

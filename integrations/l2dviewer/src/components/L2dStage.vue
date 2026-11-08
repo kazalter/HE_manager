@@ -35,6 +35,7 @@ watch(status, (value) => {
 })
 watch([() => props.paused, status], ([paused, loading]) => {
   if (!app || loading) return
+  ctx.traceEvent?.('wallpaper-activity', { paused, ticker: app.ticker.started, sharedTicker: Ticker.shared.started })
   if (paused) {
     app.ticker.stop(); Ticker.shared.stop()
     // A wallpaper can finish loading while another window is in front. Paint
