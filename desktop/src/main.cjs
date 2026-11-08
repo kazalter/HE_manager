@@ -383,6 +383,11 @@ async function createWindow(test = false) {
     minHeight: 640,
     title: "HE Manager",
     backgroundColor: "#0a0a0d",
+    ...(process.platform === 'win32' ? {
+      titleBarStyle: 'hidden',
+      titleBarOverlay: { color: '#00000000', symbolColor: '#667085', height: 44 },
+      autoHideMenuBar: true,
+    } : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
