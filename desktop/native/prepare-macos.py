@@ -11,14 +11,17 @@ import shutil
 import subprocess
 import tempfile
 import urllib.request
+import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT.parent / 'scripts'))
+from download import open_download
 URL = "https://github.com/iina/iina/releases/download/v1.5.0/IINA.v1.5.0.dmg"
 SHA = "8fad50479b10e09645053457cec46bd53d054ced2242cfe68f74586735a20dc7"
 archive = ROOT / ".downloads/IINA-v1.5.0.dmg"
 archive.parent.mkdir(parents=True, exist_ok=True)
 if not archive.exists():
-    with urllib.request.urlopen(URL, timeout=60) as source, archive.open("wb") as target:
+    with open_download(URL, timeout=60) as source, archive.open("wb") as target:
         shutil.copyfileobj(source, target)
 if hashlib.sha256(archive.read_bytes()).hexdigest() != SHA:
     raise RuntimeError("IINA runtime archive checksum mismatch")

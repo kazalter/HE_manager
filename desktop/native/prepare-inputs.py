@@ -6,6 +6,8 @@ import sys
 import urllib.request
 
 root = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(root.parent / 'scripts'))
+from download import open_download
 platform = sys.argv[1]
 if platform not in {'darwin', 'win32'}:
     raise SystemExit('Usage: prepare-inputs.py darwin|win32')
@@ -29,7 +31,7 @@ for name, url, expected in items:
     try:
         digest = hashlib.sha256()
         size = 0
-        with urllib.request.urlopen(url, timeout=90) as response, temporary.open('wb') as file:
+        with open_download(url, timeout=90) as response, temporary.open('wb') as file:
             while chunk := response.read(1024 * 1024):
                 size += len(chunk)
                 if size > 512 * 1024 * 1024:

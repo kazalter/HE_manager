@@ -1,5 +1,6 @@
 """Download pinned upstream runtimes. Run with Python 3.12+ on the build machine."""
 import argparse, hashlib, json, pathlib, shutil, subprocess, tarfile, urllib.request, zipfile, os
+from download import open_download
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 LOCK=json.loads((ROOT/'runtime-lock.json').read_text())
 
@@ -8,7 +9,7 @@ def download(item):
     cache.parent.mkdir(exist_ok=True)
     if not cache.exists() or hashlib.sha256(cache.read_bytes()).hexdigest()!=item['sha256']:
         temporary=cache.with_suffix('.partial')
-        with urllib.request.urlopen(item['url'],timeout=90) as response,temporary.open('wb') as output:
+        with open_download(item['url'],timeout=90) as response,temporary.open('wb') as output:
             shutil.copyfileobj(response,output)
         if hashlib.sha256(temporary.read_bytes()).hexdigest()!=item['sha256']:
             temporary.unlink()

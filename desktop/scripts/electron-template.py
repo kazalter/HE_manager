@@ -1,5 +1,6 @@
 """Assemble official Electron binaries; preserve all framework links and verify hashes."""
 import pathlib,json,hashlib,urllib.request,shutil,zipfile,stat,os,sys,plistlib
+from download import open_download
 root=pathlib.Path(__file__).resolve().parents[1]
 platform=sys.argv[1];arch='arm64' if platform=='darwin' else 'x64'
 version=json.loads((root/'node_modules/electron/package.json').read_text())['version']
@@ -8,7 +9,7 @@ expected=json.loads((root/'node_modules/electron/checksums.json').read_text())[n
 archive=root/'.downloads'/name
 if not archive.exists() or hashlib.sha256(archive.read_bytes()).hexdigest()!=expected:
     temporary=archive.with_suffix('.partial')
-    with urllib.request.urlopen(f'https://github.com/electron/electron/releases/download/v{version}/{name}',timeout=90) as response,temporary.open('wb') as output:shutil.copyfileobj(response,output)
+    with open_download(f'https://github.com/electron/electron/releases/download/v{version}/{name}',timeout=90) as response,temporary.open('wb') as output:shutil.copyfileobj(response,output)
     if hashlib.sha256(temporary.read_bytes()).hexdigest()!=expected:raise RuntimeError('Electron checksum mismatch')
     temporary.replace(archive)
 output=root/'release'/f'HE Manager-{platform}-{arch}'
