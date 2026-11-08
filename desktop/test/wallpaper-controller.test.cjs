@@ -10,8 +10,10 @@ class FakeWindow extends EventEmitter {
     super(); this.options = options; this.destroyed = false; this.events = []; this.messages = [];
     this.webContents = new EventEmitter();
     this.webContents.mainFrame = {};
-    this.webContents.send = (...args) => this.messages.push(args);
-    this.webContents.sendInputEvent = (event) => this.events.push(event);
+    this.webContents.send = (...args) => {
+      this.messages.push(args);
+      if (args[0] === 'he:wallpaper-pointer') this.events.push(args[1]);
+    };
     this.webContents.setAudioMuted = () => {};
     this.webContents.setWindowOpenHandler = () => {};
     FakeWindow.all.push(this);
@@ -51,17 +53,31 @@ test('wallpaper forwards background gestures only while desktop is active and re
   assert.equal(owner.events.length, 0);
   wallpaper.parse('state 1 250 300 1 1', owner);
   wallpaper.parse('state 1 260 310 1 1', owner);
-  assert.equal(owner.events.filter((event) => event.type === 'mouseDown').length, 1);
+  assert.deepEqual(owner.events.map((event) => event.type), ['down', 'move']);
   wallpaper.parse('state 0 270 320 1 0', owner);
-  assert.equal(owner.events.at(-1).type, 'mouseUp');
-  assert.deepEqual(owner.messages.at(-1), ['he:wallpaper-activity', false]);
+  assert.equal(owner.events.at(-1).type, 'cancel');
+  assert.deepEqual(owner.messages.filter(([channel]) => channel === 'he:wallpaper-activity').at(-1), ['he:wallpaper-activity', false]);
   powerMonitor.emit('lock-screen');
   wallpaper.parse('state 1 250 300 1 1', owner);
-  assert.equal(owner.events.filter((event) => event.type === 'mouseDown').length, 1);
+  assert.equal(owner.events.filter((event) => event.type === 'down').length, 1);
   await wallpaper.stop();
   assert.equal(owner.destroyed, true);
   assert.equal(children[0].killed, true);
   assert.equal(wallpaper.state().running, false);
+});
+
+test('a desktop click is delivered without focusing the wallpaper window', async () => {
+  const { wallpaper } = fixture();
+  await wallpaper.start('test_1', true);
+  const owner = FakeWindow.all[0];
+  assert.equal(owner.options.focusable, false);
+  wallpaper.parse('state 1 100 200 1 1', owner);
+  wallpaper.parse('state 1 105 205 0 1', owner);
+  assert.deepEqual(owner.events, [
+    { type: 'down', x: 100, y: 200 },
+    { type: 'up', x: 105, y: 205 },
+  ]);
+  await wallpaper.stop();
 });
 
 test('a failed model load is reported and the native host is stopped', async () => {

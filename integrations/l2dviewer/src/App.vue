@@ -18,6 +18,9 @@ function onWallpaperActivity(event) {
   if (wallpaper && event.source === window && event.origin === location.origin && event.data?.type === 'he:wallpaper-activity') {
     wallpaperPaused.value = event.data.animate !== true
   }
+  if (wallpaper && event.source === window && event.origin === location.origin && event.data?.type === 'he:wallpaper-pointer') {
+    stageRef.value?.wallpaperPointer(event.data.pointer)
+  }
 }
 function reportStage(success) { if (wallpaper) window.heWallpaper?.report(success) }
 function reportPlayback(playing) { if (wallpaper) window.heWallpaper?.reportPlayback(playing) }

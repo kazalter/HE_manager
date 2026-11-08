@@ -8,6 +8,7 @@ import { createCamera } from '../l2d/camera'
 import { createActions } from '../l2d/actions'
 import { mountModel } from '../l2d/mount'
 import { createGestures } from '../l2d/gestures'
+import { routeWallpaperPointer } from '../l2d/wallpaperPointer'
 import { createTickerCallback } from '../l2d/hud'
 import { createClickEffect } from '../l2d/clickEffect'
 import HudPanel from './debug/HudPanel.vue'
@@ -312,7 +313,7 @@ onBeforeUnmount(() => {
 watch(() => props.modelUrl, (url) => url && mountModel(ctx, url))
 
 /** 供外部（状态触发面板）直接播放指定动作组 */
-defineExpose({ play: (group) => ctx.actions.playMotion(group) })
+defineExpose({ play: (group) => ctx.actions.playMotion(group), wallpaperPointer: (pointer) => routeWallpaperPointer(gestures, view, pointer) })
 </script>
 
 <template>

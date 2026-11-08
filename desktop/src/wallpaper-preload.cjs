@@ -6,3 +6,6 @@ contextBridge.exposeInMainWorld('heWallpaper', Object.freeze({
 ipcRenderer.on('he:wallpaper-activity', (_event, animate) => {
   window.postMessage({ type: 'he:wallpaper-activity', animate: animate === true }, location.origin);
 });
+ipcRenderer.on('he:wallpaper-pointer', (_event, pointer) => {
+  window.postMessage({ type: 'he:wallpaper-pointer', pointer }, location.origin);
+});

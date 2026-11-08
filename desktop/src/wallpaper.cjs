@@ -21,12 +21,12 @@ class Wallpaper {
     const activity = wallpaperActivity({ enabled: this.state().running, desktopForeground: this.foreground,
       pauseWhenCovered: this.pauseWhenCovered, sessionLocked: this.locked, displayAsleep: this.asleep });
     if (this.window && !this.window.isDestroyed()) this.window.webContents.send('he:wallpaper-activity', activity.animate);
-    if (!activity.forwardInput && this.pressed) this.release();
+    if (!activity.forwardInput && this.pressed) this.release(true);
     this.activity = activity;
   }
-  release() {
+  release(cancel = false) {
     if (this.window && !this.window.isDestroyed() && this.lastPoint)
-      this.window.webContents.sendInputEvent({ type: 'mouseUp', button: 'left', clickCount: 1, ...this.lastPoint });
+      this.window.webContents.send('he:wallpaper-pointer', { type: cancel ? 'cancel' : 'up', ...this.lastPoint });
     this.pressed = false;
   }
   parse(line, owner) {
@@ -41,12 +41,12 @@ class Wallpaper {
     const inside = point.x >= 0 && point.y >= 0 && point.x < bounds.width && point.y < bounds.height;
     if (this.activity?.forwardInput && inside && (this.pressed || allowed)) {
       this.lastPoint = point;
-      owner.webContents.sendInputEvent({ type: 'mouseMove', ...point });
       if (down && !this.pressed && allowed) {
-        owner.webContents.sendInputEvent({ type: 'mouseDown', button: 'left', clickCount: 1, ...point });
+        owner.webContents.send('he:wallpaper-pointer', { type: 'down', ...point });
         this.pressed = true;
       } else if (!down && this.pressed) this.release();
-    } else if (this.pressed && (!down || !inside)) this.release();
+      else if (down && this.pressed) owner.webContents.send('he:wallpaper-pointer', { type: 'move', ...point });
+    } else if (this.pressed && (!down || !inside)) this.release(!inside);
   }
   async start(modelId, pauseWhenCovered) {
     if (this.platform !== 'win32') throw new Error('桌面壁纸仅支持 Windows');
@@ -133,7 +133,7 @@ class Wallpaper {
       const pending = this.pendingModel; this.pendingModel = null;
       clearTimeout(pending.timer); pending.reject(new Error('壁纸启动已取消'));
     }
-    this.release(); const owner = this.window; this.window = null;
+    if (this.pressed) this.release(true); const owner = this.window; this.window = null;
     const helper = this.helper; this.helper = null;
     if (owner && !owner.isDestroyed()) owner.destroy();
     helper?.kill(); this.foreground = false; this.modelId = ''; this.playing = null;
