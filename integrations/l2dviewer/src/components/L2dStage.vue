@@ -35,7 +35,13 @@ watch(status, (value) => {
 })
 watch([() => props.paused, status], ([paused, loading]) => {
   if (!app || loading) return
-  if (paused) { app.ticker.stop(); Ticker.shared.stop() }
+  if (paused) {
+    app.ticker.stop(); Ticker.shared.stop()
+    // A wallpaper can finish loading while another window is in front. Paint
+    // the newly loaded model once before remaining paused, rather than leaving
+    // the WebGL canvas on its initial black frame until the ticker resumes.
+    app.render()
+  }
   else { Ticker.shared.start(); app.ticker.start() }
   emit('playback-state', app.ticker.started && Ticker.shared.started)
 })
