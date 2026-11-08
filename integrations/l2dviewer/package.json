@@ -10,6 +10,7 @@
     "build:manager": "vite build --base /l2d/ --outDir ../../frontend/public/l2d --emptyOutDir"
   },
   "dependencies": {
+    "@pixi/unsafe-eval": "6.5.10",
     "lucide-vue-next": "^0.577.0",
     "pixi-live2d-display": "^0.4.0",
     "pixi.js": "^6.5.10",

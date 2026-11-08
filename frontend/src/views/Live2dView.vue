@@ -25,7 +25,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.live2d-view { height: calc(100dvh - 4rem); min-height: 500px; }
+.live2d-view { height: 100%; min-height: 0; }
 .live2d-view.immersive { height: 100dvh; min-height: 0; }
 iframe { width: 100%; height: 100%; border: 0; background: #101014; display: block; }
 :global(body.he-l2d-immersive #he-main-content) {

@@ -1,6 +1,7 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Application, Ticker } from 'pixi.js'
+import { Application, ShaderSystem, Ticker } from 'pixi.js'
+import { install as installSafeShaderSystem } from '@pixi/unsafe-eval'
 import { createInteractionHints } from '../utils/interaction'
 import { installMotionPatches } from '../l2d/motionPatches'
 import { createCamera } from '../l2d/camera'
@@ -10,6 +11,9 @@ import { createGestures } from '../l2d/gestures'
 import { createTickerCallback } from '../l2d/hud'
 import { createClickEffect } from '../l2d/clickEffect'
 import HudPanel from './debug/HudPanel.vue'
+
+// The desktop viewer's content security policy forbids dynamic JavaScript evaluation.
+installSafeShaderSystem({ ShaderSystem })
 
 const props = defineProps({
   modelUrl: { type: String, required: true },
@@ -209,13 +213,19 @@ watch(() => props.immersive, (active) => {
 onMounted(async () => {
   // resolution 按设备像素比渲染，否则高分屏上 canvas 被拉伸导致模糊；
   // autoDensity 让 canvas 的 CSS 尺寸仍等于容器尺寸，只是内部像素更密
-  app = new Application({
-    backgroundAlpha: 0,
-    resizeTo: canvasHost.value,
-    resolution: window.devicePixelRatio || 1,
-    autoDensity: true,
-    antialias: true,
-  })
+  try {
+    app = new Application({
+      backgroundAlpha: 0,
+      resizeTo: canvasHost.value,
+      resolution: window.devicePixelRatio || 1,
+      autoDensity: true,
+      antialias: true,
+    })
+  } catch (error) {
+    console.error('Live2D 舞台初始化失败', error)
+    status.value = `舞台初始化失败：${error?.message || error}`
+    return
+  }
   ctx.app = app
   ctx.view = app.view
   // 读档锁帧开关：保存过锁帧档则开局即锁 60fps（applyFrameLock 读 lockFrame）
