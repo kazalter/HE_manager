@@ -85,6 +85,8 @@ int wmain(int argc, wchar_t** argv) {
         SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW)) return 8;
     printf("ready\n"); fflush(stdout);
     bool pressed = false;
+    bool lastForeground = false, lastDown = false, lastForwarding = false, sentState = false;
+    POINT lastCursor{};
     unsigned int ticks = 0;
     while (IsWindow(target) && IsWindow(desktop.layer) && IsWindow(desktop.icons)) {
         if (++ticks % 60 == 0) {
@@ -114,9 +116,14 @@ int wmain(int argc, wchar_t** argv) {
         static bool forwarding = false;
         if (!foreground) forwarding = false;
         if (down && !pressed) forwarding = background;
-        printf("state %d %ld %ld %d %d\n", foreground ? 1 : 0, cursor.x, cursor.y,
-            down ? 1 : 0, forwarding ? 1 : 0);
-        fflush(stdout);
+        if (!sentState || foreground != lastForeground || down != lastDown || forwarding != lastForwarding ||
+            (forwarding && (cursor.x != lastCursor.x || cursor.y != lastCursor.y))) {
+            printf("state %d %ld %ld %d %d\n", foreground ? 1 : 0, cursor.x, cursor.y,
+                down ? 1 : 0, forwarding ? 1 : 0);
+            fflush(stdout);
+            sentState = true; lastForeground = foreground; lastDown = down;
+            lastForwarding = forwarding; lastCursor = cursor;
+        }
         pressed = down;
         if (!down) forwarding = false;
         Sleep(16);

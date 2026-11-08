@@ -61,5 +61,5 @@ export interface DesktopBridge {
   toggleFullscreen?(): Promise<boolean>
   exitFullscreen?(): Promise<boolean>
 }
-export interface WallpaperState { running: boolean; modelId: string; pauseWhenCovered: boolean }
+export interface WallpaperState { running: boolean; modelId: string; pauseWhenCovered: boolean; playing: boolean | null }
 

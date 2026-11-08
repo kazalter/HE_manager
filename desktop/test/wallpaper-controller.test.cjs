@@ -99,6 +99,20 @@ test('only the wallpaper main frame can confirm a loaded model', async () => {
   await wallpaper.stop();
 });
 
+test('playback state is accepted only from the current wallpaper renderer', async () => {
+  const { wallpaper } = fixture();
+  await wallpaper.start('test_1', true);
+  const owner = FakeWindow.all[0];
+  wallpaper.playbackResult({ sender: {}, senderFrame: owner.webContents.mainFrame }, true);
+  assert.equal(wallpaper.state().playing, null);
+  wallpaper.playbackResult({ sender: owner.webContents, senderFrame: owner.webContents.mainFrame }, true);
+  assert.equal(wallpaper.state().playing, true);
+  wallpaper.playbackResult({ sender: owner.webContents, senderFrame: owner.webContents.mainFrame }, false);
+  assert.equal(wallpaper.state().playing, false);
+  await wallpaper.stop();
+  assert.equal(wallpaper.state().playing, null);
+});
+
 test('a cancelled loading window cannot replace or destroy a newer wallpaper', async () => {
   const { wallpaper } = fixture();
   let release;

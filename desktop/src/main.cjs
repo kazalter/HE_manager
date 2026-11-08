@@ -90,10 +90,15 @@ const defaults = {
   engines: {},
   wallpaperPauseWhenCovered: true,
 };
-async function saveSettings() {
-  const temp = settingsFile + ".next";
-  await fs.writeFile(temp, JSON.stringify(settings, null, 2), { mode: 0o600 });
-  await fs.rename(temp, settingsFile);
+let settingsWrites = Promise.resolve();
+function saveSettings() {
+  const data = JSON.stringify(settings, null, 2), file = settingsFile, temp = file + '.next';
+  const write = settingsWrites.catch(() => {}).then(async () => {
+    await fs.writeFile(temp, data, { mode: 0o600 });
+    await fs.rename(temp, file);
+  });
+  settingsWrites = write;
+  return write;
 }
 async function engine(kind) {
   const candidates =
@@ -169,6 +174,7 @@ function handle(name, callback) {
 function registerIPC() {
   ipcMain.on('he:close-ready', (event, nonce) => { if (trusted(event)) closeFlush.acknowledge(window, nonce); });
   ipcMain.on('he:wallpaper-model', (event, success) => wallpaper?.modelResult(event, success));
+  ipcMain.on('he:wallpaper-playback', (event, playing) => wallpaper?.playbackResult(event, playing));
   handle('he:retry-progress', () => session.retryProgress());
   ipcMain.on('he:video-ready', (event) => { if (trusted(event)) player.ready(); });
   ipcMain.on('he:video-size', (event, value) => { if (trusted(event)) player.resize(value); });

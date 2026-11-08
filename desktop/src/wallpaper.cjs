@@ -8,7 +8,7 @@ class Wallpaper {
     Object.assign(this, { BrowserWindow, screen, powerMonitor, root, platform, spawnProcess });
     this.window = null; this.helper = null; this.pauseWhenCovered = true;
     this.foreground = false; this.locked = false; this.asleep = false; this.pressed = false;
-    this.operation = 0;
+    this.operation = 0; this.playing = null;
     this.onLock = () => { this.locked = true; this.updateActivity(); };
     this.onUnlock = () => { this.locked = false; this.updateActivity(); };
     this.onSuspend = () => { this.asleep = true; this.updateActivity(); };
@@ -16,7 +16,7 @@ class Wallpaper {
     powerMonitor.on('lock-screen', this.onLock); powerMonitor.on('unlock-screen', this.onUnlock);
     powerMonitor.on('suspend', this.onSuspend); powerMonitor.on('resume', this.onResume);
   }
-  state() { return { running: !!this.window && !this.window.isDestroyed(), modelId: this.modelId || '', pauseWhenCovered: this.pauseWhenCovered }; }
+  state() { return { running: !!this.window && !this.window.isDestroyed(), modelId: this.modelId || '', pauseWhenCovered: this.pauseWhenCovered, playing: this.playing }; }
   updateActivity() {
     const activity = wallpaperActivity({ enabled: this.state().running, desktopForeground: this.foreground,
       pauseWhenCovered: this.pauseWhenCovered, sessionLocked: this.locked, displayAsleep: this.asleep });
@@ -121,6 +121,11 @@ class Wallpaper {
     if (success) pending.resolve();
     else pending.reject(new Error('壁纸皮肤加载失败，请检查资源和服务器连接'));
   }
+  playbackResult(event, playing) {
+    const owner = this.window;
+    if (!owner || owner.isDestroyed() || event.sender !== owner.webContents || event.senderFrame !== owner.webContents.mainFrame || typeof playing !== 'boolean') return;
+    this.playing = playing;
+  }
   async stop() { ++this.operation; return this.closeCurrent(); }
   async closeCurrent() {
     clearInterval(this.activityTimer); this.activityTimer = null;
@@ -131,7 +136,7 @@ class Wallpaper {
     this.release(); const owner = this.window; this.window = null;
     const helper = this.helper; this.helper = null;
     if (owner && !owner.isDestroyed()) owner.destroy();
-    helper?.kill(); this.foreground = false; this.modelId = '';
+    helper?.kill(); this.foreground = false; this.modelId = ''; this.playing = null;
     return this.state();
   }
 }

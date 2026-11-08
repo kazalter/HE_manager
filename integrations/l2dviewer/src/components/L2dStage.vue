@@ -24,7 +24,7 @@ const props = defineProps({
   paused: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['motions', 'enter-fullscreen', 'stage-result'])
+const emit = defineEmits(['motions', 'enter-fullscreen', 'stage-result', 'playback-state'])
 
 const canvasHost = ref(null)
 const status = ref('正在初始化舞台…')
@@ -36,6 +36,7 @@ watch([() => props.paused, status], ([paused, loading]) => {
   if (!app || loading) return
   if (paused) { app.ticker.stop(); Ticker.shared.stop() }
   else { Ticker.shared.start(); app.ticker.start() }
+  emit('playback-state', app.ticker.started && Ticker.shared.started)
 })
 const currentMotion = ref('')
 const adjustMode = ref(false)

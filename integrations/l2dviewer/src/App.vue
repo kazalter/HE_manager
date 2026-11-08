@@ -20,6 +20,7 @@ function onWallpaperActivity(event) {
   }
 }
 function reportStage(success) { if (wallpaper) window.heWallpaper?.report(success) }
+function reportPlayback(playing) { if (wallpaper) window.heWallpaper?.reportPlayback(playing) }
 
 /** SkinTab 吃 { id, label }，模型名通过 label 字段适配，避免清单耦合视图。 */
 const tabs = computed(() => MODELS.map((m) => ({ id: m.id, label: m.name })))
@@ -159,7 +160,7 @@ function playTrigger(id) {
     @pointerdown="pointerDown" @pointerup="pointerUp" @pointercancel="pointerUp">
     <!-- 舞台永远占满容器，两侧栏作为蒙板浮在上面 -->
     <L2dStage v-if="activeModel" ref="stageRef" class="stage" :key="activeModel.id" :model-url="activeModel.url"
-      :fill="0.8" :immersive="immersive" :paused="wallpaper && wallpaperPaused" :controls-visible="!wallpaper && (!immersive || showControls)" @stage-result="reportStage" @motions="triggers = $event" @enter-fullscreen="enterFullscreen" />
+      :fill="0.8" :immersive="immersive" :paused="wallpaper && wallpaperPaused" :controls-visible="!wallpaper && (!immersive || showControls)" @stage-result="reportStage" @playback-state="reportPlayback" @motions="triggers = $event" @enter-fullscreen="enterFullscreen" />
     <SkinTab v-if="!wallpaper" v-show="!immersive || showControls" v-model="activeId" :tabs="tabs" title="皮肤列表" />
     <StateTab v-if="!wallpaper" v-show="!immersive || showControls" :items="triggerItems" :active="activeTrigger" title="状态触发" @select="playTrigger" />
     <template v-if="immersive">
