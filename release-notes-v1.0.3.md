@@ -10,6 +10,6 @@
 
 已在 Windows 验证 dafeng_6、lafeiii_3 的动作衔接，覆盖三条选牌恢复链，以及 Electron 渲染端暂停、恢复和待机持续运动。此次定位并修复了可复现的时序缺陷；未确认的特定皮肤/操作顿挫仍需具体案例进一步判断。
 
-本次提供 Windows x64 压缩包。解压后运行 HE Manager 并连接自己的服务器；模型资源仍由服务器提供。桌面壁纸仅支持 Windows。macOS 本次暂不更新，仍可使用 Web 端；Android 版本暂未包含。
+提供 Windows x64 和 macOS Apple Silicon 压缩包。解压后运行 HE Manager 并连接自己的服务器；模型资源仍由服务器提供。桌面壁纸仅支持 Windows，Android 版本暂未包含。
 
-Windows 包未签名，系统可能提示无法验证开发者。
+Windows 包未签名；macOS 包使用临时签名，尚未经过 Apple 公证。macOS 包由自动构建生成，未进行实机验证。
