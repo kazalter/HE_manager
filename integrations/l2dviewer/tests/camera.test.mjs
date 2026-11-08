@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-globalThis.localStorage = { getItem: () => null, setItem: () => {} }
+const saved = new Map()
+globalThis.localStorage = { getItem: (key) => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) }
 const { createCamera } = await import('../src/l2d/camera.js')
 
 function fixture(withOffset = false) {
@@ -21,6 +22,7 @@ function fixture(withOffset = false) {
 
 for (const withOffset of [false, true]) {
   test(`viewport round trip preserves camera (${withOffset ? 'offset' : 'measured'} model)`, () => {
+    saved.clear()
     const { ctx, model, camera, setVertices } = fixture(withOffset)
     camera.fitModel({ refreshScene: true })
     camera.zoomAt(1.7, 700, 300)
@@ -41,3 +43,17 @@ for (const withOffset of [false, true]) {
     }
   })
 }
+
+test('a new viewer instance restores the framing saved for the same skin', () => {
+  saved.clear()
+  const original = fixture()
+  original.camera.fitModel({ refreshScene: true })
+  original.camera.zoomAt(1.8, 650, 350)
+  original.camera.pan(90, -60)
+  const expected = [original.model.position.x, original.model.position.y, original.model.scale.x]
+  const wallpaper = fixture()
+  wallpaper.camera.fitModel({ refreshScene: true })
+  const actual = [wallpaper.model.position.x, wallpaper.model.position.y, wallpaper.model.scale.x]
+  for (const [index, value] of actual.entries()) assert.ok(Math.abs(value - expected[index]) < 1e-9)
+  assert.equal(wallpaper.camera.getZoom(), original.camera.getZoom())
+})

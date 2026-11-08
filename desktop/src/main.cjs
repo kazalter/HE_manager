@@ -8,6 +8,7 @@ const {
   Menu,
   safeStorage,
   screen,
+  powerMonitor,
 } = require("electron");
 const path = require("node:path"),
   fs = require("node:fs/promises"),
@@ -56,7 +57,7 @@ if (baselineMode || uiTestConfigPath) {
     app.exit(1);
   }, uiTestConfigPath ? 300000 : 60000).unref();
 }
-let window, cache, settings, settingsFile, session;
+let window, cache, settings, settingsFile, session, wallpaper;
 let applicationReady = false;
 const embeddedPlayer = new EmbeddedPlayer({ root, sharedTexture: require('electron').sharedTexture, getWindow: () => window });
 const player = new PlayerSession({ embeddedPlayer, getWindow: () => window, onBeforeVideoOpen: () => cache?.cancelPending?.() });
@@ -87,6 +88,7 @@ const defaults = {
   videoMode: "off",
   imageMode: "off",
   engines: {},
+  wallpaperPauseWhenCovered: true,
 };
 async function saveSettings() {
   const temp = settingsFile + ".next";
@@ -166,10 +168,23 @@ function handle(name, callback) {
 }
 function registerIPC() {
   ipcMain.on('he:close-ready', (event, nonce) => { if (trusted(event)) closeFlush.acknowledge(window, nonce); });
+  ipcMain.on('he:wallpaper-model', (event, success) => wallpaper?.modelResult(event, success));
   handle('he:retry-progress', () => session.retryProgress());
   ipcMain.on('he:video-ready', (event) => { if (trusted(event)) player.ready(); });
   ipcMain.on('he:video-size', (event, value) => { if (trusted(event)) player.resize(value); });
   handle("he:configuration", configuration);
+  handle('he:wallpaper-state', () => wallpaper.state());
+  handle('he:wallpaper-start', async (modelId) => {
+    session.identity(session.snapshot().generation);
+    return wallpaper.start(modelId, settings.wallpaperPauseWhenCovered);
+  });
+  handle('he:wallpaper-stop', () => wallpaper.stop());
+  handle('he:wallpaper-preferences', async (value) => {
+    if (process.platform !== 'win32' || !value || typeof value.pauseWhenCovered !== 'boolean') throw new Error('无效的壁纸设置');
+    settings.wallpaperPauseWhenCovered = value.pauseWhenCovered;
+    await saveSettings();
+    return wallpaper.setPauseWhenCovered(value.pauseWhenCovered);
+  });
   handle("he:connect", async (value) => {
     const state = await session.connect(value);
     settings.server = state.server;
@@ -457,7 +472,7 @@ async function createWindow(test = false) {
     event.preventDefault(); ownerWindow._heClosing = true;
     void prepareWindowClose(ownerWindow).catch(() => {}).then(() => {
       cache?.allowed.clear();
-      return Promise.allSettled([player.stop(), cache?.close()]);
+      return Promise.allSettled([player.stop(), cache?.close(), wallpaper?.stop()]);
     }).finally(() => { if (!ownerWindow.isDestroyed()) ownerWindow.destroy(); });
   });
   window.on("closed", () => {
@@ -492,6 +507,7 @@ app.whenReady().then(async () => {
     settings.videoMode = "off";
   if (!["off", "anime", "photo"].includes(settings.imageMode))
     settings.imageMode = "off";
+  settings.wallpaperPauseWhenCovered = settings.wallpaperPauseWhenCovered !== false;
   if (baselineOptions?.server) settings.server = baselineOptions.server;
   diagnosticStage('settings-loaded');
   const uiTestConfig = uiTestConfigPath ? JSON.parse(await fs.readFile(uiTestConfigPath, 'utf8')) : null;
@@ -508,11 +524,13 @@ app.whenReady().then(async () => {
     onChange: (state) => { if (window && !window.isDestroyed()) window.webContents.send('he:session-changed', state); },
     onInvalidate: async () => {
       const previous = cache; previous?.allowed.clear(); cache = createImageCache();
-      await Promise.all([previous?.close(), player.stop()]);
+      await Promise.all([previous?.close(), player.stop(), wallpaper?.stop()]);
     },
   });
   session.diagnosticRequests = diagnosticRequests;
   cache = createImageCache();
+  wallpaper = new (require('./wallpaper.cjs').Wallpaper)({ BrowserWindow, screen, powerMonitor, root });
+  wallpaper.pauseWhenCovered = settings.wallpaperPauseWhenCovered;
   void session.restore().catch(() => {});
   protocol.handle("he", protocolHandler);
   registerIPC();
@@ -736,6 +754,6 @@ require("./lifecycle.cjs").installShutdown(app, async () => {
   try { await prepareWindowClose(window); }
   finally {
     session?.stopRetries();
-    await Promise.allSettled([player.stop(), legacyPlayer.stop(), cache?.close()]);
+    await Promise.allSettled([player.stop(), legacyPlayer.stop(), cache?.close(), wallpaper?.stop()]);
   }
 });

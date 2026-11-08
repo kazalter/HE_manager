@@ -40,7 +40,7 @@ native=root/'native'
 build=native/'build'/${JSON.stringify(`${target}-${arch}`)}
 metadata=json.loads((build/'build-info.json').read_text(encoding='utf-8-sig'))
 required={'embedded.cpp','surface.h','header-lock.json',${JSON.stringify(target === 'win32' ? 'build-windows.ps1' : 'build-macos.py')}}
-if ${JSON.stringify(target)}=='win32':required.add('delay-load.cpp')
+if ${JSON.stringify(target)}=='win32':required.update(['delay-load.cpp','wallpaper-win.cpp'])
 if not required.issubset(metadata['sourceSha256']):
     raise RuntimeError('Native build metadata is incomplete; rebuild the addon')
 if metadata['platform']!=${JSON.stringify(`${target}-${arch}`)} or metadata['electron']!='44.8.0' or metadata['nodeAPI']!=8:
@@ -50,6 +50,8 @@ for name,expected in metadata['sourceSha256'].items():
         raise RuntimeError('Rebuild the native module after changing '+name)
 if hashlib.sha256((build/'he_embedded.node').read_bytes()).hexdigest()!=metadata['addonSha256']:
     raise RuntimeError('Native addon checksum mismatch')
+if ${JSON.stringify(target)}=='win32' and hashlib.sha256((build/'he_wallpaper.exe').read_bytes()).hexdigest()!=metadata['wallpaperSha256']:
+    raise RuntimeError('Wallpaper helper checksum mismatch')
 shutil.copytree(build,dest/'native/build'/${JSON.stringify(`${target}-${arch}`)},ignore=shutil.ignore_patterns('*.obj','*.lib','*.exp'),dirs_exist_ok=True)
 shutil.copytree(native/'runtime'/${JSON.stringify(target)},dest/'native/runtime'/${JSON.stringify(target)},ignore=shutil.ignore_patterns('include','*.lib','*.a'),dirs_exist_ok=True)
 for name in ['runtime-lock.json','header-lock.json','README.md']:

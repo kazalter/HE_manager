@@ -1,12 +1,25 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L2dStage from './components/L2dStage.vue'
 import SkinTab from './components/tabs/SkinTab.vue'
 import StateTab from './components/tabs/StateTab.vue'
 import { MODELS, TRIGGER_LABELS, TRIGGER_ORDER } from './utils/models'
 
-const activeId = ref(MODELS[0]?.id ?? '')
+const query = new URLSearchParams(location.search)
+const wallpaper = location.protocol === 'he:' && query.get('wallpaper') === '1' && window.parent === window
+const requestedModel = wallpaper ? query.get('model') : ''
+const activeId = ref(wallpaper ? (MODELS.find((model) => model.id === requestedModel)?.id ?? '') : (MODELS[0]?.id ?? ''))
 const activeModel = computed(() => MODELS.find((m) => m.id === activeId.value))
+const wallpaperPaused = ref(false)
+watch(activeId, (id) => {
+  if (!wallpaper && window.parent !== window) window.parent.postMessage({ type: 'l2d:model', id }, window.location.origin)
+}, { immediate: true })
+function onWallpaperActivity(event) {
+  if (wallpaper && event.source === window && event.origin === location.origin && event.data?.type === 'he:wallpaper-activity') {
+    wallpaperPaused.value = event.data.animate !== true
+  }
+}
+function reportStage(success) { if (wallpaper) window.heWallpaper?.report(success) }
 
 /** SkinTab 吃 { id, label }，模型名通过 label 字段适配，避免清单耦合视图。 */
 const tabs = computed(() => MODELS.map((m) => ({ id: m.id, label: m.name })))
@@ -101,13 +114,16 @@ function pointerDown(event) {
 function pointerUp() { clearTimeout(holdTimer) }
 
 onMounted(() => {
+  if (wallpaper && !activeModel.value) window.heWallpaper?.report(false)
   document.addEventListener('fullscreenchange', onFullscreenChange)
   document.addEventListener('keydown', onKeydown)
+  window.addEventListener('message', onWallpaperActivity)
 })
 onBeforeUnmount(() => {
   if (fallbackFullscreen.value) notifyParent(false)
   document.removeEventListener('fullscreenchange', onFullscreenChange)
   document.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('message', onWallpaperActivity)
   clearTimeout(hintTimer)
   clearTimeout(hideTimer)
   clearTimeout(holdTimer)
@@ -143,9 +159,9 @@ function playTrigger(id) {
     @pointerdown="pointerDown" @pointerup="pointerUp" @pointercancel="pointerUp">
     <!-- 舞台永远占满容器，两侧栏作为蒙板浮在上面 -->
     <L2dStage v-if="activeModel" ref="stageRef" class="stage" :key="activeModel.id" :model-url="activeModel.url"
-      :fill="0.8" :immersive="immersive" :controls-visible="!immersive || showControls" @motions="triggers = $event" @enter-fullscreen="enterFullscreen" />
-    <SkinTab v-show="!immersive || showControls" v-model="activeId" :tabs="tabs" title="皮肤列表" />
-    <StateTab v-show="!immersive || showControls" :items="triggerItems" :active="activeTrigger" title="状态触发" @select="playTrigger" />
+      :fill="0.8" :immersive="immersive" :paused="wallpaper && wallpaperPaused" :controls-visible="!wallpaper && (!immersive || showControls)" @stage-result="reportStage" @motions="triggers = $event" @enter-fullscreen="enterFullscreen" />
+    <SkinTab v-if="!wallpaper" v-show="!immersive || showControls" v-model="activeId" :tabs="tabs" title="皮肤列表" />
+    <StateTab v-if="!wallpaper" v-show="!immersive || showControls" :items="triggerItems" :active="activeTrigger" title="状态触发" @select="playTrigger" />
     <template v-if="immersive">
       <p v-if="showFullscreenHint" class="fullscreen-hint">鼠标移到边缘显示界面；按 Esc 退出全屏</p>
     </template>

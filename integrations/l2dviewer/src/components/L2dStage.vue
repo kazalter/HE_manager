@@ -21,12 +21,22 @@ const props = defineProps({
   fill: { type: Number, default: 1 },
   immersive: { type: Boolean, default: false },
   controlsVisible: { type: Boolean, default: true },
+  paused: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['motions', 'enter-fullscreen'])
+const emit = defineEmits(['motions', 'enter-fullscreen', 'stage-result'])
 
 const canvasHost = ref(null)
 const status = ref('正在初始化舞台…')
+watch(status, (value) => {
+  if (!value) emit('stage-result', true)
+  else if (value.startsWith('加载失败') || value.startsWith('舞台初始化失败')) emit('stage-result', false)
+})
+watch([() => props.paused, status], ([paused, loading]) => {
+  if (!app || loading) return
+  if (paused) { app.ticker.stop(); Ticker.shared.stop() }
+  else { Ticker.shared.start(); app.ticker.start() }
+})
 const currentMotion = ref('')
 const adjustMode = ref(false)
 const zoomLevel = ref(1)

@@ -6,6 +6,8 @@ import { EmptyState, PageHeader, SectionHeader, UiBadge, UiButton, UiCard, UiIco
 import { API_BASE_URL } from '../config'
 import { applyTheme, themeState, themeOptionsForMode } from '../theme'
 import ColorModeSelect from '../components/ColorModeSelect.vue'
+import WallpaperSettings from '../components/WallpaperSettings.vue'
+import { desktopBridge, desktopState } from '../desktop'
 import type { Folder } from '../types'
 
 const folders = ref<Folder[]>([])
@@ -297,6 +299,7 @@ onUnmounted(() => {
     <div class="page-gutter pb-12">
       <div class="page-container">
         <div class="max-w-[960px] space-y-10">
+          <WallpaperSettings v-if="desktopBridge && desktopState.platform === 'win32'" />
           <!-- 媒体库目录 -->
           <section>
             <SectionHeader title="媒体库目录" :count="folders.length ? `${folders.length} 个` : undefined" description="扫描这些目录中的视频、漫画、图片和音频">

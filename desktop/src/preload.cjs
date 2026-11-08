@@ -54,6 +54,10 @@ contextBridge.exposeInMainWorld(
   "heDesktop",
   Object.freeze({
     configuration: () => invoke("he:configuration"),
+    wallpaperState: () => invoke('he:wallpaper-state'),
+    wallpaperStart: (modelId) => invoke('he:wallpaper-start', modelId),
+    wallpaperStop: () => invoke('he:wallpaper-stop'),
+    wallpaperPreferences: (value) => invoke('he:wallpaper-preferences', value),
     authentication: () => invoke('he:authentication'),
     login: (value) => invoke('he:login', value),
     logout: () => invoke('he:logout'),

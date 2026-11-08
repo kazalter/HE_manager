@@ -31,6 +31,10 @@ export interface PlayerSessionState {
 export type DesktopVideoAction = 'pause' | 'seek' | 'seek-to' | 'fullscreen' | 'exit-fullscreen' | 'audio-track' | 'subtitle-track' | 'speed' | 'volume' | 'aspect-ratio'
 export interface DesktopBridge {
   configuration(): Promise<DesktopConfiguration>
+  wallpaperState(): Promise<WallpaperState>
+  wallpaperStart(modelId: string): Promise<WallpaperState>
+  wallpaperStop(): Promise<WallpaperState>
+  wallpaperPreferences(value: { pauseWhenCovered: boolean }): Promise<WallpaperState>
   authentication(): Promise<DesktopSessionSnapshot>
   login(value: { username: string; password: string; bootstrap?: boolean }): Promise<DesktopSessionSnapshot>
   logout(): Promise<DesktopSessionSnapshot>
@@ -57,4 +61,5 @@ export interface DesktopBridge {
   toggleFullscreen?(): Promise<boolean>
   exitFullscreen?(): Promise<boolean>
 }
+export interface WallpaperState { running: boolean; modelId: string; pauseWhenCovered: boolean }
 
