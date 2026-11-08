@@ -184,7 +184,7 @@ onBeforeUnmount(() => {
 <template>
  <div class="desktop-video he-video-stage relative min-h-0 flex-1 overflow-hidden bg-black text-white" :class="{ 'chrome-hidden': !controlsVisible }" :data-controls-visible="controlsVisible" @mousemove="revealControls" @pointerdown.capture="pointerFocus = true; keyboardFocus = false; revealControls()" @keydown="onKeydown">
   <div class="absolute inset-0 bg-black">
-   <canvas :id="canvasId" tabindex="0" :aria-label="title" class="absolute inset-0 h-full w-full focus-ring-inset" @click="onCanvasClick" @dblclick="onCanvasDoubleClick" />
+   <canvas :id="canvasId" tabindex="0" :aria-label="title" class="absolute inset-0 h-full w-full object-contain focus-ring-inset" @click="onCanvasClick" @dblclick="onCanvasDoubleClick" />
    <UiToast v-if="actionError && !settingsOpen && !failure" :message="actionError" urgent overlay class="absolute bottom-28 left-1/2 z-40 max-w-[90%] -translate-x-1/2" />
    <div v-if="busy || state?.buffering" class="absolute inset-0 grid place-items-center bg-background/90">
     <LoadingState :label="busy ? '正在打开视频' : '正在缓冲'" description="准备好后将继续播放。" />

@@ -10,11 +10,11 @@ ipcRenderer.on('he:before-close', (_event, nonce) => {
   Promise.allSettled([...closeHandlers].map(callback => Promise.resolve().then(callback)))
     .then(() => ipcRenderer.send('he:close-ready', nonce));
 });
-let videoCanvas = null, videoObserver = null, videoGeneration = 0;
+let videoCanvas = null, videoObserver = null, videoGeneration = 0, videoTargetSize = null;
 function detachVideoSurface() {
   videoObserver?.disconnect(); videoObserver = null;
   if (videoCanvas) videoCanvas.width = videoCanvas.width;
-  videoCanvas = null;
+  videoCanvas = null; videoTargetSize = null;
 }
 ipcRenderer.on('he:video-generation', (_event, value) => { videoGeneration = value; });
 ipcRenderer.on('he:video-flush', () => {
@@ -26,6 +26,9 @@ sharedTexture.setSharedTextureReceiver(({ importedSharedTexture }, metadata) => 
   try {
     frame = importedSharedTexture.getVideoFrame();
     if (!videoCanvas?.isConnected || metadata.generation !== videoGeneration) return;
+    // A queued frame can belong to the previous window size. Keep the last
+    // complete image until the native renderer produces the requested size.
+    if (videoTargetSize && (frame.displayWidth !== videoTargetSize.width || frame.displayHeight !== videoTargetSize.height)) return;
     if (videoCanvas.width !== frame.displayWidth || videoCanvas.height !== frame.displayHeight) {
       videoCanvas.width = frame.displayWidth; videoCanvas.height = frame.displayHeight;
     }
@@ -41,10 +44,11 @@ function mountVideoSurface(id) {
   videoObserver = new ResizeObserver(() => {
     const rectangle = canvas.getBoundingClientRect();
     if (rectangle.width <= 0 || rectangle.height <= 0) return;
-    ipcRenderer.send('he:video-size', {
+    videoTargetSize = {
       width: Math.min(3840, Math.max(32, Math.round(rectangle.width * devicePixelRatio))),
       height: Math.min(2160, Math.max(32, Math.round(rectangle.height * devicePixelRatio))),
-    });
+    };
+    ipcRenderer.send('he:video-size', videoTargetSize);
   });
   videoObserver.observe(canvas);
   ipcRenderer.send('he:video-ready');
