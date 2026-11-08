@@ -102,6 +102,11 @@ class Wallpaper {
           else if (this.window === owner) void this.stop();
         });
       });
+      // Native reparenting can show the HWND without updating Electron's
+      // visibility bookkeeping. Notify Electron after attachment so Chromium
+      // produces frames for the non-activating wallpaper window.
+      if (operation !== this.operation || this.window !== owner || owner.isDestroyed()) throw new Error('壁纸启动已取消');
+      owner.showInactive();
       await modelReady;
       if (operation !== this.operation || this.window !== owner || owner.isDestroyed()) throw new Error('壁纸启动已取消');
       this.updateActivity();

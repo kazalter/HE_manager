@@ -19,6 +19,7 @@ class FakeWindow extends EventEmitter {
     FakeWindow.all.push(this);
   }
   setMenuBarVisibility() {}
+  showInactive() { this.shownInactive = true; }
   loadURL(url) { this.url = url; return Promise.resolve(); }
   getNativeWindowHandle() { const b = Buffer.alloc(8); b.writeBigUInt64LE(123n); return b; }
   isDestroyed() { return this.destroyed; }
@@ -49,6 +50,7 @@ test('wallpaper forwards background gestures only while desktop is active and re
   await wallpaper.start('test_1', true);
   const owner = FakeWindow.all[0];
   assert.match(owner.url, /wallpaper=1&model=test_1/);
+  assert.equal(owner.shownInactive, true);
   wallpaper.parse('state 1 250 300 1 0', owner); // shell icon
   assert.equal(owner.events.length, 0);
   wallpaper.parse('state 1 250 300 1 1', owner);

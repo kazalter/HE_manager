@@ -8,14 +8,18 @@
 #include <cstdio>
 #include <cstdlib>
 
-struct DesktopWindows { HWND icons = nullptr; HWND layer = nullptr; };
+struct DesktopWindows { HWND icons = nullptr; HWND layer = nullptr; HWND view = nullptr; bool raised = false; };
 
 static BOOL CALLBACK findDesktop(HWND top, LPARAM parameter) {
     auto* result = reinterpret_cast<DesktopWindows*>(parameter);
     HWND view = FindWindowExW(top, nullptr, L"SHELLDLL_DefView", nullptr);
     if (!view) return TRUE;
+    result->view = view;
     result->icons = FindWindowExW(view, nullptr, L"SysListView32", nullptr);
-    result->layer = FindWindowExW(nullptr, top, L"WorkerW", nullptr);
+    // Since Windows 11 24H2 a raised Progman has layered children. The
+    // wallpaper must be a sibling immediately below the desktop icon view.
+    result->raised = (GetWindowLongPtrW(top, GWL_EXSTYLE) & WS_EX_NOREDIRECTIONBITMAP) != 0;
+    result->layer = result->raised ? top : FindWindowExW(nullptr, top, L"WorkerW", nullptr);
     return FALSE;
 }
 
@@ -24,6 +28,26 @@ static bool desktopForeground(HWND foreground, HWND progman, const DesktopWindow
     const HWND root = GetAncestor(foreground, GA_ROOT);
     return root == progman || root == desktop.layer ||
         (desktop.icons && root == GetAncestor(desktop.icons, GA_ROOT));
+}
+
+// Chromium may retain non-client insets even for a frameless child window.
+// Match the drawable client area, not just the outer window, to the monitor.
+static void fitClientToMonitor(HWND target, const DesktopWindows& desktop, const RECT& monitor) {
+    RECT window{}, client{};
+    if (!GetWindowRect(target, &window) || !GetClientRect(target, &client)) return;
+    POINT clientOrigin{client.left, client.top};
+    if (!ClientToScreen(target, &clientOrigin)) return;
+    const int leftInset = clientOrigin.x - window.left;
+    const int topInset = clientOrigin.y - window.top;
+    const int rightInset = window.right - clientOrigin.x - (client.right - client.left);
+    const int bottomInset = window.bottom - clientOrigin.y - (client.bottom - client.top);
+    const RECT desired{monitor.left - leftInset, monitor.top - topInset,
+        monitor.right + rightInset, monitor.bottom + bottomInset};
+    if (EqualRect(&window, &desired)) return;
+    POINT origin{desired.left, desired.top};
+    if (!ScreenToClient(desktop.layer, &origin)) return;
+    SetWindowPos(target, desktop.raised ? desktop.view : HWND_BOTTOM, origin.x, origin.y,
+        desired.right - desired.left, desired.bottom - desired.top, SWP_NOACTIVATE);
 }
 
 // LVM_HITTEST uses the receiving process's address space. If Explorer cannot
@@ -74,12 +98,20 @@ int wmain(int argc, wchar_t** argv) {
     POINT origin{monitorInfo.rcMonitor.left, monitorInfo.rcMonitor.top};
     ScreenToClient(desktop.layer, &origin);
     const LONG_PTR oldStyle = GetWindowLongPtrW(target, GWL_STYLE);
-    SetWindowLongPtrW(target, GWL_STYLE, (oldStyle & ~WS_POPUP) | WS_CHILD);
+    // Electron's frameless top-level window can still carry a resize frame.
+    // Once reparented, Windows reserves that non-client border inside the
+    // monitor-sized window, leaving gaps around the rendered wallpaper.
+    SetWindowLongPtrW(target, GWL_STYLE, (oldStyle & ~(WS_POPUP | WS_CAPTION | WS_THICKFRAME)) | WS_CHILD);
+    if (desktop.raised) {
+        const LONG_PTR exStyle = GetWindowLongPtrW(target, GWL_EXSTYLE);
+        SetWindowLongPtrW(target, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+        if (!SetLayeredWindowAttributes(target, 0, 255, LWA_ALPHA)) return 9;
+    }
     SetLastError(0);
     if (!SetParent(target, desktop.layer) && GetLastError()) {
         SetWindowLongPtrW(target, GWL_STYLE, oldStyle); return 6;
     }
-    if (!SetWindowPos(target, HWND_BOTTOM, origin.x, origin.y,
+    if (!SetWindowPos(target, desktop.raised ? desktop.view : HWND_BOTTOM, origin.x, origin.y,
         monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
         monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
         SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW)) return 8;
@@ -99,11 +131,12 @@ int wmain(int argc, wchar_t** argv) {
                 monitorInfo = updated;
                 POINT nextOrigin{updated.rcMonitor.left, updated.rcMonitor.top};
                 ScreenToClient(desktop.layer, &nextOrigin);
-                SetWindowPos(target, HWND_BOTTOM, nextOrigin.x, nextOrigin.y,
+                SetWindowPos(target, desktop.raised ? desktop.view : HWND_BOTTOM, nextOrigin.x, nextOrigin.y,
                     updated.rcMonitor.right - updated.rcMonitor.left,
                     updated.rcMonitor.bottom - updated.rcMonitor.top,
                     SWP_NOACTIVATE);
             }
+            fitClientToMonitor(target, desktop, monitorInfo.rcMonitor);
         }
         const bool foreground = desktopForeground(GetForegroundWindow(), progman, desktop);
         POINT cursor{};
