@@ -79,15 +79,17 @@ const preferences = async (videoMode: VideoEnhancement, imageMode: ImageEnhancem
 .he-titlebar-logo { width: 20px; height: 20px; object-fit: contain; }
 /* Native caption buttons and the drag strip occupy the first 44px of a
    windowed Windows client. Keep full-window viewers below that strip. */
-html.he-desktop:has(.he-windows-titlebar):not(:has(:fullscreen)) .he-media-overlay,
-html.he-desktop:has(.he-windows-titlebar):not(:has(:fullscreen)) .he-pawchive-viewer {
+html.he-desktop:has(.he-windows-titlebar):not(:fullscreen):not(:has(:fullscreen)):not(:has(.he-viewer-fullscreen)) .he-media-overlay,
+html.he-desktop:has(.he-windows-titlebar):not(:fullscreen):not(:has(:fullscreen)) .he-pawchive-viewer {
   top: 44px;
   height: calc(100dvh - 44px);
 }
-html.he-desktop:has(.he-windows-titlebar):not(:has(:fullscreen)) body.he-l2d-immersive #he-main-content {
-  top: 44px;
-  height: calc(100dvh - 44px) !important;
-}
+html.he-desktop:fullscreen .he-windows-titlebar,
+html.he-desktop:has(.he-viewer-fullscreen) .he-windows-titlebar,
+html.he-desktop body.he-l2d-immersive .he-windows-titlebar { display: none; }
+html.he-desktop:fullscreen .he-app-shell,
+html.he-desktop:has(.he-viewer-fullscreen) .he-app-shell,
+html.he-desktop:has(body.he-l2d-immersive) .he-app-shell { height: 100dvh; }
 .he-desktop .he-app-shell { height: calc(100dvh - 44px); }
 .he-desktop .he-auth-view { min-height: calc(100dvh - 44px); }
 </style>

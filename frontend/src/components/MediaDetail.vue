@@ -733,7 +733,7 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
 
 <template>
   <Teleport to="body">
-    <div v-if="!isAudio || currentMedia.is_missing" role="dialog" aria-modal="true" :aria-label="currentMedia.title" class="he-media-overlay fixed inset-0 z-[200] flex items-center justify-center">
+    <div v-if="!isAudio || currentMedia.is_missing" role="dialog" aria-modal="true" :aria-label="currentMedia.title" class="he-media-overlay fixed inset-0 z-[200] flex items-center justify-center" :class="{ 'he-viewer-fullscreen': viewerFullscreen }">
       <div class="absolute inset-0 bg-black/80" @click="emit('close')"></div>
 
       <div class="he-media-layout relative flex h-full w-full overflow-hidden bg-black" :class="{ 'is-video': isVideo, 'is-desktop-video': isVideo && !!desktopBridge, 'show-mobile-metadata': compact && showMetadataPanel }">
