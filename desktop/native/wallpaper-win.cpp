@@ -79,9 +79,7 @@ int wmain(int argc, wchar_t** argv) {
     if (!SetParent(target, desktop.layer) && GetLastError()) {
         SetWindowLongPtrW(target, GWL_STYLE, oldStyle); return 6;
     }
-    // Stay behind Explorer's icon layer, but above other wallpaper windows
-    // already hosted by this WorkerW (for example Wallpaper Engine).
-    if (!SetWindowPos(target, HWND_TOP, origin.x, origin.y,
+    if (!SetWindowPos(target, HWND_BOTTOM, origin.x, origin.y,
         monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
         monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
         SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW)) return 8;
@@ -101,7 +99,7 @@ int wmain(int argc, wchar_t** argv) {
                 monitorInfo = updated;
                 POINT nextOrigin{updated.rcMonitor.left, updated.rcMonitor.top};
                 ScreenToClient(desktop.layer, &nextOrigin);
-                SetWindowPos(target, HWND_TOP, nextOrigin.x, nextOrigin.y,
+                SetWindowPos(target, HWND_BOTTOM, nextOrigin.x, nextOrigin.y,
                     updated.rcMonitor.right - updated.rcMonitor.left,
                     updated.rcMonitor.bottom - updated.rcMonitor.top,
                     SWP_NOACTIVATE);
