@@ -6,6 +6,8 @@ import { EmptyState, PageHeader, SectionHeader, UiBadge, UiButton, UiCard, UiIco
 import { API_BASE_URL } from '../config'
 import { applyTheme, themeState, themeOptionsForMode } from '../theme'
 import ColorModeSelect from '../components/ColorModeSelect.vue'
+import AssistantModelSettings from '../components/AssistantModelSettings.vue'
+import { authState } from '../auth'
 import type { Folder } from '../types'
 
 const folders = ref<Folder[]>([])
@@ -361,6 +363,8 @@ onUnmounted(() => {
               </div>
             </UiCard>
           </section>
+
+          <AssistantModelSettings v-if="authState.user?.is_admin" />
 
           <!-- 界面主题 -->
           <section>

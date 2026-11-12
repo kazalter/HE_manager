@@ -1,36 +1,7 @@
-"""Vector embeddings and dense semantic search for manga.
+"""Read historical manga vectors without loading an embedding model.
 
-Pairs with manga_search.py:
-- manga_search handles exact / BM25-lite keyword matching over structured
-  fields (tag, author, parody, title).
-- manga_vector handles "find me something with this general vibe / theme /
-  mood" where the words might not literally match any metadata tag.
-
-Implementation notes
-====================
-- Model: `paraphrase-multilingual-MiniLM-L12-v2`. Small (384-dim, ~120MB),
-  fast on CPU (tens of ms per encode), understands Chinese/Japanese/English,
-  decent cross-lingual alignment so a Chinese query ("治愈温馨日常") can
-  match a Japanese title/tag ("ほのぼの日常").
-- Document text is assembled by `compose_doc_text()`: combines what we want to
-  embed — title + parsed_title + artist + circle + parody + tags + ai
-  summary/style/story/tone tags. OCR is *not* included; like the BM25 layer
-  we keep OCR out of the matching surface.
-- `serialize_vec` / `deserialize_vec`: bytes <-> ndarray helpers. The stored
-  format is raw float32 little-endian (np.tobytes()), so `len(blob) ==
-  dim * 4`. No JSON overhead, no version prefix — embedding_model column
-  on the row tells the consumer which model produced the blob.
-- `rank_by_query(query, candidates_with_vecs, top_k)`: simple in-memory
-  cosine search. The library size we target (~hundreds to low thousands of
-  manga) doesn't need faiss or sqlite-vec; numpy matmul handles 10k vectors
-  in single-digit ms.
-
-Why not faiss / chroma / pgvector
-=================================
-Personal library, <2k items. The whole vector table for the user's current
-library is 269 x 384 x 4 B = ~400KB. Loading into a numpy ndarray and doing
-one matmul-per-query is faster than any external index for this scale, and
-the deployment surface is one pip install instead of a C++ build.
+New profiles no longer generate embeddings. Existing vectors remain available
+for similarity lookup; keyword retrieval handles ordinary recommendations.
 """
 from __future__ import annotations
 
@@ -72,30 +43,7 @@ def is_model_cached() -> bool:
 
 
 def get_model():
-    """Lazy singleton. Loads model on first call; skips immediately if not cached."""
-    global _model, _model_failed
-    if _model is not None:
-        return _model
-    if _model_failed:
-        return None
-    with _model_lock:
-        if _model is not None:
-            return _model
-        if _model_failed:
-            return None
-        try:
-            if not is_model_cached():
-                log.info("Embedding model %s not cached locally; dense vector retrieval skipped.", MODEL_NAME)
-                _model_failed = True
-                return None
-            from sentence_transformers import SentenceTransformer  # type: ignore
-
-            log.info("Loading embedding model from local cache: %s", MODEL_NAME)
-            _model = SentenceTransformer(MODEL_NAME, local_files_only=True)
-        except Exception as exc:
-            log.warning("Embedding model %s unavailable: %s", MODEL_NAME, exc)
-            _model_failed = True
-            return None
+    """Dense encoding is disabled; retain existing vectors for similarity lookup."""
     return _model
 
 

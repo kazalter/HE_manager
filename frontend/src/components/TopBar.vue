@@ -49,7 +49,6 @@ const organizeSections = computed(() => ([
     items: [
       { to: '/creators', label: '创作者', x: 166, y: 164 },
       { to: '/tags', label: '标签管理', x: 389, y: 164 },
-      { to: '/recommend', label: 'AI 推荐', x: 612, y: 164 },
       { to: '/external', label: '外部收藏', x: 166, y: 388, admin: true },
       { to: '/assistant', label: '媒体库管家', x: 389, y: 388, admin: true },
     ],
