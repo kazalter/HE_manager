@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { CalendarDays, Heart, Users, UserRound } from 'lucide-vue-next'
 import { UiButton } from '../../ui'
+import { pawchiveCreatorImageUrl } from '../../../utils/pawchiveApi'
 import type { PawchiveCreator, PawchivePost } from '../../../types/pawchive'
 
 const props = defineProps<{
@@ -19,10 +20,8 @@ const emit = defineEmits<{
 }>()
 const bannerFailed = ref(false)
 const iconFailed = ref(false)
-const bannerUrl = computed(() => props.creator.banner_url ||
-  `https://pawchive.pw/banners/${encodeURIComponent(props.creator.service)}/${encodeURIComponent(props.creator.creator_id)}`)
-const iconUrl = computed(() => props.creator.icon_url ||
-  `https://pawchive.pw/icons/${encodeURIComponent(props.creator.service)}/${encodeURIComponent(props.creator.creator_id)}`)
+const bannerUrl = computed(() => pawchiveCreatorImageUrl('banners', props.creator.service, props.creator.creator_id))
+const iconUrl = computed(() => pawchiveCreatorImageUrl('icons', props.creator.service, props.creator.creator_id))
 const serviceName = computed(() => ({ fanbox: 'Fanbox', patreon: 'Patreon', discord: 'Discord', fantia: 'Fantia', gumroad: 'Gumroad' }[props.creator.service] || props.creator.service))
 const updateLabel = computed(() => {
   const value = props.creator.updated_at || props.latestPost?.published_at

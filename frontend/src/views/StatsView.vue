@@ -246,7 +246,7 @@ const overviewCards = computed(() => {
       unit: '',
       icon: Sparkles,
       detail: `已评 ${o.rated.toLocaleString()} 部`,
-      sub: o.rated > 0 ? `平均 ${o.average_rating ? o.average_rating.toFixed(2) : '—'} 星` : '打分可激发智能推荐',
+      sub: o.rated > 0 ? `平均 ${o.average_rating ? o.average_rating.toFixed(2) : '—'} 星` : '为作品打分，记录你的喜好',
       to: null,
     },
   ]
@@ -1320,7 +1320,7 @@ const lastOpenedText = (item: StatAttentionItem) => {
                   </div>
                   <div v-else class="mt-4 rounded-lg bg-surface-2 px-4 py-6 text-center">
                     <p class="text-body font-medium text-ink">目前全库尚未评星</p>
-                    <p class="mt-1 text-meta text-subtle">为已看过的作品评星，能让个性化推荐更加精准。</p>
+                    <p class="mt-1 text-meta text-subtle">为已看过的作品评星，记录你的喜好。</p>
                     <UiButton as="a" href="#attention-unrated-list" variant="secondary" size="sm" class="mt-4">
                       <template #icon><ArrowDown :size="14" /></template>去下方打分
                     </UiButton>

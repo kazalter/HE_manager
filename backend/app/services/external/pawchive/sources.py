@@ -6,7 +6,7 @@ from urllib.parse import parse_qsl, unquote, urlsplit
 
 FILE_PATH = re.compile(r"^/[0-9a-f]{2}/[0-9a-f]{2}/[0-9a-f]{64}\.[a-z0-9]{2,5}$")
 NODE_HOSTS = {2: "n2.pawchive.pw"}
-TEMP_HOST = "t1.pawchive.pw"
+TEMP_HOSTS = frozenset({"t1.pawchive.pw", "t2.pawchive.pw", "t3.pawchive.pw", "t4.pawchive.pw"})
 
 
 def validate_source(url: str) -> tuple[str, str]:
@@ -14,7 +14,7 @@ def validate_source(url: str) -> tuple[str, str]:
     if not isinstance(url, str) or len(url) > 2048 or any(ord(c) <= 32 or ord(c) >= 127 for c in url):
         raise ValueError("invalid Pawchive file URL")
     parsed = urlsplit(url)
-    if (parsed.scheme != "https" or parsed.netloc not in {*NODE_HOSTS.values(), TEMP_HOST}
+    if (parsed.scheme != "https" or parsed.netloc not in {*NODE_HOSTS.values(), *TEMP_HOSTS}
             or parsed.fragment):
         raise ValueError("invalid Pawchive file host")
     if parsed.netloc in NODE_HOSTS.values():

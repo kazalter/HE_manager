@@ -19,7 +19,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Settings as SettingsIcon,
-  Sparkles,
   Star,
   Tags,
   Users,
@@ -71,7 +70,6 @@ const sections = computed(() => ([
     label: '发现与整理',
     items: [
       { to: '/external', label: '外部收藏', icon: Globe2, admin: true },
-      { to: '/recommend', label: 'AI 推荐', icon: Sparkles },
       { to: '/assistant', label: '媒体库管家', icon: MessageSquare, admin: true },
       { to: '/creators', label: '创作者', icon: Palette },
       { to: '/tags', label: '标签管理', icon: Tags },

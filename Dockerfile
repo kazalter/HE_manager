@@ -14,19 +14,9 @@ WORKDIR /srv
 
 # Install deps first so the layer caches across code changes.
 COPY backend/requirements.txt ./requirements.txt
-# The N100 host has no NVIDIA GPU. Installing torch from the general mirror
-# pulled CUDA + Triton into the image (over 4 GB of unusable libraries), so
-# install the official CPU wheel first; sentence-transformers then reuses it.
-ARG TORCH_VERSION=2.9.1+cpu
-RUN pip install --no-cache-dir \
-        --index-url https://download.pytorch.org/whl/cpu \
-        "torch==${TORCH_VERSION}" \
-    && pip install --no-cache-dir \
-        -i https://pypi.org/simple \
-        -r requirements.txt
+RUN pip install --no-cache-dir -i https://pypi.org/simple -r requirements.txt
 
-# Short audio/video previews require the fixed ffmpeg encoder. Keep this after
-# Python deps to reuse the existing CPU torch cache during this upgrade.
+# Short audio/video previews require ffmpeg.
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 

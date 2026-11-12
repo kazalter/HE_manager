@@ -758,8 +758,8 @@ def _route_similar_to(
         )
     if not neighbours:
         return [], (
-            f"找到了「{referenced.title}」，但暂时没生成它的语义画像，无法找类似作品。"
-            "去「内容画像」面板对它跑一次分析后再试。"
+            f"找到了「{referenced.title}」，但没有足够的可用相似资料。"
+            "可以试试用题材、标签或作者描述想看的作品。"
         )
 
     by_id = {m.id: m for m in candidates}

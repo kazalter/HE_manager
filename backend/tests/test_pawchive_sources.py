@@ -58,6 +58,29 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(item["attachment_key"], legacy["attachment_key"])
         self.assertEqual(refs.read_media_source(legacy["stream_ref"]), (PATH, "image", None))
 
+    def test_creator_images_use_validated_paths_and_check_content(self):
+        connection = Connection()
+        with patch.dict("os.environ", {"HE_PAWCHIVE_ENABLED": "1"}), \
+                patch.object(client, "_request", return_value=(connection, Response(body=b"image"))) as request:
+            result = router.get_creator_image("icons", "patreon", "456")
+            self.assertEqual(result.body, b"image")
+            request.assert_called_once_with("pawchive.pw", "/icons/patreon/456")
+            self.assertTrue(connection.closed)
+            with self.assertRaises(Exception):
+                router.get_creator_image("icons", "patreon", "../bad")
+            self.assertEqual(request.call_count, 1)
+
+    def test_t3_original_round_trips_and_fetches(self):
+        for host in ("t2.pawchive.pw", "t3.pawchive.pw", "t4.pawchive.pw"):
+            with self.subTest(host=host):
+                url = TEMP_URL.replace("t1.pawchive.pw", host)
+                item = detail({"path": PATH, "temp_url": url})["attachments"][0]
+                with patch.object(client, "_request", return_value=(Connection(), Response(206))) as request:
+                    response = router.stream_media_response(item["stream_ref"], "bytes=0-7")
+                self.assertEqual(request.call_args.args[0], host)
+                self.assertEqual(response.status_code, 206)
+                response.background.func()
+
     def test_node_original_uses_node_host_and_preserves_range(self):
         item = detail({"path": PATH, "node": 2})["attachments"][0]
         connection = Connection()

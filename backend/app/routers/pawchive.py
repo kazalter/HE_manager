@@ -92,6 +92,28 @@ def remove_pawchive_account_favorite(
     return _run(account.set_favorite, user.id, service, creator_id, False)
 
 
+@router.get("/creator-image/{kind}/{service}/{creator_id}")
+def get_creator_image(kind: str, service: str, creator_id: str):
+    def fetch():
+        if kind not in {"icons", "banners"}:
+            raise client.PawchiveError("INVALID_REQUEST", "非法图片类型", 400)
+        provider.validate_id(service)
+        provider.validate_id(creator_id)
+        connection, upstream = client._request(client.API_HOST, f"/{kind}/{service}/{creator_id}")
+        try:
+            client._raise_for_status(upstream)
+            content_type = (upstream.getheader("Content-Type") or "").split(";", 1)[0].lower()
+            if content_type not in {"image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"}:
+                raise client.PawchiveError("UPSTREAM_INVALID", "来源返回了无效的图片", 502)
+            body = upstream.read(4 * 1024 * 1024 + 1)
+            if len(body) > 4 * 1024 * 1024:
+                raise client.PawchiveError("UPSTREAM_INVALID", "来源图片过大", 502)
+            return Response(body, media_type=content_type, headers={"Cache-Control": "private, max-age=3600"})
+        finally:
+            connection.close()
+    return _run(fetch)
+
+
 @router.get("/posts")
 def get_posts(q: str = "", service: str = "", creator_id: str = "", tag: str = "",
               media_type: str = "all", cursor: str = ""):
