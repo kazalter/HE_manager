@@ -85,7 +85,7 @@ are collapsed while preserving first occurrence.
 Legacy originals use `https://file.pawchive.pw/data{path}` and thumbnails use
 `https://img.pawchive.pw/thumbnail/data{path}`. As verified on 2026-10-25, file
 objects can also include `node: 2`, selecting `https://n2.pawchive.pw/data{path}`,
-or `preview_only: true` with a signed `temp_url` on `https://t1.pawchive.pw`.
+or `preview_only: true` with a signed `temp_url` on `https://t1.pawchive.pw` through `https://t4.pawchive.pw`.
 Temporary URLs have the form `/f/{16-hex-id}/{filename}?e={expiry}&s={32-hex-signature}`.
 For these files, `path` identifies the preview; requesting it on the legacy
 original host can return 404 even while the temporary original returns 206.
