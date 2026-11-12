@@ -31,8 +31,8 @@ export interface PlayerSessionState {
 export type DesktopVideoAction = 'pause' | 'seek' | 'seek-to' | 'fullscreen' | 'exit-fullscreen' | 'audio-track' | 'subtitle-track' | 'speed' | 'volume' | 'aspect-ratio'
 export interface DesktopBridge {
   configuration(): Promise<DesktopConfiguration>
-  l2dUpdateStart(): Promise<L2dUpdateState>
-  l2dUpdateStatus(): Promise<L2dUpdateState>
+  l2dUpdateStart?(): Promise<L2dUpdateState>
+  l2dUpdateStatus?(): Promise<L2dUpdateState>
   wallpaperState(): Promise<WallpaperState>
   wallpaperStart(modelId: string): Promise<WallpaperState>
   wallpaperStop(): Promise<WallpaperState>

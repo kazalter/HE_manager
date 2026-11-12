@@ -68,7 +68,7 @@ watch(lockFrame, (v) => {
   applyFrameLock()
 })
 // 隐藏 dev 功能：收起工具栏 dev 按钮与调试/注入面板（非开发者的测试员/用户用）；交互点供测试者使用，不随之隐藏
-const hideDev = ref(localStorage.getItem('l2d.hideDev') === '1')
+const hideDev = ref(localStorage.getItem('l2d.hideDev') !== '0')
 watch(hideDev, (v) => localStorage.setItem('l2d.hideDev', v ? '1' : '0'))
 // HUD 的 FPS 读数（0.5s 窗口帧计数，避免逐帧触发响应式重渲）
 const fps = ref(0)
@@ -376,9 +376,11 @@ defineExpose({ play: (group) => ctx.actions.playMotion(group), wallpaperPointer:
   gap: 6px;
   max-width: calc(100% - 24px);
   padding: 7px;
-  border: 1px solid #ffffff30;
+  border: 1px solid #ffffff20;
   border-radius: 12px;
-  background: #15151ddd;
+  background: #1a1b25ed;
+  box-shadow: 0 8px 28px #0005;
+  backdrop-filter: blur(12px);
   color: #fff;
   font: 13px system-ui, sans-serif;
   white-space: nowrap;
@@ -391,9 +393,9 @@ defineExpose({ play: (group) => ctx.actions.playMotion(group), wallpaperPointer:
   color: inherit;
   cursor: pointer;
 }
-.camera-controls button:hover, .camera-controls button[aria-pressed="true"] { background: #ffffff38; }
+.camera-controls button:hover, .camera-controls button[aria-pressed="true"] { background: #776de0; border-color: #9a92f1; }
 .camera-hint { color: #ffffffaa; }
-@media (max-width: 700px) { .camera-hint { display: none; } }
+@media (max-width: 900px) { .camera-hint { display: none; } .camera-controls { bottom: 14px; } }
 
 .status {
   position: absolute;
