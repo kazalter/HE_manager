@@ -70,8 +70,7 @@ const router = createRouter({
     },
     {
       path: '/recommend',
-      name: 'manga-recommend',
-      component: () => import('../views/MangaRecommendView.vue')
+      redirect: '/assistant'
     },
     {
       path: '/bd2-spine',

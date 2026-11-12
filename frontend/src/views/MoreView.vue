@@ -2,7 +2,7 @@
 import ColorModeSelect from '../components/ColorModeSelect.vue'
 import ClockWeather from '../components/ClockWeather.vue'
 import { computed } from 'vue'
-import { ArchiveX, BarChart3, Book, ChevronRight, CopyMinus, Download, LogOut, MessageSquare, Palette, Settings, Smartphone, Sparkles, Tags, Users } from 'lucide-vue-next'
+import { ArchiveX, BarChart3, Book, ChevronRight, CopyMinus, Download, LogOut, MessageSquare, Palette, Settings, Smartphone, Tags, Users } from 'lucide-vue-next'
 import { authState, logout } from '../auth'
 import { PageHeader, SectionHeader, UiButton, UiCard } from '../components/ui'
 
@@ -11,7 +11,6 @@ const links = [
   { to: '/downloads', label: '下载任务', hint: '查看服务器下载进度', icon: Download, group: 'tools' },
   { to: '/creators', label: '作者', hint: '浏览关注的创作者', icon: Book, group: 'library' },
   { to: '/tags', label: '标签', hint: '按标签整理媒体', icon: Tags, group: 'library' },
-  { to: '/recommend', label: '漫画推荐', hint: '发现想读的作品', icon: Sparkles, group: 'library' },
   { to: '/stats', label: '数据看板', hint: '查看媒体库概览', icon: BarChart3, group: 'tools' },
   { to: '/bd2-spine', label: '角色鉴赏', hint: '浏览角色动画', icon: Palette, group: 'library' },
   { to: '/live2d', label: '碧蓝航线', hint: '浏览碧蓝航线皮肤', icon: Palette, group: 'library' },
