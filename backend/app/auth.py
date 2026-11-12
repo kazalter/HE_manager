@@ -42,6 +42,8 @@ def query_token_allowed(method: str, path: str) -> bool:
         return True
     if len(parts) == 4 and parts[:3] == ["external", "pawchive", "media"]:
         return True
+    if len(parts) == 6 and parts[:3] == ["external", "pawchive", "creator-image"]:
+        return True
     return False
 
 

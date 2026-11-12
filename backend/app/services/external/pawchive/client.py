@@ -149,9 +149,9 @@ def clear_pool() -> None:
 
 
 def _request(host: str, target: str, *, range_header: str | None = None):
-    if host not in {API_HOST, FILE_HOST, IMAGE_HOST, sources.TEMP_HOST, *sources.NODE_HOSTS.values()} or not target.startswith("/") or ".." in target:
+    if host not in {API_HOST, FILE_HOST, IMAGE_HOST, *sources.TEMP_HOSTS, *sources.NODE_HOSTS.values()} or not target.startswith("/") or ".." in target:
         raise PawchiveError("INVALID_REQUEST", "非法上游请求", 400)
-    if host in {sources.TEMP_HOST, *sources.NODE_HOSTS.values()}:
+    if host in {*sources.TEMP_HOSTS, *sources.NODE_HOSTS.values()}:
         try:
             sources.validate_source(f"https://{host}{target}")
         except ValueError as exc:
@@ -449,7 +449,7 @@ def open_media(path: str, *, preview: bool = False, range_header: str | None = N
             raise PawchiveError("INVALID_REQUEST", "非法媒体来源地址", 400) from exc
     connection, response = _request(host, target, range_header=range_header)
     try:
-        if host == sources.TEMP_HOST and response.status in {401, 403, 404, 410}:
+        if host in sources.TEMP_HOSTS and response.status in {401, 403, 404, 410}:
             # A temporary link can expire while the original still exists.
             # Let the viewer refresh post metadata instead of claiming deletion.
             raise PawchiveError("MEDIA_LINK_EXPIRED", "原图临时链接已失效，请重新打开帖子", 502)
