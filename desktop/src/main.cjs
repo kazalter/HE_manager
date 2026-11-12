@@ -57,7 +57,7 @@ if (baselineMode || uiTestConfigPath) {
     app.exit(1);
   }, uiTestConfigPath ? 300000 : 60000).unref();
 }
-let window, cache, settings, settingsFile, session, wallpaper;
+let window, cache, settings, settingsFile, session, wallpaper, l2dUpdate;
 let applicationReady = false;
 const embeddedPlayer = new EmbeddedPlayer({ root, sharedTexture: require('electron').sharedTexture, getWindow: () => window });
 const player = new PlayerSession({ embeddedPlayer, getWindow: () => window, onBeforeVideoOpen: () => cache?.cancelPending?.() });
@@ -172,6 +172,8 @@ function handle(name, callback) {
   });
 }
 function registerIPC() {
+  handle('he:l2d-update-start', () => l2dUpdate.start());
+  handle('he:l2d-update-status', () => l2dUpdate.snapshot());
   ipcMain.on('he:close-ready', (event, nonce) => { if (trusted(event)) closeFlush.acknowledge(window, nonce); });
   ipcMain.on('he:wallpaper-model', (event, success) => wallpaper?.modelResult(event, success));
   ipcMain.on('he:wallpaper-playback', (event, playing) => wallpaper?.playbackResult(event, playing));
@@ -544,6 +546,7 @@ app.whenReady().then(async () => {
   wallpaper.pauseWhenCovered = settings.wallpaperPauseWhenCovered;
   void session.restore().catch(() => {});
   protocol.handle("he", protocolHandler);
+  l2dUpdate = new (require('./l2d-update.cjs').L2dUpdate)({ session, repo: path.join(app.getPath('desktop'), 'HE_Project', 'L2Dviewer'), script: path.join(__dirname, 'l2d-unpack.py') });
   registerIPC();
   diagnosticStage('services-registered');
   const isMac = process.platform === "darwin";

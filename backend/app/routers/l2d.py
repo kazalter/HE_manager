@@ -1,14 +1,62 @@
 import json
 import os
+import re
+import shutil
+import tempfile
+import zipfile
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response, UploadFile, File, Depends
 from .. import auth
 from fastapi.responses import FileResponse
 
 
 router = APIRouter(prefix="/l2d/models", tags=["live2d"])
+
+@router.post("/import/{skin_id}", status_code=201)
+def import_model(skin_id: str, archive: UploadFile = File(...), _user=Depends(auth.require_admin)):
+    if not re.fullmatch(r"[a-z0-9]+(?:_[a-z0-9]+)*", skin_id):
+        raise HTTPException(400, "Invalid skin id")
+    root = _models_root()
+    if not root.is_dir():
+        raise HTTPException(503, "Live2D models are not installed")
+    character = re.sub(r"_\d+$", "", re.sub(r"_hx$", "", skin_id))
+    # Keep staging on the same filesystem for an atomic rename.
+    with tempfile.TemporaryDirectory(prefix=".l2d-import-", dir=root) as temporary:
+        stage = Path(temporary) / "skin"
+        stage.mkdir()
+        try:
+            with zipfile.ZipFile(archive.file) as z:
+                entries = z.infolist()
+                if len(entries) > 10000 or sum(i.file_size for i in entries) > 1024**3:
+                    raise ValueError("Archive too large")
+                seen = set()
+                for item in entries:
+                    parts = item.filename.split('/')
+                    if (not item.filename or '\\' in item.filename or any(p in ('', '.', '..') for p in parts)
+                            or item.filename in seen or item.is_dir() or (item.external_attr >> 16) & 0o170000 == 0o120000):
+                        raise ValueError("Invalid archive entry")
+                    seen.add(item.filename)
+                    dest = stage.joinpath(*parts)
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    with z.open(item) as source, dest.open('xb') as out:
+                        shutil.copyfileobj(source, out)
+                if f"{skin_id}.model3.json" not in seen or f"{skin_id}.moc3" not in seen:
+                    raise ValueError("Incomplete model")
+                json.loads((stage / f"{skin_id}.model3.json").read_text(encoding="utf-8"))
+        except (ValueError, OSError, zipfile.BadZipFile, json.JSONDecodeError) as exc:
+            raise HTTPException(400, f"Invalid model archive: {exc}") from None
+        parent = root / character
+        parent.mkdir(exist_ok=True)
+        target = parent / skin_id
+        if target.exists():
+            raise HTTPException(409, "Model already exists")
+        try:
+            stage.rename(target)
+        except OSError as exc:
+            raise HTTPException(409 if target.exists() else 500, "Could not install model") from exc
+    return {"id": skin_id}
 
 
 def _models_root() -> Path:

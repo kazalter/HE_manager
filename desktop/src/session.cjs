@@ -45,7 +45,7 @@ class DesktopSession {
   #current(generation) { if (generation !== this.#generation) throw stale(); }
   async #send(server, route, options = {}, signal) {
     const timeout = new AbortController();
-    const timer = setTimeout(() => timeout.abort(), 15000); timer.unref?.();
+    const timer = setTimeout(() => timeout.abort(), route.startsWith('/l2d/models/import/') ? 300000 : 15000); timer.unref?.();
     try {
       const response = await this.fetch(server + route, { ...options, redirect: 'error', signal: AbortSignal.any([timeout.signal, ...(signal ? [signal] : []), ...(options.signal ? [options.signal] : [])]) });
       if (response.ok) void this.#outbox.retry(false);
