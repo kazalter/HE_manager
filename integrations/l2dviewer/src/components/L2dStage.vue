@@ -373,23 +373,18 @@ defineExpose({ play: (group) => ctx.actions.playMotion(group), wallpaperPointer:
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   max-width: calc(100% - 24px);
-  padding: 7px;
-  border: 1px solid #ffffff20;
-  border-radius: 12px;
-  background: #1a1b25ed;
-  box-shadow: 0 8px 28px #0005;
-  backdrop-filter: blur(12px);
   color: #fff;
-  font: 13px system-ui, sans-serif;
+  font: 12px system-ui, sans-serif;
   white-space: nowrap;
 }
 .camera-controls button {
-  padding: 7px 10px;
+  padding: 5px 8px;
   border: 1px solid #ffffff35;
   border-radius: 8px;
-  background: #ffffff18;
+  background: #1a1b25e8;
+  backdrop-filter: blur(12px);
   color: inherit;
   cursor: pointer;
 }
