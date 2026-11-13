@@ -34,7 +34,7 @@ const preferences = async (videoMode: VideoEnhancement, imageMode: ImageEnhancem
 <template>
  <header class="he-desktop-toolbar flex h-11 items-center gap-3 border-b border-line bg-sidebar px-4 text-meta text-muted" :class="{ 'he-windows-titlebar': desktopState.platform === 'win32' }">
   <template v-if="desktopState.platform === 'win32'">
-   <img class="he-titlebar-logo" src="/app-icons/he.svg" alt="" />
+   <img class="he-titlebar-logo" :src="'/app-icons/he.svg'" alt="" />
    <span class="font-medium text-ink">HE Manager</span>
    <span class="min-w-0 flex-1" />
   </template>
