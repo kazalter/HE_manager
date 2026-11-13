@@ -32,10 +32,17 @@ const preferences = async (videoMode: VideoEnhancement, imageMode: ImageEnhancem
 }
 </script>
 <template>
- <header class="he-desktop-toolbar flex h-11 items-center gap-3 border-b border-line bg-sidebar px-4 text-meta text-muted">
-  <Monitor :size="16" aria-hidden="true" /><span class="font-medium text-ink">HE Manager 桌面版</span>
-  <span class="min-w-0 flex-1 truncate">{{ desktopState.server || '尚未连接服务器' }}</span>
-  <button type="button" class="flex min-h-9 items-center gap-2 rounded-lg px-3 hover:bg-surface-2 focus-ring" @click="open = true"><Settings2 :size="16" />连接与超分</button>
+ <header class="he-desktop-toolbar flex h-11 items-center gap-3 border-b border-line bg-sidebar px-4 text-meta text-muted" :class="{ 'he-windows-titlebar': desktopState.platform === 'win32' }">
+  <template v-if="desktopState.platform === 'win32'">
+   <img class="he-titlebar-logo" :src="'/app-icons/he.svg'" alt="" />
+   <span class="font-medium text-ink">HE Manager</span>
+   <span class="min-w-0 flex-1" />
+  </template>
+  <template v-else>
+   <Monitor :size="16" aria-hidden="true" /><span class="font-medium text-ink">HE Manager 桌面版</span>
+   <span class="min-w-0 flex-1 truncate">{{ desktopState.server || '尚未连接服务器' }}</span>
+  </template>
+  <button type="button" class="he-titlebar-settings flex min-h-9 items-center gap-2 rounded-lg px-3 hover:bg-surface-2 focus-ring" @click="open = true"><Settings2 :size="16" />连接与超分</button>
  </header>
  <UiModal v-model:open="open" title="桌面设置" @close="open = false">
   <div class="space-y-6">
@@ -67,6 +74,22 @@ const preferences = async (videoMode: VideoEnhancement, imageMode: ImageEnhancem
  </UiModal>
 </template>
 <style>
+.he-windows-titlebar { -webkit-app-region: drag; padding-right: 150px; user-select: none; }
+.he-windows-titlebar .he-titlebar-settings { -webkit-app-region: no-drag; }
+.he-titlebar-logo { width: 20px; height: 20px; object-fit: contain; }
+/* Native caption buttons and the drag strip occupy the first 44px of a
+   windowed Windows client. Keep full-window viewers below that strip. */
+html.he-desktop:has(.he-windows-titlebar):not(:fullscreen):not(:has(:fullscreen)):not(:has(.he-viewer-fullscreen)) .he-media-overlay,
+html.he-desktop:has(.he-windows-titlebar):not(:fullscreen):not(:has(:fullscreen)) .he-pawchive-viewer {
+  top: 44px;
+  height: calc(100dvh - 44px);
+}
+html.he-desktop:fullscreen .he-windows-titlebar,
+html.he-desktop:has(.he-viewer-fullscreen) .he-windows-titlebar,
+html.he-desktop body.he-l2d-immersive .he-windows-titlebar { display: none; }
+html.he-desktop:fullscreen .he-app-shell,
+html.he-desktop:has(.he-viewer-fullscreen) .he-app-shell,
+html.he-desktop:has(body.he-l2d-immersive) .he-app-shell { height: 100dvh; }
 .he-desktop .he-app-shell { height: calc(100dvh - 44px); }
 .he-desktop .he-auth-view { min-height: calc(100dvh - 44px); }
 </style>

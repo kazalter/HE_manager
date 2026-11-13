@@ -21,6 +21,7 @@ import { useMediaProgress } from '../composables/useMediaProgress'
 import { useVideoPlayback } from '../composables/useVideoPlayback'
 import { useMediaKeyboard } from '../composables/useMediaKeyboard'
 import { nextVideo } from '../utils/videoSequence'
+import { closeViewerAfterFullscreen } from '../utils/closeViewer'
 
 const sessionHeaders = authHeaders(), openedIdentity = authIdentity()
 if (desktopBridge) sessionHeaders['X-HE-Media-Session'] = crypto.randomUUID()
@@ -44,6 +45,12 @@ const emit = defineEmits<{
 
 const desktopPlayer = ref<InstanceType<typeof DesktopVideoPlayer> | null>(null)
 const desktopControlsVisible = ref(true), desktopFullscreen = ref(false)
+let closingViewer = false
+async function closeViewer() {
+  if (closingViewer) return
+  closingViewer = true
+  await closeViewerAfterFullscreen(desktopBridge?.exitFullscreen, () => emit('close'))
+}
 const currentMedia = ref<Media>(props.initialMedia)
 const currentPage = ref(0)
 const totalMangaPages = ref<number | null>(null)
@@ -733,8 +740,8 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
 
 <template>
   <Teleport to="body">
-    <div v-if="!isAudio || currentMedia.is_missing" role="dialog" aria-modal="true" :aria-label="currentMedia.title" class="he-media-overlay fixed inset-0 z-[200] flex items-center justify-center">
-      <div class="absolute inset-0 bg-black/80" @click="emit('close')"></div>
+    <div v-if="!isAudio || currentMedia.is_missing" role="dialog" aria-modal="true" :aria-label="currentMedia.title" class="he-media-overlay fixed inset-0 z-[200] flex items-center justify-center" :class="{ 'he-viewer-fullscreen': viewerFullscreen }">
+      <div class="absolute inset-0 bg-black/80" @click="closeViewer"></div>
 
       <div class="he-media-layout relative flex h-full w-full overflow-hidden bg-black" :class="{ 'is-video': isVideo, 'is-desktop-video': isVideo && !!desktopBridge, 'show-mobile-metadata': compact && showMetadataPanel }">
         <section class="relative flex min-w-0 flex-1 flex-col bg-black">
@@ -819,7 +826,7 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
                 <Minimize v-if="isFullscreen" :size="18" aria-hidden="true" />
                 <Maximize v-else :size="18" aria-hidden="true" />
               </button>
-              <button type="button" class="he-chrome-btn w-9 text-white/80 hover:bg-white/10 hover:text-white pointer-coarse:w-11" aria-label="返回媒体列表" title="关闭" @click="emit('close')">
+              <button type="button" class="he-chrome-btn w-9 text-white/80 hover:bg-white/10 hover:text-white pointer-coarse:w-11" aria-label="返回媒体列表" title="关闭" @click="closeViewer">
                 <X :size="20" aria-hidden="true" />
               </button>
             </div>

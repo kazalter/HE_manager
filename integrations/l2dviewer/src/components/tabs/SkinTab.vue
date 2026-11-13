@@ -15,12 +15,12 @@ defineEmits(['update:modelValue'])
 /** 侧栏默认收起，靠左缘圆钮拉开 */
 const collapsed = ref(true)
 
-/** 按显示名子串过滤（不区分大小写），皮肤条目多时用于定位；id 是内部目录名不参与匹配 */
+/** 按显示名或资源 ID 搜索。 */
 const query = ref('')
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase()
   if (!q) return props.tabs
-  return props.tabs.filter((tab) => String(tab.label ?? '').toLowerCase().includes(q))
+  return props.tabs.filter((tab) => String(tab.label ?? '').toLowerCase().includes(q) || String(tab.id).toLowerCase().includes(q))
 })
 </script>
 
@@ -28,11 +28,11 @@ const filtered = computed(() => {
   <aside class="side-tabs" :class="{ collapsed }">
     <!-- 面板：蒙板式浮层，收起时整体滑出左缘 -->
     <div class="panel">
-      <h2 v-if="title" class="title">{{ title }}</h2>
+      <div class="panel-heading"><div><span class="eyebrow">COLLECTION</span><h2 v-if="title" class="title">{{ title }}</h2></div><span class="count">{{ filtered.length }} / {{ tabs.length }}</span></div>
       <div class="search">
         <Search class="search-icon" :size="15" />
-        <input v-model="query" type="text" placeholder="搜索皮肤…" spellcheck="false" />
-        <button v-if="query" class="clear" type="button" title="清空搜索" @click="query = ''">
+        <input v-model="query" type="text" aria-label="搜索皮肤" placeholder="搜索皮肤名称或 ID" spellcheck="false" />
+        <button v-if="query" class="clear" type="button" title="清空搜索" aria-label="清空搜索" @click="query = ''">
           <X :size="14" />
         </button>
       </div>
@@ -49,9 +49,9 @@ const filtered = computed(() => {
       <p v-else class="empty">无匹配皮肤</p>
     </div>
     <!-- 把手：垂直居中骑在左缘，收起后仍留在屏幕内供拉开 -->
-    <button class="toggle" type="button" :title="collapsed ? '展开侧栏' : '收起侧栏'" @click="collapsed = !collapsed">
-      <PanelLeftClose v-if="!collapsed" :size="36" />
-      <PanelLeftOpen v-else :size="36" />
+    <button class="toggle" type="button" :aria-expanded="!collapsed" :aria-label="collapsed ? '展开皮肤列表' : '收起皮肤列表'" :title="collapsed ? '展开皮肤列表' : '收起皮肤列表'" @click="collapsed = !collapsed">
+      <PanelLeftClose v-if="!collapsed" :size="19" />
+      <PanelLeftOpen v-else :size="19" />
     </button>
   </aside>
 </template>
@@ -63,7 +63,7 @@ const filtered = computed(() => {
   bottom: 0;
   left: 0;
   z-index: 10;
-  width: 60%;
+  width: min(560px, calc(100% - 44px));
   transform: translateX(0);
   transition: transform 0.25s ease;
   user-select: none;
@@ -78,24 +78,26 @@ const filtered = computed(() => {
   height: 100%;
   overflow-y: auto;
   border-right: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(16, 16, 20, 0.72);
+  background: rgba(19, 20, 30, 0.94);
   backdrop-filter: blur(12px);
+  scrollbar-width: thin;
+  scrollbar-color: #535267 transparent;
 }
 
 /* 把手骑在面板右缘（即侧栏与舞台的分界线），随面板一起滑动 */
 .toggle {
   position: absolute;
   top: 50%;
-  right: -32px;
+  right: -38px;
   transform: translateY(-50%);
   display: grid;
   place-items: center;
-  width: 64px;
-  height: 64px;
+  width: 38px;
+  height: 54px;
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 50%;
-  background: rgba(16, 16, 20, 0.72);
+  border-radius: 0 12px 12px 0;
+  background: rgba(30, 31, 44, 0.94);
   backdrop-filter: blur(12px);
   color: #8a8a93;
   cursor: pointer;
@@ -107,12 +109,10 @@ const filtered = computed(() => {
   color: #e8e8ee;
 }
 
-.title {
-  padding: 14px 16px 10px;
-  color: #8a8a93;
-  font: 600 12px/1.4 system-ui, sans-serif;
-  letter-spacing: 0.08em;
-}
+.panel-heading { display: flex; align-items: end; justify-content: space-between; padding: 24px 22px 18px; }
+.eyebrow { color: #9290aa; font: 700 10px/1 system-ui, sans-serif; letter-spacing: .16em; }
+.title { margin-top: 7px; color: #f1f0f7; font: 700 20px/1.3 system-ui, sans-serif; }
+.count { color: #9492a5; font: 500 12px system-ui, sans-serif; }
 
 /* 搜索框：对齐卡片主题的圆角输入条 */
 .search {
@@ -182,8 +182,8 @@ const filtered = computed(() => {
 /* 卡片网格：固定四列行式条目，样式对齐右侧 StateTab */
 .list {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
   padding: 4px 20px 24px;
   list-style: none;
 }
@@ -208,8 +208,8 @@ const filtered = computed(() => {
 }
 
 .card.active {
-  border-color: #4fc08d;
-  background: rgba(79, 192, 141, 0.1);
+  border-color: #8e83f3;
+  background: rgba(126, 112, 229, 0.22);
   color: #e8e8ee;
 }
 

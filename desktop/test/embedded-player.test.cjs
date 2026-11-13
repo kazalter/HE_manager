@@ -2,6 +2,17 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { EmbeddedPlayer } = require('../src/embedded-player.cjs');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+test('repeated measurements of the same video surface do not reconfigure the native renderer', () => {
+  const { player } = fixture();
+  const sizes = [];
+  player.native.resize = (_owner, width, height) => sizes.push([width, height]);
+  player.owner = {};
+  player.closing = false;
+  player.resize({ width: 1280, height: 720 });
+  player.resize({ width: 1280, height: 720 });
+  player.resize({ width: 1920, height: 1080 });
+  assert.deepEqual(sizes, [[1280, 720], [1920, 1080]]);
+});
 function fixture() {
   const sessions = [], releases = [], imports = [];
   const native = {

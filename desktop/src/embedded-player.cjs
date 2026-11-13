@@ -44,6 +44,7 @@ class EmbeddedPlayer {
   resize(value) {
     if (!value || !Number.isInteger(value.width) || !Number.isInteger(value.height)
       || value.width < 32 || value.height < 32 || value.width > 3840 || value.height > 2160) return;
+    if (value.width === this.size.width && value.height === this.size.height) return;
     this.size = { width: value.width, height: value.height };
     if (this.owner && !this.closing) this.native.resize(this.owner, value.width, value.height);
   }

@@ -158,7 +158,7 @@ const emit = defineEmits(['toggle-hints', 'toggle-debug', 'toggle-ripple', 'togg
       锁帧 60
     </button>
     <button class="hint-toggle" type="button" @click="emit('toggle-hidedev')">
-      {{ hideDev ? '显示dev功能' : '隐藏dev功能' }}
+      {{ hideDev ? '更多工具' : '收起工具' }}
     </button>
     <!-- 交互点：测试者也要用，不随 dev 隐藏收起 -->
     <button class="hint-toggle" type="button" :class="{ on: showHints }" @click="emit('toggle-hints')">
@@ -427,8 +427,12 @@ const emit = defineEmits(['toggle-hints', 'toggle-debug', 'toggle-ripple', 'togg
   right: 12px;
   bottom: 12px;
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
+@media (max-width: 900px) { .stage-toolbar { bottom: 68px; } }
 
 .hint-toggle {
   padding: 5px 12px;

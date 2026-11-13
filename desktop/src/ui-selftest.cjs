@@ -115,7 +115,11 @@ module.exports = async ({ window, player, session, config, output }) => {
     };
     if (!Object.values(report.authentication).every(Boolean)) throw new Error('Desktop authentication integration failed');
     report.checks.desktopAuthentication = true;
-    if (config.playerUiOnly) {
+    if (config.superResolutionProbe) {
+      enterStage('super-resolution-flicker');
+      await require('./ui-superres-probe.cjs')({ window, player, config, report, evaluate, wait, click });
+      report.status = 'passed';
+    } else if (config.playerUiOnly) {
       enterStage('player-ui');
       await require('./ui-player-selftest.cjs')({ window, player, config, report, evaluate, wait, click, field, capture, key, output });
       report.status = 'passed';
