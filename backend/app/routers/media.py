@@ -5,6 +5,7 @@ import logging
 import mimetypes
 import os
 import string
+import tempfile
 from typing import List, Optional
 import zipfile
 from PIL import Image
@@ -672,7 +673,17 @@ def get_manga_page(
                     if img.mode in ("RGBA", "P"):
                         img = img.convert("RGB")
                     img.thumbnail((200, 280))
-                    img.save(thumb_path, "JPEG", quality=80)
+                    # Publish only a complete JPEG: another request may be serving
+                    # this same page while the thumbnail is being generated.
+                    temp_path = None
+                    try:
+                        with tempfile.NamedTemporaryFile(dir=THUMBNAIL_DIR, suffix=".tmp", delete=False) as temp:
+                            temp_path = temp.name
+                            img.save(temp, "JPEG", quality=80)
+                        os.replace(temp_path, thumb_path)
+                    finally:
+                        if temp_path and os.path.exists(temp_path):
+                            os.unlink(temp_path)
                 return FileResponse(
                     thumb_path,
                     media_type="image/jpeg",

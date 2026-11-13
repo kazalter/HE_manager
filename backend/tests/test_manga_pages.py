@@ -173,6 +173,26 @@ class MangaPagesTest(unittest.TestCase):
             self.assertGreater(red, 200)
             self.assertLess(green, 50)
 
+    def test_thumbnail_is_published_only_after_jpeg_is_complete(self):
+        media = self.make_book('.dir', {'001.png': self.picture()})
+        thumbs = self.root / 'thumbs'
+        thumbs.mkdir()
+        target = thumbs / f'manga_page_{media.id}_0_v2.jpg'
+        replace = routes.os.replace
+
+        def check_before_publish(source, destination):
+            self.assertFalse(target.exists())
+            with Image.open(source) as image:
+                image.verify()
+            replace(source, destination)
+
+        with mock.patch.object(routes, 'THUMBNAIL_DIR', str(thumbs)), mock.patch.object(routes.os, 'replace', side_effect=check_before_publish):
+            response = routes.get_manga_page(media.id, 0, db=self.db, thumbnail=True)
+        self.assertEqual(Path(response.path), target)
+        self.assertEqual(list(thumbs.glob('*.tmp')), [])
+        with Image.open(target) as image:
+            image.verify()
+
     def test_metadata_only_directories_are_not_indexed_as_manga(self):
         library = self.root / "metadata-library"
         (library / "__MACOSX").mkdir(parents=True)

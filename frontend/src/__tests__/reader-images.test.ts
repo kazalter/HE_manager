@@ -132,6 +132,20 @@ const finishImage = async (index: number) => {
 
 describe('canvas reader loading feedback', () => {
   beforeEach(() => vi.useFakeTimers())
+  it('retries a failed thumbnail twice and stops after repeated errors', async () => {
+    const wrapper = mountCanvasReader(false)
+    document.body.appendChild(wrapper.element)
+    await wrapper.setProps({ showControls: true })
+    const thumb = wrapper.findAll('.he-manga-strip img')[0]!
+    await thumb.trigger('error')
+    await vi.advanceTimersByTimeAsync(600)
+    expect(new URL((thumb.element as HTMLImageElement).src).searchParams.get('thumb_retry')).toBe('1')
+    await thumb.trigger('error')
+    await vi.advanceTimersByTimeAsync(1200)
+    expect(new URL((thumb.element as HTMLImageElement).src).searchParams.get('thumb_retry')).toBe('2')
+    await thumb.trigger('error')
+    expect(thumb.attributes('alt')).toBe('缩略图加载失败')
+  })
   it('uses new cache identities for manga pages and strip thumbnails', async () => {
     const wrapper = mountCanvasReader(false)
     await wrapper.setProps({ showControls: true })

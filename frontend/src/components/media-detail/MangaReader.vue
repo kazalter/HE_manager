@@ -257,6 +257,19 @@ const desktopImages = useDesktopImageEnhancement(() => canvasPages.value.filter(
 const displayPageUrlFor = (page: number) => desktopImages.displayUrl(pageUrlFor(page))
 const pageLabel = (page: number) => `第 ${page + 1} ${props.imagePages ? '张' : '页'}`
 const thumbnailUrl = (page: number) => authUrl(`${API_BASE_URL}/manga/${props.media.id}/page/${page}?thumbnail=true&track_progress=false&page_set=2`)
+const retryThumbnail = (event: Event) => {
+  const image = event.target as HTMLImageElement
+  const attempt = Number(image.dataset.retry || 0)
+  if (attempt >= 2) { image.alt = '缩略图加载失败'; return }
+  image.dataset.retry = String(attempt + 1)
+  const original = image.src
+  window.setTimeout(() => {
+    if (!image.isConnected || image.src !== original) return
+    const url = new URL(original)
+    url.searchParams.set('thumb_retry', String(attempt + 1))
+    image.src = url.href
+  }, 600 * (attempt + 1))
+}
 
 const totalPagesList = computed(() => {
   if (!props.totalPages) return []
@@ -1182,7 +1195,7 @@ function onReaderViewportResize() { preloadAdjacentPages() }
         class="pointer-events-none absolute z-50 rounded-2xl bg-black/95 p-1 ring-1 ring-inset ring-white/15"
         :style="{ width: '200px', height: '268px', left: `${hoverThumbX}px`, top: `${hoverThumbY}px`, transform: 'translate(-50%, -100%)' }"
       >
-        <img :src="thumbnailUrl(hoverThumbIndex)" class="h-full w-full rounded-lg object-contain" alt="" />
+        <img :key="hoverThumbIndex" :src="thumbnailUrl(hoverThumbIndex)" @error="retryThumbnail" class="h-full w-full rounded-lg object-contain" alt="" />
         <div class="absolute inset-x-1 bottom-1 rounded-b-lg bg-black/70 py-0.5 text-center text-caption font-medium tabular-nums text-white/90">
           第 {{ hoverThumbIndex + 1 }} 页
         </div>
@@ -1211,6 +1224,7 @@ function onReaderViewportResize() { preloadAdjacentPages() }
           >
             <img
               :src="thumbnailUrl(item.index)"
+              @error="retryThumbnail"
               loading="lazy"
               decoding="async"
               class="h-full w-full object-cover"
