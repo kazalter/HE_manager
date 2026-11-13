@@ -6,6 +6,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from . import (
     auth,
@@ -198,16 +199,20 @@ async def require_authenticated_request(request: Request, call_next):
             logger.warning("Auth intercepted: %s %s", request.method, path)
             return _json_error(401, "Missing access token")
 
-        db = database.SessionLocal()
+        def authenticate():
+            db = database.SessionLocal()
+            try:
+                return auth.authenticate_access_token(db, raw_token)
+            finally:
+                db.close()
+
         try:
-            user = auth.authenticate_access_token(db, raw_token)
+            user = await run_in_threadpool(authenticate)
             if _admin_path(request.method, path) and not user.is_admin:
                 return _json_error(403, "Admin permission required")
             request.state.current_user = user
         except HTTPException as exc:
             return _json_error(exc.status_code, str(exc.detail))
-        finally:
-            db.close()
         response = await call_next(request)
 
     response.headers.setdefault("X-Content-Type-Options", "nosniff")

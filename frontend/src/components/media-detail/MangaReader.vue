@@ -217,10 +217,12 @@ const spreadLayout = (pages: number[]) => {
 const renderedSlots = computed(() => {
   const count = slotCount.value
   if (!count || readMode.value === 'webtoon') return []
-  const low = Math.max(0, Math.min(currentSlot.value, pager.visualSlot.value) - 1)
-  const high = Math.min(count - 1, Math.max(currentSlot.value, pager.visualSlot.value) + 1)
-  return Array.from({ length: high - low + 1 }, (_, offset) => {
-    const index = low + offset
+  // A large jump can put the settled and visible slots hundreds of pages apart.
+  // Render their immediate neighbours, not every slot between them.
+  const indices = [...new Set([currentSlot.value, pager.visualSlot.value]
+    .flatMap(slot => [slot - 1, slot, slot + 1])
+    .filter(slot => slot >= 0 && slot < count))].sort((a, b) => a - b)
+  return indices.map(index => {
     const edge = index < leadingSlot.value ? 'start' : index >= leadingSlot.value + pageSlotCount.value ? 'end' : null
     const pages = edge ? [] : slotPages(index)
     return {

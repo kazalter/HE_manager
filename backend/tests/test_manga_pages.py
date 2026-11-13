@@ -18,6 +18,19 @@ from app.services import manga_pages
 
 
 class MangaPagesTest(unittest.TestCase):
+    def test_page_io_does_not_hold_database_connection(self):
+        media = self.make_book('.cbz', {'001.png': self.picture()})
+        media_id = media.id
+        original = routes.get_manga_image_files
+
+        def check_connection(book):
+            self.assertEqual(self.engine.pool.checkedout(), 0)
+            return original(book)
+
+        with mock.patch.object(routes, 'get_manga_image_files', side_effect=check_connection):
+            routes.get_manga_page(media_id, 0, db=self.db)
+            routes.get_manga_pages_count(media_id, db=self.db, include_dimensions=True)
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)

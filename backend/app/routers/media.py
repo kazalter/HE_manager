@@ -577,18 +577,22 @@ def get_manga_pages_count(
     if media.media_type != "manga":
         return {"total_pages": 0, **({"page_dimensions": []} if include_dimensions else {})}
 
+    from types import SimpleNamespace
+    book = SimpleNamespace(id=media.id, absolute_path=media.absolute_path, extension=media.extension)
+    fallback_count = media.page_count or 0
+    db.rollback()  # Return the connection before walking files or reading image headers.
     try:
-        files = get_manga_image_files(media)
+        files = get_manga_image_files(book)
         total_pages = len(files)
-        media.page_count = total_pages
+        db.query(models.Media).filter(models.Media.id == media_id).update({models.Media.page_count: total_pages})
         db.commit()
         result = {"total_pages": total_pages}
         if include_dimensions:
-            result["page_dimensions"] = get_manga_page_dimensions(media, files)
+            result["page_dimensions"] = get_manga_page_dimensions(book, files)
         return result
     except Exception:
         return {
-            "total_pages": media.page_count or 0,
+            "total_pages": fallback_count,
             **({"page_dimensions": []} if include_dimensions else {}),
         }
 
@@ -620,9 +624,12 @@ def get_manga_page(
         media.missing_since = None
         db.commit()
 
+    from types import SimpleNamespace
+    book = SimpleNamespace(id=media.id, absolute_path=media.absolute_path, extension=media.extension)
+    db.rollback()  # File and thumbnail I/O must not occupy a pool connection.
     # v2 excludes auxiliary images, so old page-index thumbnails may point at
     # a different image. Keep the media-id prefix for existing cleanup logic.
-    thumb_path = os.path.join(THUMBNAIL_DIR, f"manga_page_{media.id}_{page_index}_v2.jpg") if thumbnail else None
+    thumb_path = os.path.join(THUMBNAIL_DIR, f"manga_page_{book.id}_{page_index}_v2.jpg") if thumbnail else None
     if thumbnail and thumb_path and os.path.exists(thumb_path):
         return FileResponse(
             thumb_path,
@@ -631,11 +638,12 @@ def get_manga_page(
         )
 
     try:
-        files = get_manga_image_files(media)
+        files = get_manga_image_files(book)
         if not 0 <= page_index < len(files):
             raise HTTPException(status_code=404, detail="Page not found")
 
         if track_progress:
+            media = get_media_or_404(media_id, db)
             media.last_opened_at = datetime.utcnow()
             media.progress = page_index
             if page_index >= len(files) - 1:
@@ -646,13 +654,13 @@ def get_manga_page(
                 media.view_status = "viewing"
             db.commit()
 
-        if media.extension == ".dir":
+        if book.extension == ".dir":
             img_path = files[page_index]
             with open(img_path, "rb") as f:
                 content = f.read()
             mime, _ = mimetypes.guess_type(img_path)
         else:
-            with zipfile.ZipFile(media.absolute_path, "r") as archive:
+            with zipfile.ZipFile(book.absolute_path, "r") as archive:
                 filename = files[page_index]
                 with archive.open(filename) as f:
                     content = f.read()
