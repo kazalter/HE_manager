@@ -5,10 +5,10 @@ export interface NativeWebtoonPage { url: string; width?: number; height?: numbe
 const props = defineProps<{ pages: NativeWebtoonPage[]; currentPage: number }>()
 const emit = defineEmits<{ content: [element: HTMLDivElement | null] }>()
 const root = ref<HTMLDivElement | null>(null)
-// WNACG's vertical reader: stable slots, two downloads, current/+20/-1 priority.
+// WNACG's vertical reader: stable slots, two downloads, current/+20/-3 priority.
 // The downloaded Image itself is displayed. Keep loaded nodes; let the browser
 // manage decoded surfaces rather than rebuilding images through a bitmap LRU.
-const AHEAD = 20, BEHIND = 1, TIMEOUT = 60_000, PLACEHOLDER_MIN = 300
+const AHEAD = 20, BEHIND = 3, TIMEOUT = 60_000, PLACEHOLDER_MIN = 300
 type Entry = { state: 'queued' | 'loading' | 'loaded' | 'failed'; since: number;
   image?: HTMLImageElement; timer?: number; swapTimer?: number }
 const entries = new Map<number, Entry>()

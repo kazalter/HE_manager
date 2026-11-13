@@ -22,6 +22,16 @@ function create() {
 const finish = async (image: HTMLImageElement) => { image.onload?.(new Event('load')); await flushPromises() }
 const warm = (page: number) => (wrapper!.vm as unknown as { warm: (page: number) => void }).warm(page)
 
+it('preloads three preceding pages after a distant jump', async () => {
+  create()
+  warm(40)
+  for (let index = 0; index < 8; index++) await finish(images[index]!)
+  expect(images.slice(2, 9).map(image => image.getAttribute('src'))).toEqual([
+    '/native-test/40.jpg', '/native-test/41.jpg', '/native-test/39.jpg',
+    '/native-test/42.jpg', '/native-test/38.jpg', '/native-test/43.jpg', '/native-test/37.jpg',
+  ])
+})
+
 it('reserves the whole book, downloads two at a time and displays the exact downloaded nodes without decode()', async () => {
   const view = create()
   expect(view.findAll('.he-reader-page')).toHaveLength(60)
