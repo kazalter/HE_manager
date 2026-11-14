@@ -1,4 +1,6 @@
+from collections import OrderedDict
 import os
+import threading
 import zipfile
 
 from PIL import Image
@@ -6,7 +8,19 @@ from PIL import Image
 from .. import models
 from ..media_files import manga_image_files
 
-_MANGA_FILES_CACHE: dict[int, tuple[float, list[str]]] = {}
+MANGA_FILES_CACHE_MAX_SIZE = 256
+PAGE_DIMENSIONS_CACHE_MAX_SIZE = 32
+_MANGA_FILES_CACHE: OrderedDict[int, tuple[float, list[str]]] = OrderedDict()
+_PAGE_DIMENSIONS_CACHE: OrderedDict[int, tuple[float, list[tuple[int, int] | None]]] = OrderedDict()
+_CACHE_LOCK = threading.Lock()
+
+
+def _lru_set(cache: OrderedDict, max_size: int, key: int, value) -> None:
+    with _CACHE_LOCK:
+        cache[key] = value
+        cache.move_to_end(key)
+        while len(cache) > max_size:
+            cache.popitem(last=False)
 
 
 def get_manga_image_files(media: models.Media):
@@ -14,25 +28,26 @@ def get_manga_image_files(media: models.Media):
         mtime = os.path.getmtime(media.absolute_path)
     except OSError:
         mtime = 0.0
-    cached = _MANGA_FILES_CACHE.get(media.id)
-    if cached and cached[0] == mtime:
-        return cached[1]
+    with _CACHE_LOCK:
+        cached = _MANGA_FILES_CACHE.get(media.id)
+        if cached and cached[0] == mtime:
+            _MANGA_FILES_CACHE.move_to_end(media.id)
+            return cached[1]
 
     result = manga_image_files(media.absolute_path, media.extension)
 
-    _MANGA_FILES_CACHE[media.id] = (mtime, result)
+    _lru_set(_MANGA_FILES_CACHE, MANGA_FILES_CACHE_MAX_SIZE, media.id, (mtime, result))
     return result
-
-
-_PAGE_DIMENSIONS_CACHE: dict[int, tuple[float, list[tuple[int, int] | None]]] = {}
 
 
 def get_manga_page_dimensions(media: models.Media, files: list[str]) -> list[tuple[int, int] | None]:
     """Read image headers once so the web reader can reserve each page's height."""
     mtime = os.path.getmtime(media.absolute_path)
-    cached = _PAGE_DIMENSIONS_CACHE.get(media.id)
-    if cached and cached[0] == mtime and len(cached[1]) == len(files):
-        return cached[1]
+    with _CACHE_LOCK:
+        cached = _PAGE_DIMENSIONS_CACHE.get(media.id)
+        if cached and cached[0] == mtime and len(cached[1]) == len(files):
+            _PAGE_DIMENSIONS_CACHE.move_to_end(media.id)
+            return cached[1]
 
     dimensions: list[tuple[int, int] | None] = []
     if media.extension == ".dir":
@@ -51,7 +66,5 @@ def get_manga_page_dimensions(media: models.Media, files: list[str]) -> list[tup
                 except (OSError, ValueError):
                     dimensions.append(None)
 
-    if len(_PAGE_DIMENSIONS_CACHE) >= 32 and media.id not in _PAGE_DIMENSIONS_CACHE:
-        _PAGE_DIMENSIONS_CACHE.pop(next(iter(_PAGE_DIMENSIONS_CACHE)))
-    _PAGE_DIMENSIONS_CACHE[media.id] = (mtime, dimensions)
+    _lru_set(_PAGE_DIMENSIONS_CACHE, PAGE_DIMENSIONS_CACHE_MAX_SIZE, media.id, (mtime, dimensions))
     return dimensions

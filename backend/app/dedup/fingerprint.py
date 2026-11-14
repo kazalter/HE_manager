@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import cv2
+from PIL import Image
 
 from .. import models
 
@@ -98,22 +99,31 @@ def _pick_three(values: List) -> List:
     return [values[0], values[n // 2], values[-1]]
 
 
+def _hash_file_chunks(path: str, chunk_size: int = SAMPLE_BYTES) -> Optional[str]:
+    """Stream file bytes in fixed-size chunks to compute the truncated SHA-1."""
+    hasher = hashlib.sha1()
+    try:
+        with open(path, "rb") as fp:
+            while True:
+                chunk = fp.read(chunk_size)
+                if not chunk:
+                    break
+                hasher.update(chunk)
+        return hasher.hexdigest()[:HASH_LENGTH]
+    except OSError:
+        return None
+
+
 def fingerprint_image(path: str) -> FingerprintResult:
     size = _safe_size(path)
     width = height = None
     try:
-        img = cv2.imread(path)
-        if img is not None:
-            height, width = img.shape[:2]
+        with Image.open(path) as img:
+            width, height = img.size
     except Exception:
         pass
 
-    file_hash: Optional[str] = None
-    try:
-        with open(path, "rb") as fp:
-            file_hash = _short_hash(fp.read())
-    except OSError:
-        pass
+    file_hash = _hash_file_chunks(path)
 
     return FingerprintResult(
         media_type="image",

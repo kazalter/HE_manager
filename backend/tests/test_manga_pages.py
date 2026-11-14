@@ -253,6 +253,28 @@ class MangaPagesTest(unittest.TestCase):
         self.assertIsNotNone(media.cover_path)
         self.assertTrue((self.root / ".thumbnails" / media.cover_path).is_file())
 
+    def test_manga_files_cache_evicts_lru_and_supports_clear(self):
+        from collections import OrderedDict
+        from types import SimpleNamespace
+
+        self.assertIsInstance(manga_pages._MANGA_FILES_CACHE, OrderedDict)
+        books = [
+            SimpleNamespace(id=idx, absolute_path=str(self.root / f"missing-{idx}.cbz"), extension=".cbz")
+            for idx in range(3)
+        ]
+        with (
+            mock.patch.object(manga_pages, "MANGA_FILES_CACHE_MAX_SIZE", 2),
+            mock.patch.object(manga_pages, "manga_image_files", side_effect=lambda p, _e: [p]),
+        ):
+            manga_pages.get_manga_image_files(books[0])
+            manga_pages.get_manga_image_files(books[1])
+            # Touch book 0 so book 1 becomes LRU.
+            manga_pages.get_manga_image_files(books[0])
+            manga_pages.get_manga_image_files(books[2])
+            self.assertEqual(list(manga_pages._MANGA_FILES_CACHE.keys()), [0, 2])
+            manga_pages._MANGA_FILES_CACHE.clear()
+            self.assertEqual(len(manga_pages._MANGA_FILES_CACHE), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

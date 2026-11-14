@@ -264,3 +264,23 @@ class DedupDetectionTest(unittest.TestCase):
         self.assertEqual(result["total_media"], 2)
         self.assertEqual(result["fingerprinted"], 0)
         self.assertEqual(result["unchecked"], 2)
+
+    def test_fingerprint_image_reads_header_without_cv2_and_hashes_in_chunks(self):
+        import hashlib
+        from PIL import Image
+        from app.dedup import fingerprint
+
+        img_path = os.path.join(self.tmp.name, "large.png")
+        Image.new("RGB", (320, 180), color="teal").save(img_path, format="PNG")
+        # Append extra trailing bytes so file size exceeds SAMPLE_BYTES (64 KB) to exercise chunked hashing.
+        with open(img_path, "ab") as fp:
+            fp.write(b"\x00" * (fingerprint.SAMPLE_BYTES + 1024))
+        with open(img_path, "rb") as fp:
+            expected_hash = hashlib.sha1(fp.read()).hexdigest()[:fingerprint.HASH_LENGTH]
+
+        with patch.object(fingerprint.cv2, "imread", side_effect=AssertionError("should not decode full image")):
+            res = fingerprint.fingerprint_image(img_path)
+
+        self.assertEqual(res.width, 320)
+        self.assertEqual(res.height, 180)
+        self.assertEqual(res.hash_first, expected_hash)
