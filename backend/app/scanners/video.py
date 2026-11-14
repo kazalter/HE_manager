@@ -1,5 +1,7 @@
+import json
 import logging
 import os
+import subprocess
 import cv2
 import numpy as np
 from PIL import Image
@@ -107,6 +109,53 @@ def get_video_thumbnail(video_path, thumb_path, semaphore=None, cv2_module=None)
     return False, 0, "failed"
 
 
+def _probe_video_metadata_ffprobe(video_path):
+    metadata = {"duration": None, "width": None, "height": None}
+    if not video_path or not os.path.exists(video_path):
+        return metadata
+    try:
+        proc = subprocess.run(
+            [
+                "ffprobe",
+                "-v", "error",
+                "-select_streams", "v:0",
+                "-show_entries", "stream=width,height,duration:stream_tags=rotate:format=duration",
+                "-of", "json",
+                video_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if proc.returncode != 0 or not proc.stdout:
+            return metadata
+        payload = json.loads(proc.stdout)
+        streams = payload.get("streams") or []
+        stream = streams[0] if streams else {}
+        width = stream.get("width")
+        height = stream.get("height")
+        rotate_raw = (stream.get("tags") or {}).get("rotate")
+        try:
+            rotate = abs(int(float(rotate_raw))) % 360 if rotate_raw is not None else 0
+        except (TypeError, ValueError):
+            rotate = 0
+        if isinstance(width, (int, float)) and width > 0 and isinstance(height, (int, float)) and height > 0:
+            w, h = int(width), int(height)
+            if rotate in (90, 270):
+                w, h = h, w
+            metadata["width"] = w
+            metadata["height"] = h
+        dur_raw = stream.get("duration") or (payload.get("format") or {}).get("duration")
+        if dur_raw is not None:
+            dur = float(dur_raw)
+            if dur > 0:
+                metadata["duration"] = max(1, int(round(dur)))
+    except Exception as e:
+        logger.debug("ffprobe fallback failed for %s: %s", video_path, e)
+    return metadata
+
+
 def get_video_metadata(video_path):
     metadata = {"duration": None, "width": None, "height": None}
     try:
@@ -116,7 +165,9 @@ def get_video_metadata(video_path):
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         if fps and fps > 0 and total_frames > 0:
-            metadata["duration"] = int(total_frames / fps)
+            dur_sec = total_frames / fps
+            if dur_sec > 0:
+                metadata["duration"] = max(1, int(round(dur_sec)))
         if width > 0:
             metadata["width"] = width
         if height > 0:
@@ -124,6 +175,12 @@ def get_video_metadata(video_path):
         cap.release()
     except Exception as e:
         logger.warning("Error reading video metadata for %s: %s", video_path, e)
+
+    if not metadata["duration"] or not metadata["width"] or not metadata["height"]:
+        probed = _probe_video_metadata_ffprobe(video_path)
+        for key in ("duration", "width", "height"):
+            if not metadata[key] and probed.get(key):
+                metadata[key] = probed[key]
     return metadata
 
 

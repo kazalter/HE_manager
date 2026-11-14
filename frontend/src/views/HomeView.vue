@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import { ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, LayoutGrid, List, Play, Rows3, Search, SlidersHorizontal, Star, Tag as TagIcon, TriangleAlert, Trash2, X } from 'lucide-vue-next'
+import { ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, Eye, LayoutGrid, List, Play, Rows3, Search, Shuffle, SlidersHorizontal, Star, Tag as TagIcon, TriangleAlert, Trash2, X } from 'lucide-vue-next'
 import { API_BASE_URL, thumbnailUrl } from '../config'
 import { authHeaders, authIdentity, authState } from '../auth'
 import { desktopBridge } from '../desktop'
@@ -35,14 +35,28 @@ let loadingNoticeTimer: number | undefined
 const mediaError = ref(''), openingMedia = ref(false), openingError = ref('')
 const discardTarget = ref<DiscardTarget | null>(null)
 const discardNotice = ref('')
+const hiddenDuplicatesCount = ref(0)
+const hiddenDupNoticeDismissed = ref(false)
 const afterDiscard = async (record: DiscardRecord) => {
   discardNotice.value = record.cleanup_error || ''
   closeMedia(); await fetchMedia(); await fetchContinueMedia()
 }
 const selectedMedia = ref<Media | null>(null)
 const searchQuery = ref(typeof route.query.search === 'string' ? route.query.search : '')
-const validSort = (value: unknown): 'date' | 'title' | 'rating' | 'opened' => value === 'title' || value === 'rating' || value === 'opened' ? value : 'date'
+const validSort = (value: unknown): 'date' | 'title' | 'rating' | 'opened' | 'random' =>
+  value === 'title' || value === 'rating' || value === 'opened' || value === 'random' ? value : 'date'
 const sortBy = ref(validSort(route.query.sort))
+const parseSeed = (value: unknown) => {
+  const n = Number(Array.isArray(value) ? value[0] : value)
+  return Number.isSafeInteger(n) && n > 0 ? n : Math.floor(Math.random() * 900000) + 100000
+}
+const randomSeed = ref(parseSeed(route.query.seed))
+const validViewStatus = (value: unknown): '' | 'unviewed' | 'viewing' | 'viewed' =>
+  value === 'unviewed' || value === 'viewing' || value === 'viewed' ? value : ''
+const viewStatusFilter = ref(validViewStatus(route.query.view_status))
+const validMinRating = (value: unknown): '' | '1' | '3' | '4' | '5' =>
+  value === '1' || value === '3' || value === '4' || value === '5' ? value : ''
+const minRatingFilter = ref(validMinRating(route.query.min_rating))
 const selectedTag = ref(typeof route.query.tag === 'string' ? route.query.tag : '')
 const tagDropdownOpen = ref(false)
 const tagSearchQuery = ref('')
@@ -118,6 +132,8 @@ const filteredTags = computed(() => {
 const activeFilterCount = computed(() => {
   return Number(Boolean(selectedTag.value)) +
     Number(Boolean(sourceFilter.value)) +
+    Number(Boolean(viewStatusFilter.value)) +
+    Number(Boolean(minRatingFilter.value)) +
     Number(sortBy.value !== 'date') +
     Number(Boolean(searchQuery.value)) +
     Number(Boolean(favoriteOnly.value))
@@ -133,7 +149,10 @@ const clearFilters = () => {
   delete query.search
   delete query.tag
   delete query.sort
+  delete query.seed
   delete query.source
+  delete query.view_status
+  delete query.min_rating
   delete query.favorite
   void router.replace({ path: route.path, query })
 }
@@ -295,8 +314,11 @@ const mediaParamsForPage = (page: number): Record<string, string | number | bool
   search: searchQuery.value.trim() || undefined,
   tag: selectedTag.value || undefined,
   favorite: favoriteOnly.value ? true : undefined,
+  view_status: viewStatusFilter.value || undefined,
+  min_rating: minRatingFilter.value ? Number(minRatingFilter.value) : undefined,
   source_site: sourceFilter.value || undefined,
   sort: sortBy.value,
+  seed: sortBy.value === 'random' ? randomSeed.value : undefined,
   limit: pageSize.value,
   offset: (page - 1) * pageSize.value,
 })
@@ -333,12 +355,13 @@ const pageTitle = computed(() => {
 
 const selectedTagLabel = computed(() => selectedTag.value || '全部标签')
 
-type SortKey = 'date' | 'title' | 'rating' | 'opened'
+type SortKey = 'date' | 'title' | 'rating' | 'opened' | 'random'
 const sortOptions: SegmentedOption<SortKey>[] = [
   { value: 'date', label: '最近添加' },
   { value: 'opened', label: '最近打开' },
   { value: 'rating', label: '评分' },
   { value: 'title', label: '名称' },
+  { value: 'random', label: '随机漫游' },
 ]
 const sortLabel = computed(() => sortOptions.find(option => option.value === sortBy.value)?.label ?? '最近添加')
 const sourceOptions: SegmentedOption<'' | 'x' | 'wnacg' | 'local'>[] = [
@@ -347,6 +370,21 @@ const sourceOptions: SegmentedOption<'' | 'x' | 'wnacg' | 'local'>[] = [
   { value: 'x', label: 'X' },
   { value: 'wnacg', label: 'WNACG' },
 ]
+const viewStatusOptions: SegmentedOption<'' | 'unviewed' | 'viewing' | 'viewed'>[] = [
+  { value: '', label: '全部状态' },
+  { value: 'unviewed', label: '未看' },
+  { value: 'viewing', label: '在看' },
+  { value: 'viewed', label: '已看' },
+]
+const viewStatusLabel = computed(() => viewStatusOptions.find(option => option.value === viewStatusFilter.value)?.label ?? '全部状态')
+const ratingOptions: SegmentedOption<'' | '1' | '3' | '4' | '5'>[] = [
+  { value: '', label: '全部评分' },
+  { value: '1', label: '1★+' },
+  { value: '3', label: '3★+' },
+  { value: '4', label: '4★+' },
+  { value: '5', label: '5★' },
+]
+const minRatingLabel = computed(() => ratingOptions.find(option => option.value === minRatingFilter.value)?.label ?? '全部评分')
 const viewSegments = computed<SegmentedOption<MediaViewMode>[]>(() => viewOptions.value.map(option => ({
   value: option.mode, label: option.label, icon: option.icon, iconOnly: !compact.value,
 })))
@@ -393,10 +431,34 @@ const scheduleGridMeasurement = () => {
 const sortDropdownOpen = ref(false)
 const sortDropdownRef = ref<HTMLElement | null>(null)
 const sortButtonRef = ref<HTMLButtonElement | null>(null)
+const viewStatusDropdownOpen = ref(false)
+const viewStatusDropdownRef = ref<HTMLElement | null>(null)
+const viewStatusButtonRef = ref<HTMLButtonElement | null>(null)
+const ratingDropdownOpen = ref(false)
+const ratingDropdownRef = ref<HTMLElement | null>(null)
+const ratingButtonRef = ref<HTMLButtonElement | null>(null)
 const selectSort = (value: SortKey) => {
+  if (value === 'random') {
+    randomSeed.value = Math.floor(Math.random() * 900000) + 100000
+  }
   sortBy.value = value
   sortDropdownOpen.value = false
   sortButtonRef.value?.focus()
+}
+const reshuffleRandom = () => {
+  randomSeed.value = Math.floor(Math.random() * 900000) + 100000
+  if (sortBy.value !== 'random') sortBy.value = 'random'
+  else syncFilters()
+}
+const selectViewStatus = (value: '' | 'unviewed' | 'viewing' | 'viewed') => {
+  viewStatusFilter.value = value
+  viewStatusDropdownOpen.value = false
+  viewStatusButtonRef.value?.focus()
+}
+const selectMinRating = (value: '' | '1' | '3' | '4' | '5') => {
+  minRatingFilter.value = value
+  ratingDropdownOpen.value = false
+  ratingButtonRef.value?.focus()
 }
 
 const selectTag = (tagName: string) => {
@@ -417,6 +479,12 @@ const handleTagOutsidePointer = (event: PointerEvent) => {
   }
   if (sortDropdownOpen.value && !sortDropdownRef.value?.contains(event.target as Node)) {
     sortDropdownOpen.value = false
+  }
+  if (viewStatusDropdownOpen.value && !viewStatusDropdownRef.value?.contains(event.target as Node)) {
+    viewStatusDropdownOpen.value = false
+  }
+  if (ratingDropdownOpen.value && !ratingDropdownRef.value?.contains(event.target as Node)) {
+    ratingDropdownOpen.value = false
   }
 }
 
@@ -482,6 +550,8 @@ const fetchMedia = async (scrollBehavior: ScrollBehavior = 'auto') => {
     totalItems.value = Number.isSafeInteger(headerTotal) && headerTotal >= 0
       ? headerTotal
       : (currentPage.value - 1) * pageSize.value + res.data.length
+    const headerHiddenDup = Number(res.headers['x-hidden-duplicates-count'])
+    hiddenDuplicatesCount.value = Number.isSafeInteger(headerHiddenDup) && headerHiddenDup >= 0 ? headerHiddenDup : 0
 
     const lastPage = Math.max(1, Math.ceil(totalItems.value / pageSize.value))
     if (currentPage.value > lastPage) {
@@ -688,12 +758,37 @@ const toggleFavoriteFilter = () => {
 
 let searchTimer: number | undefined
 const syncFilters = () => {
-  const current = [route.query.search || '', route.query.tag || '', validSort(route.query.sort), validSource(route.query.source)]
-  const desired = [searchQuery.value, selectedTag.value, sortBy.value, sourceFilter.value]
+  const desiredSeed = sortBy.value === 'random' ? String(randomSeed.value) : ''
+  const current = [
+    route.query.search || '',
+    route.query.tag || '',
+    validSort(route.query.sort),
+    validSource(route.query.source),
+    validViewStatus(route.query.view_status),
+    validMinRating(route.query.min_rating),
+    route.query.sort === 'random' && route.query.seed ? String(route.query.seed) : '',
+  ]
+  const desired = [
+    searchQuery.value,
+    selectedTag.value,
+    sortBy.value,
+    sourceFilter.value,
+    viewStatusFilter.value,
+    minRatingFilter.value,
+    desiredSeed,
+  ]
   if (current.every((value, index) => value === desired[index])) return
   const query = { ...route.query }
   delete query.page
-  for (const [key, value] of Object.entries({ search: searchQuery.value, tag: selectedTag.value, sort: sortBy.value === 'date' ? '' : sortBy.value, source: sourceFilter.value })) {
+  for (const [key, value] of Object.entries({
+    search: searchQuery.value,
+    tag: selectedTag.value,
+    sort: sortBy.value === 'date' ? '' : sortBy.value,
+    seed: desiredSeed,
+    source: sourceFilter.value,
+    view_status: viewStatusFilter.value,
+    min_rating: minRatingFilter.value,
+  })) {
     if (value) query[key] = value
     else delete query[key]
   }
@@ -703,13 +798,16 @@ watch(searchQuery, () => {
   window.clearTimeout(searchTimer)
   searchTimer = window.setTimeout(syncFilters, 250)
 })
-watch([selectedTag, sortBy, sourceFilter], syncFilters)
-watch(() => JSON.stringify([props.mediaType, route.query.search, route.query.tag, route.query.sort, route.query.source, route.query.favorite, route.query.page]), () => {
+watch([selectedTag, sortBy, sourceFilter, viewStatusFilter, minRatingFilter], syncFilters)
+watch(() => JSON.stringify([props.mediaType, route.query.search, route.query.tag, route.query.sort, route.query.seed, route.query.source, route.query.view_status, route.query.min_rating, route.query.favorite, route.query.page]), () => {
   window.clearTimeout(searchTimer)
   searchQuery.value = typeof route.query.search === 'string' ? route.query.search : ''
   selectedTag.value = typeof route.query.tag === 'string' ? route.query.tag : ''
   sortBy.value = validSort(route.query.sort)
+  if (route.query.seed) randomSeed.value = parseSeed(route.query.seed)
   sourceFilter.value = validSource(route.query.source)
+  viewStatusFilter.value = validViewStatus(route.query.view_status)
+  minRatingFilter.value = validMinRating(route.query.min_rating)
   favoriteOnly.value = route.query.favorite === 'true'
   currentPage.value = routePage(route.query.page)
   void fetchMedia()
@@ -802,13 +900,14 @@ onMounted(async () => {
         <div role="status" class="min-h-5 w-28 text-right text-meta text-subtle"><span v-if="delayedLoading">正在加载媒体…</span></div>
       </template>
       <p v-if="discardNotice" role="alert" class="w-full text-meta text-warning">文件清理未完成：{{ discardNotice }} <router-link to="/discarded" class="text-accent underline">查看丢弃记录</router-link> <button type="button" class="ml-2 underline focus-ring" @click="discardNotice = ''">关闭提示</button></p>
+      <p v-if="authState.user?.is_admin && hiddenDuplicatesCount > 0 && !hiddenDupNoticeDismissed" class="w-full text-meta text-subtle">有 {{ hiddenDuplicatesCount }} 项媒体因待检或疑似重复暂未展示 <router-link to="/dedup" class="text-accent underline">前往重复管理</router-link> <button type="button" class="ml-2 underline focus-ring" @click="hiddenDupNoticeDismissed = true">知道了</button></p>
       <div class="flex flex-wrap items-center gap-2">
         <div class="he-home-search flex min-w-0 items-center gap-2" :class="compact ? 'w-full' : ''">
           <UiInput
             v-model="searchQuery"
             type="text"
             :size="compact ? 'lg' : 'md'"
-            placeholder="搜索标题、文件名…"
+            placeholder="搜索标题、作者、标签或推文…"
             aria-label="搜索标题或文件名"
             :class="compact ? 'flex-1 pointer-coarse:[&_input]:h-11' : 'w-64 xl:w-72'"
           >
@@ -934,37 +1033,121 @@ onMounted(async () => {
             </div>
 
             <div v-if="compact">
-              <p class="mb-2 text-meta font-medium text-muted">排序</p>
-              <UiSegmented v-model="sortBy" label="排序方式" :options="sortOptions" block />
+              <p class="mb-2 text-meta font-medium text-muted">观看状态</p>
+              <UiSegmented v-model="viewStatusFilter" label="观看状态" :options="viewStatusOptions" block />
             </div>
-            <div v-else ref="sortDropdownRef" class="relative" @keydown.esc.prevent.stop="sortDropdownOpen = false; sortButtonRef?.focus()">
+            <div v-else ref="viewStatusDropdownRef" class="relative" @keydown.esc.prevent.stop="viewStatusDropdownOpen = false; viewStatusButtonRef?.focus()">
               <button
-                ref="sortButtonRef"
+                ref="viewStatusButtonRef"
                 type="button"
-                :class="buttonClass('ghost', 'md')"
+                :class="[
+                  buttonClass('secondary', 'md'),
+                  viewStatusFilter ? '!border-accent/50 !bg-accent/15 !text-accent-glow' : '',
+                ]"
                 aria-haspopup="menu"
-                :aria-expanded="sortDropdownOpen"
-                :aria-label="`排序方式：${sortLabel}`"
-                @click="sortDropdownOpen = !sortDropdownOpen"
+                :aria-expanded="viewStatusDropdownOpen"
+                :aria-label="`观看状态：${viewStatusLabel}`"
+                @click="viewStatusDropdownOpen = !viewStatusDropdownOpen"
               >
-                <ArrowUpDown :size="15" class="text-subtle" aria-hidden="true" />
-                <span>{{ sortLabel }}</span>
-                <ChevronDown :size="15" class="text-subtle transition-transform duration-150" :class="sortDropdownOpen ? 'rotate-180' : ''" aria-hidden="true" />
+                <Eye :size="15" :class="viewStatusFilter ? '' : 'text-subtle'" aria-hidden="true" />
+                <span>{{ viewStatusLabel }}</span>
+                <ChevronDown :size="15" class="text-subtle transition-transform duration-150" :class="viewStatusDropdownOpen ? 'rotate-180' : ''" aria-hidden="true" />
               </button>
-              <div v-if="sortDropdownOpen" role="menu" aria-label="排序方式" :class="[popoverClass, 'absolute left-0 top-full z-50 mt-1.5 min-w-44']">
+              <div v-if="viewStatusDropdownOpen" role="menu" aria-label="观看状态" :class="[popoverClass, 'absolute left-0 top-full z-50 mt-1.5 min-w-36']">
                 <button
-                  v-for="option in sortOptions"
+                  v-for="option in viewStatusOptions"
                   :key="option.value"
                   type="button"
                   role="menuitemradio"
-                  :aria-checked="sortBy === option.value"
-                  :class="[menuItemClass, sortBy === option.value ? '!text-ink font-medium' : '']"
-                  @click="selectSort(option.value)"
+                  :aria-checked="viewStatusFilter === option.value"
+                  :class="[menuItemClass, viewStatusFilter === option.value ? '!text-ink font-medium' : '']"
+                  @click="selectViewStatus(option.value)"
                 >
                   {{ option.label }}
-                  <Check v-if="sortBy === option.value" :size="15" class="ml-auto text-accent" aria-hidden="true" />
+                  <Check v-if="viewStatusFilter === option.value" :size="15" class="ml-auto text-accent" aria-hidden="true" />
                 </button>
               </div>
+            </div>
+
+            <div v-if="compact">
+              <p class="mb-2 text-meta font-medium text-muted">最低评分</p>
+              <UiSegmented v-model="minRatingFilter" label="最低评分" :options="ratingOptions" block />
+            </div>
+            <div v-else ref="ratingDropdownRef" class="relative" @keydown.esc.prevent.stop="ratingDropdownOpen = false; ratingButtonRef?.focus()">
+              <button
+                ref="ratingButtonRef"
+                type="button"
+                :class="[
+                  buttonClass('secondary', 'md'),
+                  minRatingFilter ? '!border-accent/50 !bg-accent/15 !text-accent-glow' : '',
+                ]"
+                aria-haspopup="menu"
+                :aria-expanded="ratingDropdownOpen"
+                :aria-label="`最低评分：${minRatingLabel}`"
+                @click="ratingDropdownOpen = !ratingDropdownOpen"
+              >
+                <Star :size="15" :class="minRatingFilter ? 'text-star' : 'text-subtle'" :fill="minRatingFilter ? 'currentColor' : 'none'" aria-hidden="true" />
+                <span>{{ minRatingLabel }}</span>
+                <ChevronDown :size="15" class="text-subtle transition-transform duration-150" :class="ratingDropdownOpen ? 'rotate-180' : ''" aria-hidden="true" />
+              </button>
+              <div v-if="ratingDropdownOpen" role="menu" aria-label="最低评分" :class="[popoverClass, 'absolute left-0 top-full z-50 mt-1.5 min-w-36']">
+                <button
+                  v-for="option in ratingOptions"
+                  :key="option.value"
+                  type="button"
+                  role="menuitemradio"
+                  :aria-checked="minRatingFilter === option.value"
+                  :class="[menuItemClass, minRatingFilter === option.value ? '!text-ink font-medium' : '']"
+                  @click="selectMinRating(option.value)"
+                >
+                  {{ option.label }}
+                  <Check v-if="minRatingFilter === option.value" :size="15" class="ml-auto text-accent" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+
+            <div v-if="compact">
+              <p class="mb-2 text-meta font-medium text-muted">排序</p>
+              <UiSegmented v-model="sortBy" label="排序方式" :options="sortOptions" block />
+              <UiButton v-if="sortBy === 'random'" variant="secondary" size="md" block class="mt-2" @click="reshuffleRandom">
+                <template #icon><Shuffle :size="15" aria-hidden="true" /></template>
+                换一批随机顺序
+              </UiButton>
+            </div>
+            <div v-else class="flex items-center gap-1">
+              <div ref="sortDropdownRef" class="relative" @keydown.esc.prevent.stop="sortDropdownOpen = false; sortButtonRef?.focus()">
+                <button
+                  ref="sortButtonRef"
+                  type="button"
+                  :class="buttonClass('ghost', 'md')"
+                  aria-haspopup="menu"
+                  :aria-expanded="sortDropdownOpen"
+                  :aria-label="`排序方式：${sortLabel}`"
+                  @click="sortDropdownOpen = !sortDropdownOpen"
+                >
+                  <ArrowUpDown :size="15" class="text-subtle" aria-hidden="true" />
+                  <span>{{ sortLabel }}</span>
+                  <ChevronDown :size="15" class="text-subtle transition-transform duration-150" :class="sortDropdownOpen ? 'rotate-180' : ''" aria-hidden="true" />
+                </button>
+                <div v-if="sortDropdownOpen" role="menu" aria-label="排序方式" :class="[popoverClass, 'absolute left-0 top-full z-50 mt-1.5 min-w-44']">
+                  <button
+                    v-for="option in sortOptions"
+                    :key="option.value"
+                    type="button"
+                    role="menuitemradio"
+                    :aria-checked="sortBy === option.value"
+                    :class="[menuItemClass, sortBy === option.value ? '!text-ink font-medium' : '']"
+                    @click="selectSort(option.value)"
+                  >
+                    {{ option.label }}
+                    <Check v-if="sortBy === option.value" :size="15" class="ml-auto text-accent" aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+              <UiButton v-if="sortBy === 'random'" variant="ghost" size="sm" title="换一批随机顺序" aria-label="换一批随机顺序" @click="reshuffleRandom">
+                <template #icon><Shuffle :size="14" aria-hidden="true" /></template>
+                换一批
+              </UiButton>
             </div>
 
             <div v-if="compact">

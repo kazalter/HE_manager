@@ -99,7 +99,8 @@ class MediaCoreTest(unittest.TestCase):
 
             self.assertEqual(len(items), 1)
             self.assertEqual(response.headers["x-total-count"], "2")
-            self.assertEqual(response.headers["access-control-expose-headers"], "X-Total-Count")
+            self.assertIn("X-Total-Count", response.headers["access-control-expose-headers"])
+            self.assertIn("X-Hidden-Duplicates-Count", response.headers["access-control-expose-headers"])
         finally:
             db.close()
 
@@ -660,6 +661,101 @@ class MediaCoreTest(unittest.TestCase):
             )
             self.assertEqual(updated2.progress, 0)
             self.assertEqual(updated2.view_status, "viewing")
+        finally:
+            db.close()
+
+    def test_search_matches_artist_metadata_xpost_synonyms_rating_and_random_seed(self):
+        db = self.Session()
+        try:
+            folder = models.Folder(path="D:\\SearchLib", scan_mode="auto")
+            db.add(folder)
+            db.flush()
+
+            manga = models.Media(
+                folder_id=folder.id,
+                title="[CircleA] Random Title",
+                artist="ArtistAlpha",
+                relative_path="manga1.cbz",
+                absolute_path="D:\\SearchLib\\manga1.cbz",
+                media_type="manga",
+                extension=".cbz",
+                file_size=100,
+                rating=5,
+                view_status="viewed",
+                is_missing=False,
+            )
+            x_video = models.Media(
+                folder_id=folder.id,
+                title="clip_001",
+                relative_path="x/clip_001.mp4",
+                absolute_path="D:\\SearchLib\\clip_001.mp4",
+                media_type="video",
+                extension=".mp4",
+                file_size=200,
+                rating=2,
+                view_status="unviewed",
+                source_site="x",
+                is_missing=False,
+            )
+            synonym_manga = models.Media(
+                folder_id=folder.id,
+                title="幼馴染との日々",
+                relative_path="syn.cbz",
+                absolute_path="D:\\SearchLib\\syn.cbz",
+                media_type="manga",
+                extension=".cbz",
+                file_size=150,
+                rating=4,
+                view_status="viewing",
+                is_missing=False,
+            )
+            db.add_all([manga, x_video, synonym_manga])
+            db.flush()
+
+            db.add(models.MangaMetadataProfile(
+                media_id=manga.id,
+                parsed_circle="CircleBeta",
+                parody="BlueArchive",
+                external_tags='["wholesome"]',
+            ))
+            x_src = models.XImportSource(name="src")
+            db.add(x_src)
+            db.flush()
+            x_post = models.XPost(
+                source_id=x_src.id,
+                tweet_id="t1",
+                url="https://x.com/u/1",
+                author_screen_name="IllustratorX",
+                author_name="画师X",
+                full_text="Sketch animation showcase",
+            )
+            db.add(x_post)
+            db.flush()
+            db.add(models.XMediaItem(
+                post_id=x_post.id,
+                media_index=0,
+                media_type="video",
+                remote_url="https://x.com/v.mp4",
+                library_media_id=x_video.id,
+            ))
+            db.commit()
+
+            # Match artist & metadata_profile parody
+            self.assertEqual([m.id for m in media_routes.list_media(Response(), search="ArtistAlpha", db=db)], [manga.id])
+            self.assertEqual([m.id for m in media_routes.list_media(Response(), search="BlueArchive", db=db)], [manga.id])
+            # Match XPost full_text and author
+            self.assertEqual([m.id for m in media_routes.list_media(Response(), search="Sketch", db=db)], [x_video.id])
+            self.assertEqual([m.id for m in media_routes.list_media(Response(), search="IllustratorX", db=db)], [x_video.id])
+            # Match synonym expansion (青梅竹马 -> 幼馴染)
+            self.assertEqual([m.id for m in media_routes.list_media(Response(), search="青梅竹马", db=db)], [synonym_manga.id])
+            # Min rating filter
+            high_rated = media_routes.list_media(Response(), min_rating=4, db=db)
+            self.assertEqual({m.id for m in high_rated}, {manga.id, synonym_manga.id})
+            # Deterministic random sort with seed
+            r1 = [m.id for m in media_routes.list_media(Response(), sort="random", seed=12345, db=db)]
+            r2 = [m.id for m in media_routes.list_media(Response(), sort="random", seed=12345, db=db)]
+            self.assertEqual(r1, r2)
+            self.assertEqual(set(r1), {manga.id, x_video.id, synonym_manga.id})
         finally:
             db.close()
 

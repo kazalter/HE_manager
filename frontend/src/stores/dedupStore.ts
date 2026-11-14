@@ -153,6 +153,39 @@ const batchResolve = async (pairIds: number[], action: 'keep_both' | 'ignore') =
   }
 }
 
+const bulkResolve = async (
+  level: 'weak_suspected' | 'suspected_duplicate' | 'strong_duplicate',
+  action: 'keep_both' | 'ignore',
+  mediaType?: string,
+) => {
+  try {
+    const res = await axios.post<{ processed: number; skipped: number }>(
+      `${API_BASE_URL}/dedup/candidates-bulk-resolve`,
+      {
+        level,
+        action,
+        media_type: mediaType || undefined,
+      },
+    )
+    await refresh()
+    return res.data
+  } catch (err: any) {
+    state.errorMessage = err.response?.data?.detail || '一键批量处理失败'
+    throw err
+  }
+}
+
+const cleanupStale = async () => {
+  try {
+    const res = await axios.post<{ deleted: number }>(`${API_BASE_URL}/dedup/candidates-cleanup-stale`)
+    await refresh()
+    return res.data
+  } catch (err: any) {
+    state.errorMessage = err.response?.data?.detail || '清理失效记录失败'
+    throw err
+  }
+}
+
 return {
   state,
   summary: computed(() => state.summary),
@@ -168,6 +201,8 @@ return {
   recheckMedia,
   deleteMediaFile,
   batchResolve,
+  bulkResolve,
+  cleanupStale,
   setFilters(filters: { level?: DedupState['filterLevel']; status?: DedupState['filterStatus']; mediaType?: DedupState['filterMediaType']; sort?: DedupState['sort'] }) {
     if (filters.level !== undefined) state.filterLevel = filters.level
     if (filters.status !== undefined) state.filterStatus = filters.status

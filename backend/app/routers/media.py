@@ -12,10 +12,10 @@ from PIL import Image
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.responses import FileResponse
-from sqlalchemy import func
+from sqlalchemy import and_, exists, func, or_
 from sqlalchemy.orm import Session, selectinload
 
-from .. import auth, database, media_cleanup, models, scanner, schemas, tagging
+from .. import auth, database, manga_search, media_cleanup, models, scanner, schemas, tagging
 from ..database import get_db
 from ..services.manga_pages import get_manga_image_files, get_manga_page_dimensions
 from ..services.media_access import get_media_or_404
@@ -147,6 +147,71 @@ def delete_folder(folder_id: int, db: Session = Depends(get_db)):
     return {"message": "Folder and associated media deleted from library"}
 
 
+
+def _escape_like(term: str) -> str:
+    return term.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+
+
+def _apply_media_search_filter(query, search: Optional[str]):
+    raw = (search or "").strip()
+    if not raw:
+        return query
+    terms = [t for t in raw.split() if t][:6]
+    for term in terms:
+        variants = manga_search.expand_query_tokens([term])[:10]
+        if not variants:
+            variants = [term]
+        term_clauses = []
+        for variant in variants:
+            pattern = f"%{_escape_like(variant)}%"
+            term_clauses.extend([
+                models.Media.title.ilike(pattern, escape="\\"),
+                models.Media.artist.ilike(pattern, escape="\\"),
+                models.Media.relative_path.ilike(pattern, escape="\\"),
+                models.Media.tags.any(models.Tag.name.ilike(pattern, escape="\\")),
+                models.Media.metadata_profile.has(
+                    or_(
+                        models.MangaMetadataProfile.parsed_title.ilike(pattern, escape="\\"),
+                        models.MangaMetadataProfile.parsed_artist.ilike(pattern, escape="\\"),
+                        models.MangaMetadataProfile.parsed_circle.ilike(pattern, escape="\\"),
+                        models.MangaMetadataProfile.parody.ilike(pattern, escape="\\"),
+                        models.MangaMetadataProfile.external_tags.ilike(pattern, escape="\\"),
+                    )
+                ),
+                exists().where(
+                    and_(
+                        models.XMediaItem.library_media_id == models.Media.id,
+                        models.XPost.id == models.XMediaItem.post_id,
+                        or_(
+                            models.XPost.author_screen_name.ilike(pattern, escape="\\"),
+                            models.XPost.author_name.ilike(pattern, escape="\\"),
+                            models.XPost.full_text.ilike(pattern, escape="\\"),
+                        ),
+                    )
+                ),
+            ])
+        query = query.filter(or_(*term_clauses))
+    return query
+
+
+def _apply_media_sort(query, sort: str, seed: Optional[int] = None):
+    if sort == "title":
+        return query.order_by(models.Media.title.asc())
+    if sort == "rating":
+        return query.order_by(models.Media.rating.desc(), models.Media.id.desc())
+    if sort == "opened":
+        return query.order_by(models.Media.last_opened_at.desc(), models.Media.id.desc())
+    if sort == "random":
+        if seed is not None:
+            safe_seed = abs(int(seed))
+            return query.order_by(
+                ((models.Media.id * ((safe_seed % 9973) + 131) + safe_seed * 37) % 1000003),
+                models.Media.id.asc(),
+            )
+        return query.order_by(func.random())
+    return query.order_by(models.Media.id.desc())
+
+
 @router.get("/media", response_model=List[schemas.Media])
 def list_media(
     response: Response,
@@ -155,11 +220,13 @@ def list_media(
     tag: Optional[str] = None,
     favorite: Optional[bool] = None,
     view_status: Optional[str] = None,
+    min_rating: Optional[int] = None,
     is_missing: Optional[bool] = None,
     duplicate_status: Optional[str] = None,
     include_hidden_duplicates: bool = False,
     source_site: Optional[str] = None,
     sort: str = "date",
+    seed: Optional[int] = None,
     limit: Optional[int] = None,
     offset: Optional[int] = None,
     db: Session = Depends(get_db),
@@ -168,13 +235,15 @@ def list_media(
     if media_type:
         query = query.filter(models.Media.media_type == media_type)
     if search:
-        query = query.filter(models.Media.title.ilike(f"%{search}%"))
+        query = _apply_media_search_filter(query, search)
     if tag:
         query = query.join(models.Media.tags).filter(models.Tag.name == tag)
     if favorite is not None:
         query = query.filter(models.Media.favorite == favorite)
     if view_status:
         query = query.filter(models.Media.view_status == view_status)
+    if min_rating is not None and min_rating > 0:
+        query = query.filter(models.Media.rating >= min_rating)
     if is_missing is not None:
         query = query.filter(models.Media.is_missing == is_missing)
     if source_site:
@@ -182,9 +251,19 @@ def list_media(
             query = query.filter(models.Media.source_site.is_(None))
         else:
             query = query.filter(models.Media.source_site == source_site)
+    hidden_duplicates_count = 0
     if duplicate_status:
         query = query.filter(models.Media.duplicate_status == duplicate_status)
     elif not include_hidden_duplicates:
+        hidden_duplicates_count = (
+            query.filter(
+                models.Media.duplicate_status.in_(
+                    ["checking", "strong_duplicate", "suspected_duplicate"]
+                )
+            )
+            .order_by(None)
+            .count()
+        )
         query = query.filter(
             models.Media.duplicate_status.notin_(["checking", "strong_duplicate", "suspected_duplicate", "dedup_excluded"])
         )
@@ -193,16 +272,10 @@ def list_media(
     # filtered total needed by the web library's server-side pagination.
     total = query.order_by(None).count()
     response.headers["X-Total-Count"] = str(total)
-    response.headers["Access-Control-Expose-Headers"] = "X-Total-Count"
+    response.headers["X-Hidden-Duplicates-Count"] = str(hidden_duplicates_count)
+    response.headers["Access-Control-Expose-Headers"] = "X-Total-Count, X-Hidden-Duplicates-Count"
 
-    if sort == "title":
-        query = query.order_by(models.Media.title.asc())
-    elif sort == "rating":
-        query = query.order_by(models.Media.rating.desc(), models.Media.id.desc())
-    elif sort == "opened":
-        query = query.order_by(models.Media.last_opened_at.desc(), models.Media.id.desc())
-    else:
-        query = query.order_by(models.Media.id.desc())
+    query = _apply_media_sort(query, sort, seed=seed)
 
     effective_limit = 200 if limit is None else max(1, min(limit, 200))
     query = query.limit(effective_limit)
@@ -219,6 +292,23 @@ def list_media(
             if dimensions['width'] and dimensions['height']:
                 item.width, item.height = dimensions['width'], dimensions['height']
                 dimensions_changed = True
+        elif (
+            item.media_type == 'video'
+            and (not item.width or not item.height or not item.duration)
+            and not item.is_missing
+            and item.absolute_path
+            and os.path.exists(item.absolute_path)
+        ):
+            v_meta = scanner.get_video_metadata(item.absolute_path)
+            if not item.width and v_meta.get('width'):
+                item.width = v_meta['width']
+                dimensions_changed = True
+            if not item.height and v_meta.get('height'):
+                item.height = v_meta['height']
+                dimensions_changed = True
+            if not item.duration and v_meta.get('duration'):
+                item.duration = v_meta['duration']
+                dimensions_changed = True
     if dimensions_changed:
         db.commit()
     return items
@@ -229,7 +319,10 @@ def list_mobile_media(
     response: Response,
     media_type: Optional[str] = None,
     search: Optional[str] = None,
+    view_status: Optional[str] = None,
+    min_rating: Optional[int] = None,
     sort: str = "date",
+    seed: Optional[int] = None,
     limit: Optional[int] = None,
     offset: Optional[int] = None,
     _: models.User = Depends(auth.get_current_user),
@@ -244,20 +337,17 @@ def list_mobile_media(
     if media_type:
         query = query.filter(models.Media.media_type == media_type)
     if search:
-        query = query.filter(models.Media.title.ilike(f"%{search}%"))
+        query = _apply_media_search_filter(query, search)
+    if view_status:
+        query = query.filter(models.Media.view_status == view_status)
+    if min_rating is not None and min_rating > 0:
+        query = query.filter(models.Media.rating >= min_rating)
 
     total = query.order_by(None).count()
     response.headers["X-Total-Count"] = str(total)
     response.headers["Access-Control-Expose-Headers"] = "X-Total-Count"
 
-    if sort == "title":
-        query = query.order_by(models.Media.title.asc())
-    elif sort == "rating":
-        query = query.order_by(models.Media.rating.desc(), models.Media.id.desc())
-    elif sort == "opened":
-        query = query.order_by(models.Media.last_opened_at.desc(), models.Media.id.desc())
-    else:
-        query = query.order_by(models.Media.id.desc())
+    query = _apply_media_sort(query, sort, seed=seed)
 
     # Omitted pagination remains a full array for released Android clients.
     # New clients can page with a bounded limit and the total response header.
@@ -295,6 +385,19 @@ def get_media(media_id: int, db: Session = Depends(get_db)):
         dimensions = scanner.get_image_metadata(media.absolute_path)
         if dimensions['width'] and dimensions['height']:
             media.width, media.height = dimensions['width'], dimensions['height']
+    elif (
+        media.media_type == 'video'
+        and (not media.width or not media.height or not media.duration)
+        and media.absolute_path
+        and os.path.exists(media.absolute_path)
+    ):
+        v_meta = scanner.get_video_metadata(media.absolute_path)
+        if not media.width and v_meta.get('width'):
+            media.width = v_meta['width']
+        if not media.height and v_meta.get('height'):
+            media.height = v_meta['height']
+        if not media.duration and v_meta.get('duration'):
+            media.duration = v_meta['duration']
 
     media.last_opened_at = datetime.utcnow()
     if media.view_status == "unviewed":

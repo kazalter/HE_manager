@@ -439,6 +439,7 @@ class DedupSummary(BaseModel):
     fingerprinted: int = 0
     unchecked: int = 0
     failed: int = 0
+    stale_pairs: int = 0
 
 
 class DedupMediaSummary(BaseModel):
@@ -498,6 +499,17 @@ class DedupBatchActionRequest(BaseModel):
 class DedupBatchActionResponse(BaseModel):
     processed: int = 0
     skipped: int = 0
+
+
+class DedupBulkResolveRequest(BaseModel):
+    action: str = Field(description="keep_both | ignore")
+    level: str = Field(description="weak_suspected | suspected_duplicate | strong_duplicate")
+    media_type: Optional[str] = None
+    note: Optional[str] = None
+
+
+class DedupCleanupStaleResponse(BaseModel):
+    deleted: int = 0
 
 
 class DedupDeleteFileRequest(BaseModel):

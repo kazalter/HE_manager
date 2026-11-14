@@ -110,6 +110,7 @@ def dedup_summary(db: Session = Depends(get_db)):
         "strong_duplicate": pending.filter(models.DuplicateCandidate.level == "strong_duplicate").count(),
         "suspected_duplicate": pending.filter(models.DuplicateCandidate.level == "suspected_duplicate").count(),
         "weak_suspected": pending.filter(models.DuplicateCandidate.level == "weak_suspected").count(),
+        "stale_pairs": _filtered_candidate_query(db, level=None, status="stale", media_type=None).count(),
         "checking": base.filter(models.Media.duplicate_status.in_(["checking", "dedup_pending"])).count(),
         "failed": base.filter(models.Media.duplicate_status == "dedup_error").count(),
         "total_media": total_media,
@@ -281,6 +282,56 @@ def batch_resolve_duplicate_candidates(
         processed += 1
     db.commit()
     return {"processed": processed, "skipped": skipped}
+
+
+@router.post("/dedup/candidates-bulk-resolve", response_model=schemas.DedupBatchActionResponse)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
+def bulk_resolve_duplicate_candidates(
+    payload: schemas.DedupBulkResolveRequest,
+    db: Session = Depends(get_db),
+):
+    if payload.action not in {dedup_merge.ACTION_KEEP_BOTH, dedup_merge.ACTION_IGNORE}:
+        raise HTTPException(status_code=400, detail="批量处理只支持‘两者不是重复’或‘忽略’")
+    if payload.level not in {"weak_suspected", "suspected_duplicate", "strong_duplicate"}:
+        raise HTTPException(status_code=400, detail="请指定有效的置信等级")
+
+    pairs = _filtered_candidate_query(
+        db,
+        level=payload.level,
+        status="pending",
+        media_type=payload.media_type,
+    ).all()
+    processed = 0
+    affected_ids = set()
+    for pair in pairs:
+        if pair.candidate_media_id:
+            affected_ids.add(pair.candidate_media_id)
+        dedup_merge.apply_action(
+            db,
+            pair,
+            payload.action,
+            note=payload.note,
+            commit=False,
+        )
+        processed += 1
+    db.flush()
+    if payload.action == dedup_merge.ACTION_KEEP_BOTH:
+        for media_id in affected_ids:
+            dedup_worker._refresh_media_status(db, media_id, preserve_pending=False)
+    db.commit()
+    return {"processed": processed, "skipped": 0}
+
+
+@router.post("/dedup/candidates-cleanup-stale", response_model=schemas.DedupCleanupStaleResponse)
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
+def cleanup_stale_duplicate_candidates(db: Session = Depends(get_db)):
+    deleted = (
+        db.query(models.DuplicateCandidate)
+        .filter(models.DuplicateCandidate.status == "stale")
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return {"deleted": int(deleted or 0)}
 
 
 @router.post("/dedup/media/{media_id}/recheck")

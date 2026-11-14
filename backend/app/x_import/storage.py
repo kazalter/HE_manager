@@ -159,6 +159,29 @@ def upsert_library_media(
         )
         db.add(media)
 
+    # Populate width / height / duration from X metadata first, then probe local file if missing.
+    if not media.width and media_record.width and media_record.width > 0:
+        media.width = int(media_record.width)
+    if not media.height and media_record.height and media_record.height > 0:
+        media.height = int(media_record.height)
+    if media_type_for_library == "video":
+        if not media.duration and media_record.duration_ms and media_record.duration_ms > 0:
+            media.duration = max(1, int(round(media_record.duration_ms / 1000)))
+        if not media.width or not media.height or not media.duration:
+            v_meta = scanner.get_video_metadata(file_path)
+            if not media.width and v_meta.get("width"):
+                media.width = v_meta["width"]
+            if not media.height and v_meta.get("height"):
+                media.height = v_meta["height"]
+            if not media.duration and v_meta.get("duration"):
+                media.duration = v_meta["duration"]
+    elif not media.width or not media.height:
+        i_meta = scanner.get_image_metadata(file_path)
+        if not media.width and i_meta.get("width"):
+            media.width = i_meta["width"]
+        if not media.height and i_meta.get("height"):
+            media.height = i_meta["height"]
+
     # Thumbnail (best-effort; image files use themselves, videos use scanner's frame finder).
     if not media.cover_path:
         thumb_hash = hashlib.md5(file_path.encode("utf-8")).hexdigest()[:12]

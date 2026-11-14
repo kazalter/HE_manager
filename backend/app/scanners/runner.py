@@ -274,6 +274,14 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                             metadata = get_image_metadata(file_path)
                             if metadata['width'] and metadata['height']:
                                 existing.width, existing.height = metadata['width'], metadata['height']
+                        elif target_type == 'video' and (not existing.width or not existing.height or not existing.duration):
+                            metadata = get_video_metadata(file_path)
+                            if not existing.width and metadata['width']:
+                                existing.width = metadata['width']
+                            if not existing.height and metadata['height']:
+                                existing.height = metadata['height']
+                            if not existing.duration and metadata['duration']:
+                                existing.duration = metadata['duration']
                         continue
 
                     rel_path = os.path.relpath(file_path, folder.path)

@@ -321,4 +321,20 @@ describe('media library route interactions', () => {
       vi.unstubAllGlobals()
     }
   })
+
+  it('syncs view_status, min_rating and random sort seed to API params and clears them cleanly', async () => {
+    const { router, get } = await setup('/?view_status=unviewed&min_rating=4&sort=random&seed=424242&view=list')
+    const listCalls = get.mock.calls.filter(([url, config]) => String(url).endsWith('/media') && config?.params?.limit !== 12)
+    expect(listCalls[0]![1]?.params).toMatchObject({
+      view_status: 'unviewed',
+      min_rating: 4,
+      sort: 'random',
+      seed: 424242,
+    })
+    const clear = wrapper!.findAll('button').find(button => button.text().includes('清除筛选'))
+    expect(clear).toBeDefined()
+    await clear!.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ view: 'list' })
+  })
 })

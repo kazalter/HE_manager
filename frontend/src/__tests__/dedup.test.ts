@@ -8,23 +8,42 @@ let wrapper: ReturnType<typeof mount> | undefined
 const originalAdapter = axios.defaults.adapter
 let scans = 0
 let failedScan = false
+let cleanedStale = 0
+let bulkResolved = 0
 const stats = {
   pending_pairs: 0, strong_duplicate: 0, suspected_duplicate: 0, weak_suspected: 0,
   checking: 0, queue_size: 0, worker_running: false,
-  total_media: 12, fingerprinted: 2, unchecked: 10, failed: 1,
+  total_media: 12, fingerprinted: 2, unchecked: 10, failed: 1, stale_pairs: 0,
 }
 
 beforeEach(() => {
   vi.useFakeTimers()
   scans = 0
   failedScan = false
+  cleanedStale = 0
+  bulkResolved = 0
   stats.checking = 0
+  stats.weak_suspected = 0
+  stats.stale_pairs = 0
   stats.worker_running = false
   dedupStore.state.summary = null
   dedupStore.state.pairs = []
   dedupStore.state.errorMessage = ''
   dedupStore.setFilters({ level: '', status: 'pending', mediaType: '', sort: 'confidence' })
   axios.defaults.adapter = (async (config) => {
+    if (config.method === 'post' && config.url?.endsWith('/dedup/candidates-cleanup-stale')) {
+      cleanedStale++
+      const deleted = stats.stale_pairs ?? 0
+      stats.stale_pairs = 0
+      return { data: { deleted }, status: 200, statusText: 'OK', headers: {}, config }
+    }
+    if (config.method === 'post' && config.url?.endsWith('/dedup/candidates-bulk-resolve')) {
+      bulkResolved++
+      const processed = stats.weak_suspected ?? 0
+      stats.weak_suspected = 0
+      stats.pending_pairs = 0
+      return { data: { processed, skipped: 0 }, status: 200, statusText: 'OK', headers: {}, config }
+    }
     if (config.method === 'post' && config.url?.endsWith('/dedup/recheck')) {
       if (failedScan) throw { response: { data: { detail: '无法启动检测' } } }
       scans++
@@ -86,5 +105,23 @@ describe('duplicate detection page', () => {
     await flushPromises()
     expect(wrapper.find('[role="alert"]').text()).toContain('无法启动检测')
     expect(start!.attributes('disabled')).toBeUndefined()
+  })
+
+  it('supports cleaning stale pairs and bulk resolving weak duplicates', async () => {
+    stats.stale_pairs = 5
+    stats.weak_suspected = 8
+    stats.pending_pairs = 8
+    wrapper = mount(DedupView)
+    await flushPromises()
+    const cleanBtn = wrapper.findAll('button').find(b => b.text().includes('清理失效记录'))
+    const bulkBtn = wrapper.findAll('button').find(b => b.text().includes('一键非重复低置信度'))
+    expect(cleanBtn).toBeDefined()
+    expect(bulkBtn).toBeDefined()
+    await cleanBtn!.trigger('click')
+    await flushPromises()
+    await bulkBtn!.trigger('click')
+    await flushPromises()
+    expect(cleanedStale).toBe(1)
+    expect(bulkResolved).toBe(1)
   })
 })

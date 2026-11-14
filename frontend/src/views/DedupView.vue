@@ -140,6 +140,12 @@ const rangeStart = computed(() => total.value ? (dedupStore.state.page - 1) * de
 const rangeEnd = computed(() => Math.min(total.value, dedupStore.state.page * dedupStore.state.pageSize))
 const noPairs = computed(() => !loading.value && pairs.value.length === 0)
 const selectedCount = computed(() => selectedPairIds.value.size)
+const pendingPairsOnPage = computed(() => pairs.value.filter(pair => pair.status === 'pending'))
+const allPageSelected = computed(() =>
+  pendingPairsOnPage.value.length > 0 && pendingPairsOnPage.value.every(pair => selectedPairIds.value.has(pair.id)),
+)
+const bulkBusy = ref(false)
+const cleaningStale = ref(false)
 const scanActive = computed(() => dedupStore.state.scanStarting || (summary.value?.checking ?? 0) > 0 || (summary.value?.queue_size ?? 0) > 0)
 const coverage = computed(() => summary.value?.total_media
   ? Math.round((summary.value.fingerprinted / summary.value.total_media) * 100) : 0)
@@ -246,10 +252,57 @@ const onResolve = async (
   }
 }
 
+const toggleSelectAllOnPage = () => {
+  const next = new Set(selectedPairIds.value)
+  if (allPageSelected.value) {
+    for (const pair of pendingPairsOnPage.value) next.delete(pair.id)
+  } else {
+    for (const pair of pendingPairsOnPage.value) next.add(pair.id)
+  }
+  selectedPairIds.value = next
+}
+
 const onBatchNotDuplicate = async () => {
-  if (!selectedPairIds.value.size) return
-  await dedupStore.batchResolve([...selectedPairIds.value], 'keep_both')
-  selectedPairIds.value = new Set()
+  if (!selectedPairIds.value.size || bulkBusy.value) return
+  bulkBusy.value = true
+  try {
+    await dedupStore.batchResolve([...selectedPairIds.value], 'keep_both')
+    selectedPairIds.value = new Set()
+  } finally {
+    bulkBusy.value = false
+  }
+}
+
+const onBatchIgnore = async () => {
+  if (!selectedPairIds.value.size || bulkBusy.value) return
+  bulkBusy.value = true
+  try {
+    await dedupStore.batchResolve([...selectedPairIds.value], 'ignore')
+    selectedPairIds.value = new Set()
+  } finally {
+    bulkBusy.value = false
+  }
+}
+
+const onBulkResolveWeak = async () => {
+  if (bulkBusy.value || !(summary.value?.weak_suspected)) return
+  bulkBusy.value = true
+  try {
+    await dedupStore.bulkResolve('weak_suspected', 'keep_both', dedupStore.state.filterMediaType || undefined)
+    selectedPairIds.value = new Set()
+  } finally {
+    bulkBusy.value = false
+  }
+}
+
+const onCleanupStale = async () => {
+  if (cleaningStale.value || !(summary.value?.stale_pairs)) return
+  cleaningStale.value = true
+  try {
+    await dedupStore.cleanupStale()
+  } finally {
+    cleaningStale.value = false
+  }
 }
 
 const copyPath = async (media: DedupMediaSummary) => {
@@ -330,6 +383,27 @@ onBeforeUnmount(() => {
   <div class="relative min-h-full">
     <PageHeader title="重复管理" :count="`${summary?.pending_pairs ?? 0} 待处理`" description="按文件内容寻找重复，支持改名后的副本。检测只生成待审查结果，保留与清理由你决定。">
       <template #actions>
+        <UiButton
+          v-if="(summary?.stale_pairs ?? 0) > 0"
+          variant="ghost"
+          size="sm"
+          class="pointer-coarse:h-11"
+          :loading="cleaningStale"
+          :disabled="cleaningStale || loading"
+          @click="onCleanupStale"
+        >
+          清理失效记录 ({{ summary?.stale_pairs }})
+        </UiButton>
+        <UiButton
+          v-if="(summary?.weak_suspected ?? 0) > 0"
+          variant="secondary"
+          class="pointer-coarse:h-11"
+          :loading="bulkBusy"
+          :disabled="bulkBusy || loading"
+          @click="onBulkResolveWeak"
+        >
+          一键非重复低置信度 ({{ summary?.weak_suspected }})
+        </UiButton>
         <UiButton variant="secondary" class="pointer-coarse:h-11" :disabled="loading" aria-label="刷新检测状态" @click="onRefresh">
           <template #icon><RefreshCw :size="16" :class="(loading || refreshSpinning) ? 'animate-spin' : ''" aria-hidden="true" /></template>
           <span class="hidden min-[480px]:inline">刷新状态</span>
@@ -451,7 +525,11 @@ onBeforeUnmount(() => {
         <!-- 重复候选列表 -->
         <UiCard as="section" padding="none" aria-label="重复候选列表" class="overflow-hidden">
           <div class="hidden h-10 items-center gap-3 border-b border-line px-4 text-caption font-medium text-subtle min-[1050px]:grid min-[1050px]:grid-cols-[40px_88px_72px_minmax(0,1fr)_minmax(140px,.7fr)_minmax(0,1fr)_120px]">
-            <span aria-hidden="true"></span><span>置信度</span><span>类型</span><span>左侧记录</span><span>差异</span><span>右侧记录</span><span class="text-right">操作</span>
+            <label v-if="pendingPairsOnPage.length" class="flex size-8 cursor-pointer items-center justify-center rounded-md hover:bg-surface-2" title="全选本页待处理">
+              <span class="sr-only">全选本页待处理</span>
+              <input type="checkbox" :checked="allPageSelected" @change="toggleSelectAllOnPage" class="size-4 rounded-sm accent-accent" />
+            </label>
+            <span v-else aria-hidden="true"></span><span>置信度</span><span>类型</span><span>左侧记录</span><span>差异</span><span>右侧记录</span><span class="text-right">操作</span>
           </div>
 
           <div v-if="loading && pairs.length === 0" aria-live="polite" class="divide-y divide-line">
@@ -619,8 +697,11 @@ onBeforeUnmount(() => {
             <template v-if="selectedCount">
               <span class="text-faint" aria-hidden="true">·</span>
               <span class="font-medium text-ink tabular-nums">已选择 {{ selectedCount }} 组</span>
-              <UiButton variant="ghost" size="sm" @click="clearSelection">取消选择</UiButton>
-              <UiButton variant="primary" size="sm" @click="onBatchNotDuplicate">
+              <UiButton variant="ghost" size="sm" :disabled="bulkBusy" @click="clearSelection">取消选择</UiButton>
+              <UiButton variant="secondary" size="sm" :disabled="bulkBusy" @click="onBatchIgnore">
+                批量忽略
+              </UiButton>
+              <UiButton variant="primary" size="sm" :loading="bulkBusy" :disabled="bulkBusy" @click="onBatchNotDuplicate">
                 <template #icon><Check :size="14" aria-hidden="true" /></template>
                 批量标记为不是重复
               </UiButton>

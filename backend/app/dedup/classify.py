@@ -73,13 +73,15 @@ def classify_manga(existing: FingerprintLite, candidate: FingerprintLite) -> Tup
     if matches:
         reasons.append(f"{matches}/3 个抽样页 hash 匹配")
 
+    page_count = existing.page_count or candidate.page_count or 0
+
     if pages_match and matches >= 3:
         return LEVEL_STRONG, 95, reasons
     if matches >= 2 and (pages_match or size_match):
         return LEVEL_SUSPECTED, 75, reasons
-    if pages_match and size_match:
+    if matches >= 1 and pages_match and size_match and (page_count == 1 or page_count > 6):
         return LEVEL_SUSPECTED, 65, reasons
-    if matches >= 1 or pages_match:
+    if matches >= 1 or (pages_match and size_match):
         return LEVEL_WEAK, 45, reasons
     return LEVEL_UNIQUE, 0, reasons
 

@@ -39,6 +39,7 @@ export interface DedupSummary {
     fingerprinted: number;
     unchecked: number;
     failed: number;
+    stale_pairs?: number;
 }
 
 export interface DedupMediaSummary {

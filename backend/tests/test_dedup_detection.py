@@ -284,3 +284,58 @@ class DedupDetectionTest(unittest.TestCase):
         self.assertEqual(res.width, 320)
         self.assertEqual(res.height, 180)
         self.assertEqual(res.hash_first, expected_hash)
+
+    def test_short_manga_and_zero_hash_match_demoted_to_weak(self):
+        from app.dedup import classify as dedup_classify
+
+        short_a = dedup_classify.FingerprintLite("manga", 10000, 4, None, None, None, "h1", "h2", "h3")
+        short_b = dedup_classify.FingerprintLite("manga", 10200, 4, None, None, None, "h1", "x2", "x3")
+        level, score, _ = dedup_classify.classify(short_a, short_b)
+        self.assertEqual(level, dedup_classify.LEVEL_WEAK)
+        self.assertEqual(score, 45)
+
+        zero_a = dedup_classify.FingerprintLite("manga", 50000, 26, None, None, None, "h1", "h2", "h3")
+        zero_b = dedup_classify.FingerprintLite("manga", 50500, 26, None, None, None, "x1", "x2", "x3")
+        level, _, _ = dedup_classify.classify(zero_a, zero_b)
+        self.assertEqual(level, dedup_classify.LEVEL_WEAK)
+
+        long_a = dedup_classify.FingerprintLite("manga", 50000, 26, None, None, None, "h1", "h2", "h3")
+        long_b = dedup_classify.FingerprintLite("manga", 50500, 26, None, None, None, "h1", "x2", "x3")
+        level, score, _ = dedup_classify.classify(long_a, long_b)
+        self.assertEqual(level, dedup_classify.LEVEL_SUSPECTED)
+        self.assertEqual(score, 65)
+
+    def test_cleanup_stale_and_bulk_resolve_endpoints(self):
+        from app import schemas
+
+        left = self.image("a.png")
+        mid = self.image("b.png", status="weak_suspected")
+        right = self.image("c.png", status="suspected_duplicate")
+        self.db.add_all([
+            models.DuplicateCandidate(
+                existing_media_id=left, candidate_media_id=mid,
+                level="weak_suspected", similarity=45, status="pending",
+            ),
+            models.DuplicateCandidate(
+                existing_media_id=left, candidate_media_id=right,
+                level="weak_suspected", similarity=45, status="stale",
+            ),
+        ])
+        self.db.commit()
+
+        summary = dedup.dedup_summary(db=self.db)
+        self.assertEqual(summary["stale_pairs"], 1)
+        self.assertEqual(summary["weak_suspected"], 1)
+
+        cleaned = dedup.cleanup_stale_duplicate_candidates(db=self.db)
+        self.assertEqual(cleaned["deleted"], 1)
+        self.assertEqual(self.db.query(models.DuplicateCandidate).filter_by(status="stale").count(), 0)
+
+        res = dedup.bulk_resolve_duplicate_candidates(
+            schemas.DedupBulkResolveRequest(action="keep_both", level="weak_suspected"),
+            db=self.db,
+        )
+        self.assertEqual(res["processed"], 1)
+        self.db.expire_all()
+        self.assertEqual(self.db.get(models.Media, mid).duplicate_status, "unique")
+        self.assertEqual(self.db.query(models.DuplicateCandidate).filter_by(status="kept_both").count(), 1)
