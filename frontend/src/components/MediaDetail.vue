@@ -329,7 +329,7 @@ const imagePages = computed(() => {
 const imagePage = computed(() => Math.max(0, imagePages.value.findIndex(item => item.id === currentMedia.value.id)))
 const imageDimensions = computed(() => imagePages.value.map(item => item.width && item.height ? [item.width, item.height] as [number, number] : null))
 watch([() => props.currentImageId, () => props.initialMedia], ([imageId, media]) => {
-  if (desktopBridge || !isImage.value) return
+  if (!isImage.value) return
   // Follow browser back/forward even while another image's metadata is pending.
   const target = imageId === undefined || media.id === imageId ? media : imagePages.value.find(item => item.id === imageId)
   if (target?.media_type === 'image') currentMedia.value = target
@@ -337,7 +337,7 @@ watch([() => props.currentImageId, () => props.initialMedia], ([imageId, media])
 const selectImagePage = (page: number) => {
   const target = imagePages.value[page]
   if (!target || target.id === currentMedia.value.id) return
-  if (!desktopBridge) currentMedia.value = target
+  currentMedia.value = target
   emit('navigate', target)
 }
 const setReaderPage = (page: number) => {

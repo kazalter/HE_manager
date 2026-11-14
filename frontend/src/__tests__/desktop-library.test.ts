@@ -5,7 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import axios from 'axios'
 vi.mock('../desktop', () => ({ desktopBridge: {}, desktopSession: reactive({ generation: 'library-session', revision: 1 }) }))
 vi.mock('../composables/useCompactViewport', () => ({ useCompactViewport: () => ref(false) }))
-vi.mock('../components/asyncComponents', () => ({ AsyncMediaDetail: defineComponent({ props: ['initialMedia', 'allMedia', 'hasAdjacentMediaPage', 'loadAdjacentMediaPage'], template: '<div class="opened-detail">{{ initialMedia.title }}</div>' }) }))
+vi.mock('../components/asyncComponents', () => ({ AsyncMediaDetail: defineComponent({ props: ['initialMedia', 'allMedia', 'hasAdjacentMediaPage', 'loadAdjacentMediaPage'], emits: ['navigate'], template: '<div class="opened-detail" @click="$emit(\'navigate\', allMedia[1])">{{ initialMedia.title }}</div>' }) }))
 import HomeView from '../views/HomeView.vue'
 import { authState } from '../auth'
 const item = (id: number) => ({ id, title: 'Media ' + id, relative_path: `${id}.mp4`, media_type: 'video', cover_path: null, width: 640, height: 360, page_count: null, duration: 30, progress: 0, rating: 0, favorite: false, view_status: 'unviewed', tags: [], last_opened_at: null, created_at: '2026-10-18', is_missing: false })
@@ -13,10 +13,10 @@ let wrapper: ReturnType<typeof mount> | undefined
 const response = (data: unknown, total = 62) => ({ data, headers: { 'x-total-count': String(total) } })
 beforeEach(() => { localStorage.clear(); authState.token = ''; authState.user = { id: 1, username: 'test', is_admin: false, is_active: true, created_at: '' }; vi.restoreAllMocks() })
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; document.body.innerHTML = '' })
-async function create(detail?: (id: number) => Promise<any>) {
+async function create(detail?: (id: number) => Promise<any>, images = false) {
  const get = vi.spyOn(axios, 'get').mockImplementation(async (url, config: any) => {
   if (url === '/tags') return response([])
-  if (url === '/media') return response(config?.params?.sort === 'opened' ? [] : Array.from({ length: config?.params?.offset ? 2 : 60 }, (_, i) => item(i + (config?.params?.offset || 0) + 1)))
+  if (url === '/media') return response(config?.params?.sort === 'opened' ? [] : Array.from({ length: config?.params?.offset ? 2 : 60 }, (_, i) => ({ ...item(i + (config?.params?.offset || 0) + 1), ...(images ? { media_type: 'image' } : {}) })))
   const id = /^\/media\/(\d+)$/.exec(String(url))?.[1]
   if (id) return detail ? detail(Number(id)) : response({ ...item(Number(id)), title: 'Verified ' + id, view_status: 'viewing', last_opened_at: '2026-10-18' })
   throw new Error('Unexpected request ' + url)
@@ -53,5 +53,19 @@ describe('desktop library contract', () => {
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await flushPromises()
   complete(response({ ...item(1), title: 'Stale detail' })); await flushPromises()
   expect(wrapper!.find('.opened-detail').exists()).toBe(false); expect(router.currentRoute.value.query.media).toBeUndefined()
+ })
+ it('keeps the desktop image viewer mounted while the next image is verified', async () => {
+  let complete!: (value: any) => void
+  const { router } = await create(id => id === 1
+   ? Promise.resolve(response({ ...item(1), media_type: 'image' }))
+   : new Promise(resolve => { complete = resolve }), true)
+  await wrapper!.get('.test-card').trigger('click'); await flushPromises()
+  const viewer = wrapper!.get('.opened-detail').element
+  await wrapper!.get('.opened-detail').trigger('click'); await flushPromises()
+  expect(router.currentRoute.value.query.media).toBe('2')
+  expect(wrapper!.get('.opened-detail').element).toBe(viewer)
+  complete(response({ ...item(2), media_type: 'image' })); await flushPromises()
+  expect(wrapper!.get('.opened-detail').element).toBe(viewer)
+  expect(wrapper!.get('.opened-detail').text()).toBe('Media 2')
  })
 })

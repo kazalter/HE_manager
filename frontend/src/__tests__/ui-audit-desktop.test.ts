@@ -57,6 +57,7 @@ vi.mock('../stores/audioPlaybackStore', () => ({
 import DesktopVideoPlayer from '../components/media-detail/DesktopVideoPlayer.vue'
 import DesktopToolbar from '../components/DesktopToolbar.vue'
 import MediaDetail from '../components/MediaDetail.vue'
+import MangaReader from '../components/media-detail/MangaReader.vue'
 import router from '../router/index'
 
 const playback = (position = 5) => ({
@@ -89,6 +90,26 @@ afterEach(() => {
 })
 
 describe('ui-audit desktop coverage', () => {
+  it('changes desktop image pages without replacing the reader and follows route updates', async () => {
+    const images = [1, 2, 3].map(id => ({ id, title: `Image ${id}`, media_type: 'image', is_missing: false,
+      progress: 0, view_status: 'unviewed', tags: [], favorite: false, rating: 0 }))
+    const wrapper = mount(MediaDetail, {
+      props: { initialMedia: images[0] as any, allMedia: images as any, currentImageId: 1 },
+      global: { stubs: { MangaReader: true, MetadataPanel: true } },
+      attachTo: document.body,
+    })
+    wrappers.push(wrapper)
+    const reader = wrapper.getComponent(MangaReader)
+    Object.assign(reader.vm, { flushVisiblePage: vi.fn() })
+    expect(reader.props('currentPage')).toBe(0)
+    reader.vm.$emit('update:currentPage', 1)
+    await flushPromises()
+    expect(wrapper.getComponent(MangaReader).element).toBe(reader.element)
+    expect(reader.props('currentPage')).toBe(1)
+    expect(wrapper.emitted('navigate')?.at(-1)?.[0]).toMatchObject({ id: 2 })
+    await wrapper.setProps({ currentImageId: 3 })
+    expect(reader.props('currentPage')).toBe(2)
+  })
   it('DesktopVideoPlayer handles ArrowLeft, ArrowRight, J, L, 0 shortcuts and auto-focuses canvas on mount', async () => {
     bridge.videoState.mockResolvedValue(playback(15))
     bridge.openVideo.mockResolvedValue(playback(15))

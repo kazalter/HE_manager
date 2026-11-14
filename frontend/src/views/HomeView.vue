@@ -616,7 +616,7 @@ const updateMediaInList = (media: Media) => {
   }
 }
 
-const canKeepImageReader = (mediaId: number) => !desktopBridge && selectedMedia.value?.media_type === 'image'
+const canKeepImageReader = (mediaId: number) => selectedMedia.value?.media_type === 'image'
   && viewerMediaList.value.some(item => item.id === mediaId && item.media_type === 'image' && !item.is_missing)
 
 const openMedia = (media: Media, replace = false) => {
