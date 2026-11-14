@@ -131,6 +131,7 @@ def update_user(
         user.is_active = payload.is_active
 
     db.commit()
+    auth.invalidate_user_auth_cache(user_id)
     db.refresh(user)
     return user
 
@@ -150,4 +151,5 @@ def delete_user(
 
     db.delete(user)
     db.commit()
+    auth.invalidate_user_auth_cache(user_id)
     return {"message": "User deleted"}

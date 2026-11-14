@@ -127,7 +127,17 @@ app.include_router(system_routes.router)
 app.include_router(x_import_routes.router)
 app.include_router(root_routes.router)
 
-app.mount("/thumbnails", StaticFiles(directory=THUMBNAIL_DIR), name="thumbnails")
+class CachedThumbnailStaticFiles(StaticFiles):
+    """Serve thumbnail files with private browser caching to cut 304 roundtrips."""
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code in (200, 304):
+            response.headers["Cache-Control"] = "private, max-age=86400"
+        return response
+
+
+app.mount("/thumbnails", CachedThumbnailStaticFiles(directory=THUMBNAIL_DIR), name="thumbnails")
 
 
 PUBLIC_PATHS = {
@@ -203,12 +213,14 @@ async def require_authenticated_request(request: Request, call_next):
         def authenticate():
             db = database.SessionLocal()
             try:
-                return auth.authenticate_access_token(db, raw_token)
+                return auth.authenticate_request_token(db, raw_token)
             finally:
                 db.close()
 
         try:
-            user = await run_in_threadpool(authenticate)
+            user = auth.get_cached_request_user(raw_token)
+            if user is None:
+                user = await run_in_threadpool(authenticate)
             if _admin_path(request.method, path) and not user.is_admin:
                 return _json_error(403, "Admin permission required")
             request.state.current_user = user
