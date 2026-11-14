@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -74,7 +75,7 @@ async def lifespan(app: FastAPI):
     from .services.media_discard import recover_pending_cleanup
     recover_pending_cleanup()
     auto_sync_routes.init_scheduler()
-    cleanup_orphaned_thumbnails()
+    threading.Thread(target=cleanup_orphaned_thumbnails, name="cleanup-thumbnails", daemon=True).start()
     assistant_routes.sessions.start_background()
     try:
         yield

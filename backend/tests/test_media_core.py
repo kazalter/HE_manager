@@ -567,6 +567,66 @@ class MediaCoreTest(unittest.TestCase):
         finally:
             db.close()
 
+    def test_cleanup_orphaned_thumbnails_preserves_manga_pages_and_sprites(self):
+        db = self.Session()
+        try:
+            with tempfile.TemporaryDirectory() as tmp_thumb:
+                folder = models.Folder(path="/media", scan_mode="auto")
+                db.add(folder)
+                db.flush()
+                manga = models.Media(
+                    folder_id=folder.id,
+                    title="Manga 1",
+                    relative_path="m1.cbz",
+                    absolute_path="/media/m1.cbz",
+                    media_type="manga",
+                    extension=".cbz",
+                    cover_path="thumb_m_1.jpg",
+                )
+                video = models.Media(
+                    folder_id=folder.id,
+                    title="Video 1",
+                    relative_path="v1.mp4",
+                    absolute_path="/media/v1.mp4",
+                    media_type="video",
+                    extension=".mp4",
+                    cover_path="thumb_v_abc_123.45.jpg",
+                )
+                db.add_all([manga, video])
+                db.commit()
+
+                keep_files = [
+                    "thumb_m_1.jpg",
+                    "thumb_v_abc_123.45.jpg",
+                    "thumb_v_abc_123.45_0.jpg",
+                    "thumb_v_abc_123.45.vtt",
+                    f"manga_page_{manga.id}_0_v2.jpg",
+                    f"manga_page_{manga.id}_12_v2.jpg",
+                ]
+                drop_files = [
+                    "thumb_orphan_999.jpg",
+                    f"manga_page_{manga.id + 999}_0_v2.jpg",
+                    f"manga_page_{manga.id}_0.jpg",
+                ]
+                for name in keep_files + drop_files:
+                    with open(os.path.join(tmp_thumb, name), "wb") as fp:
+                        fp.write(b"x")
+                os.makedirs(os.path.join(tmp_thumb, "manga_pages"), exist_ok=True)
+
+                with (
+                    mock.patch.object(thumbnails, "THUMBNAIL_DIR", tmp_thumb),
+                    mock.patch.object(thumbnails.database, "SessionLocal", self.Session),
+                ):
+                    thumbnails.cleanup_orphaned_thumbnails()
+
+                for name in keep_files:
+                    self.assertTrue(os.path.exists(os.path.join(tmp_thumb, name)), f"expected kept: {name}")
+                for name in drop_files:
+                    self.assertFalse(os.path.exists(os.path.join(tmp_thumb, name)), f"expected removed: {name}")
+                self.assertTrue(os.path.isdir(os.path.join(tmp_thumb, "manga_pages")))
+        finally:
+            db.close()
+
     def test_manga_page_zero_respects_explicit_viewing(self):
         db = self.Session()
         try:
