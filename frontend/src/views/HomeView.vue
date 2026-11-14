@@ -560,14 +560,49 @@ const goToPage = (page: number) => {
   syncPageQuery(target)
 }
 
+const MISSING_RECHECK_COOLDOWN_MS = 15 * 60 * 1000
+const MISSING_RECHECK_STORAGE_KEY = 'he_missing_recheck_last_at'
+let fallbackMissingRecheckAt = 0
+
+const getLastMissingRecheckAt = () => {
+  try {
+    const parsed = Number(sessionStorage.getItem(MISSING_RECHECK_STORAGE_KEY) || 0)
+    return Number.isFinite(parsed) ? parsed : 0
+  } catch {
+    return fallbackMissingRecheckAt
+  }
+}
+
+const setLastMissingRecheckAt = (timestamp: number) => {
+  fallbackMissingRecheckAt = timestamp
+  try {
+    sessionStorage.setItem(MISSING_RECHECK_STORAGE_KEY, String(timestamp))
+  } catch {
+    // Session storage is optional; fall back to in-memory timestamp.
+  }
+}
+
+const tagsSignature = (media?: Media | null) =>
+  (media?.tags ?? [])
+    .map(tag => `${tag.id}:${tag.name}:${tag.namespace ?? ''}`)
+    .sort()
+    .join('|')
+
 const updateMediaInList = (media: Media) => {
   const index = mediaList.value.findIndex(item => item.id === media.id)
+  const viewerIndex = viewerMediaList.value.findIndex(item => item.id === media.id)
+  const continueIndex = continueMedia.value.findIndex(item => item.id === media.id)
+  const previousMedia =
+    (selectedMedia.value?.id === media.id ? selectedMedia.value : undefined) ??
+    (index >= 0 ? mediaList.value[index] : undefined) ??
+    (viewerIndex >= 0 ? viewerMediaList.value[viewerIndex] : undefined) ??
+    (continueIndex >= 0 ? continueMedia.value[continueIndex] : undefined)
+  const tagsChanged = Boolean(previousMedia) && tagsSignature(previousMedia) !== tagsSignature(media)
+
   if (index >= 0) {
     mediaList.value[index] = media
   }
-  const viewerIndex = viewerMediaList.value.findIndex(item => item.id === media.id)
   if (viewerIndex >= 0) viewerMediaList.value[viewerIndex] = media
-  const continueIndex = continueMedia.value.findIndex(item => item.id === media.id)
   if (continueIndex >= 0) {
     continueMedia.value[continueIndex] = media
   } else if (media.last_opened_at || progressPercent(media) > 0) {
@@ -576,7 +611,9 @@ const updateMediaInList = (media: Media) => {
   if (selectedMedia.value?.id === media.id) {
     selectedMedia.value = media
   }
-  fetchTags()
+  if (tagsChanged) {
+    void fetchTags()
+  }
 }
 
 const canKeepImageReader = (mediaId: number) => !desktopBridge && selectedMedia.value?.media_type === 'image'
@@ -728,10 +765,13 @@ onUnmounted(() => {
 
 const triggerMissingRecheck = async () => {
   if (!authState.user?.is_admin) return
+  const now = Date.now()
+  if (now - getLastMissingRecheckAt() < MISSING_RECHECK_COOLDOWN_MS) return
+  setLastMissingRecheckAt(now)
   try {
     const res = await axios.post(`${API_BASE_URL}/system/recheck-missing`)
-    if (res.data.recovered > 0) {
-      fetchMedia()
+    if (!disposed && res.data.recovered > 0) {
+      void fetchMedia()
     }
   } catch (err) {
     // silently ignore errors

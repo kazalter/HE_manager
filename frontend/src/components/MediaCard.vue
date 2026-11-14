@@ -101,6 +101,7 @@ const showDuration = computed(() => (props.media.media_type === 'video' || props
 
 // Video stills and album art are not 2:3; fit them whole inside a poster tile.
 const contained = computed(() => props.shape === 'poster' && (props.media.media_type === 'video' || props.media.media_type === 'audio'))
+const imageLoading = computed(() => (props.eager || props.index < 12 ? 'eager' : 'lazy'))
 
 const frameStyle = computed(() => {
   if (props.shape === 'poster') return { aspectRatio: '2 / 3' }
@@ -132,14 +133,14 @@ const frameStyle = computed(() => {
         :src="coverSrc"
         alt=""
         aria-hidden="true"
-        :loading="eager || !virtualized || index < 36 ? 'eager' : 'lazy'"
+        :loading="imageLoading"
         decoding="async"
         class="he-media-card__backdrop absolute inset-0 h-full w-full object-cover"
       />
       <img
         :src="coverSrc"
         :alt="media.title"
-        :loading="eager || !virtualized || index < 36 ? 'eager' : 'lazy'"
+        :loading="imageLoading"
         decoding="async"
         class="he-media-card__art absolute inset-0 h-full w-full"
         :class="contained ? 'object-contain' : 'object-cover'"
