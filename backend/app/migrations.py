@@ -110,6 +110,8 @@ def ensure_media_indexes():
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_media_folder_id ON media (folder_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_media_media_type ON media (media_type)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_media_folder_missing ON media (folder_id, is_missing)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_media_last_opened_at ON media (last_opened_at)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_media_dup_type_id ON media (duplicate_status, media_type, id)"))
 
 
 def ensure_media_cover_info_columns():
@@ -157,11 +159,14 @@ def ensure_dedup_columns():
 
 def ensure_dedup_indexes():
     inspector = inspect(engine)
-    if not inspector.has_table("duplicate_candidates"):
-        return
     with engine.begin() as conn:
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_dup_candidates_status ON duplicate_candidates (status)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_dup_candidates_level ON duplicate_candidates (level)"))
+        if inspector.has_table("duplicate_candidates"):
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_dup_candidates_status ON duplicate_candidates (status)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_dup_candidates_level ON duplicate_candidates (level)"))
+        if inspector.has_table("media_fingerprints"):
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_media_fingerprints_hash_first ON media_fingerprints (hash_first)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_media_fingerprints_hash_middle ON media_fingerprints (hash_middle)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_media_fingerprints_hash_last ON media_fingerprints (hash_last)"))
 
 
 def ensure_tag_columns():

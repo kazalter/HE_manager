@@ -35,6 +35,10 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
     # 页（≈800KB），缩短「WAL 里有未合并写入」的风险窗口——异常退出时丢失/损
     # 坏的可能数据量小一个数量级。代价是更频繁的小批量 I/O，对 SSD 微不足道。
     cursor.execute("PRAGMA wal_autocheckpoint=200")
+    # 32 MiB page cache, 64 MiB mmap, and in-memory temp tables for small SQLite DBs.
+    cursor.execute("PRAGMA cache_size=-32768")
+    cursor.execute("PRAGMA mmap_size=67108864")
+    cursor.execute("PRAGMA temp_store=MEMORY")
     cursor.close()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

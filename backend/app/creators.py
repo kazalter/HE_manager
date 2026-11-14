@@ -61,9 +61,9 @@ def _visible_media_q(db: Session, media_type: Optional[str] = None):
     return q
 
 
-def _display_names(db: Session) -> dict:
+def _display_names(db: Session, screen_name: Optional[str] = None) -> dict:
     """Latest non-null display name per screen_name (handles handle renames)."""
-    latest_name_ids = (
+    q = (
         db.query(
             models.XPost.author_screen_name.label("screen_name"),
             func.max(models.XPost.id).label("post_id"),
@@ -71,9 +71,10 @@ def _display_names(db: Session) -> dict:
         .filter(models.XPost.author_screen_name.isnot(None))
         .filter(models.XPost.author_name.isnot(None))
         .filter(models.XPost.author_name != "")
-        .group_by(models.XPost.author_screen_name)
-        .subquery()
     )
+    if screen_name is not None:
+        q = q.filter(models.XPost.author_screen_name == screen_name)
+    latest_name_ids = q.group_by(models.XPost.author_screen_name).subquery()
     rows = (
         db.query(latest_name_ids.c.screen_name, models.XPost.author_name)
         .join(models.XPost, models.XPost.id == latest_name_ids.c.post_id)
@@ -136,18 +137,19 @@ def _media_counts(db: Session, media_type: Optional[str] = None) -> dict:
     return {sn: n for sn, n in rows}
 
 
-def _posts_known(db: Session) -> dict:
-    rows = (
+def _posts_known(db: Session, screen_name: Optional[str] = None) -> dict:
+    q = (
         db.query(models.XPost.author_screen_name, func.count(models.XPost.id))
         .filter(models.XPost.author_screen_name.isnot(None))
-        .group_by(models.XPost.author_screen_name)
-        .all()
     )
+    if screen_name is not None:
+        q = q.filter(models.XPost.author_screen_name == screen_name)
+    rows = q.group_by(models.XPost.author_screen_name).all()
     return {sn: n for sn, n in rows}
 
 
-def _posts_in_library(db: Session) -> dict:
-    rows = (
+def _posts_in_library(db: Session, screen_name: Optional[str] = None) -> dict:
+    q = (
         db.query(
             models.XPost.author_screen_name,
             func.count(func.distinct(models.XPost.id)),
@@ -155,9 +157,10 @@ def _posts_in_library(db: Session) -> dict:
         .join(models.XMediaItem, models.XMediaItem.post_id == models.XPost.id)
         .filter(models.XPost.author_screen_name.isnot(None))
         .filter(models.XMediaItem.library_media_id.isnot(None))
-        .group_by(models.XPost.author_screen_name)
-        .all()
     )
+    if screen_name is not None:
+        q = q.filter(models.XPost.author_screen_name == screen_name)
+    rows = q.group_by(models.XPost.author_screen_name).all()
     return {sn: n for sn, n in rows}
 
 
@@ -237,18 +240,15 @@ def _artist_media_q(db: Session):
     )
 
 
-def _artist_covers(db: Session) -> dict:
-    rows = (
-        _artist_media_q(db)
-        .filter(models.Media.cover_path.isnot(None))
-        .with_entities(models.Media.artist, models.Media.cover_path)
-        .order_by(models.Media.id.desc())
-        .all()
-    )
+def _artist_covers(db: Session, artist: Optional[str] = None) -> dict:
+    q = _artist_media_q(db).filter(models.Media.cover_path.isnot(None))
+    if artist is not None:
+        q = q.filter(models.Media.artist == artist)
+    rows = q.with_entities(models.Media.artist, models.Media.cover_path).order_by(models.Media.id.desc()).all()
     out: dict = {}
-    for artist, cover in rows:
-        if artist not in out and cover:
-            out[artist] = cover
+    for artist_name, cover in rows:
+        if artist_name not in out and cover:
+            out[artist_name] = cover
     return out
 
 
@@ -357,7 +357,6 @@ def creator_detail(db: Session, key: str) -> Optional[dict]:
         )
         if not media:
             return None
-        covers = _artist_covers(db)
         creator = {
             "kind": "artist",
             "key": key,
@@ -366,7 +365,7 @@ def creator_detail(db: Session, key: str) -> Optional[dict]:
             "media_count": len({m.id for m in media}),
             "posts_known": 0,
             "posts_pending": 0,
-            "cover_path": covers.get(artist),
+            "cover_path": next((m.cover_path for m in media if m.cover_path), None),
         }
         return {"creator": creator, "media": media}
 
@@ -382,10 +381,10 @@ def creator_detail(db: Session, key: str) -> Optional[dict]:
     if not media:
         return None
     counts = {sn: len({m.id for m in media})}
-    names = _display_names(db)
+    names = _display_names(db, screen_name=sn)
     covers = {sn: next((m.cover_path for m in media if m.cover_path), None)}
-    known = _posts_known(db)
-    in_lib = _posts_in_library(db)
+    known = _posts_known(db, screen_name=sn)
+    in_lib = _posts_in_library(db, screen_name=sn)
     return {
         "creator": _build_x(sn, counts, names, covers, known, in_lib),
         "media": media,

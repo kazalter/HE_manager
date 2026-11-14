@@ -1,5 +1,6 @@
 from datetime import datetime
 import os
+from types import SimpleNamespace
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -90,11 +91,18 @@ def _audio_lyrics_rel(track: dict, media: models.Media) -> Optional[str]:
     return os.path.relpath(track["lyrics_abs"], anchor).replace(os.sep, "/")
 
 
+def _resolve_audio_tracks_released(media_id: int, db: Session) -> tuple[SimpleNamespace, List[dict]]:
+    media = _get_audio_media_or_404(media_id, db)
+    anchor = SimpleNamespace(absolute_path=media.absolute_path)
+    # Release the DB session before walking track files or streaming audio.
+    db.rollback()
+    return anchor, _resolve_audio_tracks(anchor)
+
+
 @router.get("/audio/{media_id}/tracks")
 @__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def get_audio_tracks(media_id: int, db: Session = Depends(get_db)):
-    media = _get_audio_media_or_404(media_id, db)
-    tracks = _resolve_audio_tracks(media)
+    anchor, tracks = _resolve_audio_tracks_released(media_id, db)
     return {
         "tracks": [
             {
@@ -102,7 +110,7 @@ def get_audio_tracks(media_id: int, db: Session = Depends(get_db)):
                 "title": t["title"],
                 "rel": t["rel"],
                 "duration": t.get("duration"),
-                "lyrics": _audio_lyrics_rel(t, media),
+                "lyrics": _audio_lyrics_rel(t, anchor),
             }
             for t in tracks
         ],
@@ -112,8 +120,7 @@ def get_audio_tracks(media_id: int, db: Session = Depends(get_db)):
 @router.get("/audio/{media_id}/track/{index}")
 @__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def stream_audio_track(media_id: int, index: int, request: Request, db: Session = Depends(get_db)):
-    media = _get_audio_media_or_404(media_id, db)
-    tracks = _resolve_audio_tracks(media)
+    _, tracks = _resolve_audio_tracks_released(media_id, db)
     if index < 1 or index > len(tracks):
         raise HTTPException(status_code=404, detail="Track index out of range")
     return get_ranged_file_response(request, tracks[index - 1]["abs_path"])
@@ -121,8 +128,7 @@ def stream_audio_track(media_id: int, index: int, request: Request, db: Session 
 
 @router.get("/audio/{media_id}/track/{index}/lyrics")
 def get_audio_track_lyrics(media_id: int, index: int, db: Session = Depends(get_db)):
-    media = _get_audio_media_or_404(media_id, db)
-    tracks = _resolve_audio_tracks(media)
+    _, tracks = _resolve_audio_tracks_released(media_id, db)
     if index < 1 or index > len(tracks):
         raise HTTPException(status_code=404, detail="Track index out of range")
     lyrics_path = tracks[index - 1]["lyrics_abs"]

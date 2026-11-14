@@ -526,12 +526,11 @@ def remove_media_tag(media_id: int, tag_id: int, db: Session = Depends(get_db)):
     return media
 
 
-@router.get("/stream/{media_id}")
-@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
-def stream_media(request: Request, media_id: int, db: Session = Depends(get_db)):
+def _resolve_stream_media_path(media_id: int, db: Session) -> str:
     media = get_media_or_404(media_id, db)
+    media_path = media.absolute_path
 
-    if not os.path.exists(media.absolute_path):
+    if not os.path.exists(media_path):
         if not media.is_missing:
             media.is_missing = True
             media.missing_since = datetime.utcnow()
@@ -542,7 +541,15 @@ def stream_media(request: Request, media_id: int, db: Session = Depends(get_db))
         media.missing_since = None
         db.commit()
 
-    return get_ranged_file_response(request, media.absolute_path)
+    # Release the DB session before streaming large files so long transfers do not hold a pool slot.
+    db.rollback()
+    return media_path
+
+
+@router.get("/stream/{media_id}")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
+def stream_media(request: Request, media_id: int, db: Session = Depends(get_db)):
+    return get_ranged_file_response(request, _resolve_stream_media_path(media_id, db))
 
 
 @router.get("/mobile/stream/{media_id}")
@@ -553,19 +560,7 @@ def stream_mobile_media(
     _: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
 ):
-    media = get_media_or_404(media_id, db)
-    if not os.path.exists(media.absolute_path):
-        if not media.is_missing:
-            media.is_missing = True
-            media.missing_since = datetime.utcnow()
-            db.commit()
-        raise HTTPException(status_code=404, detail="File not found on disk")
-    elif media.is_missing:
-        media.is_missing = False
-        media.missing_since = None
-        db.commit()
-
-    return get_ranged_file_response(request, media.absolute_path)
+    return get_ranged_file_response(request, _resolve_stream_media_path(media_id, db))
 
 
 @router.get("/manga/{media_id}/pages")
