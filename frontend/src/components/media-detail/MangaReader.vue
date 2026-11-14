@@ -777,6 +777,7 @@ function onReaderViewportResize() { preloadAdjacentPages() }
       <!-- Left Prev Button -->
       <button
         @click.stop="previousPage"
+        @dblclick.stop
         @mouseenter="emit('controlsHover', true)"
         @mouseleave="emit('controlsHover', false)"
         :class="showControls
@@ -929,6 +930,7 @@ function onReaderViewportResize() { preloadAdjacentPages() }
       <!-- Right Next Button -->
       <button
         @click.stop="nextPage"
+        @dblclick.stop
         @mouseenter="emit('controlsHover', true)"
         @mouseleave="emit('controlsHover', false)"
         :class="showControls

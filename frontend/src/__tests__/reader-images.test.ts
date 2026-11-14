@@ -25,6 +25,24 @@ afterEach(() => {
 })
 
 describe('reader images and controls', () => {
+  it.each(['上一页', '下一页'])('does not enter fullscreen when %s is double-clicked', async title => {
+    vi.stubGlobal('Image', ControlledImage)
+    const images = Array.from({ length: 5 }, (_, id) => ({ id: id + 100, title: `Image ${id}`, media_type: 'image' })) as Media[]
+    const wrapper = mount(MangaReader, { props: {
+      media: images[2]!, imagePages: images, currentPage: 2, totalPages: 5,
+      pageDimensions: [], showControls: true, clickOnlyControls: true,
+      progressText: '3 / 5', progressPercent: 60,
+    } })
+    wrappers.push(wrapper)
+    const button = wrapper.get(`[title="${title}"]`)
+    await button.trigger('click')
+    await button.trigger('click')
+    await button.trigger('dblclick')
+    expect(wrapper.emitted('update:currentPage')).toHaveLength(2)
+    expect(wrapper.emitted('viewerDoubleClick')).toBeUndefined()
+    await wrapper.get('.he-reader-surface').trigger('dblclick')
+    expect(wrapper.emitted('viewerDoubleClick')).toHaveLength(1)
+  })
   it('hides and restores non-fullscreen image controls on deliberate clicks', async () => {
     vi.useFakeTimers()
     let controls!: ReturnType<typeof useMediaOverlayControls>
