@@ -58,6 +58,8 @@ contextBridge.exposeInMainWorld(
   "heDesktop",
   Object.freeze({
     configuration: () => invoke("he:configuration"),
+    checkUpdate: () => invoke('he:check-update'),
+    openReleases: () => invoke('he:open-releases'),
     l2dUpdateStart: () => invoke('he:l2d-update-start'),
     l2dUpdateStatus: () => invoke('he:l2d-update-status'),
     wallpaperState: () => invoke('he:wallpaper-state'),

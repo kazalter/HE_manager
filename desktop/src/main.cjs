@@ -9,6 +9,7 @@ const {
   safeStorage,
   screen,
   powerMonitor,
+  shell,
 } = require("electron");
 const path = require("node:path"),
   fs = require("node:fs/promises"),
@@ -172,6 +173,8 @@ function handle(name, callback) {
   });
 }
 function registerIPC() {
+  handle('he:check-update', () => require('./update-check.cjs').checkUpdate(app.getVersion()));
+  handle('he:open-releases', () => shell.openExternal(require('./update-check.cjs').RELEASES));
   handle('he:l2d-update-start', () => l2dUpdate.start());
   handle('he:l2d-update-status', () => l2dUpdate.snapshot());
   ipcMain.on('he:close-ready', (event, nonce) => { if (trusted(event)) closeFlush.acknowledge(window, nonce); });

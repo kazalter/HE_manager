@@ -4,7 +4,23 @@ import { Monitor, Server, Settings2 } from 'lucide-vue-next'
 import { desktopBridge, desktopState, setDesktopPreferences, type ImageEnhancement, type VideoEnhancement } from '../desktop'
 import { controlClass, fieldLabelClass, UiButton, UiModal } from './ui'
 import ColorModeSelect from './ColorModeSelect.vue'
+import { sourceVersion } from '../buildInfo'
 const open = ref(false), server = ref(''), error = ref(''), busy = ref(false)
+const updateBusy = ref(false), updateMessage = ref(''), updateAvailable = ref(false)
+async function checkUpdate() {
+ if (!desktopBridge?.checkUpdate) { updateMessage.value = '当前客户端不支持检查更新，请安装新版客户端。'; return }
+ updateBusy.value = true; updateMessage.value = ''; updateAvailable.value = false
+ try {
+  const result = await desktopBridge.checkUpdate()
+  updateAvailable.value = result.status === 'available'
+  updateMessage.value = result.status === 'available' ? `发现新版 ${result.version}`
+   : result.status === 'current' ? '当前客户端已是最新正式版' : result.status === 'no-release' ? '尚无公开的正式版' : '无法比较当前版本，请查看发布页面'
+ } catch { updateMessage.value = '检查更新失败，请检查网络后重试' }
+ finally { updateBusy.value = false }
+}
+async function openReleases() {
+ try { await desktopBridge?.openReleases?.() } catch { updateMessage.value = '无法打开发布页面' }
+}
 onMounted(() => { server.value = desktopState.server || 'http://192.168.0.101:8011'; open.value = !desktopState.server })
 watch(() => desktopState.server, (newServer) => {
  if (newServer && (!server.value || server.value === 'http://192.168.0.101:8011')) {
@@ -66,6 +82,9 @@ const preferences = async (videoMode: VideoEnhancement, imageMode: ImageEnhancem
    </section>
    <section class="space-y-3 border-t border-line pt-4">
     <p class="text-meta text-muted">{{ desktopState.platform }} · {{ desktopState.arch }} · v{{ desktopState.version }}</p>
+    <p class="text-meta text-muted">界面源码版本：{{ sourceVersion }}</p>
+    <div class="flex flex-wrap items-center gap-2"><UiButton size="sm" :loading="updateBusy" @click="checkUpdate">检查桌面更新</UiButton><UiButton v-if="updateAvailable && desktopBridge?.openReleases" size="sm" @click="openReleases">打开下载页面</UiButton></div>
+    <p v-if="updateMessage" role="status" class="text-meta text-muted">{{ updateMessage }}</p>
     <p class="text-body">内嵌播放器：{{ desktopState.mpv ? '已就绪' : '运行库缺失，请安装完整客户端' }}</p>
     <div class="flex items-center justify-between gap-3"><span class="text-body">图片超分：{{ desktopState.image ? '已就绪' : '未找到' }}</span><UiButton size="sm" @click="choose('image')">选择引擎</UiButton></div>
    </section>

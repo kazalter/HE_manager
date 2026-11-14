@@ -18,6 +18,8 @@ const bridge = vi.hoisted(() => ({
   isFullscreen: vi.fn().mockResolvedValue(false),
   exitFullscreen: vi.fn().mockResolvedValue(false),
   onBeforeClose: vi.fn().mockReturnValue(() => {}),
+  checkUpdate: vi.fn(),
+  openReleases: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('../desktop', () => ({
@@ -90,6 +92,18 @@ afterEach(() => {
 })
 
 describe('ui-audit desktop coverage', () => {
+  it('checks for a desktop update only on request and opens the fixed release page', async () => {
+    bridge.checkUpdate.mockResolvedValue({ status: 'available', version: '1.2.0' })
+    const wrapper = mount(DesktopToolbar, { attachTo: document.body })
+    wrappers.push(wrapper)
+    await wrapper.get('.he-titlebar-settings').trigger('click')
+    expect(bridge.checkUpdate).not.toHaveBeenCalled()
+    const findButton = (text: string) => [...document.querySelectorAll('button')].find(button => button.textContent?.includes(text))!
+    findButton('检查桌面更新').click(); await flushPromises()
+    expect(document.body.textContent).toContain('发现新版 1.2.0')
+    findButton('打开下载页面').click(); await flushPromises()
+    expect(bridge.openReleases).toHaveBeenCalledOnce()
+  })
   it('changes desktop image pages without replacing the reader and follows route updates', async () => {
     const images = [1, 2, 3].map(id => ({ id, title: `Image ${id}`, media_type: 'image', is_missing: false,
       progress: 0, view_status: 'unviewed', tags: [], favorite: false, rating: 0 }))

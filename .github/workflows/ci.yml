@@ -72,6 +72,9 @@ jobs:
         run: |
           npm run build
 
+      - name: Verify Web build source revision
+        run: node frontend/scripts/check-build-provenance.cjs frontend/dist/version.json "$GITHUB_SHA"
+
   pawchive-windows:
     name: Pawchive Windows Compatibility
     runs-on: windows-latest

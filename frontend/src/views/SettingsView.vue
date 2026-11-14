@@ -11,6 +11,7 @@ import { desktopBridge, desktopState } from '../desktop'
 import AssistantModelSettings from '../components/AssistantModelSettings.vue'
 import { authState } from '../auth'
 import type { Folder } from '../types'
+import { sourceVersion } from '../buildInfo'
 
 const folders = ref<Folder[]>([])
 const newPath = ref('')
@@ -297,6 +298,7 @@ onUnmounted(() => {
         </UiButton>
       </template>
     </PageHeader>
+    <p class="mb-4 text-meta text-subtle">界面源码版本：{{ sourceVersion }}</p>
 
     <div class="page-gutter pb-12">
       <div class="page-container">

@@ -133,5 +133,7 @@ he-server.ps1             Windows 后端服务启动脚本
 
 ## 相关文档
 
+- [Web 与桌面前端维护](docs/shared-frontend-maintenance.md)
+
 - [Pawchive 运维文档](docs/pawchive-operations.md)
 - [Pawchive API 契约](docs/pawchive-api-contract.md)

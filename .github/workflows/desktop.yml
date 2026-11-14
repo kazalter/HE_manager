@@ -52,6 +52,9 @@ jobs:
         run: npm run build:manager --prefix integrations/l2dviewer
       - name: Build shared UI
         run: npm run build:ui --prefix desktop
+      - name: Verify desktop UI source revision
+        shell: bash
+        run: node frontend/scripts/check-build-provenance.cjs desktop/ui/version.json "$GITHUB_SHA"
       - name: Verify and prepare native runtimes
         run: python desktop/scripts/prepare-runtimes.py ${{ matrix.platform }}
       - name: Verify native addon build inputs
