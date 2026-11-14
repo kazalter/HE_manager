@@ -22,7 +22,10 @@ let controller: AbortController | undefined, epoch = 0
 async function verify() {
   controller?.abort()
   const current = ++epoch, identity = authIdentity(), mediaId = props.initialMedia.id
-  verified.value = null; error.value = ''
+  const keepImageReader = props.verifiedForOpen && verified.value?.media_type === 'image' && props.initialMedia.media_type === 'image'
+    && !props.initialMedia.is_missing
+  if (!keepImageReader) verified.value = null
+  error.value = ''
   if (!desktopBridge || props.verifiedForOpen) { verified.value = props.initialMedia; return }
   controller = new AbortController()
   try {
@@ -37,7 +40,10 @@ async function verify() {
   }
 }
 function navigate(media: Media) {
-  if (desktopBridge) { ++epoch; controller?.abort(); verified.value = null }
+  if (desktopBridge) {
+    ++epoch; controller?.abort()
+    if (!props.verifiedForOpen || verified.value?.media_type !== 'image' || media.media_type !== 'image' || media.is_missing) verified.value = null
+  }
   emit('navigate', media)
 }
 watch([() => props.initialMedia.id, () => authIdentity()], () => { void verify() }, { immediate: true })
@@ -49,7 +55,7 @@ onBeforeUnmount(() => { ++epoch; controller?.abort(); window.removeEventListener
 </script>
 <template>
   <div>
-    <MediaDetail v-if="verified" :key="desktopBridge ? verified.id : undefined" :initial-media="verified" :current-image-id="currentImageId" :all-media="allMedia"
+    <MediaDetail v-if="verified" :key="desktopBridge ? (verified.media_type === 'image' ? 'images' : verified.id) : undefined" :initial-media="verified" :current-image-id="currentImageId" :all-media="allMedia"
       :has-adjacent-media-page="hasAdjacentMediaPage" :load-adjacent-media-page="loadAdjacentMediaPage"
       @close="emit('close')" @updated="emit('updated', $event)" @navigate="navigate" @discarded="emit('discarded', $event)" />
     <Teleport to="body">
