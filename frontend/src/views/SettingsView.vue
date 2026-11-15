@@ -9,6 +9,7 @@ import ColorModeSelect from '../components/ColorModeSelect.vue'
 import WallpaperSettings from '../components/WallpaperSettings.vue'
 import { desktopBridge, desktopState } from '../desktop'
 import AssistantModelSettings from '../components/AssistantModelSettings.vue'
+import MetadataEnrichmentSettings from '../components/MetadataEnrichmentSettings.vue'
 import { authState } from '../auth'
 import type { Folder } from '../types'
 import { sourceVersion } from '../buildInfo'
@@ -370,6 +371,7 @@ onUnmounted(() => {
           </section>
 
           <AssistantModelSettings v-if="authState.user?.is_admin" />
+          <MetadataEnrichmentSettings v-if="authState.user?.is_admin" />
 
           <!-- 界面主题 -->
           <section>

@@ -12,8 +12,9 @@ Strategies
 * by_style    — BM25 with cross-lingual ACG synonym expansion + dense vector
                 cosine with adaptive threshold.
 * similar_to  — Look up the referenced title with fuzzy matching against
-                media.title / metadata.parsed_title, take its embedding,
-                do cosine top-K.
+                media.title / metadata.parsed_title, then rank neighbours
+                using local metadata (artist, circle, parody, IDF-weighted
+                tags, title/summary tokens) plus optional cached vectors.
 * browse      — Smart discovery blending favorites, ratings, user reading affinity
                 (boosting unread works from frequently-read artists), and jitter
                 for serendipitous "换一批" exploration.
@@ -21,7 +22,9 @@ Strategies
 from __future__ import annotations
 
 import logging
+import math
 import random
+import re
 from collections import Counter
 from typing import Iterable, Optional
 
@@ -229,13 +232,130 @@ def _vector_pass(
 
 # --- similar_to -------------------------------------------------------------
 
+SIMILAR_MIN_SCORE = 0.12
+_GENERIC_PARODIES = {"original", "オリジナル", "原创", "原創", "none", "n/a"}
+_SIMILAR_IGNORED_NAMESPACES = {"artist", "circle", "parody", "language", "length"}
+_SIMILAR_NOISE_TAGS = {
+    "dl版", "中文", "汉化", "漢化", "无修正", "無修正", "chinese", "translated",
+    "digital", "中国翻訳", "中国語", "日本語", "japanese", "english",
+}
+
+
+def _artist_set(media: models.Media) -> set[str]:
+    out: set[str] = set()
+    if media.artist and media.artist.strip():
+        out.add(media.artist.strip().lower())
+    metadata = media.metadata_profile
+    if metadata and metadata.parsed_artist and metadata.parsed_artist.strip():
+        out.add(metadata.parsed_artist.strip().lower())
+    for tag in media.tags or ():
+        if (tag.namespace or "").strip().lower() == "artist" and tag.name and tag.name.strip():
+            out.add(tag.name.strip().lower())
+    return out
+
+
+def _circle_set(media: models.Media) -> set[str]:
+    out: set[str] = set()
+    metadata = media.metadata_profile
+    if metadata and metadata.parsed_circle and metadata.parsed_circle.strip():
+        out.add(metadata.parsed_circle.strip().lower())
+    for tag in media.tags or ():
+        if (tag.namespace or "").strip().lower() == "circle" and tag.name and tag.name.strip():
+            out.add(tag.name.strip().lower())
+    return out
+
+
+def _parody_set(media: models.Media) -> set[str]:
+    raw: list[str] = []
+    metadata = media.metadata_profile
+    if metadata and metadata.parody and metadata.parody.strip():
+        raw.append(metadata.parody)
+    for tag in media.tags or ():
+        if (tag.namespace or "").strip().lower() == "parody" and tag.name and tag.name.strip():
+            raw.append(tag.name)
+    out: set[str] = set()
+    for entry in raw:
+        for part in re.split(r"[,/、&]+", entry):
+            cleaned = part.strip().lower()
+            if cleaned and cleaned not in _GENERIC_PARODIES:
+                out.add(cleaned)
+    return out
+
+
+def _is_noise_similar_tag(name: str, namespace: Optional[str] = None) -> bool:
+    ns = (namespace or "").strip().lower()
+    if ns in _SIMILAR_IGNORED_NAMESPACES:
+        return True
+    cleaned = name.strip().lower()
+    if not cleaned or cleaned in _SIMILAR_NOISE_TAGS:
+        return True
+    if cleaned.startswith(("language:", "length:")):
+        return True
+    if cleaned.endswith(("汉化组", "漢化組")):
+        return True
+    return False
+
+
+def _content_tag_set(media: models.Media) -> set[str]:
+    out: set[str] = set()
+    for tag in media.tags or ():
+        if tag.name and not _is_noise_similar_tag(tag.name, tag.namespace):
+            out.add(tag.name.strip().lower())
+    metadata = media.metadata_profile
+    if metadata and metadata.external_tags:
+        for item in manga_search._json_list(metadata.external_tags):
+            if not _is_noise_similar_tag(item):
+                out.add(item.strip().lower())
+    profile = media.ai_profile
+    if profile:
+        for raw in (profile.style_tags, profile.story_tags, profile.tone_tags):
+            for item in manga_search._json_list(raw):
+                if not _is_noise_similar_tag(item):
+                    out.add(item.strip().lower())
+    return out
+
+
+def _similar_text_tokens(media: models.Media) -> set[str]:
+    tokens = (
+        manga_search._tokens_from_text(manga_search._title_field(media))
+        | manga_search._tokens_from_text(manga_search._summary_field(media))
+    )
+    return {t for t in tokens if t and not _is_noise_similar_tag(t)}
+
+
+def _compute_set_idf(sets_by_id: dict[int, set[str]]) -> dict[str, float]:
+    n_docs = len(sets_by_id) or 1
+    df: dict[str, int] = {}
+    for tokens in sets_by_id.values():
+        for token in tokens:
+            df[token] = df.get(token, 0) + 1
+    return {
+        token: math.log(1.0 + (n_docs - count + 0.5) / (count + 0.5))
+        for token, count in df.items()
+    }
+
+
+def _weighted_cosine(left: set[str], right: set[str], idf: dict[str, float]) -> tuple[float, int]:
+    if not left or not right:
+        return 0.0, 0
+    shared = left & right
+    if not shared:
+        return 0.0, 0
+    num = sum(idf.get(t, 1.0) for t in shared)
+    den_left = sum(idf.get(t, 1.0) for t in left)
+    den_right = sum(idf.get(t, 1.0) for t in right)
+    if den_left <= 0 or den_right <= 0:
+        return 0.0, 0
+    return num / math.sqrt(den_left * den_right), len(shared)
+
+
 def similar_to(
     db: Session,
     referenced_title: str,
     candidates: list[models.Media],
     surviving_ids: Optional[set[int]] = None,
 ) -> tuple[Optional[models.Media], list[tuple[int, float]]]:
-    """Find a referenced manga, then cosine-rank the rest by its embedding."""
+    """Find a referenced manga, then rank neighbours by local metadata + optional cached vectors."""
     if not referenced_title or not referenced_title.strip():
         return None, []
 
@@ -243,6 +363,11 @@ def similar_to(
     clean_target = referenced_title.strip().lower()
     referenced = (
         db.query(models.Media)
+        .options(
+            selectinload(models.Media.tags),
+            selectinload(models.Media.ai_profile),
+            selectinload(models.Media.metadata_profile),
+        )
         .outerjoin(models.MangaMetadataProfile)
         .filter(
             models.Media.media_type == "manga",
@@ -252,33 +377,75 @@ def similar_to(
                 func.lower(models.MangaMetadataProfile.parsed_title).like(f"%{clean_target}%"),
             ),
         )
+        .order_by(models.Media.id.asc())
         .first()
     )
     if not referenced:
         log.debug("similar_to: no manga matches title hint %r", referenced_title)
         return None, []
-    if not referenced.ai_profile or not referenced.ai_profile.embedding:
-        log.debug("similar_to: media %s has no embedding yet", referenced.id)
-        return referenced, []
 
-    target_vec = manga_vector.deserialize_vec(referenced.ai_profile.embedding)
-    if target_vec is None:
-        return referenced, []
-
-    profiles = [
-        m.ai_profile for m in candidates
-        if m.ai_profile and m.id != referenced.id
-        and (surviving_ids is None or m.id in surviving_ids)
+    pool = [
+        m for m in candidates
+        if m.id != referenced.id and (surviving_ids is None or m.id in surviving_ids)
     ]
-    pairs = manga_vector.load_candidate_vectors(profiles)
-    if not pairs:
+    if not pool:
         return referenced, []
 
-    ranked = manga_vector.rank_by_query(target_vec, pairs, top_k=len(pairs))
-    if not ranked:
-        return referenced, []
+    ref_artists = _artist_set(referenced)
+    ref_circles = _circle_set(referenced)
+    ref_parodies = _parody_set(referenced)
 
-    return referenced, [(mid, sim) for mid, sim in ranked if sim >= 0.40][:VECTOR_POOL]
+    all_docs = [referenced] + pool
+    tag_sets = {m.id: _content_tag_set(m) for m in all_docs}
+    text_sets = {m.id: _similar_text_tokens(m) for m in all_docs}
+    tag_idf = _compute_set_idf(tag_sets)
+    text_idf = _compute_set_idf(text_sets)
+
+    ref_tags = tag_sets[referenced.id]
+    ref_text = text_sets[referenced.id]
+
+    vec_sims: dict[int, float] = {}
+    if referenced.ai_profile and referenced.ai_profile.embedding:
+        target_vec = manga_vector.deserialize_vec(referenced.ai_profile.embedding)
+        if target_vec is not None:
+            profiles = [m.ai_profile for m in pool if m.ai_profile and m.ai_profile.embedding]
+            pairs = manga_vector.load_candidate_vectors(profiles)
+            if pairs:
+                for mid, vsim in manga_vector.rank_by_query(target_vec, pairs, top_k=len(pairs)):
+                    if vsim >= 0.40:
+                        vec_sims[mid] = vsim
+
+    scored: list[tuple[int, float, float]] = []
+    for media in pool:
+        sim = 0.0
+        if ref_artists and (_artist_set(media) & ref_artists):
+            sim += 0.40
+        if ref_circles and (_circle_set(media) & ref_circles):
+            sim += 0.25
+        if ref_parodies and (_parody_set(media) & ref_parodies):
+            sim += 0.30
+
+        tag_cos, shared_tag_count = _weighted_cosine(ref_tags, tag_sets[media.id], tag_idf)
+        if tag_cos > 0 and shared_tag_count > 0:
+            sim += 0.55 * tag_cos * min(1.0, shared_tag_count / 2.0)
+
+        text_cos, shared_text_count = _weighted_cosine(ref_text, text_sets[media.id], text_idf)
+        if text_cos > 0 and shared_text_count > 0:
+            sim += 0.25 * text_cos
+
+        vsim = vec_sims.get(media.id)
+        if vsim is not None:
+            sim += 0.45 * vsim
+
+        sim = min(1.0, sim)
+        if sim < SIMILAR_MIN_SCORE:
+            continue
+
+        tiebreak = float(media.rating or 0) + (1.0 if media.favorite else 0.0)
+        scored.append((media.id, round(sim, 4), tiebreak))
+
+    scored.sort(key=lambda item: (item[1], item[2], item[0]), reverse=True)
+    return referenced, [(mid, s) for mid, s, _ in scored[:VECTOR_POOL]]
 
 
 # --- browse -----------------------------------------------------------------

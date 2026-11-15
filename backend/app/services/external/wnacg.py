@@ -10,7 +10,7 @@ import zipfile
 from typing import List, Optional
 from urllib.parse import urljoin
 
-from ... import database, external_sources, models, scanner
+from ... import database, external_sources, metadata_enrichment, models, scanner
 from .. import job_lifecycle
 from ..media_access import get_source_or_404
 from .covers import (
@@ -45,10 +45,25 @@ def _natural_path_key(path: str):
     return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", path)]
 
 
-def _write_wnacg_source_marker(item: models.ExternalFavoriteItem, item_dir: str) -> None:
+def _write_wnacg_source_marker(
+    item: models.ExternalFavoriteItem,
+    item_dir: str,
+    detail: Optional[dict] = None,
+) -> None:
     info_path = os.path.join(item_dir, "source.txt")
     with open(info_path, "w", encoding="utf-8") as info_file:
         info_file.write(f"{item.title}\n{item.url}\n")
+    payload = dict(detail or {})
+    payload.setdefault("source_site", "wnacg")
+    payload.setdefault("external_id", item.external_id)
+    payload.setdefault("source_url", item.url)
+    payload.setdefault("title", item.title)
+    if item.category_name and not payload.get("category"):
+        payload["category"] = item.category_name
+    try:
+        metadata_enrichment.write_metadata_json(item_dir, payload)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to write wnacg metadata.json for %r: %s", item.title, exc)
 
 
 def _advance_wnacg_job_progress(job: Optional[dict], task: Optional[dict], pages: int = 0, bytes_count: int = 0) -> None:
@@ -178,7 +193,7 @@ def _try_download_wnacg_archive(
                     if task is not None:
                         task["total_pages"] = actual_pages
                 _advance_wnacg_job_progress(job, task, pages=actual_pages)
-            _write_wnacg_source_marker(item, item_dir)
+            _write_wnacg_source_marker(item, item_dir, detail=plan.get("detail"))
             return {
                 "item_id": item.id,
                 "title": item.title,
@@ -242,12 +257,23 @@ def prepare_wnacg_download_plan(item: models.ExternalFavoriteItem, source: model
     except Exception as exc:  # noqa: BLE001 - the image downloader below remains the fallback
         logger.warning("Failed to inspect wnacg archive page for %r: %s", item.title, exc)
 
+    detail_dict = None
+    try:
+        detail_url = item.url or external_sources.wnacg_detail_url(item.external_id)
+        detail = external_sources.fetch_wnacg_work_detail(detail_url, cookie=source.cookie or "")
+        detail_dict = detail.to_sidecar_dict(source_url=item.url or detail_url)
+        if item.category_name and not detail_dict.get("category"):
+            detail_dict["category"] = item.category_name
+    except Exception as exc:  # noqa: BLE001 - detail scraping must never block downloads
+        logger.warning("Failed to fetch wnacg detail page for %r: %s", item.title, exc)
+
     return {
         "item_dir": item_dir,
         "image_urls": image_urls,
         "download_page_url": download_page_url,
         "archive_urls": archive_urls,
         "archive_worker_request": archive_worker_request,
+        "detail": detail_dict,
     }
 
 
@@ -284,7 +310,7 @@ def download_wnacg_item(item: models.ExternalFavoriteItem, source: models.Extern
         _advance_wnacg_job_progress(job, task, pages=1, bytes_count=len(content))
         time.sleep(0.15)
 
-    _write_wnacg_source_marker(item, item_dir)
+    _write_wnacg_source_marker(item, item_dir, detail=plan.get("detail"))
 
     return {
         "item_id": item.id,

@@ -6,7 +6,7 @@ from typing import List, Optional
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from ... import models, scanner
+from ... import metadata_enrichment, models, scanner
 from ..media_discard import ensure_external_download_allowed, external_discarded_ids
 from ..thumbnails import THUMBNAIL_DIR
 from .covers import (
@@ -119,6 +119,7 @@ def upsert_external_downloaded_audio_media(
             if scanner.make_work_thumbnail(cover_src, thumb_path):
                 media.cover_path = thumb_name
 
+    metadata_enrichment.enrich_audio_media(db, media, item=item)
     folder.last_scanned_at = datetime.now()
     db.commit()
     db.refresh(media)
@@ -394,6 +395,7 @@ def upsert_external_downloaded_media(
         elif scanner.get_folder_thumbnail(item_dir, thumb_path):
             media.cover_path = thumb_name
 
+    metadata_enrichment.enrich_manga_media(db, media, item=item)
     folder.last_scanned_at = datetime.now()
     db.commit()
     db.refresh(media)

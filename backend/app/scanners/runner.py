@@ -5,7 +5,7 @@ import os
 import traceback
 import uuid
 
-from .. import database, models
+from .. import database, metadata_enrichment, models
 from ..dedup import worker as dedup_worker
 from ..services.storage_guard import ensure_folder_scannable
 from .audio import (
@@ -56,6 +56,20 @@ def _make_folder_manga_cover(root: str, thumbnail_dir: str) -> str | None:
         return None
 
 
+
+def _commit_and_enrich_batch(db, media_batch: list[models.Media]) -> None:
+    if not media_batch:
+        return
+    db.add_all(media_batch)
+    db.commit()
+    for item in media_batch:
+        try:
+            metadata_enrichment.enrich_media_metadata(db, item)
+        except Exception:
+            logger.warning("Metadata enrichment failed for %s", item.absolute_path, exc_info=True)
+    db.commit()
+
+
 def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
     """Scan one folder, rejecting concurrent work for the same folder id."""
     if reservation is None:
@@ -92,6 +106,7 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                 os.makedirs(thumbnail_dir)
 
             media_batch = []
+            existing_to_enrich = []
             scanned_paths = set()
             BATCH_SIZE = 200
             processed_count = 0
@@ -150,11 +165,15 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                             rel_path = os.path.relpath(root, folder.path)
                             title = os.path.basename(root) if rel_path != "." else (os.path.basename(os.path.normpath(folder.path)) or folder.path)
                             page_count = count_manga_pages(root, ".dir")
+                            source_info = metadata_enrichment.read_source_txt(root)
                             media = models.Media(
                                 folder_id=folder.id, title=title, relative_path=rel_path,
                                 absolute_path=root, media_type='manga', extension='.dir',
                                 file_size=directory_size(root),
-                                page_count=page_count, is_missing=False
+                                page_count=page_count,
+                                source_url=source_info.get("source_url"),
+                                source_site=source_info.get("source_site"),
+                                is_missing=False
                             )
                             media.cover_path = _make_folder_manga_cover(root, thumbnail_dir)
 
@@ -165,8 +184,7 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                             logger.info("  + Added Folder Manga: %s", media.title)
 
                             if len(media_batch) >= BATCH_SIZE:
-                                db.add_all(media_batch)
-                                db.commit()
+                                _commit_and_enrich_batch(db, media_batch)
                                 media_batch = []
                         else:
                             existing.is_missing = False
@@ -177,6 +195,12 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                             # the long-title bug), without changing existing covers.
                             if not existing.cover_path:
                                 existing.cover_path = _make_folder_manga_cover(root, thumbnail_dir)
+                            if (
+                                not existing.artist
+                                or existing.metadata_profile is None
+                                or (not existing.source_url and ("source.txt" in files or "metadata.json" in files))
+                            ):
+                                existing_to_enrich.append(existing)
                         dirs[:] = []
                     continue
 
@@ -212,7 +236,9 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                                 if rel_path != "."
                                 else (os.path.basename(os.path.normpath(folder.path)) or folder.path)
                             )
-                            source_url = (manifest or {}).get("url") or None
+                            source_info = metadata_enrichment.read_source_txt(root)
+                            source_url = (manifest or {}).get("url") or source_info.get("source_url") or None
+                            source_site = source_info.get("source_site") or ('asmr' if source_url and 'asmr.one' in source_url else None)
                             media = models.Media(
                                 folder_id=folder.id,
                                 title=title,
@@ -224,7 +250,7 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                                 page_count=track_count,
                                 duration=total_duration,
                                 source_url=source_url,
-                                source_site='asmr' if source_url and 'asmr.one' in source_url else None,
+                                source_site=source_site,
                                 is_missing=False,
                             )
                             cover_src = get_work_cover_path(root)
@@ -241,8 +267,7 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                             logger.info("  + Added Audio Work: %s", media.title)
 
                             if len(media_batch) >= BATCH_SIZE:
-                                db.add_all(media_batch)
-                                db.commit()
+                                _commit_and_enrich_batch(db, media_batch)
                                 media_batch = []
                         else:
                             existing.is_missing = False
@@ -251,6 +276,8 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                                 existing.page_count = track_count
                             if total_duration and existing.duration != total_duration:
                                 existing.duration = total_duration
+                            if not existing.artist or not existing.source_url:
+                                existing_to_enrich.append(existing)
                         dirs[:] = []
                     continue
 
@@ -282,6 +309,10 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                                 existing.height = metadata['height']
                             if not existing.duration and metadata['duration']:
                                 existing.duration = metadata['duration']
+                        if (target_type == 'manga' and (not existing.artist or existing.metadata_profile is None)) or (
+                            existing.source_site == 'x' and not existing.artist
+                        ):
+                            existing_to_enrich.append(existing)
                         continue
 
                     rel_path = os.path.relpath(file_path, folder.path)
@@ -365,8 +396,7 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                             logger.info("  + Added %s: %s", media.media_type, file)
 
                         if len(media_batch) >= BATCH_SIZE:
-                            db.add_all(media_batch)
-                            db.commit()
+                            _commit_and_enrich_batch(db, media_batch)
                             media_batch = []
 
                     except Exception as file_error:
@@ -374,7 +404,16 @@ def scan_folder(folder_id: int, reservation: object | None = None) -> bool:
                         continue
 
             if media_batch:
-                db.add_all(media_batch)
+                _commit_and_enrich_batch(db, media_batch)
+
+            if existing_to_enrich:
+                for idx, item in enumerate(existing_to_enrich, start=1):
+                    try:
+                        metadata_enrichment.enrich_media_metadata(db, item)
+                    except Exception:
+                        logger.warning("Existing metadata enrichment failed for %s", item.absolute_path, exc_info=True)
+                    if idx % BATCH_SIZE == 0:
+                        db.commit()
                 db.commit()
 
             for item in existing_media.values():

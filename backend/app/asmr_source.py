@@ -755,3 +755,86 @@ def ping_mirror(base: str, timeout: int = 6) -> dict:
     except (URLError, socket.timeout, ConnectionError, OSError) as exc:
         return {"base": norm, "ok": False, "latency_ms": None, "error": str(exc)}
     return {"base": norm, "ok": True, "latency_ms": int((time.monotonic() - start) * 1000), "error": None}
+
+
+@dataclass
+class ParsedAsmrWorkDetail:
+    external_id: str
+    title: Optional[str] = None
+    circle: Optional[str] = None
+    vas: List[str] = field(default_factory=list)
+    tags: List[str] = field(default_factory=list)
+    release: Optional[str] = None
+    age_category: Optional[str] = None
+    has_subtitle: Optional[bool] = None
+    duration: Optional[int] = None
+    rate_average: Optional[float] = None
+    source_url: Optional[str] = None
+
+    def to_sidecar_dict(self) -> dict:
+        return {
+            "source_site": "asmr",
+            "external_id": self.external_id,
+            "source_url": self.source_url or _work_url(self.external_id),
+            "title": self.title,
+            "circle": self.circle,
+            "vas": list(self.vas),
+            "tags": list(self.tags),
+            "release": self.release,
+            "age_category": self.age_category,
+            "has_subtitle": self.has_subtitle,
+            "duration": self.duration,
+            "rate_average": self.rate_average,
+        }
+
+
+def parse_asmr_work_detail(payload: dict, fallback_id: str = "") -> ParsedAsmrWorkDetail:
+    if not isinstance(payload, dict):
+        payload = {}
+    rj = _rj_code(payload) or (fallback_id.upper() if fallback_id else "")
+    tags: List[str] = []
+    seen: set[str] = set()
+    for tag in payload.get("tags") or []:
+        if not isinstance(tag, dict):
+            continue
+        i18n = tag.get("i18n") or {}
+        zh = i18n.get("zh-cn") if isinstance(i18n, dict) else None
+        name = ((zh.get("name") if isinstance(zh, dict) else "") or tag.get("name") or "").strip()
+        key = name.lower()
+        if name and key not in seen:
+            seen.add(key)
+            tags.append(name)
+
+    duration = payload.get("duration")
+    rate = payload.get("rate_average_2dp")
+    return ParsedAsmrWorkDetail(
+        external_id=rj,
+        title=(payload.get("title") or "").strip() or None,
+        circle=_circle_name(payload),
+        vas=_va_names(payload),
+        tags=tags,
+        release=(payload.get("release") or "").strip() or None,
+        age_category=(payload.get("age_category_string") or "").strip() or None,
+        has_subtitle=bool(payload.get("has_subtitle")) if payload.get("has_subtitle") is not None else None,
+        duration=int(duration) if isinstance(duration, (int, float)) else None,
+        rate_average=float(rate) if isinstance(rate, (int, float)) else None,
+        source_url=_work_url(rj) if rj else None,
+    )
+
+
+def fetch_work_detail(
+    working_base: str,
+    token: Optional[str],
+    rj_or_id: str,
+    mirrors: Optional[List[str]] = None,
+) -> ParsedAsmrWorkDetail:
+    numeric = rj_or_id.upper().removeprefix("RJ").lstrip("0") or rj_or_id
+    payload, _ = _request_json_any(
+        "GET",
+        working_base,
+        f"/api/work/{quote(numeric)}",
+        token=token,
+        mirrors=mirrors,
+    )
+    fallback_rj = rj_or_id.upper() if rj_or_id.upper().startswith("RJ") else f"RJ{numeric.zfill(6)}"
+    return parse_asmr_work_detail(payload, fallback_id=fallback_rj)

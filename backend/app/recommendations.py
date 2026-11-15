@@ -308,8 +308,13 @@ def _classify_intent_heuristic(
         slots["artists"] = list(positive_terms)
         return "by_author", slots
 
+    if has_similar_hint:
+        title_match = re.search(r"[《「『]([^》」』]{2,80})[》」』]", query or "")
+        if title_match:
+            slots["similar_to_title"] = title_match.group(1).strip()
+            return "similar_to", slots
     if has_similar_hint and positive_terms:
-        # Heuristic can't reliably extract a real title from free text;
+        # Heuristic can't reliably extract a real title without quotes;
         # down-route to by_style so we don't claim a similar_to intent
         # we can't service.
         slots["themes"] = list(positive_terms)
@@ -735,7 +740,7 @@ def _route_similar_to(
     candidates: list[models.Media],
     avoid_tokens: list[str],
 ) -> tuple[list[dict], Optional[str]]:
-    """Find the referenced manga, then cosine-rank neighbours."""
+    """Find the referenced manga, then rank neighbours by local similarity."""
     slots = preferences.get("slots") or {}
     title_hint = (slots.get("similar_to_title") or "").strip()
     if not title_hint:

@@ -26,7 +26,7 @@ from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
-from .. import models, scanner
+from .. import metadata_enrichment, models, scanner
 
 
 THUMBNAIL_DIR_NAME = ".thumbnails"
@@ -206,6 +206,7 @@ def upsert_library_media(
                 pass
 
     db.flush()
+    metadata_enrichment.enrich_x_media(db, media, post=post)
     return media
 
 

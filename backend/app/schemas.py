@@ -68,6 +68,7 @@ class MediaBase(BaseModel):
     last_opened_at: Optional[datetime] = None
     source_url: Optional[str] = None
     source_site: Optional[str] = None
+    artist: Optional[str] = None
     is_missing: bool = False
     missing_since: Optional[datetime] = None
     cover_time_ms: Optional[int] = None

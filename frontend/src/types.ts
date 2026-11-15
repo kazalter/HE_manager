@@ -17,6 +17,7 @@ export interface Media {
     last_opened_at: string | null;
     source_url: string | null;
     source_site: string | null;
+    artist?: string | null;
     is_missing: boolean;
     missing_since: string | null;
     normalized_title?: string | null;

@@ -1,14 +1,14 @@
 import logging
 import os
 from typing import Any, Dict, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import or_
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
-from .. import models, scanner
+from .. import metadata_enrichment, models, scanner
 from ..database import SQLALCHEMY_DATABASE_URL, get_db
-from ..services import backup, storage_guard
+from ..services import backup, external_metadata_backfill, storage_guard
 
 logger = logging.getLogger(__name__)
 
@@ -115,3 +115,57 @@ def backfill_missing_video_metadata(db: Session, limit: int = 500) -> Dict[str, 
 @__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
 def run_video_metadata_backfill(limit: int = 500, db: Session = Depends(get_db)) -> Dict[str, int]:
     return backfill_missing_video_metadata(db, limit=limit)
+
+
+@router.get("/metadata/stats")
+def get_metadata_stats(db: Session = Depends(get_db)) -> Dict[str, int]:
+    return metadata_enrichment.metadata_coverage_stats(db)
+
+
+@router.post("/backfill-metadata")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
+def run_metadata_backfill(
+    limit: int = 5000,
+    force: bool = False,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    result = metadata_enrichment.backfill_media_metadata(db, limit=limit, force=force)
+    stats = metadata_enrichment.metadata_coverage_stats(db)
+    return {**result, "stats": stats}
+
+
+@router.post("/backfill-external-metadata")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
+def start_external_metadata_backfill(
+    background_tasks: BackgroundTasks,
+    limit: int = 100,
+    delay_seconds: float = 1.0,
+    include_wnacg: bool = True,
+    include_asmr: bool = True,
+    force: bool = False,
+) -> Dict[str, Any]:
+    return external_metadata_backfill.start_external_metadata_backfill_job(
+        background_tasks,
+        limit=limit,
+        delay_seconds=delay_seconds,
+        include_wnacg=include_wnacg,
+        include_asmr=include_asmr,
+        force=force,
+    )
+
+
+@router.get("/backfill-external-metadata/{job_id}")
+def get_external_metadata_backfill_status(job_id: str) -> Dict[str, Any]:
+    job = external_metadata_backfill.get_external_metadata_backfill_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="未找到外部元数据抓取任务")
+    return job
+
+
+@router.post("/backfill-external-metadata/{job_id}/cancel")
+@__import__("app.services.media_operation_guard",fromlist=["guarded_mutation"]).guarded_mutation
+def cancel_external_metadata_backfill(job_id: str) -> Dict[str, Any]:
+    job = external_metadata_backfill.cancel_external_metadata_backfill_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="未找到外部元数据抓取任务")
+    return job

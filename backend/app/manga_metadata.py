@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from datetime import datetime
 from typing import Optional
@@ -9,7 +10,7 @@ from . import manga_artist, models
 from .dedup import normalize as dedup_normalize
 
 
-ANALYZER_VERSION = "metadata-v1"
+ANALYZER_VERSION = "metadata-v2"
 
 LANGUAGE_HINTS = {
     "中文": "中文",
@@ -27,6 +28,12 @@ NOISE_WORDS = {
     "dl版", "dl version", "無修正", "无修正", "digital", "カラー", "color",
     "中国翻訳", "中國翻譯", "汉化", "漢化", "中文", "english", "eng",
 }
+
+_EVENT_OR_FORMAT_PARENS_RE = re.compile(
+    r"^(?:c\d+|comitia\d*|comic1.*|例大祭.*|紅楼夢.*|サンクリ.*|air\s*comiket.*|"
+    r"同人誌|成年コミック|商業誌|単行本|雑誌|漫画|cg集|画集|イラスト集|18禁|r-?18|無修正|无修正|\d{4}[-/年]\d*)$",
+    re.I,
+)
 
 
 def _json_dumps(value) -> str:
@@ -83,14 +90,30 @@ def parse_title_metadata(title: str) -> dict:
         if any(word.lower() in lowered for word in NOISE_WORDS):
             tags.append(chunk)
 
-    paren_chunks = re.findall(r"\(([^)]+)\)", title or "")
-    for chunk in paren_chunks:
-        lowered = chunk.lower()
-        if not any(word.lower() in lowered for word in NOISE_WORDS) and not re.match(r"c\d+|comitia|例大祭", lowered):
-            parody = parody or chunk.strip()
-
     artist = manga_artist.parse_artist(title)
     circle = manga_artist.parse_circle(title)
+    artist_lower = (artist or "").lower()
+    circle_lower = (circle or "").lower()
+
+    # Search parenthetical chunks *outside* [...] / 【...】 so `[Circle (Artist)]`
+    # does not mistake `(Artist)` for the parody.
+    outside_brackets = re.sub(r"\[[^\]]*\]|【[^】]*】", " ", title or "")
+    paren_chunks = [
+        (m.group(1) or m.group(2) or "").strip()
+        for m in re.finditer(r"\(([^)]+)\)|（([^）]+)）", outside_brackets)
+    ]
+    for chunk in paren_chunks:
+        if not chunk:
+            continue
+        lowered = chunk.lower()
+        if lowered in {artist_lower, circle_lower}:
+            continue
+        if any(word.lower() in lowered for word in NOISE_WORDS):
+            continue
+        if _EVENT_OR_FORMAT_PARENS_RE.match(chunk):
+            continue
+        parody = parody or chunk
+
     parsed_title = _strip_bracket_noise(title or "")
     normalized = dedup_normalize.normalize_title(parsed_title)
 
@@ -105,14 +128,44 @@ def parse_title_metadata(title: str) -> dict:
     }
 
 
-def _source_signature(media: models.Media) -> str:
+def _read_local_sidecar(media: models.Media) -> dict:
+    if not media.absolute_path or not os.path.isdir(media.absolute_path):
+        return {}
+    sidecar_path = os.path.join(media.absolute_path, "metadata.json")
+    if not os.path.isfile(sidecar_path):
+        return {}
+    try:
+        with open(sidecar_path, "r", encoding="utf-8") as fp:
+            data = json.load(fp)
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _sidecar_signature(sidecar: Optional[dict]) -> str:
+    if not sidecar:
+        return ""
+    tags = ",".join(sorted(str(t).strip() for t in (sidecar.get("tags") or []) if str(t).strip()))
+    return "|".join([
+        str(sidecar.get("category") or "").strip(),
+        tags,
+        str(sidecar.get("intro") or "").strip()[:120],
+    ])
+
+
+def _source_signature(media: models.Media, sidecar: Optional[dict] = None) -> str:
+    if sidecar is None:
+        sidecar = _read_local_sidecar(media)
     return "|".join(
         [
             str(media.id),
             media.title or "",
+            media.artist or "",
             media.source_site or "",
             media.source_url or "",
+            str(media.page_count or ""),
             ",".join(sorted(tag.name for tag in media.tags)),
+            _sidecar_signature(sidecar),
         ]
     )
 
@@ -127,20 +180,28 @@ def _external_item_for_media(db: Session, media: models.Media) -> Optional[model
     )
 
 
-def needs_metadata(media: models.Media) -> bool:
+def needs_metadata(media: models.Media, sidecar: Optional[dict] = None) -> bool:
     profile = media.metadata_profile
     if not profile:
         return media.media_type == "manga"
     return (
         profile.analyzer_version != ANALYZER_VERSION
-        or profile.source_signature != _source_signature(media)
+        or profile.source_signature != _source_signature(media, sidecar=sidecar)
     )
 
 
-def build_metadata_profile(db: Session, media: models.Media, force: bool = False) -> models.MangaMetadataProfile:
+def build_metadata_profile(
+    db: Session,
+    media: models.Media,
+    force: bool = False,
+    sidecar: Optional[dict] = None,
+    external_item: Optional[models.ExternalFavoriteItem] = None,
+) -> models.MangaMetadataProfile:
     if media.media_type != "manga":
         raise ValueError("Only manga media can have manga metadata")
-    if media.metadata_profile and not force and not needs_metadata(media):
+    if sidecar is None:
+        sidecar = _read_local_sidecar(media)
+    if media.metadata_profile and not force and not needs_metadata(media, sidecar=sidecar):
         return media.metadata_profile
 
     parsed = parse_title_metadata(media.title or "")
@@ -149,10 +210,15 @@ def build_metadata_profile(db: Session, media: models.Media, force: bool = False
     summary_bits = []
     confidence = 25
 
-    if parsed.get("parsed_artist"):
-        tags.append(f"artist:{parsed['parsed_artist']}")
-        summary_bits.append(f"作者/社团：{parsed['parsed_artist']}")
+    parsed_artist = parsed.get("parsed_artist") or (media.artist or "").strip() or None
+    parsed_circle = parsed.get("parsed_circle")
+
+    if parsed_artist:
+        tags.append(f"artist:{parsed_artist}")
+        summary_bits.append(f"作者/社团：{parsed_artist}")
         confidence += 15
+    if parsed_circle:
+        tags.append(f"circle:{parsed_circle}")
     if parsed.get("parody"):
         tags.append(f"parody:{parsed['parody']}")
         summary_bits.append(f"原作/系列：{parsed['parody']}")
@@ -165,7 +231,27 @@ def build_metadata_profile(db: Session, media: models.Media, force: bool = False
     for tag in media.tags:
         tags.append(tag.name)
 
-    item = _external_item_for_media(db, media)
+    if sidecar:
+        sidecar_tags = [str(t).strip() for t in (sidecar.get("tags") or []) if str(t).strip()]
+        if sidecar_tags:
+            tags.extend(sidecar_tags)
+            confidence += 15
+        sidecar_category = (sidecar.get("category") or "").strip()
+        if sidecar_category:
+            tags.append(f"category:{sidecar_category}")
+            summary_bits.append(f"分类：{sidecar_category}")
+            confidence += 10
+        sidecar_intro = (sidecar.get("intro") or "").strip()
+        if sidecar_intro:
+            summary_bits.append(f"简介：{sidecar_intro}")
+        source_matches.append({
+            "source_type": sidecar.get("source_site") or media.source_site or "sidecar",
+            "external_id": sidecar.get("external_id"),
+            "url": sidecar.get("source_url") or media.source_url,
+            "category": sidecar_category or None,
+        })
+
+    item = external_item if external_item is not None else _external_item_for_media(db, media)
     if item:
         source_matches.append({
             "source_type": item.source_type,
@@ -203,8 +289,8 @@ def build_metadata_profile(db: Session, media: models.Media, force: bool = False
 
     profile.normalized_title = parsed["normalized_title"]
     profile.parsed_title = parsed["parsed_title"]
-    profile.parsed_artist = parsed["parsed_artist"]
-    profile.parsed_circle = parsed["parsed_circle"]
+    profile.parsed_artist = parsed_artist
+    profile.parsed_circle = parsed_circle
     profile.parody = parsed["parody"]
     profile.language = parsed["language"]
     profile.external_tags = _json_dumps(_dedupe(tags))
@@ -212,7 +298,7 @@ def build_metadata_profile(db: Session, media: models.Media, force: bool = False
     profile.source_matches = _json_dumps(source_matches)
     profile.confidence = min(100, confidence)
     profile.analyzer_version = ANALYZER_VERSION
-    profile.source_signature = _source_signature(media)
+    profile.source_signature = _source_signature(media, sidecar=sidecar)
     profile.updated_at = datetime.utcnow()
     return profile
 

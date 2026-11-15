@@ -10,8 +10,11 @@ import { EmptyState, PageHeader, SectionHeader, UiButton, UiCard, UiIconButton, 
 const NAMESPACES = [
   { value: 'general', label: '通用' },
   { value: 'artist', label: '作者' },
+  { value: 'circle', label: '社团' },
+  { value: 'parody', label: '原作' },
   { value: 'character', label: '角色' },
-  { value: 'parody', label: '出处' },
+  { value: 'category', label: '分类' },
+  { value: 'language', label: '语言' },
   { value: 'source', label: '来源' },
 ]
 const NS_ORDER = NAMESPACES.map(n => n.value)

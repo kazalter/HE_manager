@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from html import unescape
 from html.parser import HTMLParser
 import json
@@ -456,3 +456,144 @@ def fetch_content_length(url: str, cookie: str, referer: str = WNACG_BASE_URL, t
             continue
 
     return None
+
+
+@dataclass
+class WnacgWorkDetail:
+    external_id: Optional[str] = None
+    title: Optional[str] = None
+    category: Optional[str] = None
+    page_count: Optional[int] = None
+    tags: List[str] = field(default_factory=list)
+    intro: Optional[str] = None
+
+    def to_sidecar_dict(self, source_url: Optional[str] = None) -> Dict[str, object]:
+        return {
+            "source_site": "wnacg",
+            "external_id": self.external_id,
+            "source_url": source_url,
+            "title": self.title,
+            "category": self.category,
+            "page_count": self.page_count,
+            "tags": list(self.tags),
+            "intro": self.intro,
+        }
+
+
+def wnacg_detail_url(aid: str, base_url: str = WNACG_BASE_URL) -> str:
+    return urljoin(base_url, f"photos-index-aid-{aid}.html")
+
+
+class WnacgDetailParser(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.title: Optional[str] = None
+        self.category: Optional[str] = None
+        self.page_count: Optional[int] = None
+        self.tags: List[str] = []
+        self.intro: Optional[str] = None
+        self._seen_tags: set[str] = set()
+        self._in_h2 = False
+        self._h2_parts: List[str] = []
+        self._in_uwconn_depth = 0
+        self._in_label = False
+        self._label_parts: List[str] = []
+        self._in_tag_link = False
+        self._tag_parts: List[str] = []
+        self._in_intro_p = False
+        self._intro_parts: List[str] = []
+
+    def handle_starttag(self, tag: str, attrs: Iterable[tuple[str, Optional[str]]]):
+        attrs_dict = {name.lower(): value or "" for name, value in attrs}
+        classes = set((attrs_dict.get("class") or "").split())
+        if tag == "h2" and self.title is None:
+            self._in_h2 = True
+            self._h2_parts = []
+        elif tag == "div" and ("uwconn" in classes or self._in_uwconn_depth > 0):
+            self._in_uwconn_depth += 1
+        elif tag == "label" and self._in_uwconn_depth > 0:
+            self._in_label = True
+            self._label_parts = []
+        elif tag == "a" and "tagshow" in classes:
+            self._in_tag_link = True
+            self._tag_parts = []
+        elif tag == "p" and self._in_uwconn_depth > 0:
+            self._in_intro_p = True
+            self._intro_parts = []
+
+    def handle_data(self, data: str):
+        if self._in_h2:
+            self._h2_parts.append(data)
+        if self._in_label:
+            self._label_parts.append(data)
+        if self._in_tag_link:
+            self._tag_parts.append(data)
+        if self._in_intro_p:
+            self._intro_parts.append(data)
+
+    def handle_endtag(self, tag: str):
+        if tag == "h2" and self._in_h2:
+            text = unescape("".join(self._h2_parts)).strip()
+            if text and self.title is None:
+                self.title = text
+            self._in_h2 = False
+            self._h2_parts = []
+        elif tag == "label" and self._in_label:
+            text = unescape("".join(self._label_parts)).strip()
+            if text.startswith(("分類：", "分类：")):
+                val = text.split("：", 1)[1].strip()
+                if val and not self.category:
+                    self.category = val
+            elif text.startswith(("頁數：", "页数：")):
+                m = re.search(r"(\d+)", text)
+                if m and self.page_count is None:
+                    self.page_count = int(m.group(1))
+            self._in_label = False
+            self._label_parts = []
+        elif tag == "a" and self._in_tag_link:
+            tag_name = unescape("".join(self._tag_parts)).strip()
+            key = tag_name.lower()
+            if tag_name and key not in self._seen_tags:
+                self._seen_tags.add(key)
+                self.tags.append(tag_name)
+            self._in_tag_link = False
+            self._tag_parts = []
+        elif tag == "p" and self._in_intro_p:
+            text = unescape("".join(self._intro_parts)).strip()
+            if text.startswith(("簡介：", "简介：")):
+                val = text.split("：", 1)[1].strip()
+                if val:
+                    self.intro = val
+            self._in_intro_p = False
+            self._intro_parts = []
+        elif tag == "div" and self._in_uwconn_depth > 0:
+            self._in_uwconn_depth -= 1
+
+
+def parse_wnacg_work_detail(html: str, external_id: Optional[str] = None) -> WnacgWorkDetail:
+    parser = WnacgDetailParser()
+    parser.feed(html or "")
+    return WnacgWorkDetail(
+        external_id=external_id,
+        title=parser.title,
+        category=parser.category,
+        page_count=parser.page_count,
+        tags=parser.tags,
+        intro=parser.intro,
+    )
+
+
+def fetch_wnacg_work_detail(
+    url_or_aid: str,
+    cookie: str = "",
+    base_url: str = WNACG_BASE_URL,
+) -> WnacgWorkDetail:
+    raw = (url_or_aid or "").strip()
+    if raw.isdigit():
+        aid = raw
+        url = wnacg_detail_url(aid, base_url=base_url)
+    else:
+        aid = extract_wnacg_aid(raw)
+        url = raw if raw.startswith(("http://", "https://")) else urljoin(base_url, raw)
+    html = fetch_html(url, cookie)
+    return parse_wnacg_work_detail(html, external_id=aid)

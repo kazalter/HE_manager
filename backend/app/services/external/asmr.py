@@ -1,9 +1,10 @@
+import logging
 import os
 import shutil
 import time
 from typing import List, Optional
 
-from ... import asmr_source, database, models
+from ... import asmr_source, database, metadata_enrichment, models
 from .. import job_lifecycle
 from ..media_access import get_source_or_404
 from .covers import (
@@ -11,6 +12,8 @@ from .covers import (
     external_item_download_dir,
 )
 from .jobs import DOWNLOAD_JOBS, DownloadCancelled, find_task, is_cancel_requested
+logger = logging.getLogger(__name__)
+
 from .matching import (
     ensure_external_audio_library,
     find_local_media_for_external_item,
@@ -53,9 +56,19 @@ def prepare_asmr_download_plan_for_item(item: models.ExternalFavoriteItem, sourc
             "size": planned.size,
         })
 
+    detail_dict = None
+    try:
+        detail = asmr_source.fetch_work_detail(working_base, token, item.external_id, mirrors=mirrors)
+        detail_dict = detail.to_sidecar_dict()
+        if item.category_name and not detail_dict.get("circle"):
+            detail_dict["circle"] = item.category_name
+    except Exception as exc:  # noqa: BLE001 - detail fetch is best-effort
+        logger.warning("Failed to fetch ASMR work detail for %r: %s", item.title, exc)
+
     return {
         "item_dir": item_dir,
         "files": files,
+        "detail": detail_dict,
     }
 
 
@@ -136,6 +149,18 @@ def download_asmr_item(item: models.ExternalFavoriteItem, source: models.Externa
     info_path = os.path.join(item_dir, "source.txt")
     with open(info_path, "w", encoding="utf-8") as info_file:
         info_file.write(f"{item.title}\n{item.url}\n{item.external_id}\n")
+
+    sidecar_payload = dict(plan.get("detail") or {})
+    sidecar_payload.setdefault("source_site", "asmr")
+    sidecar_payload.setdefault("external_id", item.external_id)
+    sidecar_payload.setdefault("source_url", item.url)
+    sidecar_payload.setdefault("title", item.title)
+    if item.category_name and not sidecar_payload.get("circle"):
+        sidecar_payload["circle"] = item.category_name
+    try:
+        metadata_enrichment.write_metadata_json(item_dir, sidecar_payload)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to write ASMR metadata.json for %r: %s", item.title, exc)
 
     return {
         "item_id": item.id,
