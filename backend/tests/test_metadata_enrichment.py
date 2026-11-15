@@ -18,7 +18,11 @@ from app import (
     metadata_enrichment,
     models,
     recommendations,
+    tagging,
+    zh_conv,
 )
+from fastapi import Response
+from app.routers import media as media_routes
 from app.routers import system as system_routes
 from app.services import external_metadata_backfill
 from app.services.external import asmr as asmr_service
@@ -515,6 +519,225 @@ class MetadataEnrichmentTest(unittest.TestCase):
             candidates = manga_retrievers.visible_manga(db)
             _, neighbours = manga_retrievers.similar_to(db, "Reference Book", candidates)
             self.assertEqual([mid for mid, _ in neighbours], [m2.id])
+        finally:
+            db.close()
+
+
+
+    def test_zh_conv_roundtrip_and_shinjitai(self):
+        self.assertEqual(zh_conv.to_simplified("長筒襪・黒絲・發情・蘿莉"), "长筒袜・黑丝・发情・萝莉")
+        self.assertEqual(zh_conv.to_traditional("黑丝"), "黑絲")
+        variants = zh_conv.expand_zh_variants("超长发")
+        self.assertIn("超長髮", variants)
+        self.assertIn("超長發", variants)
+
+    def test_noise_tag_purge_and_scanlation_bracket_skip_and_path_extraction(self):
+        db = self.Session()
+        try:
+            folder = models.Folder(path="/manga", scan_mode="manga")
+            db.add(folder)
+            db.flush()
+
+            m1 = models.Media(
+                folder_id=folder.id,
+                title="[绅士仓库汉化] (C93) [合衆国ネタメコル (ねこめたる)] 莉嘉ちゃん",
+                relative_path="合衆国ネタメコル (ねこめたる)/item1",
+                absolute_path="/manga/合衆国ネタメコル (ねこめたる)/item1",
+                media_type="manga",
+                extension=".dir",
+                file_size=100,
+                artist="绅士仓库汉化",
+            )
+            m2 = models.Media(
+                folder_id=folder.id,
+                title="[种植园汉化]hhkg杏目",
+                relative_path="hhkg/[种植园汉化]hhkg杏目",
+                absolute_path="/manga/hhkg/[种植园汉化]hhkg杏目",
+                media_type="manga",
+                extension=".dir",
+                file_size=100,
+                artist="种植园汉化",
+            )
+            m3 = models.Media(
+                folder_id=folder.id,
+                title="3757416_[ie] Fanbox短篇合集 [Chinese]",
+                relative_path="ie/3757416_[ie]",
+                absolute_path="/manga/ie/3757416_[ie]",
+                media_type="manga",
+                extension=".dir",
+                file_size=100,
+            )
+            m4 = models.Media(
+                folder_id=folder.id,
+                title="Artist--MだSたろう(8╱8)",
+                relative_path="m4",
+                absolute_path="/manga/m4",
+                media_type="manga",
+                extension=".dir",
+                file_size=100,
+            )
+            m5 = models.Media(
+                folder_id=folder.id,
+                title="[2021.02] [PIXIV FANBOX] 人妻ちゃん温泉旅行 [真不可视汉化组]",
+                relative_path="ie\\C1369-[ie研究室 (ie)]／[@_raarami_]／[ie]\\book5",
+                absolute_path="/manga/ie/book5",
+                media_type="manga",
+                extension=".dir",
+                file_size=100,
+            )
+            m6 = models.Media(
+                folder_id=folder.id,
+                title="魅力的代價 無修正版 [轟媽無修正][沒有漢化漢化組][原崎]魅惑の代償 (リョナキング vol.27)",
+                relative_path="m6",
+                absolute_path="/manga/m6",
+                media_type="manga",
+                extension=".dir",
+                file_size=100,
+            )
+            m7 = models.Media(
+                folder_id=folder.id,
+                title="コミックメガストア Vol.22",
+                relative_path="コミックメガストア Vol.22",
+                absolute_path="/manga/コミックメガストア Vol.22",
+                media_type="manga",
+                extension=".dir",
+                file_size=100,
+            )
+            db.add_all([m1, m2, m3, m4, m5, m6, m7])
+            db.flush()
+
+            # Seed noisy tags to be purged
+            tagging.attach_tag(db, m1, "绅士仓库汉化", namespace="artist")
+            tagging.attach_tag(db, m2, "种植园汉化", namespace="artist")
+            tagging.attach_tag(db, m4, "8╱8", namespace="parody")
+            tagging.attach_tag(db, m1, "後頁>", namespace="category")
+            tagging.attach_tag(db, m1, "收藏", namespace="category")
+            tagging.attach_tag(db, m1, "SUMSK翻译", namespace="general")
+            tagging.attach_tag(db, m1, "/", namespace="general")
+            tagging.attach_tag(db, m1, "ねこめたる", namespace="general")  # duplicate of artist
+            db.commit()
+
+            res = metadata_enrichment.backfill_media_metadata(db, limit=100, force=True, clean_noise=True)
+            self.assertGreater(res["noise_tags_deleted"], 0)
+
+            db.expire_all()
+            self.assertEqual(db.get(models.Media, m1.id).artist, "ねこめたる")
+            self.assertEqual(db.get(models.Media, m2.id).artist, "hhkg")
+            self.assertEqual(db.get(models.Media, m3.id).artist, "ie")
+            self.assertEqual(db.get(models.Media, m4.id).artist, "MだSたろう")
+            self.assertEqual(db.get(models.Media, m5.id).artist, "ie")
+            self.assertEqual(db.get(models.Media, m6.id).artist, "原崎")
+            self.assertIsNone(db.get(models.Media, m7.id).artist)
+
+            m5_tags = {(t.name, t.namespace) for t in db.get(models.Media, m5.id).tags}
+            self.assertIn(("ie研究室", "circle"), m5_tags)
+
+            remaining_names = {t.name for t in db.query(models.Tag).all()}
+            for junk in ("绅士仓库汉化", "种植园汉化", "8╱8", "後頁>", "收藏", "SUMSK翻译", "/"):
+                self.assertNotIn(junk, remaining_names)
+            m1_general = {t.name for t in db.get(models.Media, m1.id).tags if t.namespace == "general"}
+            self.assertNotIn("ねこめたる", m1_general)
+        finally:
+            db.close()
+
+    def test_trad_simp_media_search_list_tags_and_recommend_by_style(self):
+        db = self.Session()
+        try:
+            folder = models.Folder(path="/manga", scan_mode="manga")
+            db.add(folder)
+            db.flush()
+
+            m_trad = models.Media(
+                folder_id=folder.id,
+                title="[畫師A] 羽川蓮實的誘惑 (蔚藍檔案) [中文]",
+                relative_path="book_trad",
+                absolute_path="/manga/book_trad",
+                media_type="manga",
+                extension=".dir",
+                file_size=100,
+                page_count=28,
+            )
+            m_other = models.Media(
+                folder_id=folder.id,
+                title="[畫師B] 機戰冒險",
+                relative_path="book_other",
+                absolute_path="/manga/book_other",
+                media_type="manga",
+                extension=".dir",
+                file_size=100,
+                page_count=40,
+            )
+            db.add_all([m_trad, m_other])
+            db.flush()
+
+            tagging.attach_tag(db, m_trad, "長筒襪", namespace="general")
+            tagging.attach_tag(db, m_trad, "純愛", namespace="general")
+            tagging.attach_tag(db, m_trad, "同人誌／漢化", namespace="category")
+            tagging.attach_tag(db, m_other, "機戰", namespace="general")
+            db.commit()
+
+            metadata_enrichment.backfill_media_metadata(db, limit=100, force=True)
+
+            # /media?search=长筒袜 (Simplified) hits Traditional 長筒襪
+            rows = media_routes.list_media(response=Response(), search="长筒袜", media_type="manga", db=db)
+            self.assertEqual([r.id for r in rows], [m_trad.id])
+
+            rows_cat = media_routes.list_media(response=Response(), search="同人志", media_type="manga", db=db)
+            self.assertEqual([r.id for r in rows_cat], [m_trad.id])
+
+            rows_tag = media_routes.list_media(response=Response(), tag="长筒袜", media_type="manga", db=db)
+            self.assertEqual([r.id for r in rows_tag], [m_trad.id])
+
+            # /tags filtered query
+            filtered_tags = media_routes.list_tags(
+                namespace="general",
+                q="长筒袜",
+                min_count=1,
+                media_type="manga",
+                sort="count",
+                db=db,
+            )
+            self.assertEqual([(t.name, t.count) for t in filtered_tags], [("長筒襪", 1)])
+
+            # recommendations.recommend_manga (by_style) matches Traditional via Simplified query
+            rec = recommendations.recommend_manga(
+                db=db,
+                query="想看长筒袜纯爱同人志",
+                limit=5,
+                avoid_tags=[],
+                preferred_tags=[],
+                allow_ai=False,
+            )
+            rec_ids = [item["media"].id for item in rec["recommendations"]]
+            self.assertEqual(rec["parsed_preferences"]["intent"], "by_style")
+            self.assertIn(m_trad.id, rec_ids)
+            self.assertNotIn(m_other.id, rec_ids)
+        finally:
+            db.close()
+
+    def test_wnacg_autosync_opportunistic_catchup_best_effort(self):
+        db = self.Session()
+        try:
+            source = models.ExternalFavoriteSource(
+                source_type="wnacg",
+                name="WNACG",
+                favorites_url="https://www.wnacg.com/users-fav.html",
+                cookie="session=abc",
+                download_root_path="/tmp/wnacg-test",
+                auto_sync_enabled=True,
+                auto_sync_interval_hours=24,
+            )
+            db.add(source)
+            db.commit()
+            source_id = source.id
+
+            from app.services.auto_sync import wnacg as wnacg_auto_sync
+            with patch.object(wnacg_auto_sync, "is_mount_or_sentinel_valid", return_value=(True, "")),                  patch.object(external_sources, "fetch_html", return_value="<html></html>"),                  patch.object(external_sources, "parse_wnacg_categories", return_value=[]),                  patch.object(external_sources, "parse_wnacg_favorites", return_value=[]),                  patch.object(external_metadata_backfill, "run_external_details_batch", side_effect=RuntimeError("network blip")) as mock_catchup:
+                wnacg_auto_sync._run_wnacg(source_id)
+                mock_catchup.assert_called_once()
+
+            fresh = db.query(models.ExternalFavoriteSource).filter_by(id=source_id).first()
+            self.assertEqual(fresh.auto_sync_last_status, "success")
         finally:
             db.close()
 

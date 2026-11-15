@@ -30,7 +30,7 @@ import math
 import re
 from typing import Iterable, Optional
 
-from . import models
+from . import models, zh_conv
 
 
 def _json_list(value: Optional[str]) -> list[str]:
@@ -125,39 +125,49 @@ ACG_SYNONYM_MAP: dict[str, list[str]] = {
     "原神": ["原神", "genshin"],
     "明日方舟": ["アークナイツ", "明日方舟", "arknights"],
     "偶像大师": ["アイドルマスター", "アイマス"],
+    "黑丝": ["黑絲", "絲襪", "長筒襪", "連褲襪", "连裤袜", "连体丝袜", "ストッキング"],
+    "长筒袜": ["長筒襪", "黑絲", "白絲", "絲襪", "ニーソ"],
+    "丝袜": ["絲襪", "黑絲", "長筒襪", "連褲襪", "连体丝袜"],
+    "同人志": ["同人誌", "同人誌／漢化", "同人誌／日語"],
+    "单行本": ["單行本", "單行本／漢化", "單行本／日語"],
 }
 
 
 def expand_query_tokens(tokens: Iterable[str]) -> list[str]:
-    """Broaden query tokens with ACG tropes and cross-lingual synonyms."""
+    """Broaden query tokens with Trad/Simp Chinese variants, ACG tropes and synonyms."""
     out: list[str] = []
     seen: set[str] = set()
+
+    def _add(item: str) -> None:
+        clean = (item or "").strip()
+        low = clean.lower()
+        if clean and low not in seen:
+            seen.add(low)
+            out.append(clean)
 
     for token in tokens:
         if not token:
             continue
         t_clean = token.strip()
-        t_lower = t_clean.lower()
-        if t_lower not in seen:
-            seen.add(t_lower)
-            out.append(t_clean)
+        for variant in zh_conv.expand_zh_variants(t_clean):
+            _add(variant)
 
-        # Direct map hit
-        if t_lower in ACG_SYNONYM_MAP:
-            for syn in ACG_SYNONYM_MAP[t_lower]:
-                s_lower = syn.lower()
-                if s_lower not in seen:
-                    seen.add(s_lower)
-                    out.append(syn)
-        else:
-            # Substring / partial key hit
-            for key, syns in ACG_SYNONYM_MAP.items():
-                if key in t_lower or (len(t_lower) >= 2 and t_lower in key):
+        t_lower = t_clean.lower()
+        t_simp = zh_conv.to_simplified(t_lower)
+        lookup_keys = [t_lower] if t_simp == t_lower else [t_lower, t_simp]
+
+        matched_direct = False
+        for key in lookup_keys:
+            if key in ACG_SYNONYM_MAP:
+                matched_direct = True
+                for syn in ACG_SYNONYM_MAP[key]:
+                    _add(syn)
+
+        if not matched_direct:
+            for map_key, syns in ACG_SYNONYM_MAP.items():
+                if any(map_key in k or (len(k) >= 2 and k in map_key) for k in lookup_keys):
                     for syn in syns:
-                        s_lower = syn.lower()
-                        if s_lower not in seen:
-                            seen.add(s_lower)
-                            out.append(syn)
+                        _add(syn)
     return out
 
 
@@ -199,17 +209,9 @@ def _cjk_ngrams(s: str) -> list[str]:
     return out
 
 
-def tokenize(text: Optional[str]) -> list[str]:
-    """Lowercase + tokenize. Returns a flat list (may contain duplicates)."""
-    if not text:
-        return []
-    text = text.lower()
+def _segment_text(text: str) -> list[str]:
     tokens: list[str] = []
-
-    # Latin / digit / hyphenated identifier
     tokens.extend(m.group(0) for m in _LATIN_TOKEN_RE.finditer(text))
-
-    # Group consecutive CJK characters into runs, then tokenize each run
     run: list[str] = []
     for ch in text:
         if _is_cjk(ch):
@@ -220,8 +222,6 @@ def tokenize(text: Optional[str]) -> list[str]:
             run = []
     if run:
         tokens.extend(_tokenize_cjk_run("".join(run)))
-
-    # Filter stopwords and 1-char Latin (CJK 1-chars are kept as anchors)
     out: list[str] = []
     for t in tokens:
         if not t or t in _STOPWORDS:
@@ -232,6 +232,22 @@ def tokenize(text: Optional[str]) -> list[str]:
     return out
 
 
+def tokenize(text: Optional[str]) -> list[str]:
+    """Lowercase + tokenize with Simplified Chinese normalization."""
+    if not text:
+        return []
+    lowered = text.lower()
+    tokens = _segment_text(lowered)
+    simp = zh_conv.to_simplified(lowered)
+    if simp != lowered:
+        existing = set(tokens)
+        for t in _segment_text(simp):
+            if t not in existing:
+                existing.add(t)
+                tokens.append(t)
+    return tokens
+
+
 def _tokenize_cjk_run(run: str) -> list[str]:
     if _HAS_JIEBA:
         cut = [t.strip() for t in jieba.cut(run, HMM=True)]
@@ -240,7 +256,7 @@ def _tokenize_cjk_run(run: str) -> list[str]:
 
 
 def _tokens_from_items(items: Iterable[str]) -> set[str]:
-    """Tokenize each item AND keep the lowercased whole as an exact-match key."""
+    """Tokenize each item AND keep lowercased original/simplified whole keys."""
     out: set[str] = set()
     for raw in items:
         if not raw:
@@ -249,7 +265,11 @@ def _tokens_from_items(items: Iterable[str]) -> set[str]:
         if not s:
             continue
         out.update(tokenize(s))
-        out.add(s.lower())
+        low = s.lower()
+        out.add(low)
+        simp = zh_conv.to_simplified(low)
+        if simp:
+            out.add(simp)
     return out
 
 
@@ -260,6 +280,9 @@ def _tokens_from_text(text: Optional[str]) -> set[str]:
     s = text.strip().lower()
     if s:
         out.add(s)
+        simp = zh_conv.to_simplified(s)
+        if simp:
+            out.add(simp)
 
     # Extract Japanese Katakana words (e.g. ブルーアーカイブ, メイド, バニー)
     for k in re.findall(r"[\u30a0-\u30ffー]{2,}", text):
@@ -271,6 +294,9 @@ def _tokens_from_text(text: Optional[str]) -> set[str]:
             if part and len(part.strip()) > 1:
                 cleaned = part.strip().lower()
                 out.add(cleaned)
+                simp_part = zh_conv.to_simplified(cleaned)
+                if simp_part:
+                    out.add(simp_part)
                 out.update(tokenize(cleaned))
     return out
 

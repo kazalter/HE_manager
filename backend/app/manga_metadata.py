@@ -2,7 +2,7 @@ import json
 import os
 import re
 from datetime import datetime
-from typing import Optional
+from typing import Iterable, Optional
 
 from sqlalchemy.orm import Session
 
@@ -10,7 +10,7 @@ from . import manga_artist, models
 from .dedup import normalize as dedup_normalize
 
 
-ANALYZER_VERSION = "metadata-v2"
+ANALYZER_VERSION = "metadata-v3"
 
 LANGUAGE_HINTS = {
     "中文": "中文",
@@ -29,9 +29,18 @@ NOISE_WORDS = {
     "中国翻訳", "中國翻譯", "汉化", "漢化", "中文", "english", "eng",
 }
 
+JUNK_CATEGORIES = {"後頁>", "后页>", "收藏"}
+
 _EVENT_OR_FORMAT_PARENS_RE = re.compile(
-    r"^(?:c\d+|comitia\d*|comic1.*|例大祭.*|紅楼夢.*|サンクリ.*|air\s*comiket.*|"
-    r"同人誌|成年コミック|商業誌|単行本|雑誌|漫画|cg集|画集|イラスト集|18禁|r-?18|無修正|无修正|\d{4}[-/年]\d*)$",
+    r"^(?:c\d+|comitia\d*|コミティア\d*|comic1.*|例大祭.*|紅楼夢.*|サンクリ.*|"
+    r"air\s*comiket.*|エアコミケ\d*|ホロクル.*|ホロケット.*|gw超同人祭|コミックトレジャー.*|"
+    r"同人誌|成年コミック|商業誌|単行本|雑誌|漫画|cg集|画集|イラスト集|18禁|r-?18|無修正|无修正|"
+    r"前編|中編|後編|完結|ongoing|complete(?:d)?|wip|sample|\d{4}[-/年]\d*)$",
+    re.I,
+)
+
+_NOISE_PARENS_RE = re.compile(
+    r"(?:^\d+(?:[╱/]\d+)?$|^ex-hentai\b|汉化|漢化|翻译|翻譯|渣翻|机翻|機翻|重嵌|嵌字|扫图|掃圖|个汉|個漢|去码|去碼|疏码|疏碼)",
     re.I,
 )
 
@@ -76,7 +85,13 @@ def _strip_bracket_noise(title: str) -> str:
     return cleaned or title
 
 
-def parse_title_metadata(title: str) -> dict:
+def parse_title_metadata(
+    title: str,
+    relative_path: Optional[str] = None,
+    *,
+    known_artists: Optional[Iterable[str]] = None,
+    known_circles: Optional[Iterable[str]] = None,
+) -> dict:
     chunks = _bracket_chunks(title or "")
     tags = []
     language = None
@@ -90,8 +105,18 @@ def parse_title_metadata(title: str) -> dict:
         if any(word.lower() in lowered for word in NOISE_WORDS):
             tags.append(chunk)
 
-    artist = manga_artist.parse_artist(title)
-    circle = manga_artist.parse_circle(title)
+    artist = manga_artist.parse_artist_with_path(
+        title,
+        relative_path,
+        known_artists=known_artists,
+        known_circles=known_circles,
+    )
+    circle = manga_artist.parse_circle_with_path(
+        title,
+        relative_path,
+        known_artists=known_artists,
+        known_circles=known_circles,
+    )
     artist_lower = (artist or "").lower()
     circle_lower = (circle or "").lower()
 
@@ -110,7 +135,7 @@ def parse_title_metadata(title: str) -> dict:
             continue
         if any(word.lower() in lowered for word in NOISE_WORDS):
             continue
-        if _EVENT_OR_FORMAT_PARENS_RE.match(chunk):
+        if _EVENT_OR_FORMAT_PARENS_RE.match(chunk) or _NOISE_PARENS_RE.search(chunk):
             continue
         parody = parody or chunk
 
@@ -160,6 +185,7 @@ def _source_signature(media: models.Media, sidecar: Optional[dict] = None) -> st
         [
             str(media.id),
             media.title or "",
+            media.relative_path or "",
             media.artist or "",
             media.source_site or "",
             media.source_url or "",
@@ -196,6 +222,8 @@ def build_metadata_profile(
     force: bool = False,
     sidecar: Optional[dict] = None,
     external_item: Optional[models.ExternalFavoriteItem] = None,
+    known_artists: Optional[Iterable[str]] = None,
+    known_circles: Optional[Iterable[str]] = None,
 ) -> models.MangaMetadataProfile:
     if media.media_type != "manga":
         raise ValueError("Only manga media can have manga metadata")
@@ -204,7 +232,12 @@ def build_metadata_profile(
     if media.metadata_profile and not force and not needs_metadata(media, sidecar=sidecar):
         return media.metadata_profile
 
-    parsed = parse_title_metadata(media.title or "")
+    parsed = parse_title_metadata(
+        media.title or "",
+        relative_path=media.relative_path,
+        known_artists=known_artists,
+        known_circles=known_circles,
+    )
     tags = list(parsed["title_tags"])
     source_matches = []
     summary_bits = []
@@ -237,7 +270,7 @@ def build_metadata_profile(
             tags.extend(sidecar_tags)
             confidence += 15
         sidecar_category = (sidecar.get("category") or "").strip()
-        if sidecar_category:
+        if sidecar_category and sidecar_category not in JUNK_CATEGORIES:
             tags.append(f"category:{sidecar_category}")
             summary_bits.append(f"分类：{sidecar_category}")
             confidence += 10
@@ -248,23 +281,25 @@ def build_metadata_profile(
             "source_type": sidecar.get("source_site") or media.source_site or "sidecar",
             "external_id": sidecar.get("external_id"),
             "url": sidecar.get("source_url") or media.source_url,
-            "category": sidecar_category or None,
+            "category": sidecar_category if sidecar_category and sidecar_category not in JUNK_CATEGORIES else None,
         })
 
     item = external_item if external_item is not None else _external_item_for_media(db, media)
     if item:
+        cat_name = (item.category_name or "").strip()
+        clean_cat = cat_name if cat_name and cat_name not in JUNK_CATEGORIES else None
         source_matches.append({
             "source_type": item.source_type,
             "external_id": item.external_id,
             "url": item.url,
             "title": item.title,
             "category_id": item.category_id,
-            "category_name": item.category_name,
+            "category_name": clean_cat,
         })
         confidence += 30
-        if item.category_name:
-            tags.append(f"category:{item.category_name}")
-            summary_bits.append(f"来源分类：{item.category_name}")
+        if clean_cat:
+            tags.append(f"category:{clean_cat}")
+            summary_bits.append(f"来源分类：{clean_cat}")
         if item.title and item.title != media.title:
             summary_bits.append(f"来源标题：{item.title}")
 

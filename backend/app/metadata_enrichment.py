@@ -176,18 +176,126 @@ def _attach_unique_tag(
 
 
 _NOISE_TAG_EXACT = {
-    "dl版", "汉化", "漢化", "中国翻訳", "无修正", "無修正", "category:後頁>",
+    "dl版", "dl", "汉化", "漢化", "中国翻訳", "中國翻譯", "无修正", "無修正",
+    "category:後頁>", "後頁>", "后页>", "收藏", "僅",
 }
 _NOISE_TAG_SUFFIXES = ("汉化组", "漢化組", "翻译组", "翻譯組", "汉化社", "漢化社")
+_SCANLATION_NOISE_SUBSTRINGS = (
+    "汉化", "漢化", "翻译", "翻譯", "渣翻", "机翻", "機翻",
+    "重嵌", "嵌字", "扫图", "掃圖", "个汉", "個漢",
+    "去码", "去碼", "疏码", "疏碼",
+)
+_HAS_WORD_CHAR_RE = re.compile(r"[0-9a-zA-Z\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]")
+_PARODY_NOISE_RE = re.compile(
+    r"^(?:\d+(?:[╱/]\d+)?|ex-hentai\b.*|ongoing|complete(?:d)?|前編|中編|後編|完結|"
+    r"c\d+|comitia\d*|コミティア\d*|comic1.*|エアコミケ\d*|gw超同人祭|ホロクル.*|ホロケット.*)$",
+    re.I,
+)
 
 
-def _is_noise_tag(name: str) -> bool:
-    lowered = name.strip().lower()
-    if not lowered or lowered in _NOISE_TAG_EXACT:
+def _is_noise_tag(name: Optional[str], namespace: Optional[str] = None) -> bool:
+    raw = (name or "").strip()
+    if not raw:
+        return True
+    if not _HAS_WORD_CHAR_RE.search(raw):
+        return True
+    lowered = raw.lower()
+    ns = (namespace or "general").strip().lower()
+    if lowered in _NOISE_TAG_EXACT:
         return True
     if lowered.endswith(_NOISE_TAG_SUFFIXES):
         return True
+    if ns in ("general", "artist", "parody", "circle"):
+        if any(sub in lowered for sub in _SCANLATION_NOISE_SUBSTRINGS):
+            return True
+    if ns == "category" and lowered in {"後頁>", "后页>", "收藏", "category:後頁>"}:
+        return True
+    if ns == "parody" and _PARODY_NOISE_RE.match(raw):
+        return True
+    if ns == "general":
+        if raw.isdigit() and raw != "69":
+            return True
+        if lowered.startswith("ex-hentai "):
+            return True
     return False
+
+
+def purge_noise_tags(db: Session) -> dict[str, int]:
+    """Remove ingested scanlation/pagination/duplicate noise tags from DB."""
+    removed_links = 0
+    deleted_tags = 0
+
+    all_tags = db.query(models.Tag).all()
+    noise_ids = [t.id for t in all_tags if _is_noise_tag(t.name, t.namespace)]
+    if noise_ids:
+        removed_links += (
+            db.query(models.media_tags)
+            .filter(models.media_tags.c.tag_id.in_(noise_ids))
+            .delete(synchronize_session=False)
+        )
+        deleted_tags += (
+            db.query(models.Tag)
+            .filter(models.Tag.id.in_(noise_ids))
+            .delete(synchronize_session=False)
+        )
+
+    # Clear scanlation noise stuck in media.artist column
+    artist_rows = (
+        db.query(models.Media)
+        .filter(models.Media.artist.isnot(None), models.Media.artist != "")
+        .all()
+    )
+    for m in artist_rows:
+        if _is_noise_tag(m.artist, "artist"):
+            m.artist = None
+
+    # Remove `general` tags on manga that duplicate the same media's `artist` or `circle`
+    db.flush()
+    manga_rows = (
+        db.query(models.Media)
+        .options(selectinload(models.Media.tags))
+        .filter(models.Media.media_type == "manga")
+        .all()
+    )
+    candidate_orphan_ids: set[int] = set()
+    for m in manga_rows:
+        creator_names = {
+            (m.artist or "").strip().lower(),
+        }
+        for t in m.tags:
+            if (t.namespace or "general") in ("artist", "circle") and t.name:
+                creator_names.add(t.name.strip().lower())
+        creator_names.discard("")
+        if not creator_names:
+            continue
+        to_unlink = [
+            t for t in m.tags
+            if (t.namespace or "general") == "general" and t.name.strip().lower() in creator_names
+        ]
+        if to_unlink:
+            for t in to_unlink:
+                m.tags.remove(t)
+                candidate_orphan_ids.add(t.id)
+                removed_links += 1
+
+    db.flush()
+    if candidate_orphan_ids:
+        used_ids = {
+            row[0]
+            for row in db.query(models.media_tags.c.tag_id)
+            .filter(models.media_tags.c.tag_id.in_(candidate_orphan_ids))
+            .distinct()
+            .all()
+        }
+        orphan_ids = list(candidate_orphan_ids - used_ids)
+        if orphan_ids:
+            deleted_tags += (
+                db.query(models.Tag)
+                .filter(models.Tag.id.in_(orphan_ids))
+                .delete(synchronize_session=False)
+            )
+
+    return {"noise_links_removed": int(removed_links), "noise_tags_deleted": int(deleted_tags)}
 
 
 def _clean_string_list(values: Any) -> list[str]:
@@ -211,6 +319,8 @@ def enrich_manga_media(
     item: Optional[models.ExternalFavoriteItem] = None,
     sidecar: Optional[dict[str, Any]] = None,
     external_item_lookup: Optional[dict[str, models.ExternalFavoriteItem]] = None,
+    known_artists: Optional[set[str]] = None,
+    known_circles: Optional[set[str]] = None,
     force: bool = False,
 ) -> dict[str, int]:
     if media.media_type != "manga":
@@ -238,11 +348,28 @@ def enrich_manga_media(
                 .first()
             )
 
-    parsed = manga_metadata.parse_title_metadata(media.title or "")
+    if media.artist and _is_noise_tag(media.artist, "artist"):
+        media.artist = None
+        metrics["updated"] = 1
+
+    parsed = manga_metadata.parse_title_metadata(
+        media.title or "",
+        relative_path=media.relative_path,
+        known_artists=known_artists,
+        known_circles=known_circles,
+    )
+    sidecar_artist = (sidecar.get("artist") or "").strip()
+    if sidecar_artist and _is_noise_tag(sidecar_artist, "artist"):
+        sidecar_artist = ""
     candidate_artist = (
-        (sidecar.get("artist") or "").strip()
+        sidecar_artist
         or parsed.get("parsed_artist")
-        or manga_artist.parse_artist(media.title)
+        or manga_artist.parse_artist_with_path(
+            media.title,
+            media.relative_path,
+            known_artists=known_artists,
+            known_circles=known_circles,
+        )
     )
     if candidate_artist and (not media.artist or force):
         if media.artist != candidate_artist:
@@ -250,15 +377,21 @@ def enrich_manga_media(
             metrics["artist_filled"] = 1
             metrics["updated"] = 1
 
-    if parsed.get("parsed_artist") and _attach_unique_tag(db, media, parsed["parsed_artist"], "artist"):
-        metrics["tags_attached"] += 1
-    elif media.artist and _attach_unique_tag(db, media, media.artist, "artist"):
-        metrics["tags_attached"] += 1
+    parsed_artist = parsed.get("parsed_artist")
+    parsed_circle = parsed.get("parsed_circle")
+    if parsed_artist and not _is_noise_tag(parsed_artist, "artist"):
+        if _attach_unique_tag(db, media, parsed_artist, "artist"):
+            metrics["tags_attached"] += 1
+    elif media.artist and not _is_noise_tag(media.artist, "artist"):
+        if _attach_unique_tag(db, media, media.artist, "artist"):
+            metrics["tags_attached"] += 1
 
-    if parsed.get("parsed_circle") and _attach_unique_tag(db, media, parsed["parsed_circle"], "circle"):
-        metrics["tags_attached"] += 1
-    if parsed.get("parody") and _attach_unique_tag(db, media, parsed["parody"], "parody"):
-        metrics["tags_attached"] += 1
+    if parsed_circle and not _is_noise_tag(parsed_circle, "circle"):
+        if _attach_unique_tag(db, media, parsed_circle, "circle"):
+            metrics["tags_attached"] += 1
+    if parsed.get("parody") and not _is_noise_tag(parsed["parody"], "parody"):
+        if _attach_unique_tag(db, media, parsed["parody"], "parody"):
+            metrics["tags_attached"] += 1
     if parsed.get("language") and _attach_unique_tag(db, media, parsed["language"], "language"):
         metrics["tags_attached"] += 1
 
@@ -267,11 +400,18 @@ def enrich_manga_media(
         item.category_name if item else None,
     ])
     for cat in categories:
+        if _is_noise_tag(cat, "category"):
+            continue
         if _attach_unique_tag(db, media, cat, "category"):
             metrics["tags_attached"] += 1
 
+    skip_general_lower = {
+        str(val).strip().lower()
+        for val in (media.artist, parsed_artist, parsed_circle, sidecar_artist)
+        if val and str(val).strip()
+    }
     for tag_name in _clean_string_list(sidecar.get("tags")):
-        if _is_noise_tag(tag_name):
+        if _is_noise_tag(tag_name, "general") or tag_name.strip().lower() in skip_general_lower:
             continue
         if _attach_unique_tag(db, media, tag_name, "general"):
             metrics["tags_attached"] += 1
@@ -284,6 +424,8 @@ def enrich_manga_media(
             force=force,
             sidecar=sidecar,
             external_item=item,
+            known_artists=known_artists,
+            known_circles=known_circles,
         )
         metrics["updated"] = 1
         if not had_profile:
@@ -433,6 +575,8 @@ def enrich_media_metadata(
     sidecar: Optional[dict[str, Any]] = None,
     external_item_lookup: Optional[dict[str, models.ExternalFavoriteItem]] = None,
     x_post_lookup: Optional[dict[int, models.XPost]] = None,
+    known_artists: Optional[set[str]] = None,
+    known_circles: Optional[set[str]] = None,
     force: bool = False,
 ) -> dict[str, int]:
     if media.media_type == "manga":
@@ -442,6 +586,8 @@ def enrich_media_metadata(
             item=item,
             sidecar=sidecar,
             external_item_lookup=external_item_lookup,
+            known_artists=known_artists,
+            known_circles=known_circles,
             force=force,
         )
     if media.media_type == "audio":
@@ -543,8 +689,24 @@ def backfill_media_metadata(
     *,
     limit: int = 5000,
     force: bool = False,
+    clean_noise: bool = True,
 ) -> dict[str, int]:
     safe_limit = max(1, min(int(limit), 20000))
+    noise_stats = purge_noise_tags(db) if clean_noise else {"noise_links_removed": 0, "noise_tags_deleted": 0}
+    if clean_noise:
+        db.flush()
+
+    known_artists = {
+        name.strip().lower()
+        for (name,) in db.query(models.Tag.name).filter(models.Tag.namespace == "artist").all()
+        if name and not _is_noise_tag(name, "artist")
+    }
+    known_circles = {
+        name.strip().lower()
+        for (name,) in db.query(models.Tag.name).filter(models.Tag.namespace == "circle").all()
+        if name and not _is_noise_tag(name, "circle")
+    }
+
     rows = (
         db.query(models.Media)
         .options(
@@ -579,6 +741,8 @@ def backfill_media_metadata(
         "manga_enriched": 0,
         "x_enriched": 0,
         "audio_enriched": 0,
+        "noise_links_removed": noise_stats["noise_links_removed"],
+        "noise_tags_deleted": noise_stats["noise_tags_deleted"],
     }
 
     for idx, media in enumerate(rows, start=1):
@@ -588,6 +752,8 @@ def backfill_media_metadata(
             media,
             external_item_lookup=external_item_lookup,
             x_post_lookup=x_post_lookup,
+            known_artists=known_artists,
+            known_circles=known_circles,
             force=force,
         )
         if res.get("updated"):
@@ -603,6 +769,11 @@ def backfill_media_metadata(
         totals["manga_profiles_created"] += res.get("profiles_created", 0)
         if idx % 200 == 0:
             db.flush()
+
+    if clean_noise:
+        post_noise = purge_noise_tags(db)
+        totals["noise_links_removed"] += post_noise["noise_links_removed"]
+        totals["noise_tags_deleted"] += post_noise["noise_tags_deleted"]
 
     db.commit()
     return totals

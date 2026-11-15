@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import and_, exists, func, or_
 from sqlalchemy.orm import Session, selectinload
 
-from .. import auth, database, manga_search, media_cleanup, models, scanner, schemas, tagging
+from .. import auth, database, manga_search, media_cleanup, models, scanner, schemas, tagging, zh_conv
 from ..database import get_db
 from ..services.manga_pages import get_manga_image_files, get_manga_page_dimensions
 from ..services.media_access import get_media_or_404
@@ -158,9 +158,10 @@ def _apply_media_search_filter(query, search: Optional[str]):
         return query
     terms = [t for t in raw.split() if t][:6]
     for term in terms:
-        variants = manga_search.expand_query_tokens([term])[:10]
+        seed_variants = zh_conv.expand_zh_variants(term) or [term]
+        variants = manga_search.expand_query_tokens(seed_variants)[:14]
         if not variants:
-            variants = [term]
+            variants = seed_variants
         term_clauses = []
         for variant in variants:
             pattern = f"%{_escape_like(variant)}%"
@@ -237,7 +238,11 @@ def list_media(
     if search:
         query = _apply_media_search_filter(query, search)
     if tag:
-        query = query.join(models.Media.tags).filter(models.Tag.name == tag)
+        tag_variants = zh_conv.expand_zh_variants(tag)
+        if len(tag_variants) > 1:
+            query = query.join(models.Media.tags).filter(models.Tag.name.in_(tag_variants))
+        else:
+            query = query.join(models.Media.tags).filter(models.Tag.name == tag)
     if favorite is not None:
         query = query.filter(models.Media.favorite == favorite)
     if view_status:
@@ -500,19 +505,56 @@ def recheck_all_missing(background_tasks: BackgroundTasks, db: Session = Depends
 
 
 @router.get("/tags", response_model=List[schemas.Tag])
-def list_tags(db: Session = Depends(get_db)):
-    rows = (
-        db.query(
-            models.Tag.id,
-            models.Tag.name,
-            models.Tag.namespace,
-            func.count(models.media_tags.c.media_id).label("count"),
-        )
-        .outerjoin(models.media_tags, models.Tag.id == models.media_tags.c.tag_id)
-        .group_by(models.Tag.id, models.Tag.name, models.Tag.namespace)
-        .order_by(models.Tag.name.asc())
-        .all()
+def list_tags(
+    namespace: Optional[str] = None,
+    q: Optional[str] = None,
+    min_count: int = 0,
+    media_type: Optional[str] = None,
+    sort: str = "name",
+    limit: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    count_expr = func.count(models.media_tags.c.media_id).label("count")
+    query = db.query(
+        models.Tag.id,
+        models.Tag.name,
+        models.Tag.namespace,
+        count_expr,
     )
+    if media_type:
+        query = (
+            query.join(models.media_tags, models.Tag.id == models.media_tags.c.tag_id)
+            .join(models.Media, models.Media.id == models.media_tags.c.media_id)
+            .filter(
+                models.Media.media_type == media_type,
+                models.Media.is_missing == False,  # noqa: E712
+            )
+        )
+    else:
+        query = query.outerjoin(models.media_tags, models.Tag.id == models.media_tags.c.tag_id)
+
+    if namespace:
+        query = query.filter(models.Tag.namespace == namespace)
+
+    if q and q.strip():
+        variants = zh_conv.expand_zh_variants(q.strip())[:4]
+        query = query.filter(
+            or_(*(models.Tag.name.ilike(f"%{_escape_like(v)}%", escape="\\") for v in variants))
+        )
+
+    query = query.group_by(models.Tag.id, models.Tag.name, models.Tag.namespace)
+    if min_count and min_count > 0:
+        query = query.having(count_expr >= int(min_count))
+
+    if sort == "count":
+        query = query.order_by(count_expr.desc(), models.Tag.name.asc())
+    else:
+        query = query.order_by(models.Tag.name.asc())
+
+    if limit is not None:
+        query = query.limit(max(1, min(int(limit), 5000)))
+
+    rows = query.all()
     return [
         schemas.Tag(
             id=r.id,

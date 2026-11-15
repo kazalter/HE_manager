@@ -211,6 +211,21 @@ def _run_wnacg(source_id: int) -> None:
             status = "partial" if status == "success" else status
             message += f"，剩余 {remaining_count} 本待后续自动同步"
 
+        # Opportunistic best-effort catch-up for local WNACG works missing metadata.json
+        try:
+            from .. import external_metadata_backfill
+            catchup = external_metadata_backfill.run_external_details_batch(
+                db,
+                limit=10,
+                delay_seconds=0.8,
+                include_wnacg=True,
+                include_asmr=False,
+            )
+            if catchup.get("completed"):
+                message += f"；补全 {catchup['completed']} 本详情缓存"
+        except Exception as catchup_exc:
+            logger.warning("WNACG auto-sync opportunistic metadata catch-up failed: %s", catchup_exc)
+
     except Exception as exc:
         status = "failed"
         message = f"自动同步失败：{exc}"

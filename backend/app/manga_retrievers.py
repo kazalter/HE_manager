@@ -31,7 +31,7 @@ from typing import Iterable, Optional
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, selectinload
 
-from . import manga_search, manga_vector, models
+from . import manga_search, manga_vector, metadata_enrichment, models, zh_conv
 
 log = logging.getLogger(__name__)
 
@@ -276,7 +276,7 @@ def _parody_set(media: models.Media) -> set[str]:
     out: set[str] = set()
     for entry in raw:
         for part in re.split(r"[,/、&]+", entry):
-            cleaned = part.strip().lower()
+            cleaned = zh_conv.to_simplified(part.strip()).lower()
             if cleaned and cleaned not in _GENERIC_PARODIES:
                 out.add(cleaned)
     return out
@@ -289,9 +289,9 @@ def _is_noise_similar_tag(name: str, namespace: Optional[str] = None) -> bool:
     cleaned = name.strip().lower()
     if not cleaned or cleaned in _SIMILAR_NOISE_TAGS:
         return True
-    if cleaned.startswith(("language:", "length:")):
+    if cleaned.startswith(("language:", "length:", "artist:", "circle:", "parody:", "category:")):
         return True
-    if cleaned.endswith(("汉化组", "漢化組")):
+    if metadata_enrichment._is_noise_tag(cleaned, ns or "general"):
         return True
     return False
 
@@ -300,18 +300,18 @@ def _content_tag_set(media: models.Media) -> set[str]:
     out: set[str] = set()
     for tag in media.tags or ():
         if tag.name and not _is_noise_similar_tag(tag.name, tag.namespace):
-            out.add(tag.name.strip().lower())
+            out.add(zh_conv.to_simplified(tag.name.strip()).lower())
     metadata = media.metadata_profile
     if metadata and metadata.external_tags:
         for item in manga_search._json_list(metadata.external_tags):
             if not _is_noise_similar_tag(item):
-                out.add(item.strip().lower())
+                out.add(zh_conv.to_simplified(item.strip()).lower())
     profile = media.ai_profile
     if profile:
         for raw in (profile.style_tags, profile.story_tags, profile.tone_tags):
             for item in manga_search._json_list(raw):
                 if not _is_noise_similar_tag(item):
-                    out.add(item.strip().lower())
+                    out.add(zh_conv.to_simplified(item.strip()).lower())
     return out
 
 
@@ -360,7 +360,13 @@ def similar_to(
         return None, []
 
     # Resolve the referenced manga via fuzzy SQL LIKE on title/parsed_title
-    clean_target = referenced_title.strip().lower()
+    target_variants = [v.lower() for v in zh_conv.expand_zh_variants(referenced_title) if v.strip()]
+    if not target_variants:
+        target_variants = [referenced_title.strip().lower()]
+    title_clauses = []
+    for variant in target_variants[:4]:
+        title_clauses.append(func.lower(models.Media.title).like(f"%{variant}%"))
+        title_clauses.append(func.lower(models.MangaMetadataProfile.parsed_title).like(f"%{variant}%"))
     referenced = (
         db.query(models.Media)
         .options(
@@ -372,10 +378,7 @@ def similar_to(
         .filter(
             models.Media.media_type == "manga",
             models.Media.is_missing == False,  # noqa: E712
-            or_(
-                func.lower(models.Media.title).like(f"%{clean_target}%"),
-                func.lower(models.MangaMetadataProfile.parsed_title).like(f"%{clean_target}%"),
-            ),
+            or_(*title_clauses),
         )
         .order_by(models.Media.id.asc())
         .first()

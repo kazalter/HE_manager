@@ -15,6 +15,7 @@ it('loads metadata stats and triggers local and external backfill jobs', async (
     manga_wnacg_total: 30,
     manga_wnacg_with_sidecar: 2,
     audio_total: 5,
+    audio_with_sidecar: 3,
     total_tags: 42,
   }
   const updatedStats = {
@@ -33,6 +34,7 @@ it('loads metadata stats and triggers local and external backfill jobs', async (
           checked: 100,
           updated: 65,
           tags_attached: 180,
+          noise_tags_deleted: 12,
           stats: updatedStats,
         },
       }
@@ -73,6 +75,7 @@ it('loads metadata stats and triggers local and external backfill jobs', async (
 
   expect(getSpy).toHaveBeenCalledWith(expect.stringContaining('/system/metadata/stats'))
   expect(wrapper.text()).toContain('20 / 100')
+  expect(wrapper.text()).toContain('3 / 5')
   expect(wrapper.text()).toContain('有效标签共 42 个')
 
   const localBtn = wrapper.findAll('button').find((b) => b.text().includes('一键补充本地元数据'))!
@@ -85,7 +88,7 @@ it('loads metadata stats and triggers local and external backfill jobs', async (
     expect.objectContaining({ params: { limit: 10000 } }),
   )
   expect(wrapper.text()).toContain('85 / 100')
-  expect(wrapper.text()).toContain('已检查 100 项，更新 65 项')
+  expect(wrapper.text()).toContain('清理噪声标签 12 个')
 
   const extBtn = wrapper.findAll('button').find((b) => b.text().includes('抓取 WNACG / ASMR 详情标签'))!
   await extBtn.trigger('click')
@@ -94,7 +97,14 @@ it('loads metadata stats and triggers local and external backfill jobs', async (
   expect(postSpy).toHaveBeenCalledWith(
     expect.stringContaining('/system/backfill-external-metadata'),
     null,
-    expect.objectContaining({ params: { limit: 100, delay_seconds: 1.0 } }),
+    expect.objectContaining({
+      params: {
+        limit: 100,
+        delay_seconds: 1.0,
+        include_wnacg: true,
+        include_asmr: true,
+      },
+    }),
   )
   expect(wrapper.text()).toContain('进度：3 / 28')
 

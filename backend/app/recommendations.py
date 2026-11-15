@@ -7,7 +7,7 @@ from urllib.request import Request, urlopen
 
 from sqlalchemy.orm import Session
 
-from . import ai_config, manga_retrievers, manga_search, models
+from . import metadata_enrichment, zh_conv, ai_config, manga_retrievers, manga_search, models
 
 log = logging.getLogger(__name__)
 
@@ -445,7 +445,16 @@ _NOISE_TERMS = {
 
 def local_reason(media: models.Media, matched_terms: list[str]) -> str:
     bits = []
-    clean_terms = [t for t in matched_terms if t.lower() not in _NOISE_TERMS]
+    clean_terms: list[str] = []
+    seen_terms: set[str] = set()
+    for t in matched_terms:
+        raw_t = str(t or "").strip()
+        if not raw_t or raw_t.lower() in _NOISE_TERMS or metadata_enrichment._is_noise_tag(raw_t):
+            continue
+        key = zh_conv.to_simplified(raw_t).lower()
+        if key not in seen_terms:
+            seen_terms.add(key)
+            clean_terms.append(raw_t)
     if clean_terms:
         bits.append(f"契合主题「{', '.join(clean_terms[:3])}」")
 
@@ -454,6 +463,10 @@ def local_reason(media: models.Media, matched_terms: list[str]) -> str:
         artist = media.metadata_profile.parsed_artist
     if artist:
         bits.append(f"画师【{artist}】作品")
+
+    parody = media.metadata_profile.parody if media.metadata_profile else None
+    if parody and parody.strip() and parody.strip().lower() not in {"original", "オリジナル", "原创", "原創"}:
+        bits.append(f"原作《{parody.strip()}》")
 
     if media.view_status == "unviewed":
         bits.append("尚未阅读的新作")

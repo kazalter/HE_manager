@@ -19,15 +19,38 @@ const NAMESPACES = [
 ]
 const NS_ORDER = NAMESPACES.map(n => n.value)
 const nsLabel = (ns: string) => NAMESPACES.find(n => n.value === ns)?.label ?? ns
+const GROUP_PAGE_SIZE = 80
 
 const tags = ref<Tag[]>([])
 const loading = ref(true)
 const errorMessage = ref('')
 const refreshSpinning = ref(false)
 const search = ref('')
+const selectedNamespace = ref<string>('all')
+const minCount = ref<number>(0)
+const sortBy = ref<'count' | 'name'>('count')
 const collapsed = ref<Set<string>>(new Set())
+const expandedGroups = ref<Set<string>>(new Set())
 
 const zeroCountTags = computed(() => tags.value.filter(t => (t.count ?? 0) === 0))
+
+const namespaceTabs = computed(() => {
+  const counts: Record<string, number> = {}
+  for (const t of tags.value) {
+    const ns = t.namespace || 'general'
+    counts[ns] = (counts[ns] ?? 0) + 1
+  }
+  const known = NS_ORDER.filter(n => counts[n])
+  const extra = Object.keys(counts).filter(n => !NS_ORDER.includes(n)).sort()
+  return [
+    { value: 'all', label: '全部', count: tags.value.length },
+    ...[...known, ...extra].map(ns => ({
+      value: ns,
+      label: nsLabel(ns),
+      count: counts[ns] ?? 0,
+    })),
+  ]
+})
 
 // edit / merge state
 const editId = ref<number | null>(null)
@@ -36,8 +59,6 @@ const editNs = ref('general')
 const rowError = ref<{ id: number; msg: string } | null>(null)
 const mergeId = ref<number | null>(null)
 const mergeSearch = ref('')
-// 0 = "no target chosen" sentinel (no tag has id 0; stays falsy for the
-// existing !mergeTargetId guards) so the value fits ThemeSelect's typed model.
 const mergeTargetId = ref<number>(0)
 const busy = ref(false)
 
@@ -67,25 +88,47 @@ const grouped = computed(() => {
   const q = search.value.trim().toLowerCase()
   const groups: Record<string, Tag[]> = {}
   for (const t of tags.value) {
-    if (q && !t.name.toLowerCase().includes(q)) continue
     const ns = t.namespace || 'general'
+    if (selectedNamespace.value !== 'all' && ns !== selectedNamespace.value) continue
+    if (minCount.value > 0 && (t.count ?? 0) < minCount.value) continue
+    if (q && !t.name.toLowerCase().includes(q)) continue
     ;(groups[ns] ??= []).push(t)
   }
   const known = NS_ORDER.filter(n => groups[n])
   const extra = Object.keys(groups).filter(n => !NS_ORDER.includes(n)).sort()
-  return [...known, ...extra].map(ns => ({
-    ns,
-    label: nsLabel(ns),
-    items: groups[ns].sort((a, b) => a.name.localeCompare(b.name)),
-  }))
+  return [...known, ...extra].map(ns => {
+    const sorted = groups[ns].slice().sort((a, b) => {
+      if (sortBy.value === 'count') {
+        const diff = (b.count ?? 0) - (a.count ?? 0)
+        if (diff !== 0) return diff
+      }
+      return a.name.localeCompare(b.name)
+    })
+    const showAll = expandedGroups.value.has(ns) || Boolean(q) || selectedNamespace.value !== 'all'
+    const visibleItems = showAll ? sorted : sorted.slice(0, GROUP_PAGE_SIZE)
+    return {
+      ns,
+      label: nsLabel(ns),
+      total: sorted.length,
+      items: visibleItems,
+      hasMore: !showAll && sorted.length > GROUP_PAGE_SIZE,
+      expandedAll: expandedGroups.value.has(ns),
+    }
+  })
 })
 
-const totalShown = computed(() => grouped.value.reduce((s, g) => s + g.items.length, 0))
+const totalShown = computed(() => grouped.value.reduce((s, g) => s + g.total, 0))
 
 const toggleGroup = (ns: string) => {
   const s = new Set(collapsed.value)
   s.has(ns) ? s.delete(ns) : s.add(ns)
   collapsed.value = s
+}
+
+const toggleGroupExpand = (ns: string) => {
+  const s = new Set(expandedGroups.value)
+  s.has(ns) ? s.delete(ns) : s.add(ns)
+  expandedGroups.value = s
 }
 
 const startEdit = (t: Tag) => {
@@ -123,10 +166,12 @@ const startMerge = (t: Tag) => {
   editId.value = null
 }
 const mergeCandidates = computed(() => {
+  if (mergeId.value === null) return []
   const q = mergeSearch.value.trim().toLowerCase()
   return tags.value
     .filter(t => t.id !== mergeId.value && (!q || t.name.toLowerCase().includes(q) || nsLabel(t.namespace).toLowerCase().includes(q)))
-    .sort((a, b) => (a.namespace + a.name).localeCompare(b.namespace + b.name))
+    .sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.name.localeCompare(b.name))
+    .slice(0, 120)
 })
 const mergeOptions = computed(() => [
   { value: 0, label: '选择目标标签…' },
@@ -205,10 +250,40 @@ const removeTag = async (t: Tag) => {
           <RefreshCw :size="18" :class="{ 'animate-spin': refreshSpinning }" />
         </UiIconButton>
       </template>
-      <UiInput v-model="search" type="search" placeholder="搜索标签名…" aria-label="搜索标签名" class="w-full sm:w-80">
-        <template #leading><Search :size="16" /></template>
-        <template #trailing><UiIconButton v-if="search" label="清除搜索" size="sm" @click="search = ''"><X :size="14" /></UiIconButton></template>
-      </UiInput>
+      <div class="flex flex-wrap items-center gap-2">
+        <UiInput v-model="search" type="search" placeholder="搜索标签名…" aria-label="搜索标签名" class="w-full sm:w-72">
+          <template #leading><Search :size="16" /></template>
+          <template #trailing><UiIconButton v-if="search" label="清除搜索" size="sm" @click="search = ''"><X :size="14" /></UiIconButton></template>
+        </UiInput>
+        <UiButton
+          :variant="minCount >= 2 ? 'primary' : 'secondary'"
+          size="sm"
+          @click="minCount = minCount >= 2 ? 0 : 2"
+        >
+          仅看常用 (≥2)
+        </UiButton>
+        <UiButton
+          variant="secondary"
+          size="sm"
+          @click="sortBy = sortBy === 'count' ? 'name' : 'count'"
+        >
+          排序：{{ sortBy === 'count' ? '按数量' : '按名称' }}
+        </UiButton>
+      </div>
+      <div v-if="tags.length > 0" class="mt-3 flex flex-wrap gap-1.5">
+        <button
+          v-for="tab in namespaceTabs"
+          :key="tab.value"
+          type="button"
+          class="rounded-full border px-2.5 py-1 text-caption transition-colors"
+          :class="selectedNamespace === tab.value
+            ? 'border-accent bg-accent/15 text-ink font-medium'
+            : 'border-line bg-surface-2 text-muted hover:text-ink'"
+          @click="selectedNamespace = tab.value"
+        >
+          {{ tab.label }} <span class="tabular-nums text-subtle">{{ tab.count }}</span>
+        </button>
+      </div>
     </PageHeader>
 
     <div class="page-gutter pb-12">
@@ -230,16 +305,23 @@ const removeTag = async (t: Tag) => {
 
         <EmptyState
           v-else-if="totalShown === 0"
-          :icon="search ? Search : TagsIcon"
-          :title="search ? '没有匹配的标签' : '还没有标签'"
-          :description="search ? '换个关键词试试。' : '在媒体详情里添加标签后，会在这里集中管理。'"
+          :icon="search || minCount > 0 || selectedNamespace !== 'all' ? Search : TagsIcon"
+          :title="search || minCount > 0 || selectedNamespace !== 'all' ? '没有匹配的标签' : '还没有标签'"
+          :description="search || minCount > 0 || selectedNamespace !== 'all' ? '试试放宽筛选条件或清除搜索。' : '在媒体详情里添加标签后，会在这里集中管理。'"
         >
-          <UiButton v-if="search" variant="secondary" size="sm" @click="search = ''">清除搜索</UiButton>
+          <UiButton
+            v-if="search || minCount > 0 || selectedNamespace !== 'all'"
+            variant="secondary"
+            size="sm"
+            @click="search = ''; minCount = 0; selectedNamespace = 'all'"
+          >
+            重置筛选
+          </UiButton>
         </EmptyState>
 
         <div v-else class="space-y-10">
           <section v-for="group in grouped" :key="group.ns">
-            <SectionHeader :title="group.label" :count="group.items.length">
+            <SectionHeader :title="group.label" :count="group.total">
               <template #actions>
                 <UiButton variant="ghost" size="sm" :aria-expanded="!collapsed.has(group.ns)" @click="toggleGroup(group.ns)">
                   {{ collapsed.has(group.ns) ? '展开' : '收起' }}
@@ -304,6 +386,17 @@ const removeTag = async (t: Tag) => {
                 </div>
 
                 <p v-if="rowError && rowError.id === t.id" role="alert" class="mt-1.5 px-2.5 text-caption text-danger">{{ rowError.msg }}</p>
+              </div>
+
+              <div v-if="group.hasMore" class="col-span-full flex justify-center py-2">
+                <UiButton variant="ghost" size="sm" @click="toggleGroupExpand(group.ns)">
+                  显示其余 {{ group.total - group.items.length }} 个{{ group.label }}标签
+                </UiButton>
+              </div>
+              <div v-else-if="group.expandedAll && group.total > GROUP_PAGE_SIZE" class="col-span-full flex justify-center py-2">
+                <UiButton variant="ghost" size="sm" @click="toggleGroupExpand(group.ns)">
+                  仅显示前 {{ GROUP_PAGE_SIZE }} 个
+                </UiButton>
               </div>
             </UiCard>
           </section>

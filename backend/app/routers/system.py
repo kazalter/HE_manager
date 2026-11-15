@@ -127,9 +127,15 @@ def get_metadata_stats(db: Session = Depends(get_db)) -> Dict[str, int]:
 def run_metadata_backfill(
     limit: int = 5000,
     force: bool = False,
+    clean_noise: bool = True,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    result = metadata_enrichment.backfill_media_metadata(db, limit=limit, force=force)
+    result = metadata_enrichment.backfill_media_metadata(
+        db,
+        limit=limit,
+        force=force,
+        clean_noise=clean_noise,
+    )
     stats = metadata_enrichment.metadata_coverage_stats(db)
     return {**result, "stats": stats}
 
