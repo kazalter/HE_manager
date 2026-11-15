@@ -177,7 +177,7 @@ def _attach_unique_tag(
 
 _NOISE_TAG_EXACT = {
     "dl版", "dl", "汉化", "漢化", "中国翻訳", "中國翻譯", "无修正", "無修正",
-    "category:後頁>", "後頁>", "后页>", "收藏", "僅",
+    "category:後頁>", "後頁>", "后页>", "收藏", "僅", "洨五組", "洨五组",
 }
 _NOISE_TAG_SUFFIXES = ("汉化组", "漢化組", "翻译组", "翻譯組", "汉化社", "漢化社")
 _SCANLATION_NOISE_SUBSTRINGS = (

@@ -742,5 +742,25 @@ class MetadataEnrichmentTest(unittest.TestCase):
             db.close()
 
 
+    def test_scanlation_group_xiaowuzu_and_similar_reason_formatting(self):
+        from app import manga_artist
+        self.assertEqual(
+            manga_artist.parse_artist("[洨五組]\xa0\xa0[ピジャ] 投げ銭￥交際 [DL版]"),
+            "ピジャ",
+        )
+        m = models.Media(
+            title="[ひょこ道 (ひょころー)] 清楚×反転2",
+            relative_path="clear2",
+            absolute_path="/tmp/clear2",
+            media_type="manga",
+            extension=".dir",
+            file_size=100,
+            artist="ひょころー",
+        )
+        reason = recommendations.local_reason(m, ["类似《清楚×反転》"])
+        self.assertTrue(reason.startswith("类似《清楚×反転》"))
+        self.assertNotIn("契合主题「类似", reason)
+
+
 if __name__ == "__main__":
     unittest.main()

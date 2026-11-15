@@ -446,15 +446,22 @@ _NOISE_TERMS = {
 def local_reason(media: models.Media, matched_terms: list[str]) -> str:
     bits = []
     clean_terms: list[str] = []
+    similar_hints: list[str] = []
     seen_terms: set[str] = set()
     for t in matched_terms:
         raw_t = str(t or "").strip()
         if not raw_t or raw_t.lower() in _NOISE_TERMS or metadata_enrichment._is_noise_tag(raw_t):
             continue
+        if raw_t.startswith("类似《") and raw_t.endswith("》"):
+            if raw_t not in similar_hints:
+                similar_hints.append(raw_t)
+            continue
         key = zh_conv.to_simplified(raw_t).lower()
         if key not in seen_terms:
             seen_terms.add(key)
             clean_terms.append(raw_t)
+    if similar_hints:
+        bits.append(similar_hints[0])
     if clean_terms:
         bits.append(f"契合主题「{', '.join(clean_terms[:3])}」")
 
@@ -792,7 +799,7 @@ def _route_similar_to(
             "media": media,
             "text_score": sim,
             "prior": prior,
-            "matched_tags": [f"类似《{referenced.title[:30]}》"],
+            "matched_tags": [f"类似《{((referenced.metadata_profile.parsed_title if referenced.metadata_profile and referenced.metadata_profile.parsed_title else None) or referenced.title or '')[:30].strip()}》"],
             "fused": fused,
             "bm25_rank": None,
             "vec_rank": rank,

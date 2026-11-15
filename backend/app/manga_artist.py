@@ -29,6 +29,7 @@ _META_TAGS = {
     # Archive / compilation labels that sit where the author bracket would be.
     "汉化汇总", "汉化合集", "漢化彙總", "汉化杂图集",
     "pixiv fanbox", "fanbox", "pixiv",
+    "洨五組", "洨五组",
 }
 
 _SCANLATION_SUBSTRINGS = (
