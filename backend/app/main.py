@@ -35,7 +35,7 @@ from .routers import system as system_routes
 from .routers import x_import as x_import_routes
 from .dedup import worker as dedup_worker
 from .services import job_lifecycle
-from .services.external.pawchive import downloader as pawchive_downloader
+from .services.external.pawchive import creator_images as pawchive_creator_images, downloader as pawchive_downloader
 from .services.external.pawchive.media_cache import media_cache as pawchive_media_cache
 from .services.thumbnails import THUMBNAIL_DIR, cleanup_orphaned_thumbnails
 
@@ -70,6 +70,8 @@ async def lifespan(app: FastAPI):
     job_lifecycle.recover_interrupted_jobs()
     pawchive_downloader.recover_interrupted_attachments()
     pawchive_media_cache.reset_for_startup()
+    if os.getenv("HE_PAWCHIVE_ENABLED", "0").lower() in {"1", "true", "yes", "on"}:
+        pawchive_creator_images.warm_persisted_favorites()
     job_lifecycle.cleanup_job_history()
     dedup_worker.recover_checking_jobs()
     from .services.media_discard import recover_pending_cleanup

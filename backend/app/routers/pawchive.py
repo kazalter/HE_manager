@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from .. import auth, models
 from ..database import get_db
 from ..services import job_lifecycle
-from ..services.external.pawchive import account, client, creators, downloader, media_fetch, normalize, provider, refs, sources
+from ..services.external.pawchive import account, client, creator_images, creators, downloader, media_fetch, normalize, provider, refs, sources
 from ..services.external.pawchive.media_cache import CacheLease, media_cache
 
 router = APIRouter(prefix="/external/pawchive", tags=["pawchive"])
@@ -95,22 +95,15 @@ def remove_pawchive_account_favorite(
 @router.get("/creator-image/{kind}/{service}/{creator_id}")
 def get_creator_image(kind: str, service: str, creator_id: str):
     def fetch():
-        if kind not in {"icons", "banners"}:
-            raise client.PawchiveError("INVALID_REQUEST", "非法图片类型", 400)
-        provider.validate_id(service)
-        provider.validate_id(creator_id)
-        connection, upstream = client._request(client.API_HOST, f"/{kind}/{service}/{creator_id}")
-        try:
-            client._raise_for_status(upstream)
-            content_type = (upstream.getheader("Content-Type") or "").split(";", 1)[0].lower()
-            if content_type not in {"image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"}:
-                raise client.PawchiveError("UPSTREAM_INVALID", "来源返回了无效的图片", 502)
-            body = upstream.read(4 * 1024 * 1024 + 1)
-            if len(body) > 4 * 1024 * 1024:
-                raise client.PawchiveError("UPSTREAM_INVALID", "来源图片过大", 502)
-            return Response(body, media_type=content_type, headers={"Cache-Control": "private, max-age=3600"})
-        finally:
-            connection.close()
+        body, content_type, cache_status = creator_images.get_image(kind, service, creator_id)
+        return Response(
+            body,
+            media_type=content_type,
+            headers={
+                "Cache-Control": _IMAGE_CACHE_CONTROL,
+                "X-Pawchive-Creator-Cache": cache_status,
+            },
+        )
     return _run(fetch)
 
 
@@ -163,7 +156,9 @@ def list_creator_favorites(
             .order_by(models.PawchiveCreatorFavorite.created_at.desc(),
                       models.PawchiveCreatorFavorite.id.desc())
             .all())
-    return {"items": [_serialize_creator_favorite(row) for row in rows], "source": "he_manager"}
+    items = [_serialize_creator_favorite(row) for row in rows]
+    creator_images.sync_favorites(f"local:{user.id}", items)
+    return {"items": items, "source": "he_manager"}
 
 
 @router.put("/favorites")
@@ -194,6 +189,7 @@ def save_creator_favorite(
         row.creator_name = creator_name
     db.commit()
     db.refresh(row)
+    creator_images.mark_favorite(f"local:{user.id}", service, creator_id, True)
     return _serialize_creator_favorite(row)
 
 
@@ -215,6 +211,7 @@ def remove_creator_favorite(
     if row is not None:
         db.delete(row)
         db.commit()
+    creator_images.mark_favorite(f"local:{user.id}", service, creator_id, False)
     return Response(status_code=204)
 
 

@@ -11,7 +11,7 @@ from PIL import Image
 
 from app import models
 from app.routers import pawchive as router
-from app.services.external.pawchive import client, downloader, media_fetch, normalize, refs, sources
+from app.services.external.pawchive import client, creator_images, downloader, media_fetch, normalize, refs, sources
 from app.services.external.pawchive import media_cache as cache_module
 
 PATH = "/ab/cd/" + "a" * 64 + ".jpg"
@@ -173,3 +173,165 @@ class SourceTests(unittest.TestCase):
                 client.open_media(PATH, source_url=TEMP_URL)
         self.assertEqual(raised.exception.code, "UPSTREAM_REDIRECT")
         connection.close.assert_called_once()
+
+
+THREE_HEX_PATH = "/1f5/4a/" + "b" * 64 + ".png"
+
+
+class ExtendedSourceAndCreatorArtworkTests(unittest.TestCase):
+    def _reset_creator_image_state(self):
+        with creator_images._state_lock:
+            creator_images._scopes.clear()
+            creator_images._loaded_root = None
+        with creator_images._queue_lock:
+            creator_images._queue.clear()
+            creator_images._queued.clear()
+
+    def test_three_hex_path_and_server_field_work_end_to_end(self):
+        post = normalize.normalize_post(
+            {
+                "id": "999",
+                "user": "19469841",
+                "service": "fanbox",
+                "file": {"name": "art.png", "path": THREE_HEX_PATH, "server": "https://n3.pawchive.pw"},
+                "attachments": [],
+            },
+            detail=True,
+        )
+        item = post["attachments"][0]
+        self.assertEqual(item["media_type"], "image")
+        self.assertEqual(item["mime_type"], "image/png")
+        expected_url = f"https://n3.pawchive.pw/data{THREE_HEX_PATH}"
+        self.assertEqual(refs.read_media_source(item["stream_ref"]), (THREE_HEX_PATH, "image", expected_url))
+        self.assertEqual(refs.read_media_source(item["preview_ref"]), (THREE_HEX_PATH, "preview", None))
+
+        connection = Connection()
+        with patch.object(client, "_request", return_value=(connection, Response(206))) as request:
+            response = router.stream_media_response(item["stream_ref"], "bytes=0-7")
+        request.assert_called_once_with("n3.pawchive.pw", "/data" + THREE_HEX_PATH, range_header="bytes=0-7")
+        self.assertEqual(response.status_code, 206)
+        response.background.func()
+
+    def test_untrusted_server_field_is_rejected(self):
+        for bad_server in ("https://evil.com", "https://n99.pawchive.pw", "http://n3.pawchive.pw", "https://n3.pawchive.pw/extra"):
+            with self.subTest(bad_server=bad_server):
+                with self.assertRaises(client.PawchiveError) as raised:
+                    detail({"path": THREE_HEX_PATH, "server": bad_server})
+                self.assertEqual(raised.exception.code, "UPSTREAM_INVALID")
+
+    def test_creator_image_sniffs_octet_stream_images_and_rejects_invalid_bytes(self):
+        jpeg_bytes = io.BytesIO()
+        Image.new("RGB", (4, 4), "blue").save(jpeg_bytes, format="JPEG")
+        raw_jpeg = jpeg_bytes.getvalue()
+
+        connection = Connection()
+        with patch.dict("os.environ", {"HE_PAWCHIVE_ENABLED": "1"}),                 patch.object(creator_images, "_disk_root", return_value=None),                 patch.object(client, "_request", return_value=(connection, Response(body=raw_jpeg, mime="application/octet-stream"))):
+            result = router.get_creator_image("icons", "fanbox", "19469841")
+        self.assertEqual(result.media_type, "image/jpeg")
+        self.assertEqual(result.body, raw_jpeg)
+        self.assertTrue(connection.closed)
+
+        bad_connection = Connection()
+        with patch.dict("os.environ", {"HE_PAWCHIVE_ENABLED": "1"}),                 patch.object(creator_images, "_disk_root", return_value=None),                 patch.object(client, "_request", return_value=(bad_connection, Response(body=b"not-an-image", mime="application/octet-stream"))):
+            with self.assertRaises(Exception) as raised:
+                router.get_creator_image("banners", "fanbox", "19469841")
+        self.assertEqual(raised.exception.status_code, 502)
+        self.assertTrue(bad_connection.closed)
+
+    def test_favorite_creator_artwork_persists_across_restarts_and_negative_caches_404(self):
+        webp_bytes = io.BytesIO()
+        Image.new("RGB", (8, 4), "green").save(webp_bytes, format="WEBP")
+        raw_webp = webp_bytes.getvalue()
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / ".mounted").touch()
+            artwork_root = root / ".he-manager" / "pawchive-creators" / "artwork"
+            self._reset_creator_image_state()
+            with patch.dict("os.environ", {"HE_PAWCHIVE_ENABLED": "1"}),                     patch.object(creator_images, "MOUNT_ROOT", root),                     patch.object(creator_images, "ARTWORK_ROOT", artwork_root),                     patch.object(creator_images, "PREFETCH_INTERVAL", 0):
+                # Mark favorite without triggering background worker during first assertion
+                with patch.object(creator_images, "enqueue_favorites"):
+                    creator_images.sync_favorites("account:5", [{"service": "fanbox", "creator_id": "19469841"}])
+
+                with patch.object(
+                    client,
+                    "_request",
+                    side_effect=[
+                        (Connection(), Response(body=raw_webp, mime="application/octet-stream")),
+                        (Connection(), Response(404, body=b"", mime="text/plain")),
+                    ],
+                ) as request:
+                    first = router.get_creator_image("banners", "fanbox", "19469841")
+                    self.assertEqual(first.media_type, "image/webp")
+                    self.assertEqual(first.headers["x-pawchive-creator-cache"], "MISS")
+
+                    # Simulate process restart by clearing in-memory favorite state
+                    self._reset_creator_image_state()
+                    second = router.get_creator_image("banners", "fanbox", "19469841")
+                    self.assertEqual(second.body, raw_webp)
+                    self.assertEqual(second.media_type, "image/webp")
+                    self.assertEqual(second.headers["x-pawchive-creator-cache"], "HIT")
+
+                    # 404 is negative-cached for favorited creators
+                    with self.assertRaises(Exception) as missing_first:
+                        router.get_creator_image("icons", "fanbox", "19469841")
+                    self.assertEqual(missing_first.exception.status_code, 404)
+
+                    with self.assertRaises(Exception) as missing_second:
+                        router.get_creator_image("icons", "fanbox", "19469841")
+                    self.assertEqual(missing_second.exception.status_code, 404)
+
+                self.assertEqual(request.call_count, 2)
+
+                # Non-favorite creator is NOT saved to disk
+                with patch.object(
+                    client,
+                    "_request",
+                    side_effect=lambda *a, **kw: (Connection(), Response(body=raw_webp, mime="image/webp")),
+                ) as non_fav_req:
+                    res1 = router.get_creator_image("banners", "patreon", "99999")
+                    res2 = router.get_creator_image("banners", "patreon", "99999")
+                self.assertEqual(res1.headers["x-pawchive-creator-cache"], "MISS")
+                self.assertEqual(res2.headers["x-pawchive-creator-cache"], "MISS")
+                self.assertEqual(non_fav_req.call_count, 2)
+
+    def test_favorite_sync_prefetches_artwork_and_removes_unfavorited(self):
+        png_bytes = io.BytesIO()
+        Image.new("RGB", (4, 4), "red").save(png_bytes, format="PNG")
+        raw_png = png_bytes.getvalue()
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / ".mounted").touch()
+            artwork_root = root / ".he-manager" / "pawchive-creators" / "artwork"
+            self._reset_creator_image_state()
+            with patch.object(creator_images, "MOUNT_ROOT", root),                     patch.object(creator_images, "ARTWORK_ROOT", artwork_root),                     patch.object(creator_images, "PREFETCH_INTERVAL", 0):
+                with patch.object(
+                    client,
+                    "_request",
+                    side_effect=[
+                        (Connection(), Response(body=raw_png, mime="application/octet-stream")),
+                        (Connection(), Response(body=raw_png, mime="image/png")),
+                    ],
+                ) as request:
+                    creator_images.sync_favorites("account:5", [{"service": "patreon", "creator_id": "456"}])
+                    worker = creator_images._worker
+                    if worker is not None:
+                        worker.join(timeout=5)
+                    self.assertEqual(request.call_count, 2)
+
+                self.assertTrue((artwork_root / "icons" / "patreon" / "456.img").is_file())
+                self.assertTrue((artwork_root / "banners" / "patreon" / "456.img").is_file())
+
+                # Subsequent sync skips already cached artwork with 0 upstream calls
+                with patch.object(client, "_request") as second_req:
+                    creator_images.sync_favorites("account:5", [{"service": "patreon", "creator_id": "456"}])
+                    worker = creator_images._worker
+                    if worker is not None:
+                        worker.join(timeout=5)
+                    second_req.assert_not_called()
+
+                # Unfavoriting cleans up cached artwork when no scope retains it
+                creator_images.mark_favorite("account:5", "patreon", "456", False)
+                self.assertFalse((artwork_root / "icons" / "patreon" / "456.img").exists())
+                self.assertFalse((artwork_root / "banners" / "patreon" / "456.img").exists())

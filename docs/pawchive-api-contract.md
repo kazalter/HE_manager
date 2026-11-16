@@ -83,15 +83,20 @@ are collapsed while preserving first occurrence.
 ## Media
 
 Legacy originals use `https://file.pawchive.pw/data{path}` and thumbnails use
-`https://img.pawchive.pw/thumbnail/data{path}`. As verified on 2026-10-25, file
-objects can also include `node: 2`, selecting `https://n2.pawchive.pw/data{path}`,
-or `preview_only: true` with a signed `temp_url` on `https://t1.pawchive.pw` through `https://t4.pawchive.pw`.
+`https://img.pawchive.pw/thumbnail/data{path}`. Paths may use a 2-to-4-hex first
+directory segment (`/{2..4-hex}/{2-hex}/{64-hex}.{ext}`). File objects can also
+include `server` (such as `https://n1.pawchive.pw` through `https://n12.pawchive.pw`),
+legacy `node` integers, or `preview_only: true` with a signed `temp_url` on
+`https://t1.pawchive.pw` through `https://t12.pawchive.pw`.
 Temporary URLs have the form `/f/{16-hex-id}/{filename}?e={expiry}&s={32-hex-signature}`.
 For these files, `path` identifies the preview; requesting it on the legacy
 original host can return 404 even while the temporary original returns 206.
 The original can have a different extension from its preview (including video).
 
-The adapter prefers `temp_url`, then the verified node, then the legacy host.
+The adapter prefers `temp_url`, then the verified `server`/node host, then the legacy host.
+Favorited creator icons and banners (`/icons/...`, `/banners/...`, including valid
+images returned as `application/octet-stream`) are persistently cached under
+`/mnt/hdd/.he-manager/pawchive-creators/artwork`.
 Only exact allowlisted hosts and validated paths/query signatures are accepted;
 temporary signatures travel inside authenticated HMAC-signed media references.
 Preview requests remain on the thumbnail host. No redirects are followed and

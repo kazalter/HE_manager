@@ -12,7 +12,7 @@ from urllib.parse import quote
 
 from .... import models
 from ....database import SessionLocal
-from . import client, provider
+from . import client, creator_images, provider
 
 _sessions: dict[int, "AccountSession"] = {}
 _sessions_lock = threading.RLock()
@@ -285,6 +285,7 @@ def login(user_id: int, username: str, password: str) -> dict:
             session.user_id = None
             raise
         _sessions[user_id] = session
+    creator_images.sync_favorites(f"account:{user_id}", favorites)
     return {"connected": True, "items": favorites}
 
 
@@ -292,11 +293,13 @@ def favorites(user_id: int) -> list[dict]:
     session = _session_for(user_id)
     with session.lock:
         try:
-            return _fetch_favorites(session)
+            items = _fetch_favorites(session)
         except client.PawchiveError as exc:
             if exc.code == "ACCOUNT_AUTH_REQUIRED":
                 _forget_if_same(user_id, session)
             raise
+    creator_images.sync_favorites(f"account:{user_id}", items)
+    return items
 
 
 def set_favorite(user_id: int, service: str, creator_id: str, favorite: bool) -> dict:
@@ -313,6 +316,7 @@ def set_favorite(user_id: int, service: str, creator_id: str, favorite: bool) ->
             if exc.code == "ACCOUNT_AUTH_REQUIRED":
                 _forget_if_same(user_id, session)
             raise
+    creator_images.mark_favorite(f"account:{user_id}", service, creator_id, favorite)
     return {"service": service, "creator_id": creator_id, "favorite": favorite}
 
 

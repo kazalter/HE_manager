@@ -4,9 +4,9 @@ from __future__ import annotations
 import re
 from urllib.parse import parse_qsl, unquote, urlsplit
 
-FILE_PATH = re.compile(r"^/[0-9a-f]{2}/[0-9a-f]{2}/[0-9a-f]{64}\.[a-z0-9]{2,5}$")
-NODE_HOSTS = {2: "n2.pawchive.pw"}
-TEMP_HOSTS = frozenset({"t1.pawchive.pw", "t2.pawchive.pw", "t3.pawchive.pw", "t4.pawchive.pw"})
+FILE_PATH = re.compile(r"^/[0-9a-f]{2,4}/[0-9a-f]{2}/[0-9a-f]{64}\.[a-z0-9]{2,5}$")
+NODE_HOSTS = {index: f"n{index}.pawchive.pw" for index in range(1, 13)}
+TEMP_HOSTS = frozenset(f"t{index}.pawchive.pw" for index in range(1, 13))
 
 
 def validate_source(url: str) -> tuple[str, str]:
@@ -40,6 +40,11 @@ def original_source(file: dict) -> str | None:
     if temporary:
         validate_source(temporary)
         return temporary
+    server = file.get("server")
+    if isinstance(server, str) and server.strip():
+        url = f"{server.strip().rstrip('/')}/data{file.get('path', '')}"
+        validate_source(url)
+        return url
     node = file.get("node")
     if type(node) is int and node in NODE_HOSTS:
         url = f"https://{NODE_HOSTS[node]}/data{file.get('path', '')}"
