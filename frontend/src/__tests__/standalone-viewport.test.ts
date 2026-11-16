@@ -23,6 +23,10 @@ afterEach(() => {
 describe('installed app viewport', () => {
   it('keeps full CSS viewport height when iOS reports smaller visualViewport safe areas', () => {
     start(true)
+    const probe = document.body.querySelector('div[aria-hidden="true"]') as HTMLElement | null
+    expect(probe?.style.position).toBe('fixed')
+    expect(probe?.style.top).toBe('0px')
+    expect(probe?.style.bottom).toBe('0px')
     expect(document.documentElement.classList.contains('he-standalone')).toBe(true)
     expect(document.documentElement.style.getPropertyValue('--he-app-height')).toBe('')
     expect(document.documentElement.classList.contains('he-keyboard-open')).toBe(false)

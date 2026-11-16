@@ -22,7 +22,7 @@ export function useStandaloneViewport() {
     if (!probe) {
       probe = document.createElement('div')
       probe.setAttribute('aria-hidden', 'true')
-      probe.style.cssText = 'position:absolute;width:0;height:100vh;top:0;left:0;visibility:hidden;pointer-events:none;'
+      probe.style.cssText = 'position:fixed;width:0;top:0;bottom:0;left:0;visibility:hidden;pointer-events:none;'
       document.body.appendChild(probe)
     }
     const focused = document.activeElement

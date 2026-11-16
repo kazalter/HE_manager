@@ -476,8 +476,9 @@ html.he-mode-transition::view-transition-new(root) { animation: none; mix-blend-
 /* Phone shell: bottom navigation and dynamic Safari viewport. */
 :root { --he-nav-height: 80px; --he-app-height: 100vh; }
 @supports (height: 100dvh) { :root { --he-app-height: 100dvh; } }
-/* Home Screen mode has no Safari toolbar. Do not subtract its space via dvh. */
-html.he-standalone { --he-app-height: 100vh; }
+/* Standard iOS standalone viewport excludes the opaque status bar; percentage height follows
+ * the actual layout viewport, whereas 100vh still includes the excluded status bar. */
+html.he-standalone { --he-app-height: 100%; }
 html.he-standalone, .he-standalone body, .he-standalone #app { height: var(--he-app-height); min-height: 0; overflow: hidden; }
 .he-standalone body { position: relative; }
 .he-standalone .he-auth-view { height: var(--he-app-height); min-height: 0; overflow-y: auto; align-items: safe center; padding-block: 16px; }
