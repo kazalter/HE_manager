@@ -361,9 +361,16 @@ async function protocolHandler(request) {
         headers: outgoing,
       });
     }
-    const response = await net.fetch(
-        pathToFileURL(staticPath(ui, url.pathname === '/l2d/' ? '/l2d/index.html' : url.pathname)).href,
-      ),
+    operation = 'static';
+    const file = staticPath(ui, url.pathname === '/l2d/' ? '/l2d/index.html' : url.pathname);
+    if (!(await fs.stat(file).then((stat) => stat.isFile(), () => false))) {
+      diagnosticStage(`static-missing-${url.pathname}`);
+      return Response.json(
+        { detail: `桌面版缺少本地界面文件 ui/${path.relative(ui, file).split(path.sep).join('/')}，请重新安装或重新打包桌面版` },
+        { status: 404 },
+      );
+    }
+    const response = await net.fetch(pathToFileURL(file).href),
       headers = new Headers(response.headers);
     headers.set(
       "Content-Security-Policy",

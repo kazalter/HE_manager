@@ -9,6 +9,9 @@ const python = process.platform === "win32" ? "python" : "python3";
 if (!["darwin", "win32"].includes(target))
   throw new Error("Usage: npm run package -- darwin|win32");
 const arch = target === "darwin" ? "arm64" : "x64";
+execFileSync(process.execPath, [path.join(root, "scripts/check-ui.cjs")], {
+  stdio: "inherit",
+});
 execFileSync(
   python,
   [path.join(root, "scripts/electron-template.py"), target],

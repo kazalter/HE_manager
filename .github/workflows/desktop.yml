@@ -48,9 +48,7 @@ jobs:
           node --check desktop/probe/main.cjs
           node --check desktop/probe/preload.cjs
           node --check desktop/probe/renderer.js
-      - name: Build Live2D viewer
-        run: npm run build:manager --prefix integrations/l2dviewer
-      - name: Build shared UI
+      - name: Build shared UI (includes Live2D viewer)
         run: npm run build:ui --prefix desktop
       - name: Verify desktop UI source revision
         shell: bash

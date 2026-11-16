@@ -106,10 +106,11 @@ npm run build
 
 ### 2. 构建桌面端 UI
 ```sh
+npm ci --prefix ../integrations/l2dviewer   # 碧蓝航线 Live2D 查看器依赖，首次需要
 cd ../desktop
 npm ci
 npm test
-npm run build:ui
+npm run build:ui   # 会先构建 Live2D 查看器，再构建前端，最后校验 ui/l2d/index.html 存在
 ```
 
 ### 3. 生成安装分发包

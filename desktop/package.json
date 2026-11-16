@@ -9,7 +9,8 @@
   "start": "electron .",
   "baseline": "node scripts/baseline.cjs",
   "test": "node --test test/*.test.cjs",
-  "build:ui": "npm --prefix ../frontend run build -- --outDir ../desktop/ui --emptyOutDir",
+  "build:l2d": "npm --prefix ../integrations/l2dviewer run build:manager",
+  "build:ui": "npm run build:l2d && npm --prefix ../frontend run build -- --outDir ../desktop/ui --emptyOutDir && node scripts/check-ui.cjs",
   "package": "node scripts/package.mjs"
  },
  "devDependencies": {
