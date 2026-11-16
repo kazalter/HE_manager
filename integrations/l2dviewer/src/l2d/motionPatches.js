@@ -1,6 +1,6 @@
 /** pixi-live2d-display 动作库补丁（安装一次，幂等）：动作交叉渐变恢复、尊重 Meta.Loop、idle 确定性选支。补丁运行时读 activeCtx.fades / activeCtx.orch / activeCtx.runtime——每次舞台挂载调用 installMotionPatches(ctx) 更新 activeCtx（L2dStage 被 App.vue 按 :key 逐皮肤整体重挂，补丁单例必须跟随当前活动舞台，见 activeCtx 注释）。 */
 import { Ticker } from 'pixi.js'
-import { Cubism4InternalModel, Cubism4MotionManager, CubismModel, Live2DModel, config } from 'pixi-live2d-display/cubism4'
+import { Cubism4InternalModel, Cubism4MotionManager, CubismConfig, CubismModel, CubismMotion, FocusController, Live2DModel, config } from 'pixi-live2d-display/cubism4'
 
 let installed = false
 
@@ -49,6 +49,79 @@ export function installMotionPatches(ctx) {
    */
   config.motionFadingDuration = 300
   config.idleMotionFadingDuration = 300
+  // Azur Lane models animate discrete part swaps (hands, props, overlays) via
+  // PartOpacity curves and have no pose3 files. Enable motion PartOpacity writes.
+  CubismConfig.setOpacityFromMotion = true
+
+  // Capture each model's initial moc3 part opacities before any motion runs,
+  // so transitions back to clips that omit a PartOpacity curve can restore it.
+  const initInternal = Cubism4InternalModel.prototype.init
+  Cubism4InternalModel.prototype.init = function () {
+    initInternal.call(this)
+    const core = this.coreModel
+    if (typeof core?.getPartCount === 'function') {
+      this._initPartOpacities = Float32Array.from(
+        { length: core.getPartCount() },
+        (_, i) => core.getPartOpacityByIndex(i),
+      )
+    }
+  }
+
+  // Fix pixi-live2d-display's CubismModel.getPartIndex bug where _notExistPartId
+  // is a plain object `{}` and `.length` evaluates to undefined -> NaN index.
+  const getPartIndex = CubismModel.prototype.getPartIndex
+  CubismModel.prototype.getPartIndex = function (partId) {
+    const idx = getPartIndex.call(this, partId)
+    if (Number.isNaN(idx)) {
+      const next = this.getPartCount() + Object.keys(this._notExistPartId).length - 1
+      this._notExistPartId[partId] = next
+      this._notExistPartOpacities[next] = 0
+      return next
+    }
+    return idx
+  }
+
+  // Crossfade from the pose captured at transition start instead of compounding
+  // (1 - fadeWeight) against the previous frame's saveParameters() buffer, which
+  // collapses transitions on 60-240Hz displays into a brief initial snap.
+  const doUpdateParameters = CubismMotion.prototype.doUpdateParameters
+  CubismMotion.prototype.doUpdateParameters = function (model, userTimeSeconds, fadeWeight, motionQueueEntry) {
+    const fadeSeconds = this._fadeInSeconds
+    const fadingIn = fadeSeconds > 0 && (userTimeSeconds - motionQueueEntry.getFadeInStartTime()) < fadeSeconds
+    if (fadingIn && model?._parameterValues) {
+      if (!motionQueueEntry._fadeSource) {
+        motionQueueEntry._fadeSource = new Float32Array(model._parameterValues)
+      } else {
+        const src = motionQueueEntry._fadeSource
+        const curves = this._motionData?.curves
+        const count = this._motionData?.curveCount ?? 0
+        for (let c = 0; c < count; c++) {
+          if (curves[c].type !== 1 || curves[c].fadeInTime === 0) continue
+          const idx = model.getParameterIndex(curves[c].id)
+          if (idx >= 0 && idx < src.length) model._parameterValues[idx] = src[idx]
+        }
+      }
+    } else if (!fadingIn && motionQueueEntry._fadeSource) {
+      motionQueueEntry._fadeSource = null
+    }
+    return doUpdateParameters.call(this, model, userTimeSeconds, fadeWeight, motionQueueEntry)
+  }
+
+  // Settle FocusController cleanly at target instead of stopping within EPSILON
+  // with residual tilt and non-zero velocity.
+  const updateFocusCtrl = FocusController.prototype.update
+  FocusController.prototype.update = function (dt) {
+    const dx = this.targetX - this.x
+    const dy = this.targetY - this.y
+    if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) {
+      this.x = this.targetX
+      this.y = this.targetY
+      this.vx = 0
+      this.vy = 0
+      return
+    }
+    return updateFocusCtrl.call(this, dt)
+  }
 
   // The library checks completion only BEFORE evaluating the queue. Drain a
   // natural completion in the same rendered frame, so the async idle request

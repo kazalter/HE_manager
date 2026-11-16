@@ -105,7 +105,8 @@ export const TRIGGER_HANDLERS = {
     if (m.animationPlayApply) return
     const duration = m.orch.clipDurationOf?.(state)
     if (!duration) return
-    if (at.trigger_rate <= (now - m.orch.playStartAt) / duration) {
+    const animNow = Number.isFinite(m.orch.model?.elapsedTime) ? m.orch.model.elapsedTime / 1000 : now
+    if (at.trigger_rate <= (animNow - m.orch.playStartAt) / duration) {
       m.applyTrigger()
       m.isTriggerAtion = false
       m.animationPlayApply = true

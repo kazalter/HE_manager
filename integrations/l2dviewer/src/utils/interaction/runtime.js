@@ -41,6 +41,10 @@ export class InteractionRuntime {
         .map((pid) => core.getParameterIndex(pid))
         .filter((i) => i >= 0 && i < core.getParameterCount()),
     )
+    this._initPartOpacities = model.internalModel._initPartOpacities
+      ?? (typeof core.getPartCount === 'function'
+        ? Float32Array.from({ length: core.getPartCount() }, (_, i) => core.getPartOpacityByIndex(i))
+        : null)
 
     // ---- 有向图节点跟踪 ----
     // 节点 = preservePids 的值向量，初值取 moc 默认（模型加载即干净默认姿态）
@@ -136,7 +140,7 @@ export class InteractionRuntime {
 
   /** 表外补全：节点跟随本支动作**实际驱动**的状态/摆位参数。state/carry 表剔除了首末均为 0 的开关（extract.py clip_boundary_state），但那正是有向图的回零边——基础 idle 曲线恒 0 而无表项时，节点学不到"已归零"，起播缓动会按滞留的旧节点值把开关再次摆出；对表里没记的参数按 motion3 真实末值补账，边界数据与提取同源（同一份 motion3 文件），无需重新提取 */
   _syncBoundary(clipName, state, carry, seq) {
-    this.loadMotionBoundary(clipName).then((boundary) => {
+    const apply = (boundary) => {
       if (!boundary || seq !== this._applyEndSeq) return
       for (const [pid, value] of boundary) {
         if (!(this.statePids.has(pid) || this.carryPids.has(pid))) continue
@@ -144,52 +148,69 @@ export class InteractionRuntime {
         if ((pid in state && this.statePids.has(pid)) || pid in carry) continue
         this.node.set(pid, value)
       }
-    })
+    }
+    const cached = this._boundaryMap?.get(clipName)
+    if (cached) {
+      apply(cached)
+      return
+    }
+    this.loadMotionBoundary(clipName).then(apply)
   }
 
-  /** clip 的参数边界（pid -> 末值）：motion3 曲线段布局 [t0,v0, type, ...]，末元素即曲线终值。挂载时 attachMotions 预热全部 clip，运行期全走缓存，起播缓动不会取到补全前的旧节点值 */
-  loadMotionBoundary(clip) {
-    this._boundaries ??= new Map()
-    let p = this._boundaries.get(clip)
+  /** 单次拉取并解析 clip 的 motion3 元数据（末值边界 + Parameter/PartOpacity 驱动集），避免重复请求同一文件 */
+  _loadMotionMeta(clip) {
+    this._metaPromises ??= new Map()
+    let p = this._metaPromises.get(clip)
     if (!p) {
       const file = this._clipFiles?.get(clip)
       if (!file || this._motionBase == null) return Promise.resolve(null)
       p = fetch(`${this._motionBase}${file}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((m) => {
-          const out = new Map()
-          for (const c of m?.Curves ?? []) {
-            if (c.Target !== 'Parameter') continue
-            const segs = c.Segments
-            if (segs?.length >= 2) out.set(c.Id, segs[segs.length - 1])
+          if (!m) return null
+          const boundary = new Map()
+          const drivenParams = new Set()
+          const drivenParts = new Set()
+          for (const c of m.Curves ?? []) {
+            if (c.Target === 'Parameter') {
+              drivenParams.add(c.Id)
+              const segs = c.Segments
+              if (segs?.length >= 2) boundary.set(c.Id, segs[segs.length - 1])
+            } else if (c.Target === 'PartOpacity') {
+              drivenParts.add(c.Id)
+            }
           }
-          return out
+          this._boundaryMap ??= new Map()
+          this._boundaryMap.set(clip, boundary)
+          this._drivenSet ??= new Map()
+          this._drivenSet.set(clip, drivenParams)
+          this._drivenPartsSet ??= new Map()
+          this._drivenPartsSet.set(clip, drivenParts)
+          return { boundary, drivenParams, drivenParts }
         })
         .catch(() => null)
+      this._metaPromises.set(clip, p)
+    }
+    return p
+  }
+
+  /** clip 的参数边界（pid -> 末值）：motion3 曲线段布局 [t0,v0, type, ...]，末元素即曲线终值。挂载时 attachMotions 预热全部 clip，运行期全走 _boundaryMap 同步缓存 */
+  loadMotionBoundary(clip) {
+    this._boundaries ??= new Map()
+    let p = this._boundaries.get(clip)
+    if (!p) {
+      p = this._loadMotionMeta(clip).then((meta) => meta?.boundary ?? null)
       this._boundaries.set(clip, p)
     }
     return p
   }
 
-  /** clip 驱动的参数 id 集（motion3 全部 Parameter 曲线 Id）：起播缓动的豁免表。与 loadMotionBoundary 同文件各取所需（浏览器 HTTP 缓存去重），解析成功后同步落 _drivenSet */
+  /** clip 驱动的参数 id 集（motion3 全部 Parameter 曲线 Id）：起播缓动的豁免表 */
   loadMotionDriven(clip) {
     this._driven ??= new Map()
     let p = this._driven.get(clip)
     if (!p) {
-      const file = this._clipFiles?.get(clip)
-      if (!file || this._motionBase == null) return Promise.resolve(null)
-      p = fetch(`${this._motionBase}${file}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((m) => {
-          const out = new Set()
-          for (const c of m?.Curves ?? []) {
-            if (c.Target === 'Parameter') out.add(c.Id)
-          }
-          this._drivenSet ??= new Map()
-          this._drivenSet.set(clip, out)
-          return out
-        })
-        .catch(() => null)
+      p = this._loadMotionMeta(clip).then((meta) => meta?.drivenParams ?? null)
       this._driven.set(clip, p)
     }
     return p
@@ -208,7 +229,22 @@ export class InteractionRuntime {
     return out
   }
 
-  /** 注入动作文件源（mount.js 在 runtime 创建后调）：记录 model3 同目录基址与 clip -> File 映射，并预热全部 clip 的边界缓存 */
+  /** clip 驱动的部件下标集（PartOpacity 豁免表；未预热返回 null） */
+  drivenPartIdxOf(clip) {
+    const set = clip ? this._drivenPartsSet?.get(clip) : null
+    if (!set) return null
+    const core = this.model.internalModel.coreModel
+    if (typeof core.getPartIndex !== 'function' || typeof core.getPartCount !== 'function') return null
+    const count = core.getPartCount()
+    const out = new Set()
+    for (const pid of set) {
+      const idx = core.getPartIndex(pid)
+      if (idx >= 0 && idx < count) out.add(idx)
+    }
+    return out
+  }
+
+  /** 注入动作文件源（mount.js 在 runtime 创建后调）：记录 model3 同目录基址与 clip -> File 映射，并预热全部 clip 的边界与驱动集缓存 */
   attachMotions(modelUrl) {
     this._motionBase = modelUrl.replace(/[^/]*$/, '')
     this._clipFiles = new Map()
@@ -219,9 +255,7 @@ export class InteractionRuntime {
         if (clip) this._clipFiles.set(clip, d.File)
       }
     }
-    return Promise.all([...this._clipFiles.keys()].flatMap((clip) => [
-      this.loadMotionBoundary(clip), this.loadMotionDriven(clip),
-    ]))
+    return Promise.all([...this._clipFiles.keys()].map((clip) => this._loadMotionMeta(clip)))
   }
 
   /** 节点复位到干净默认态（"重置交互状态"用）：清挂起转移，状态参数全部回 moc 默认；配合拖拽参数机编排器的 resetAll 一起调 */
@@ -300,20 +334,32 @@ export class InteractionRuntime {
       const target = core.getParameterDefaultValue(i)
       if (from !== target) entries.push({ idx: i, from, target })
     }
-    // 状态机/摆位参数：实时值偏离节点（打断残留，如菜单摊到一半）时缓动对齐到协议态；与硬写路径相同的节点读取时机（先于 trackMotionStart 结算被顶掉的挂起动作），语义不变只是落笔变缓；新动作驱动的参数同豁免
+    // 状态机/摆位参数：实时值偏离节点（打断残留，如菜单摊到一半）时缓动对齐到协议态；新动作驱动的参数同豁免
     for (const [pid, value] of this.node) {
       const idx = core.getParameterIndex(pid)
       if (idx < 0 || idx >= core.getParameterCount() || exempt?.has(idx)) continue
       const from = core.getParameterValueByIndex(idx)
       if (from !== value) entries.push({ idx, from, target: value })
     }
+    const partEntries = []
+    if (this._initPartOpacities && typeof core.getPartCount === 'function') {
+      const exemptParts = this.drivenPartIdxOf(clip)
+      const partCount = core.getPartCount()
+      for (let i = 0; i < partCount; i++) {
+        if (exemptParts?.has(i)) continue
+        const from = core.getPartOpacityByIndex(i)
+        const target = this._initPartOpacities[i]
+        if (from !== target) partEntries.push({ idx: i, from, target })
+      }
+    }
     if (durationSec <= 0) {
       // 0 秒转场（login/home/change_* 硬切）：同帧瞬跳落定，等价旧版硬写
       for (const e of entries) core.setParameterValueByIndex(e.idx, e.target)
+      for (const e of partEntries) core.setPartOpacityByIndex(e.idx, e.target)
       this._resetTween = null
       return
     }
-    this._resetTween = { start: this.resetTime(), duration: durationSec, entries }
+    this._resetTween = { start: this.resetTime(), duration: durationSec, entries, partEntries }
   }
 
   // Use the animation clock: wallpaper ticker pauses must also pause resets.
@@ -335,12 +381,16 @@ export class InteractionRuntime {
     if (t >= 1) {
       // 末帧补齐目标值再收窗：t 一旦越窗（帧尖峰）最后一笔 k 可能未到 1
       for (const e of tween.entries) core.setParameterValueByIndex(e.idx, e.target)
+      for (const e of tween.partEntries ?? []) core.setPartOpacityByIndex(e.idx, e.target)
       this._resetTween = null
       return
     }
     const k = 0.5 - 0.5 * Math.cos(Math.PI * t)
     for (const e of tween.entries) {
       core.setParameterValueByIndex(e.idx, e.from + (e.target - e.from) * k)
+    }
+    for (const e of tween.partEntries ?? []) {
+      core.setPartOpacityByIndex(e.idx, e.from + (e.target - e.from) * k)
     }
   }
 
@@ -353,6 +403,12 @@ export class InteractionRuntime {
       core.setParameterValueByIndex(i, core.getParameterDefaultValue(i))
     }
     for (const [pid, value] of this.node) core.setParameterValueById(pid, value)
+    if (this._initPartOpacities && typeof core.getPartCount === 'function') {
+      const partCount = core.getPartCount()
+      for (let i = 0; i < partCount; i++) {
+        core.setPartOpacityByIndex(i, this._initPartOpacities[i])
+      }
+    }
   }
 
   /**

@@ -74,19 +74,28 @@ export async function loadAmbient(modelUrl, settings) {
   // modelUrl 可能是站内绝对路径（"/models/..."），需先经 location 解析为绝对 URL
   const data = await (await fetch(new URL(file, new URL(modelUrl, window.location.href)))).json()
   const duration = data.Meta?.Duration
-  const curves = (data.Curves ?? []).filter((c) => c.Target === 'Parameter')
+  const curves = (data.Curves ?? []).filter((c) => c.Target === 'Parameter' || c.Target === 'PartOpacity')
   if (!duration || !curves.length) return null
-  // 参数绑定（惰性，首次 apply 时解析）：下标 + moc 的 [min, max] 范围
+  // 参数/部件绑定（惰性，首次 apply 时解析）：下标 + 范围
   let bindings = null
   return {
     /** seconds 取任意单调时钟；按 Meta.Duration 取模后每帧写入，效果与游戏内连播一致。 */
     apply(coreModel, seconds) {
       if (!bindings) {
+        const hasParts = typeof coreModel.getPartIndex === 'function' && typeof coreModel.getPartCount === 'function'
+        const partCount = hasParts ? coreModel.getPartCount() : 0
         bindings = curves
           .map((curve) => {
+            if (curve.Target === 'PartOpacity') {
+              if (!hasParts) return null
+              const index = coreModel.getPartIndex(curve.Id)
+              if (index < 0 || index >= partCount) return null
+              return { part: true, index, segments: curve.Segments, min: 0, max: 1 }
+            }
             const index = coreModel.getParameterIndex(curve.Id)
             if (index < 0 || index >= coreModel.getParameterCount()) return null
             return {
+              part: false,
               index,
               segments: curve.Segments,
               min: coreModel.getParameterMinimumValue(index),
@@ -102,7 +111,8 @@ export async function loadAmbient(modelUrl, settings) {
         // 部分皮肤的 effect 曲线超程（shengluyisi_5 的 Param90/92 曲线达 14.7，参数范围 [0,2]），超程值会放大形变
         if (value < b.min) value = b.min
         else if (value > b.max) value = b.max
-        coreModel.setParameterValueByIndex(b.index, value)
+        if (b.part) coreModel.setPartOpacityByIndex(b.index, value)
+        else coreModel.setParameterValueByIndex(b.index, value)
       }
     },
   }

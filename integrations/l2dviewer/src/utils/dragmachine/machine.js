@@ -141,6 +141,7 @@ export class DragMachine {
     this.actionListIndex = 1
     // type 3/4 的按压累计计时（游戏 triggerActionTime：startDrag 归零）
     this.triggerActionTime = 0
+    this._writeSeq = 0
     this.warned = false
   }
 
@@ -489,13 +490,16 @@ export class DragMachine {
   }
 
   setTargetValue(v) {
+    if (v === this.parameterTargetValue && this.parameterValue !== this.parameterTargetValue) return
     this.parameterSmooth = 0
-    this.parameterStartValue = this.parameterTargetValue
+    this.parameterStartValue = this.parameterValue
     this.parameterTargetValue = v
+    if (this.orch) this._writeSeq = ++this.orch._writeCounter
   }
 
   setParameterValue(v) {
     this.parameterValue = v
+    if (this.orch) this._writeSeq = ++this.orch._writeCounter
   }
 
   /** 每帧步进（游戏 stepParameter 的 updateParameterValue + checkReset + 触发调度） */
@@ -547,7 +551,9 @@ export class DragMachine {
     }
     // 平滑趋近目标（游戏 updateParameterValue + Live2DExtend.CustomSmoothValue）：进度按 SMOOTH_RATE×dt 推进，复刻 fixedDeltaTime×30Hz 的 1.67× 时长拉伸
     if (this.parameterValue !== this.parameterTargetValue) {
-      if (Math.abs(this.parameterValue - this.parameterTargetValue) < VALUE_EPS) {
+      const span = Math.abs((this.range[1] ?? 0) - (this.range[0] ?? 0))
+      const eps = Math.min(VALUE_EPS, Math.max(1e-4, span * 0.002))
+      if (Math.abs(this.parameterValue - this.parameterTargetValue) < eps) {
         this.setParameterValue(this.parameterTargetValue)
       } else if (this.parameterSmoothTime > 0) {
         this.parameterSmooth = Math.min(this.parameterSmooth + SMOOTH_RATE * dt, this.parameterSmoothTime)
@@ -697,6 +703,7 @@ export class DragMachine {
     }
     this.setParameterValue(this.startValue)
     this.setTargetValue(this.startValue)
+    this._writeSeq = 0
     this.offsetDragX = this.offsetDragTargetX = this.startValue
     this.offsetDragY = this.offsetDragTargetY = this.startValue
   }

@@ -68,24 +68,6 @@ async function mountModelInner(ctx, url) {
   model.internalModel.breath?.setParameters?.([])
   // 装配序列未走完前不上台，揭幕在挂载尾部
   model.visible = false
-  // 逐 clip 转场时长表（<id>.fades.json，extract.py 的 animator_fades 从 bundle 的 AnimatorController 提取）：motionPatches.createMotion 按它设置动作渐入时长，动作起播的复位缓动窗口也取同一值——两处严格同源
-  // 缺失时全旁路（渐变走 config 兜底 300ms、复位走 RESET_FADE 兜底）
-  // 动作起播的参数复位改走平滑路径（见 runtime.beginSmoothReset）：瞬跳会毁掉动作交叉渐变的混合起点
-  // 落笔钩子在 runtime 创建后挂（下方 beforeMotionUpdate），这里只登记缓动窗口；窗口取起播 clip 的转场时长（trackMotionStart 尚未结算挂起动作，节点读取时机不变）
-  // 首个 motionStart 跳过复位：入口参数已硬写干净态，无遗留可清
-  // 后续动作照常开窗，清上一支动作的遗留开关；新动作驱动的参数豁免（引擎渐入自带混合，见 beginSmoothReset）
-  let firstMotion = true
-  model.internalModel.motionManager.on('motionStart', (group, index) => {
-    const clip = ctx.runtime?.clipOf(group, index)
-    if (firstMotion) {
-      firstMotion = false
-      return
-    }
-    ctx.runtime?.beginSmoothReset(
-      clip ? (ctx.fades?.transitions?.[clip] ?? ctx.fades?.default ?? undefined) : undefined,
-      clip,
-    )
-  })
   // 常驻氛围层：effect 组（垂发/扶手布的微风摆动）在游戏内永远循环叠加，这里挂在 afterMotionUpdate（主动作求值后、saveParameters 前）直写参数，物理与姿态系统不触碰这些参数，故不会与本层互相覆盖。游戏内实测（zhenzhuhao_2）：effect 参数可与全部动作重叠（五体系列 MB_*×10 等），游戏表现是本层值赢——动作里同参数曲线是导出时烘焙的副本，被本层盖掉才是游戏内观感（挂 beforeMotionUpdate 让动作赢下共享参数，摆动会退化为动作副本的粗糙节奏）
   // effect 缺失/加载失败只跳过本层，不应中断整个挂载
   try {
@@ -96,7 +78,9 @@ async function mountModelInner(ctx, url) {
     }
     if (ambient) {
       const core = model.internalModel.coreModel
-      model.internalModel.on('afterMotionUpdate', () => ambient.apply(core, performance.now() / 1000))
+      model.internalModel.on('afterMotionUpdate', () =>
+        ambient.apply(core, (Number.isFinite(model.elapsedTime) ? model.elapsedTime : performance.now()) / 1000),
+      )
     }
   } catch (err) {
     console.warn('[l2d] 常驻氛围层加载失败,已跳过', err)
@@ -115,9 +99,24 @@ async function mountModelInner(ctx, url) {
   // 库的 idle 自启挂在 Ticker.shared（Live2DModel.from 的 init 即注册共享 ticker），首个 tick 早于本行——from 之后这里已串行 await 了氛围层/交互数据，auto idle 的 motionStart 已错过且无人监听；循环 idle 永不 motionFinish、重播同支又被 MotionState.reserve 拒绝，此后再无 motionStart
   // 向 state 的当前动作补一次起播结算（此刻 _clipFiles 已注入，表外边界补全一次到位）；reserve 已留位未 start 的场合（currentGroup 仍空）不补——随后的 motionStart 会落在已注册的监听器上
   const mountState = model.internalModel.motionManager.state
-  if (mountState?.currentGroup !== undefined) {
+  const hadInitialMotion = mountState?.currentGroup !== undefined
+  if (hadInitialMotion) {
     ctx.runtime.trackMotionStart(mountState.currentGroup, mountState.currentIndex)
   }
+  // 逐 clip 转场时长表（<id>.fades.json，extract.py 的 animator_fades 从 bundle 的 AnimatorController 提取）：motionPatches.createMotion 按它设置动作渐入时长，动作起播的复位缓动窗口也取同一值——两处严格同源
+  // 注册在 InteractionRuntime 构造之后，保证 trackMotionStart 先行结算被顶掉的挂起动作与 _syncBoundary，beginSmoothReset 再读取最新节点态
+  let skipNextReset = false
+  model.internalModel.motionManager.on('motionStart', (group, index) => {
+    const clip = ctx.runtime?.clipOf(group, index)
+    if (skipNextReset) {
+      skipNextReset = false
+      return
+    }
+    ctx.runtime?.beginSmoothReset(
+      clip ? (ctx.fades?.transitions?.[clip] ?? ctx.fades?.default ?? undefined) : undefined,
+      clip,
+    )
+  })
   // 调色板控制层（色轴参数 skin 没有时整层旁路）
   installPalette(ctx, model)
   // 平滑复位每帧落笔：先于机器叠加层的 restoreLayer 注册（同事件按注册序触发）——机器加/乘参数的底值还原保持原语义，不被缓动写入覆盖
@@ -166,7 +165,12 @@ async function mountModelInner(ctx, url) {
     entryMotion = manager.motionGroups?.[idleGroup]?.[idx]
     if (entryMotion) entryMotion.setFadeInTime(0)
     else ctx._entryHardCutClip = wantIdle
-    ctx.actions.playLuaAction(wantIdle)
+    skipNextReset = true
+    ctx.actions.playLuaAction(wantIdle).then((ok) => {
+      if (!ok) skipNextReset = false
+    })
+  } else if (!hadInitialMotion) {
+    skipNextReset = true
   }
   ctx.camera.fitModel()
   // drawable 顶点在模型首次 update 时才由核心算出，上面的适配只能拿到陈旧值；两帧后（顶点就绪、idle 已应用）按真实场景重新适配一次
@@ -211,6 +215,7 @@ async function mountModelInner(ctx, url) {
         }
         if (ctx.model) ctx.model.visible = true
         ctx.status.value = ''
+        preloadMotions(model, ctx.runtime.idleGroup, stale)
       }
       reveal()
     }),
@@ -243,4 +248,22 @@ async function mountModelInner(ctx, url) {
   // 上报动作组清单，供状态触发面板展示
   ctx.emit('motions', Object.keys(model.internalModel.settings?.motions ?? {}))
   ctx.hintsCtl.rebuild(model)
+}
+
+/** 揭幕后在后台预热其余动作组，避免首次点击或 type 10 动作链卡在首次 XHR 加载 */
+async function preloadMotions(model, idleGroup, stale) {
+  const manager = model.internalModel?.motionManager
+  if (!manager?.definitions) return
+  const queue = []
+  for (const [group, defs] of Object.entries(manager.definitions)) {
+    if (group === idleGroup || group === 'effect') continue
+    for (let i = 0; i < (defs?.length ?? 0); i++) queue.push([group, i])
+  }
+  const workers = Array.from({ length: Math.min(3, queue.length) }, async () => {
+    while (queue.length && !stale() && !model.destroyed && !manager.destroyed) {
+      const [group, i] = queue.shift()
+      try { await manager.loadMotion(group, i) } catch { /* ignore preload failure */ }
+    }
+  })
+  await Promise.all(workers)
 }

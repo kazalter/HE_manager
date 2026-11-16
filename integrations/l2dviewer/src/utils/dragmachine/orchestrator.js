@@ -36,8 +36,9 @@ export class DragOrchestrator {
     this.isPlaying = false
     this.playActionName = ''
     this.playingClip = '' // 最近一次起播的 clip 名（含 idle 组——type 10 动作链的 state 名判据需要 idle clip 名，playActionName 只记反应动作）
-    this.playStartAt = 0 // playingClip 的起播时刻（performance 时钟，秒）——type 10 归一化播进度的起算点
+    this.playStartAt = 0 // playingClip 的起播时刻（动画时钟，秒）——type 10 归一化播进度的起算点
     this.clipDurationOf = null // (clipName) => 秒 | undefined，查 clip 时长；mount/sim 从 interaction.json clips 表注入，type 10 用
+    this._writeCounter = 0
     this.machines = config.entries.map((e) => new DragMachine(e, this))
     // 读档：只恢复机器拖拽参数值。idle 变体号/白名单不跨会话恢复——存档里只有变体号、没有交互图状态（菜单摊开与否），单独恢复变体号会造出"菜单没开但 touch_idle1 被重复 idle 豁免跳过"的自不一致死态；游戏里两者是配套恢复的，这里拿不到后者就干脆都从干净态起步
     for (const m of this.machines) {
@@ -335,13 +336,25 @@ export class DragOrchestrator {
   /** @param clipName 起播的 clip 名
    * @param idle 是否 idle 组（idle 是循环氛围动作，库内循环动作永不 isFinished、不产生 motionFinish，不能占用"反应动作播放中"状态——否则 isPlaying 永久滞留 true，点击触发恒被拦）
    */
+  animClockSeconds() {
+    return (Number.isFinite(this.model?.elapsedTime) ? this.model.elapsedTime : performance.now()) / 1000
+  }
+
+  shouldIgnoreGaze() {
+    return this.machines.some(
+      (m) =>
+        m.ignoreReact &&
+        (m._active || m.parameterValue !== m.parameterTargetValue || (m.parameterToStart != null && m.parameterToStart > 0)),
+    )
+  }
+
   noteMotionStart(clipName, idle = false) {
     // 被顶掉的旧反应动作不会再发 motionFinish（库只在动作队列排空且 playing 仍真时发一次 finish，FORCE 起播杀掉旧队列条目是无声的）：新动作起播即宣告旧反应终局，先清滞留的播放中
     // 否则长按姿势播放中松手、收尾切 idle 的场合 isPlaying 永久滞留真值，全机 ignore_action 拒按 + 触发处理器 l2dIsPlaying 早退，交互整体锁死
     this.isPlaying = false
     this.playActionName = ''
     this.playingClip = clipName
-    this.playStartAt = performance.now() / 1000
+    this.playStartAt = this.animClockSeconds()
     // 最近一次起播是否 idle 组：noteMotionFinish 判定"反应动作播完"用（库的 motionFinish 事件不带 group 参数，只能在这里记）
     this._lastStartIdle = idle
     if (!idle) {
@@ -398,18 +411,34 @@ export class DragOrchestrator {
 
   /** 叠加层阶段一（挂 beforeMotionUpdate）：撤掉上帧叠加，还原动作求值的底 */
   restoreLayer(core) {
-    for (const e of this.layerEntries()) {
-      if (!e.additive || !e.inited) continue
-      if (e.r && !e.r.enable) continue
-      core.setParameterValueByIndex(e.idx, e.base)
+    if (!this._layerBase?.size) return
+    for (const [idx, base] of this._layerBase) {
+      core.setParameterValueByIndex(idx, base)
     }
+    this._layerBase.clear()
   }
 
-  /** 叠加层阶段二（挂 afterMotionUpdate）：取干净底重新叠加 */
+  /** 叠加层阶段二（挂 afterMotionUpdate）：取干净底重新叠加；同参数多入口按最新写入者/relation 优先收口，防止同机叠加倍增或未触达兄弟机回写覆盖 */
   applyLayer(core) {
+    const winners = new Map()
     for (const e of this.layerEntries()) {
-      const v = e.r ? e.r.value : e.m.parameterValue
       if (e.r && !e.r.enable) continue
+      const prev = winners.get(e.idx)
+      if (!prev) {
+        winners.set(e.idx, e)
+        continue
+      }
+      // 同机内的 relation（如 baifeng_2 的 type 101）优先于本机主条目；跨机按最新交互 _writeSeq（同序后来者）胜出
+      if (prev.m === e.m && prev.r === null && e.r !== null) {
+        winners.set(e.idx, e)
+      } else if (!(prev.m === e.m && prev.r !== null && e.r === null) && e.m._writeSeq >= prev.m._writeSeq) {
+        winners.set(e.idx, e)
+      }
+    }
+    this._layerBase ??= new Map()
+    this._layerBase.clear()
+    for (const e of winners.values()) {
+      const v = e.r ? e.r.value : e.m.parameterValue
       const cur = core.getParameterValueByIndex(e.idx)
       const mode = e.r ? (e.r.mode ?? e.m.mode) : e.m.mode
       let out
@@ -417,10 +446,7 @@ export class DragOrchestrator {
       else if (mode === 3) out = cur * v
       else out = v
       core.setParameterValueByIndex(e.idx, out)
-      if (e.additive) {
-        e.base = cur
-        e.inited = true
-      }
+      if (e.additive) this._layerBase.set(e.idx, cur)
     }
   }
 
@@ -450,6 +476,8 @@ export class DragOrchestrator {
     this.saveValue('__idle', 0)
     this.saveValue('__action', 0)
     for (const m of this.machines) m.reset()
+    this._writeCounter = 0
+    this._layerBase?.clear()
     // 按压锁一并清掉：machineAble 置真后若没走到任何清假路径（如按压中复位），checkEnablePlay 恒假会连"重置交互"自己的重播一起拦死
     this.pressLock('重置交互', false)
     this.idleIndex = 0
