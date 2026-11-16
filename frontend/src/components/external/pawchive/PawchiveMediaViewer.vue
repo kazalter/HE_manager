@@ -493,7 +493,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="viewerRef" tabindex="-1" role="dialog" aria-modal="true" :aria-label="`Pawchive 查看器：${post.title}`" :class="nativeFullscreen ? 'h-screen w-screen' : ''" class="he-pawchive-viewer fixed inset-0 z-[70] bg-black/95 text-white flex flex-col">
+  <div ref="viewerRef" tabindex="-1" role="dialog" aria-modal="true" :aria-label="`Pawchive 查看器：${post.title}`" :class="{ 'is-fullscreen': isFullscreen }" class="he-pawchive-viewer fixed inset-0 z-[70] bg-black/95 text-white flex flex-col">
     <header :class="isFullscreen ? ['absolute inset-x-0 top-0 z-30 bg-gradient-to-b from-black/90 via-black/65 to-transparent border-b-0', controlsVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'] : ''" class="shrink-0 px-3 sm:px-5 py-3 border-b border-white/15 flex items-center gap-3 transition-[transform,opacity] duration-300" @mouseenter="onControlsHover(true)" @mouseleave="onControlsHover(false)">
       <button type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" aria-label="返回列表" @click="emit('close')"><X :size="21" /></button>
       <div class="min-w-0 flex-1"><p class="text-xs text-white/55 truncate">{{ post.creator_name }} · {{ scopeLabel }}</p><h2 class="text-sm sm:text-base font-bold truncate">{{ post.title }}</h2></div>
@@ -509,7 +509,7 @@ onBeforeUnmount(() => {
       ><Download :size="17" aria-hidden="true" /><span class="hidden sm:inline">{{ downloadBusy ? '正在核对…' : '下载此图' }}</span></button>
       <button type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-lg text-white/90 hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" :aria-label="isFullscreen ? '退出全屏' : '进入全屏'" :title="isFullscreen ? '退出全屏' : '进入全屏'" :aria-pressed="isFullscreen" @click="toggleFullscreen"><Minimize2 v-if="isFullscreen" :size="18" aria-hidden="true" /><Maximize2 v-else :size="18" aria-hidden="true" /></button>
     </header>
-    <div class="flex-1 min-h-0 relative flex" @wheel.capture="onMediaWheel">
+    <div class="he-pawchive-stage flex-1 min-h-0 relative flex" @wheel.capture="onMediaWheel">
       <img v-if="placeholderUrl && showPlaceholder && !imageReady && !loadFailed" :src="placeholderUrl" alt="" aria-hidden="true" draggable="false" class="pointer-events-none absolute inset-0 z-10 h-full w-full scale-105 object-contain opacity-60 blur-md" />
       <div v-if="attachment.media_type === 'image' && !displayImageUrl && showPlaceholder && !loadFailed" role="status" class="pointer-events-none absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/75 px-4 py-2 text-sm ">
         <Loader2 :size="16" class="shrink-0 animate-spin text-white/70" aria-hidden="true" />
@@ -625,8 +625,10 @@ onBeforeUnmount(() => {
 </style>
 
 <style scoped>
-.he-pawchive-viewer { height: var(--he-app-height, 100dvh); }
+:global(html.he-keyboard-open) .he-pawchive-viewer { height: var(--he-app-height); }
 .he-pawchive-viewer > header { padding-top: calc(12px + env(safe-area-inset-top)); }
-.he-pawchive-viewer > footer { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+.he-pawchive-viewer > footer { padding-bottom: calc(12px + var(--he-safe-bottom, env(safe-area-inset-bottom, 0px))); }
+.he-pawchive-viewer.is-fullscreen .he-pawchive-stage { padding-bottom: var(--he-safe-bottom, env(safe-area-inset-bottom, 0px)); }
+@media (max-width: 899px) { .he-pawchive-viewer:not(.is-fullscreen) :deep(.image-viewer-toolbar) { bottom: 12px; } }
 @media (max-width: 599px) { .he-pawchive-viewer > header { gap: 4px; } }
 </style>

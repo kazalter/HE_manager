@@ -954,7 +954,8 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
 </template>
 
 <style scoped>
-.he-media-overlay { height: var(--he-app-height, 100dvh); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.he-media-overlay { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+:global(html.he-keyboard-open) .he-media-overlay { height: var(--he-app-height); }
 .he-viewer-header { padding-top: calc(12px + env(safe-area-inset-top)); }
 .he-chrome-btn {
   display: inline-flex;
@@ -977,7 +978,7 @@ useMediaKeyboard(handleKeydown, handleKeyup, handleWindowBlur)
   .he-media-layout:not(.is-video) .he-viewer-header h2 { flex-basis: 100%; }
   .he-media-layout:not(.is-video) .he-viewer-header { justify-content: flex-end; }
   .he-viewer-header [aria-label="自动播放设置"] button span { display: none; }
-  .he-media-layout.is-video > section { overflow-y: auto; overscroll-behavior: contain; }
+  .he-media-layout.is-video > section { overflow-y: auto; overscroll-behavior: contain; padding-bottom: var(--he-safe-bottom, env(safe-area-inset-bottom, 0px)); }
   .he-media-layout.is-video .he-viewer-header { position: relative; flex-wrap: nowrap; opacity: 1; transform: none; pointer-events: auto; background: #000; padding-bottom: 8px; }
   .he-media-layout.is-video .he-viewer-actions { background: transparent; padding: 0; }
   .he-media-layout.is-video :deep(.he-video-stage) { flex: 0 0 auto; aspect-ratio: 16 / 9; width: 100%; }

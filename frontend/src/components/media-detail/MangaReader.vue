@@ -951,8 +951,8 @@ function onReaderViewportResize() { preloadAdjacentPages() }
         class="he-manga-controls absolute left-1/2 z-20 flex w-[min(640px,calc(100%-2rem))] select-none flex-col gap-2 rounded-2xl bg-black/75 p-2.5 text-white ring-1 ring-inset ring-white/10 transition-[transform,opacity] duration-200 ease-out sm:px-3"
         :style="{
           width: desktopBridge ? 'min(800px, calc(100% - 2rem))' : undefined,
-          bottom: 'calc(12px + env(safe-area-inset-bottom))',
-          transform: `translate3d(-50%, ${isStripOpen ? 'calc(-184px - env(safe-area-inset-bottom))' : (showControls || !clickOnlyControls ? '0px' : '12px')}, 0)`,
+          bottom: 'calc(12px + var(--he-safe-bottom, env(safe-area-inset-bottom, 0px)))',
+          transform: `translate3d(-50%, ${isStripOpen ? 'calc(-184px - var(--he-safe-bottom, env(safe-area-inset-bottom, 0px)))' : (showControls || !clickOnlyControls ? '0px' : '12px')}, 0)`,
         }"
         style="will-change: transform, opacity;"
         @mouseenter="emit('controlsHover', true)"
@@ -1114,8 +1114,8 @@ function onReaderViewportResize() { preloadAdjacentPages() }
         class="he-manga-zoom absolute right-6 z-20 flex select-none items-center gap-0.5 rounded-2xl bg-black/75 p-1 text-white/80 ring-1 ring-inset ring-white/10 transition-[transform,opacity] duration-200 ease-out"
         :style="{
           top: desktopBridge ? '84px' : undefined,
-          bottom: desktopBridge ? 'auto' : 'calc(12px + env(safe-area-inset-bottom))',
-          transform: `translate3d(0, ${desktopBridge ? (showControls ? '0px' : '-12px') : isStripOpen ? 'calc(-184px - env(safe-area-inset-bottom))' : (showZoomControls ? '0px' : '12px')}, 0)`,
+          bottom: desktopBridge ? 'auto' : 'calc(12px + var(--he-safe-bottom, env(safe-area-inset-bottom, 0px)))',
+          transform: `translate3d(0, ${desktopBridge ? (showControls ? '0px' : '-12px') : isStripOpen ? 'calc(-184px - var(--he-safe-bottom, env(safe-area-inset-bottom, 0px)))' : (showZoomControls ? '0px' : '12px')}, 0)`,
         }"
         style="will-change: transform, opacity;"
         @click.stop
@@ -1326,7 +1326,8 @@ function onReaderViewportResize() { preloadAdjacentPages() }
   [data-keyboard-guide] { display: none; }
   .he-manga-zoom { right: 12px; top: calc(140px + env(safe-area-inset-top)); bottom: auto !important; transform: none !important; }
   .he-manga-zoom button { min-height: 44px; min-width: 44px; }
-  .he-manga-strip { padding-bottom: env(safe-area-inset-bottom); }
+  .he-manga-reader:not(.he-native-webtoon) .he-reader-surface { padding-bottom: var(--he-safe-bottom, env(safe-area-inset-bottom, 0px)); }
+  .he-manga-strip { padding-bottom: var(--he-safe-bottom, env(safe-area-inset-bottom, 0px)); }
   .he-manga-strip button { min-height: 44px; }
   .he-page-nav.left-5 { left: 8px; width: 44px; height: 44px; }
   .he-page-nav.right-5 { right: 8px; width: 44px; height: 44px; }

@@ -111,8 +111,8 @@ const widths = { sm: 'sm:max-w-[400px]', md: 'sm:max-w-[560px]', lg: 'sm:max-w-[
 </template>
 
 <style>
-.ui-modal { height: var(--he-app-height, 100%); }
-.ui-modal-panel { padding-bottom: env(safe-area-inset-bottom); }
+html.he-keyboard-open .ui-modal { height: var(--he-app-height); }
+.ui-modal-panel { padding-bottom: var(--he-safe-bottom, env(safe-area-inset-bottom, 0px)); }
 .ui-modal-enter-active, .ui-modal-leave-active { transition: opacity var(--duration-base) var(--ease-out); }
 .ui-modal-enter-active .ui-modal-panel, .ui-modal-leave-active .ui-modal-panel { transition: transform var(--duration-slow) var(--ease-out); }
 .ui-modal-enter-from, .ui-modal-leave-to { opacity: 0; }

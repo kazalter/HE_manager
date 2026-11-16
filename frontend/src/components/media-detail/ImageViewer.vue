@@ -379,7 +379,7 @@ onBeforeUnmount(() => {
   transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out);
 }
 @media (max-width: 899px) {
-  .image-viewer-toolbar { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); justify-content: center; gap: 2px; }
+  .image-viewer-toolbar { left: 12px; right: 12px; bottom: calc(12px + var(--he-safe-bottom, env(safe-area-inset-bottom, 0px))); justify-content: center; gap: 2px; }
   .image-viewer-toolbar button { min-width: 44px; min-height: 44px; }
   .he-page-nav.left-5 { left: 8px; width: 44px; height: 44px; }
   .he-page-nav.right-5 { right: 8px; width: 44px; height: 44px; }

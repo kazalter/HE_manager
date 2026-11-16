@@ -269,7 +269,7 @@ const onTagInputBlur = () => {
 }
 
 .he-metadata-inline {
-  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  padding-bottom: calc(24px + var(--he-safe-bottom, env(safe-area-inset-bottom, 0px)));
 }
 
 @media (max-width: 899px) {
@@ -285,7 +285,7 @@ const onTagInputBlur = () => {
     border-radius: 20px 20px 0 0;
     background: rgb(var(--color-surface-3));
     box-shadow: var(--shadow-modal);
-    padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
+    padding: 16px 16px calc(24px + var(--he-safe-bottom, env(safe-area-inset-bottom, 0px)));
   }
 }
 </style>

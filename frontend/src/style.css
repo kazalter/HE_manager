@@ -474,11 +474,14 @@ html.he-mode-transition::view-transition-new(root) { animation: none; mix-blend-
 }
 
 /* Phone shell: bottom navigation and dynamic Safari viewport. */
-:root { --he-nav-height: 80px; --he-app-height: 100vh; }
+:root { --he-nav-height: 80px; --he-app-height: 100vh; --he-safe-bottom: env(safe-area-inset-bottom, 0px); }
 @supports (height: 100dvh) { :root { --he-app-height: 100dvh; } }
 /* Standard iOS standalone viewport excludes the opaque status bar; percentage height follows
  * the actual layout viewport, whereas 100vh still includes the excluded status bar. */
 html.he-standalone { --he-app-height: 100%; }
+@media (display-mode: standalone) and (max-width: 899px) {
+  html.he-ios-standard-viewport { --he-safe-bottom: 34px; }
+}
 html.he-standalone, .he-standalone body, .he-standalone #app { height: var(--he-app-height); min-height: 0; overflow: hidden; }
 .he-standalone body { position: relative; }
 .he-standalone .he-auth-view { height: var(--he-app-height); min-height: 0; overflow-y: auto; align-items: safe center; padding-block: 16px; }
@@ -528,6 +531,15 @@ html.he-webtoon-document body {
 .he-native-webtoon .he-manga-strip,
 .he-native-webtoon .he-page-nav { position: fixed; }
 .he-native-webtoon .he-page-nav { top: 50%; }
+html.he-standalone.he-webtoon-document body,
+.he-standalone.he-webtoon-document .he-media-overlay,
+.he-standalone.he-webtoon-document .he-media-layout,
+.he-standalone.he-webtoon-document .he-media-layout > section,
+.he-standalone .he-native-webtoon,
+.he-standalone .he-native-webtoon .he-reader-surface,
+.he-standalone .he-native-webtoon .he-webtoon-viewport {
+  min-height: 0;
+}
 .he-back-top { bottom: 24px; }
 .he-mobile-nav { position: fixed; bottom: 0; inset-inline: 0; z-index: 40; height: calc(var(--he-nav-height) + env(safe-area-inset-bottom)); padding: 8px max(12px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); background: rgb(var(--color-sidebar)); border-top: 1px solid rgb(var(--color-line)); }
 .he-nav-surface { position: relative; isolation: isolate; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); height: 64px; width: min(100%, 520px); margin-inline: auto; padding: 4px; border-radius: 20px; touch-action: pan-y; user-select: none; -webkit-user-select: none; }

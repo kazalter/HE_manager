@@ -141,7 +141,8 @@ defineExpose({ warm })
 </template>
 
 <style>
-.he-native-pages { display: flex; flex-direction: column; align-items: center; width: 100%; min-height: 100vh; }
+.he-native-pages { display: flex; flex-direction: column; align-items: center; width: 100%; min-height: 100vh; padding-bottom: var(--he-safe-bottom, env(safe-area-inset-bottom, 0px)); }
+html.he-standalone .he-native-pages { min-height: 0; }
 .he-native-page { display: flex; justify-content: center; position: relative; width: 100%; overflow-anchor: none; }
 .he-native-page-image { display: block; width: auto; height: auto; max-width: 100%; align-self: flex-start; pointer-events: auto; }
 .he-native-placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: #18181b; color: #a1a1aa; font-size: 14px; }

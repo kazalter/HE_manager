@@ -685,7 +685,7 @@ onBeforeUnmount(() => {
 .he-audio-range::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; margin-top: -4px; border-radius: 9999px; background: #fff; }
 .he-audio-range::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 9999px; background: #fff; }
 @media (max-width: 899px) {
-  .he-audio-player { overflow-y: auto; padding-bottom: max(24px, calc(16px + env(safe-area-inset-bottom))); }
+  .he-audio-player { overflow-y: auto; padding-bottom: max(24px, calc(16px + var(--he-safe-bottom, env(safe-area-inset-bottom, 0px)))); }
   .he-audio-body { flex: none; }
   .he-audio-tracks { flex: none; overflow: visible; }
   .he-audio-stage { padding: 24px 16px 20px; }
