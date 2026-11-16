@@ -128,7 +128,13 @@ export function createActions(ctx) {
     }
     ctx.currentMotion.value = group
     // 等引擎的真实结果：MotionState.reserve 拒绝（重播在循环的同支 idle、预留被抢等）只静默回 false——调用方（onActionApply）必须拿到 false 才不会把 activeData（idle 变体号/白名单）记到一次没播出去的动作上
-    const ok = await ctx.model.motion(group, index, MotionPriority.FORCE)
+    let ok = false
+    try {
+      ok = await ctx.model.motion(group, index, MotionPriority.FORCE)
+    } catch (error) {
+      console.warn('[l2d] 动作加载或播放异常:', `${group}[${index}]`, error)
+      ok = false
+    }
     if (!ok) {
       console.warn('[l2d] 动作播放被引擎拒绝:', `${group}[${index}]`)
       // 拒绝原因进触发链日志：链式路由中一环播放失败、activeData 不入账时整条链静默断掉，无此日志无法定位断点

@@ -121,6 +121,15 @@ export class InteractionRuntime {
     this.pendingIdle = false
   }
 
+  /** 若底层运动管理器已停止播放且无保留动作，但非 idle 挂起状态仍滞留（如异常中断/未收到 motionFinish），自动清账解锁 */
+  syncPlayingState() {
+    if (this.pending === null || this.pendingIdle) return
+    const manager = this.model?.internalModel?.motionManager
+    if (manager && !manager.playing && manager.state?.reservedGroup === undefined) {
+      this.trackMotionFinish()
+    }
+  }
+
   /** 把 clip 的结束值写进节点——有向图中沿这条边走一步。开关参数只写节点域内（statePids）的：end-only 参数（起播恒 0，如 sdrtx）由 resetParameters 的常规复位管理，写入节点会让它永久残留；连续摆位参数（carryPids）同样按结束值落账——收尾分支带回 0 的也写，节点随之清零 */
   applyEnd(clipName) {
     if (!clipName) return

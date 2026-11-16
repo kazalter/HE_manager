@@ -288,3 +288,106 @@ test('crossfade produces identical progress at 60Hz and 144Hz and PartOpacity wr
     }
   }
 })
+
+test('gestures ignore right-click and cancel prior press before starting a new pointer', async () => {
+  const { createGestures } = await import('../src/l2d/gestures.js')
+  let cancelled = 0
+  let downs = 0
+  const ctx = {
+    app: {
+      screen: { width: 800, height: 600 },
+      view: { getBoundingClientRect: () => ({ left: 0, top: 0 }) },
+    },
+    model: {
+      visible: true,
+      internalModel: {
+        coreModel: { getDrawableVertexIndices: () => [0, 1, 2, 0, 2, 3], getDrawableRenderOrders: () => [0] },
+        hitAreas: { touch_drag1: { index: 0 } },
+        getDrawableVertices: () => [0, 0, 100, 0, 100, 100, 0, 100],
+      },
+      toGlobal: (p) => p,
+      toModelPosition: (p) => p,
+    },
+    orch: {
+      zoneOrder: (name) => (name === 'touch_drag1' ? 0 : -1),
+      onDown: () => { downs++; return true },
+      onUp: () => true,
+      onCancel: () => { cancelled++ },
+      onMove: () => {},
+    },
+    actions: { handleHitAreas: () => {} },
+    dragScale: 1,
+    lastGesture: 'tap',
+  }
+  const g = createGestures(ctx)
+  // Right-click must not enter pressing state or engage machines.
+  g.onPointerDown({ clientX: 50, clientY: 50, pointerType: 'mouse', button: 2, pointerId: 1, target: {} })
+  assert.equal(downs, 0)
+  // Left-click engages pointer 1; a second pointer down cancels pointer 1 first.
+  g.onPointerDown({ clientX: 50, clientY: 50, pointerType: 'mouse', button: 0, pointerId: 1, target: {} })
+  assert.equal(downs, 1)
+  g.onPointerDown({ clientX: 60, clientY: 60, pointerType: 'touch', button: 0, pointerId: 2, target: {} })
+  assert.equal(cancelled, 1)
+  assert.equal(downs, 2)
+})
+
+test('DragOrchestrator and InteractionRuntime self-heal leaked locks, stale playing state, and async races', async () => {
+  const { DragOrchestrator } = await import('../src/utils/dragmachine/index.js')
+  const { InteractionRuntime } = await import('../src/utils/interaction/runtime.js')
+  const motionManager = {
+    playing: false,
+    groups: { idle: 'idle' },
+    state: { reservedGroup: undefined },
+    on: () => {},
+  }
+  const core = makeCoreModel(['ParamA'])
+  const model = {
+    internalModel: {
+      coreModel: core,
+      motionManager,
+      settings: { motions: { idle: [{ File: 'idle.motion3.json' }, { File: 'idle1.motion3.json' }], touch_head: [{ File: 'touch_head.motion3.json' }] } },
+    },
+  }
+  let resolvePlay = null
+  let nextPlayResult = true
+  let deferPlay = false
+  const orch = new DragOrchestrator(
+    model,
+    {
+      skin_id: 'lock_heal_test',
+      idle_index: { 0: 'idle', 1: 'idle1' },
+      entries: [
+        { id: 1, draw_able_name: 'ZoneA', parameter: 'ParamA', mode: 1, range: [0, 1], action_trigger: { type: 2, action: 'touch_idle1' }, action_trigger_active: { idle: 1, enable: ['touch_idle17'] } },
+      ],
+    },
+    () => (deferPlay ? new Promise((resolve) => { resolvePlay = () => resolve(nextPlayResult) }) : Promise.resolve(nextPlayResult)),
+  )
+  // 1. Leaked machineAble and stale isPlaying heal on next step() when nothing is active/playing.
+  orch.pressLock('test leak', true)
+  orch.isPlaying = true
+  orch.playActionName = 'touch_head'
+  orch.step(1 / 60)
+  assert.equal(orch.machineAble, false)
+  assert.equal(orch.isPlaying, false)
+
+  // 2. resetAll() cancels an in-flight async onActionApply so stale activeData cannot re-lock whitelist.
+  deferPlay = true
+  const inflight = orch.onActionApply(orch.machines[0], 'touch_idle1', { enable: ['touch_idle17'] })
+  orch.resetAll()
+  resolvePlay()
+  await inflight
+  assert.deepEqual(orch.enablePlayActions, [])
+
+  // 3. Failed idle pre-switch reverts idleIndex cleanly.
+  deferPlay = false
+  nextPlayResult = false
+  await orch.onActionApply(orch.machines[0], 'idle', { idle: 1, enable: ['touch_idle17'] })
+  assert.equal(orch.idleIndex, 0)
+
+  // 4. InteractionRuntime heals stale non-idle pending when motionManager is no longer playing.
+  const rt = new InteractionRuntime(model, { clips: { touch_head: {} } })
+  rt.trackMotionStart('touch_head', 0)
+  assert.equal(rt.canPlay('touch_body'), false)
+  rt.syncPlayingState()
+  assert.equal(rt.canPlay('touch_body'), true)
+})

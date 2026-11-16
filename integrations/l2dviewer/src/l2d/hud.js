@@ -131,6 +131,7 @@ export function createTickerCallback(ctx) {
   // 差分采样已注册的模型实例：每次挂载换新模型，逐模型注册一次 beforeModelUpdate 钩子
   let diffModel = null
   return () => {
+    ctx.runtime?.syncPlayingState?.()
     // 拖拽参数机每帧步进（平滑趋近/回弹倒计时/点击确认窗口/触发调度）
     ctx.orch?.step(ctx.app.ticker.deltaMS / 1000)
     const live = ctx.hintsCtl.update()

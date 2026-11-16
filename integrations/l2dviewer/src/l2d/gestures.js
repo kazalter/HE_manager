@@ -12,6 +12,7 @@ const GAZE_START_THRESHOLD = 3
  */
 export function createGestures(ctx) {
   let pressing = false
+  let activePointerId = null
   let dragging = false
   let downX = 0
   let downY = 0
@@ -112,6 +113,9 @@ export function createGestures(ctx) {
   }
 
   function onPointerDown(e) {
+    // 仅响应主按键/触控：右键菜单或侧键会吞掉 pointerup，导致机器按压锁滞留
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    if (pressing) onPointerCancel()
     const { x, y } = pointerPos(e)
     // 指针捕获：按下后无论在哪里松手（HUD 浮层上、画布外）pointerup 都保证送达画布。机器按压依赖 down/up 成对收尾（up 清 _active 与按压锁），鼠标没有隐式捕获，丢一次 up 会双滞留（按压锁与 _active 都不清）
     try {
@@ -120,6 +124,7 @@ export function createGestures(ctx) {
       /* 指针已释放等边缘态：捕获失败按无捕获走 */
     }
     pressing = true
+    activePointerId = e.pointerId ?? null
     dragging = false
     downX = x
     downY = y
@@ -138,8 +143,9 @@ export function createGestures(ctx) {
   }
 
   function onPointerMove(e) {
-    const { x, y } = pointerPos(e)
     if (!pressing) return
+    if (activePointerId !== null && e.pointerId !== undefined && e.pointerId !== activePointerId) return
+    const { x, y } = pointerPos(e)
     maxDist = Math.max(maxDist, Math.hypot(x - downX, y - downY))
     if (!dragging && maxDist > GAZE_START_THRESHOLD) dragging = true
     // 视线只在按住拖动后跟随，且持有 ignore_react=1 机器时不扭转头身
@@ -153,7 +159,9 @@ export function createGestures(ctx) {
 
   function onPointerUp(e) {
     if (!pressing) return
+    if (activePointerId !== null && e.pointerId !== undefined && e.pointerId !== activePointerId) return
     pressing = false
+    activePointerId = null
     // 松手视线回正：焦点归零，focusController 内部缓动过渡
     resetGaze()
     // 换模型窗口期 ctx.model 已指向未揭幕的新模型，不可交互
@@ -187,6 +195,7 @@ export function createGestures(ctx) {
   function onPointerCancel() {
     if (!pressing) return
     pressing = false
+    activePointerId = null
     resetGaze()
     // 拖拽被系统打断（移出画布等）：机器按压作废，不构成点击
     ctx.orch?.onCancel()

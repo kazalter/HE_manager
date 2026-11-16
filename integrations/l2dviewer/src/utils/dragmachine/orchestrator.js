@@ -216,12 +216,14 @@ export class DragOrchestrator {
 
   /** 机器触发 -> 播放动作。action 非空且真的播出去（存在 + 白名单放行 + 引擎接受）才应用 activeData；action 为空则直接应用（游戏"空触发"分支）。 */
   async onActionApply(machine, action, activeData) {
+    const seq = (this._actionApplySeq = (this._actionApplySeq ?? 0) + 1)
     if (action) {
       // action='idle' 先切变体后播：游戏里 play("idle") 的 SetAction 与 applyActiveData 的 SetInteger("idle",n) 同帧落账（live2d.lua CT:286-291），Animator 下一帧才评估迁移——实际播出的就是 activeData 指向的新变体子状态，且游戏播放器（整数迁移）不存在"重播正在循环的同支 idle"这回事，恒成功
       // 移植端 playLuaAction 重播在循环的同支会被引擎 MotionState.reserve 以 "Motion is already playing" 拒绝（播放失败 → activeData 不入账）
       // 先落账变体再播，playLuaAction 按 idleClipFor(新变体) 解析出新 clip；游戏对 idle_focus=1 的空动作机同款先切后播先例（CT:280-284）
       // 选支只做一次并带给 applyActiveData——数组 idle 的两次随机不得各选各的；新旧变体解析出同一 clip 时预切无意义（引擎照样拒绝同支），维持原序
       let picked
+      const prevIdleIndex = this.idleIndex
       if (
         action === 'idle' &&
         activeData?.idle != null &&
@@ -240,6 +242,7 @@ export class DragOrchestrator {
       // playAction 返回引擎的真实播放结果（async）：拒播时 activeData 不入账，否则 idle 变体号/白名单会记到一次没播出去的动作上
       // 先切路径的变体号是唯一例外——游戏侧该路径无失败形态（见上），变体先行落账与播出强绑定
       const played = await this.playAction(action)
+      if (seq !== this._actionApplySeq) return
       // debug 读数：触发链关键步，debugHook 接线见 l2d/mount.js
       this.debug?.(
         `${machine.parameterName} 触发 ${action}` +
@@ -256,6 +259,8 @@ export class DragOrchestrator {
         this.notice(1, { action })
         if (picked != null) this.applyActiveData(machine.id, activeData, true, null, picked)
         else this.applyActiveData(machine.id, activeData, true)
+      } else if (picked != null) {
+        this.changeIdleIndex(prevIdleIndex, false)
       }
     } else {
       this.applyActiveData(machine.id, activeData, true)
@@ -384,7 +389,21 @@ export class DragOrchestrator {
   // ---- 每帧驱动与参数图层 ----
 
   step(dt) {
-    for (const m of this.machines) m.step(dt, performance.now() / 1000, this.isPlaying, this.playActionName)
+    const manager = this.model?.internalModel?.motionManager
+    if (
+      this.isPlaying &&
+      manager &&
+      typeof manager.playing === 'boolean' &&
+      !manager.playing &&
+      manager.state?.reservedGroup === undefined
+    ) {
+      this.noteMotionFinish()
+    }
+    const now = performance.now() / 1000
+    for (const m of this.machines) m.step(dt, now, this.isPlaying, this.playActionName)
+    if (this.machineAble && !this.machines.some((m) => m._active || m.clickTriggerTime != null)) {
+      this.pressLock('无按压自愈解锁', false)
+    }
   }
 
   /** 机器参数图层（游戏 AddParameterValue/ChangeParameterData 的叠加源）：mode 1=Override 直接写机器值、2=Additive 叠加、3=Multiply 相乘；relation 联动参数随后写入（游戏对 enable 的 relation 逐帧 ChangeParameterData，mode 缺省回落机器 mode）。
@@ -469,6 +488,7 @@ export class DragOrchestrator {
 
   /** 全量复位（游戏 ClearLive2dSave）：清存档、机器回 startValue、idle 归零、白名单清空 */
   resetAll() {
+    this._actionApplySeq = (this._actionApplySeq ?? 0) + 1
     for (const m of this.machines) {
       this.saveValue(String(m.id), null)
       this.saveValue(`${m.id}__listIndex`, null)
