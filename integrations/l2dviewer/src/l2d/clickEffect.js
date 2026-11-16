@@ -236,6 +236,9 @@ export function createClickEffect(app, view, getVisible) {
 
   return {
     update,
+    onPointerDown: onDown,
+    onPointerMove: onMove,
+    onPointerUp: onUp,
     destroy() {
       view.removeEventListener('pointerdown', onDown)
       view.removeEventListener('pointermove', onMove)

@@ -23,6 +23,7 @@ const props = defineProps({
   immersive: { type: Boolean, default: false },
   controlsVisible: { type: Boolean, default: true },
   paused: { type: Boolean, default: false },
+  wallpaper: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['motions', 'enter-fullscreen', 'stage-result', 'playback-state'])
@@ -266,21 +267,25 @@ onMounted(async () => {
   // 交互点提示逐帧跟随模型（顶点/透明度/门控状态都在变），HUD 取其返回读数；
   // 末参取编排器：提示标签按 l2d.json 显示分区驱动的参数（网格名与反应
   // 编号在部分皮肤是错位的，如 shengluyisi_5 的 TouchDrag23 -> touch_drag25）
-  ctx.hintsCtl = createInteractionHints(app, () => ctx.runtime, () => showHints.value && props.controlsVisible, () => ctx.orch)
+  ctx.hintsCtl = props.wallpaper
+    ? { rebuild() {}, destroy() {} }
+    : createInteractionHints(app, () => ctx.runtime, () => showHints.value && props.controlsVisible, () => ctx.orch)
   // 触点涟漪：独立于模型，只依赖 canvas 指针事件；update 走同一 ticker
   rippleCtl = createClickEffect(app, view, () => showRipple.value && !adjustMode.value)
   app.ticker.add(() => rippleCtl.update(app.ticker.deltaMS / 1000))
-  app.ticker.add(createTickerCallback(ctx))
-  // FPS 用 0.5s 窗口帧计数：ticker.FPS 读的 elapsedMS 在节流跳帧期间仍每 rAF 重算，采样会落中
-  // 跳帧周期的短读数（锁帧时显示 100+）；ticker 监听器只在帧真正执行的 tick 触发，计数即真实帧率
-  let fpsFrames = 0
-  app.ticker.add(() => {
-    fpsFrames++
-  })
-  fpsTimer = setInterval(() => {
-    fps.value = fpsFrames * 2
-    fpsFrames = 0
-  }, 500)
+  if (!props.wallpaper) {
+    app.ticker.add(createTickerCallback(ctx))
+    // FPS 用 0.5s 窗口帧计数：ticker.FPS 读的 elapsedMS 在节流跳帧期间仍每 rAF 重算，采样会落中
+    // 跳帧周期的短读数（锁帧时显示 100+）；ticker 监听器只在帧真正执行的 tick 触发，计数即真实帧率
+    let fpsFrames = 0
+    app.ticker.add(() => {
+      fpsFrames++
+    })
+    fpsTimer = setInterval(() => {
+      fps.value = fpsFrames * 2
+      fpsFrames = 0
+    }, 500)
+  }
   // ResizeObserver 兼顾窗口变化与容器变化（如侧栏收起/展开）
   resizeObserver = new ResizeObserver(() => {
     if (!canvasHost.value?.clientWidth || !canvasHost.value?.clientHeight) return
@@ -320,7 +325,7 @@ onBeforeUnmount(() => {
 watch(() => props.modelUrl, (url) => url && mountModel(ctx, url))
 
 /** 供外部（状态触发面板）直接播放指定动作组 */
-defineExpose({ play: (group) => ctx.actions.playMotion(group), wallpaperPointer: (pointer) => routeWallpaperPointer(gestures, view, pointer) })
+defineExpose({ play: (group) => ctx.actions.playMotion(group), wallpaperPointer: (pointer) => routeWallpaperPointer(gestures, view, pointer, rippleCtl) })
 </script>
 
 <template>
@@ -343,7 +348,7 @@ defineExpose({ play: (group) => ctx.actions.playMotion(group), wallpaperPointer:
       @toggle-ripple="showRipple = !showRipple"
       @toggle-lockframe="lockFrame = !lockFrame" @toggle-hidedev="hideDev = !hideDev"
       @reset="actions.resetInteraction()" />
-    <p v-if="status" class="status">{{ status }}</p>
+    <p v-if="status && (!wallpaper || status.startsWith('加载失败') || status.startsWith('舞台初始化失败'))" class="status">{{ status }}</p>
   </div>
 </template>
 

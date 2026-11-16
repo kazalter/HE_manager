@@ -63,9 +63,15 @@ contextBridge.exposeInMainWorld(
     l2dUpdateStart: () => invoke('he:l2d-update-start'),
     l2dUpdateStatus: () => invoke('he:l2d-update-status'),
     wallpaperState: () => invoke('he:wallpaper-state'),
-    wallpaperStart: (modelId) => invoke('he:wallpaper-start', modelId),
+    wallpaperStart: (modelId, options) => invoke('he:wallpaper-start', modelId, options),
     wallpaperStop: () => invoke('he:wallpaper-stop'),
     wallpaperPreferences: (value) => invoke('he:wallpaper-preferences', value),
+    onWallpaperChanged: (callback) => {
+      if (typeof callback !== 'function') throw new Error('无效的壁纸状态监听器');
+      const listener = (_event, value) => callback(value);
+      ipcRenderer.on('he:wallpaper-changed', listener);
+      return () => ipcRenderer.removeListener('he:wallpaper-changed', listener);
+    },
     authentication: () => invoke('he:authentication'),
     login: (value) => invoke('he:login', value),
     logout: () => invoke('he:logout'),

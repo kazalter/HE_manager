@@ -14,7 +14,7 @@ class FakeWindow extends EventEmitter {
       this.messages.push(args);
       if (args[0] === 'he:wallpaper-pointer') this.events.push(args[1]);
     };
-    this.webContents.setAudioMuted = () => {};
+    this.webContents.setAudioMuted = (value) => { this.muted = value; };
     this.webContents.setWindowOpenHandler = () => {};
     FakeWindow.all.push(this);
   }
@@ -150,4 +150,75 @@ test('a cancelled loading window cannot replace or destroy a newer wallpaper', a
     assert.equal(wallpaper.state().running, true);
     await wallpaper.stop();
   } finally { FakeWindow.prototype.loadURL = original; }
+});
+
+test('wallpaper creates borderless non-resizable window and deduplicates unchanged activity messages', async () => {
+  const { wallpaper } = fixture();
+  await wallpaper.start('test_1', true);
+  const owner = FakeWindow.all[0];
+  assert.equal(owner.options.resizable, false);
+  assert.equal(owner.options.thickFrame, false);
+  assert.equal(owner.options.hasShadow, false);
+  assert.equal(owner.options.roundedCorners, false);
+  const before = owner.messages.filter(([c]) => c === 'he:wallpaper-activity').length;
+  wallpaper.parse('state 0 10 10 0 0', owner);
+  wallpaper.updateActivity();
+  const after = owner.messages.filter(([c]) => c === 'he:wallpaper-activity').length;
+  assert.equal(after, before);
+  wallpaper.setMuted(false);
+  assert.equal(owner.muted, false);
+  assert.equal(wallpaper.state().muted, false);
+  await wallpaper.stop();
+});
+
+test('switching wallpaper keeps previous window until replacement model is ready and restores on failure', async () => {
+  FakeWindow.all = [];
+  const children = [];
+  const spawnArgs = [];
+  let wallpaper;
+  let autoReport = true;
+  const spawnProcess = (_bin, args) => {
+    spawnArgs.push(args);
+    const child = new EventEmitter(); child.stdout = new PassThrough(); child.stderr = new PassThrough();
+    child.kill = () => { child.killed = true; child.emit('exit', 0); };
+    children.push(child); setImmediate(() => {
+      child.stdout.write('ready\n');
+      const owner = wallpaper.window;
+      if (owner && autoReport) wallpaper.modelResult({ sender: owner.webContents, senderFrame: owner.webContents.mainFrame }, true);
+    });
+    return child;
+  };
+  const screen = { getPrimaryDisplay: () => ({ id: 1, bounds: { x: 0, y: 0, width: 1000, height: 800 } }), screenToDipPoint: (p) => p };
+  const powerMonitor = new EventEmitter();
+  wallpaper = new Wallpaper({ BrowserWindow: FakeWindow, screen, powerMonitor, root: '.', platform: 'win32', spawnProcess });
+
+  await wallpaper.start('first', true);
+  const firstWindow = FakeWindow.all[0];
+  const firstChild = children[0];
+  autoReport = false;
+  const switching = wallpaper.start('second', true);
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(firstWindow.destroyed, false);
+  assert.equal(firstChild.killed, undefined);
+  assert.equal(spawnArgs[1][2], '123');
+  const secondWindow = FakeWindow.all[1];
+  wallpaper.modelResult({ sender: secondWindow.webContents, senderFrame: secondWindow.webContents.mainFrame }, true);
+  await switching;
+  assert.equal(firstWindow.destroyed, true);
+  assert.equal(firstChild.killed, true);
+  assert.equal(wallpaper.state().modelId, 'second');
+
+  // Failing switch restores the previous running wallpaper.
+  const failing = wallpaper.start('broken', true);
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  const thirdWindow = FakeWindow.all[2];
+  wallpaper.modelResult({ sender: thirdWindow.webContents, senderFrame: thirdWindow.webContents.mainFrame }, false);
+  await assert.rejects(failing, /皮肤加载失败/);
+  assert.equal(thirdWindow.destroyed, true);
+  assert.equal(secondWindow.destroyed, false);
+  assert.equal(wallpaper.state().running, true);
+  assert.equal(wallpaper.state().modelId, 'second');
+  await wallpaper.stop();
 });

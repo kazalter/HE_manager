@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { Check, ChevronDown, CircleAlert, Download, LoaderCircle, Monitor, X } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { Check, ChevronDown, CircleAlert, Download, LoaderCircle, Monitor, Square, X } from 'lucide-vue-next'
 import { desktopBridge, desktopSession, desktopState } from '../desktop'
-import type { L2dUpdateState } from '../desktop-contract'
+import type { L2dUpdateState, WallpaperState } from '../desktop-contract'
 
 const viewer = ref<HTMLIFrameElement | null>(null)
 const immersive = ref(false)
 const selectedModel = ref('')
 const wallpaperBusy = ref(false)
 const wallpaperMessage = ref('')
+const wallpaperState = ref<WallpaperState>({ running: false, modelId: '', pauseWhenCovered: true, playing: null })
 const update = ref<L2dUpdateState>({ running: false, message: '', failures: [] })
 const viewerRevision = ref(0)
 const updateOpen = ref(false)
@@ -17,7 +18,23 @@ const dismissedKey = 'he-l2d-update-dismissed'
 let firstUpdateRead = true
 let startError = false
 let timer: ReturnType<typeof setInterval> | undefined
+let unsubscribeWallpaper: (() => void) | undefined
+let noticeTimer: ReturnType<typeof setTimeout> | undefined
 
+const isCurrentWallpaper = computed(() =>
+  wallpaperState.value.running && !!selectedModel.value && wallpaperState.value.modelId === selectedModel.value,
+)
+const wallpaperActionLabel = computed(() => {
+  if (wallpaperBusy.value) return '正在设置'
+  if (isCurrentWallpaper.value) return '壁纸运行中'
+  if (wallpaperState.value.running) return '切换壁纸'
+  return '设为壁纸'
+})
+
+async function refreshWallpaper() {
+  if (!desktopBridge?.wallpaperState) return
+  wallpaperState.value = await desktopBridge.wallpaperState()
+}
 async function refreshUpdate() {
   if (!desktopBridge?.l2dUpdateStatus || startError) return
   const wasRunning = update.value.running
@@ -46,14 +63,34 @@ function onViewerMessage(event: MessageEvent) {
   }
 }
 
+function showWallpaperNotice(message: string, autoClose = false) {
+  clearTimeout(noticeTimer)
+  wallpaperMessage.value = message
+  wallpaperOpen.value = true
+  if (autoClose) {
+    noticeTimer = setTimeout(() => { wallpaperOpen.value = false }, 4000)
+  }
+}
+
 async function setWallpaper() {
   if (!desktopBridge || !selectedModel.value) return
   wallpaperBusy.value = true; wallpaperMessage.value = ''
   wallpaperOpen.value = true
   try {
-    await desktopBridge.wallpaperStart(selectedModel.value)
-    wallpaperMessage.value = '已设置为桌面壁纸，可在设置中停止或调整省电选项。'
-  } catch (error) { wallpaperMessage.value = error instanceof Error ? error.message : '无法设置壁纸' }
+    const result = await desktopBridge.wallpaperStart(selectedModel.value)
+    if (result) wallpaperState.value = result
+    showWallpaperNotice('已设置为桌面壁纸，可在设置中调整省电、静音与托盘选项。', true)
+  } catch (error) { showWallpaperNotice(error instanceof Error ? error.message : '无法设置壁纸') }
+  finally { wallpaperBusy.value = false }
+}
+
+async function stopWallpaper() {
+  if (!desktopBridge?.wallpaperStop) return
+  wallpaperBusy.value = true
+  try {
+    wallpaperState.value = await desktopBridge.wallpaperStop()
+    showWallpaperNotice('已停止桌面壁纸。', true)
+  } catch (error) { showWallpaperNotice(error instanceof Error ? error.message : '无法停止壁纸') }
   finally { wallpaperBusy.value = false }
 }
 
@@ -61,11 +98,18 @@ onMounted(() => {
   window.addEventListener('message', onViewerMessage)
   if (desktopBridge && desktopState.platform === 'win32') {
     void refreshUpdate().catch(() => {})
-    timer = setInterval(() => { void refreshUpdate().catch(() => {}) }, 1500)
+    void refreshWallpaper().catch(() => {})
+    unsubscribeWallpaper = desktopBridge.onWallpaperChanged?.((next) => { wallpaperState.value = next })
+    timer = setInterval(() => {
+      void refreshUpdate().catch(() => {})
+      void refreshWallpaper().catch(() => {})
+    }, 1500)
   }
 })
 onBeforeUnmount(() => {
   if (timer) clearInterval(timer)
+  clearTimeout(noticeTimer)
+  unsubscribeWallpaper?.()
   window.removeEventListener('message', onViewerMessage)
   document.body.classList.remove('he-l2d-immersive')
 })
@@ -76,7 +120,8 @@ onBeforeUnmount(() => {
     <iframe :key="desktopSession.generation + ':' + viewerRevision" ref="viewer" src="/l2d/" title="碧蓝航线 Live2D 皮肤查看器" allow="fullscreen" allowfullscreen></iframe>
     <div v-if="desktopBridge && desktopState.platform === 'win32' && !immersive" class="viewer-actions">
       <div class="action-row">
-        <button class="action secondary" type="button" :disabled="!selectedModel || wallpaperBusy" @click="setWallpaper"><Monitor :size="16" />{{ wallpaperBusy ? '正在设置' : '设为壁纸' }}</button>
+        <button class="action secondary" :class="{ active: isCurrentWallpaper }" type="button" :disabled="!selectedModel || wallpaperBusy" @click="setWallpaper"><Monitor :size="16" />{{ wallpaperActionLabel }}</button>
+        <button v-if="wallpaperState.running" class="action secondary" type="button" :disabled="wallpaperBusy" title="停止桌面壁纸" @click="stopWallpaper"><Square :size="14" />停止壁纸</button>
         <button v-if="desktopBridge.l2dUpdateStart && !update.running" class="action primary" type="button" @click="startUpdate"><Download :size="16" />继续解包</button>
         <button v-else-if="desktopBridge.l2dUpdateStart" class="action primary" type="button" @click="showUpdate"><LoaderCircle :size="16" class="spin" />查看进度</button>
         <button v-if="!update.running && update.message && !updateOpen" class="action icon-action" type="button" aria-label="查看解包结果" title="查看解包结果" @click="showUpdate"><ChevronDown :size="16" /></button>
@@ -104,6 +149,7 @@ iframe { width: 100%; height: 100%; border: 0; background: #101014; display: blo
 .action, .close { display: inline-flex; align-items: center; justify-content: center; gap: 7px; cursor: pointer; }
 .action { min-height: 38px; border: 1px solid #ffffff20; border-radius: 10px; padding: 0 13px; font-weight: 600; color: #e9e8ef; box-shadow: 0 6px 24px #0003; }
 .secondary, .icon-action { background: #1a1b25ed; }
+.action.active { border-color: #8178ef; color: #d9d5ff; }
 .primary { background: #6a61d8; border-color: #8178ef; color: white; }
 .action:hover { filter: brightness(1.16); } .action:disabled { opacity: .45; cursor: default; filter: none; }
 .icon-action { padding: 0 10px; }

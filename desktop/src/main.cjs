@@ -6,6 +6,8 @@ const {
   ipcMain,
   dialog,
   Menu,
+  Tray,
+  nativeImage,
   safeStorage,
   screen,
   powerMonitor,
@@ -58,8 +60,8 @@ if (baselineMode || uiTestConfigPath) {
     app.exit(1);
   }, uiTestConfigPath ? 300000 : 60000).unref();
 }
-let window, cache, settings, settingsFile, session, wallpaper, l2dUpdate;
-let applicationReady = false;
+let window, cache, l2dCache, settings, settingsFile, session, wallpaper, l2dUpdate, tray;
+let applicationReady = false, autoRestoreAttempted = false;
 const embeddedPlayer = new EmbeddedPlayer({ root, sharedTexture: require('electron').sharedTexture, getWindow: () => window });
 const player = new PlayerSession({ embeddedPlayer, getWindow: () => window, onBeforeVideoOpen: () => cache?.cancelPending?.() });
 const legacyPlayer = new Player(path.join(root, "resources/shaders"));
@@ -90,6 +92,11 @@ const defaults = {
   imageMode: "off",
   engines: {},
   wallpaperPauseWhenCovered: true,
+  wallpaperMuted: true,
+  wallpaperKeepInTray: true,
+  wallpaperAutoRestore: true,
+  wallpaperModelId: "",
+  wallpaperDisplayId: null,
 };
 let settingsWrites = Promise.resolve();
 function saveSettings() {
@@ -172,6 +179,115 @@ function handle(name, callback) {
     }
   });
 }
+function wallpaperSnapshot() {
+  return {
+    ...(wallpaper?.state() || { running: false, modelId: '', pauseWhenCovered: true, playing: null }),
+    muted: settings?.wallpaperMuted !== false,
+    keepInTray: settings?.wallpaperKeepInTray !== false,
+    autoRestore: settings?.wallpaperAutoRestore !== false,
+    displayId: wallpaper?.state().displayId ?? settings?.wallpaperDisplayId ?? null,
+    displays: wallpaper?.displays() || [],
+  };
+}
+function showMainWindow() {
+  if (window && !window.isDestroyed()) {
+    if (window.isMinimized()) window.restore();
+    window.show();
+    window.focus();
+  } else if (applicationReady) {
+    void createWindow().catch(() => {});
+  }
+}
+function destroyTray() {
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
+}
+function syncTray() {
+  if (process.platform !== 'win32' || baselineMode || uiTestConfigPath) return;
+  const running = !!wallpaper?.state().running;
+  const hiddenWindow = !!window && !window.isDestroyed() && !window.isVisible();
+  if (!running && !hiddenWindow) {
+    destroyTray();
+    return;
+  }
+  if (!tray) {
+    const icon = nativeImage.createFromPath(path.join(root, 'resources/icons/he.ico'));
+    tray = new Tray(icon);
+    tray.setToolTip('HE Manager');
+    tray.on('double-click', showMainWindow);
+  }
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: '打开 HE Manager', click: showMainWindow },
+    { type: 'separator' },
+    {
+      label: '其他应用在前台时暂停壁纸',
+      type: 'checkbox',
+      checked: settings.wallpaperPauseWhenCovered !== false,
+      click: (item) => {
+        settings.wallpaperPauseWhenCovered = item.checked;
+        wallpaper?.setPauseWhenCovered(item.checked);
+        void saveSettings();
+        syncTray();
+      },
+    },
+    {
+      label: '壁纸静音',
+      type: 'checkbox',
+      checked: settings.wallpaperMuted !== false,
+      click: (item) => {
+        settings.wallpaperMuted = item.checked;
+        wallpaper?.setMuted(item.checked);
+        void saveSettings();
+        syncTray();
+      },
+    },
+    {
+      label: '停止壁纸',
+      enabled: running,
+      click: () => {
+        void wallpaper?.stop().then(async () => {
+          settings.wallpaperModelId = '';
+          await saveSettings();
+          syncTray();
+        }).catch(() => {});
+      },
+    },
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => {
+        app._heQuitting = true;
+        app.quit();
+      },
+    },
+  ]));
+}
+function emitWallpaperChanged() {
+  syncTray();
+  if (window && !window.isDestroyed()) {
+    window.webContents.send('he:wallpaper-changed', wallpaperSnapshot());
+  }
+}
+function maybeAutoRestoreWallpaper(authState) {
+  if (
+    autoRestoreAttempted ||
+    process.platform !== 'win32' ||
+    baselineMode ||
+    uiTestConfigPath ||
+    !authState?.user ||
+    !settings?.wallpaperAutoRestore ||
+    !settings?.wallpaperModelId ||
+    wallpaper?.state().running
+  ) return;
+  autoRestoreAttempted = true;
+  void wallpaper.start(settings.wallpaperModelId, {
+    pauseWhenCovered: settings.wallpaperPauseWhenCovered,
+    muted: settings.wallpaperMuted,
+    displayId: settings.wallpaperDisplayId,
+  }).catch(() => {});
+}
 function registerIPC() {
   handle('he:check-update', () => require('./update-check.cjs').checkUpdate(app.getVersion()));
   handle('he:open-releases', () => shell.openExternal(require('./update-check.cjs').RELEASES));
@@ -184,17 +300,73 @@ function registerIPC() {
   ipcMain.on('he:video-ready', (event) => { if (trusted(event)) player.ready(); });
   ipcMain.on('he:video-size', (event, value) => { if (trusted(event)) player.resize(value); });
   handle("he:configuration", configuration);
-  handle('he:wallpaper-state', () => wallpaper.state());
-  handle('he:wallpaper-start', async (modelId) => {
+  handle('he:wallpaper-state', () => wallpaperSnapshot());
+  handle('he:wallpaper-start', async (modelId, options) => {
     session.identity(session.snapshot().generation);
-    return wallpaper.start(modelId, settings.wallpaperPauseWhenCovered);
-  });
-  handle('he:wallpaper-stop', () => wallpaper.stop());
-  handle('he:wallpaper-preferences', async (value) => {
-    if (process.platform !== 'win32' || !value || typeof value.pauseWhenCovered !== 'boolean') throw new Error('无效的壁纸设置');
-    settings.wallpaperPauseWhenCovered = value.pauseWhenCovered;
+    const displayId = options && typeof options === 'object' && options.displayId !== undefined
+      ? options.displayId
+      : settings.wallpaperDisplayId;
+    const result = await wallpaper.start(modelId, {
+      pauseWhenCovered: settings.wallpaperPauseWhenCovered,
+      muted: settings.wallpaperMuted,
+      displayId,
+    });
+    settings.wallpaperModelId = result.modelId;
+    settings.wallpaperDisplayId = result.displayId ?? null;
     await saveSettings();
-    return wallpaper.setPauseWhenCovered(value.pauseWhenCovered);
+    emitWallpaperChanged();
+    return wallpaperSnapshot();
+  });
+  handle('he:wallpaper-stop', async () => {
+    await wallpaper.stop();
+    settings.wallpaperModelId = '';
+    await saveSettings();
+    emitWallpaperChanged();
+    return wallpaperSnapshot();
+  });
+  handle('he:wallpaper-preferences', async (value) => {
+    if (process.platform !== 'win32' || !value || typeof value !== 'object') throw new Error('无效的壁纸设置');
+    let updated = false;
+    let displayChanged = false;
+    if (value.pauseWhenCovered !== undefined) {
+      if (typeof value.pauseWhenCovered !== 'boolean') throw new Error('无效的壁纸设置');
+      settings.wallpaperPauseWhenCovered = value.pauseWhenCovered;
+      wallpaper.setPauseWhenCovered(value.pauseWhenCovered);
+      updated = true;
+    }
+    if (value.muted !== undefined) {
+      if (typeof value.muted !== 'boolean') throw new Error('无效的壁纸设置');
+      settings.wallpaperMuted = value.muted;
+      wallpaper.setMuted(value.muted);
+      updated = true;
+    }
+    if (value.keepInTray !== undefined) {
+      if (typeof value.keepInTray !== 'boolean') throw new Error('无效的壁纸设置');
+      settings.wallpaperKeepInTray = value.keepInTray;
+      updated = true;
+    }
+    if (value.autoRestore !== undefined) {
+      if (typeof value.autoRestore !== 'boolean') throw new Error('无效的壁纸设置');
+      settings.wallpaperAutoRestore = value.autoRestore;
+      updated = true;
+    }
+    if (value.displayId !== undefined) {
+      if (value.displayId !== null && typeof value.displayId !== 'number') throw new Error('无效的显示器设置');
+      displayChanged = settings.wallpaperDisplayId !== value.displayId;
+      settings.wallpaperDisplayId = value.displayId;
+      updated = true;
+    }
+    if (!updated) throw new Error('无效的壁纸设置');
+    await saveSettings();
+    if (displayChanged && wallpaper.state().running && wallpaper.state().modelId) {
+      await wallpaper.start(wallpaper.state().modelId, {
+        pauseWhenCovered: settings.wallpaperPauseWhenCovered,
+        muted: settings.wallpaperMuted,
+        displayId: settings.wallpaperDisplayId,
+      });
+    }
+    emitWallpaperChanged();
+    return wallpaperSnapshot();
   });
   handle("he:connect", async (value) => {
     const state = await session.connect(value);
@@ -332,6 +504,17 @@ async function protocolHandler(request) {
       if (headers.has('x-he-generation') && url.searchParams.has('he_session') && headers.get('x-he-generation') !== url.searchParams.get('he_session')) throw new SessionError(409, '资源会话已改变');
       url.searchParams.delete('he_session');
       if (/^\/manga\/\d+\/page\/\d+$/.test(url.pathname)) url.searchParams.set('track_progress', 'false');
+      if (request.method === 'GET' && l2dCache?.canCache(url.pathname)) {
+        session.identity(generation);
+        const cached = await l2dCache.get(settings.server, url.pathname);
+        if (cached) {
+          diagnosticStage(`l2d-cache-hit-${url.pathname}`);
+          return new Response(cached.body, {
+            status: 200,
+            headers: { 'Content-Type': cached.contentType, 'Cache-Control': 'no-store' },
+          });
+        }
+      }
       const options = { method: request.method, headers, signal: request.signal };
       if (!["GET", "HEAD"].includes(request.method)) options.body = await request.arrayBuffer();
       operation = 'proxy-fetch';
@@ -356,6 +539,11 @@ async function protocolHandler(request) {
         outgoing.delete(key);
       outgoing.set("Cache-Control", "no-store");
       operation = 'proxy-response';
+      if (request.method === 'GET' && response.status === 200 && l2dCache?.canCache(url.pathname)) {
+        const body = Buffer.from(await response.arrayBuffer());
+        void l2dCache.put(settings.server, url.pathname, outgoing.get('content-type') || 'application/octet-stream', body);
+        return new Response(body, { status: 200, headers: outgoing });
+      }
       return new Response(response.body, {
         status: response.status,
         headers: outgoing,
@@ -492,12 +680,27 @@ async function createWindow(test = false) {
   downloadSession.on('will-download', onDownload);
   window.on('close', (event) => {
     if (ownerWindow._heClosing) return;
+    if (
+      process.platform === 'win32' &&
+      !app._heQuitting &&
+      !baselineMode &&
+      !uiTestConfigPath &&
+      settings?.wallpaperKeepInTray !== false &&
+      wallpaper?.state().running
+    ) {
+      event.preventDefault();
+      ownerWindow.hide();
+      syncTray();
+      return;
+    }
     event.preventDefault(); ownerWindow._heClosing = true;
     void prepareWindowClose(ownerWindow).catch(() => {}).then(() => {
       cache?.allowed.clear();
+      destroyTray();
       return Promise.allSettled([player.stop(), cache?.close(), wallpaper?.stop()]);
     }).finally(() => { if (!ownerWindow.isDestroyed()) ownerWindow.destroy(); });
   });
+  window.on('show', syncTray);
   window.on("closed", () => {
     downloadSession.removeListener('will-download', onDownload);
     screen.removeListener('display-metrics-changed', onDisplayChange);
@@ -531,6 +734,11 @@ app.whenReady().then(async () => {
   if (!["off", "anime", "photo"].includes(settings.imageMode))
     settings.imageMode = "off";
   settings.wallpaperPauseWhenCovered = settings.wallpaperPauseWhenCovered !== false;
+  settings.wallpaperMuted = settings.wallpaperMuted !== false;
+  settings.wallpaperKeepInTray = settings.wallpaperKeepInTray !== false;
+  settings.wallpaperAutoRestore = settings.wallpaperAutoRestore !== false;
+  if (typeof settings.wallpaperModelId !== 'string') settings.wallpaperModelId = '';
+  if (settings.wallpaperDisplayId !== null && typeof settings.wallpaperDisplayId !== 'number') settings.wallpaperDisplayId = null;
   if (baselineOptions?.server) settings.server = baselineOptions.server;
   diagnosticStage('settings-loaded');
   const uiTestConfig = uiTestConfigPath ? JSON.parse(await fs.readFile(uiTestConfigPath, 'utf8')) : null;
@@ -544,7 +752,10 @@ app.whenReady().then(async () => {
     },
     server: settings.server,
     store: new CredentialStore(path.join(app.getPath('userData'), 'desktop-login.json'), safeStorage),
-    onChange: (state) => { if (window && !window.isDestroyed()) window.webContents.send('he:session-changed', state); },
+    onChange: (state) => {
+      if (window && !window.isDestroyed()) window.webContents.send('he:session-changed', state);
+      maybeAutoRestoreWallpaper(state);
+    },
     onInvalidate: async () => {
       const previous = cache; previous?.allowed.clear(); cache = createImageCache();
       await Promise.all([previous?.close(), player.stop(), wallpaper?.stop()]);
@@ -552,9 +763,18 @@ app.whenReady().then(async () => {
   });
   session.diagnosticRequests = diagnosticRequests;
   cache = createImageCache();
-  wallpaper = new (require('./wallpaper.cjs').Wallpaper)({ BrowserWindow, screen, powerMonitor, root });
+  l2dCache = new (require('./l2d-cache.cjs').L2dCache)(path.join(app.getPath('userData'), 'l2d-cache'));
+  wallpaper = new (require('./wallpaper.cjs').Wallpaper)({
+    BrowserWindow,
+    screen,
+    powerMonitor,
+    root,
+    onStateChange: () => emitWallpaperChanged(),
+  });
   wallpaper.pauseWhenCovered = settings.wallpaperPauseWhenCovered;
-  void session.restore().catch(() => {});
+  wallpaper.muted = settings.wallpaperMuted;
+  wallpaper.displayId = settings.wallpaperDisplayId;
+  void session.restore().then((state) => { maybeAutoRestoreWallpaper(state); }).catch(() => {});
   protocol.handle("he", protocolHandler);
   l2dUpdate = new (require('./l2d-update.cjs').L2dUpdate)({ session, repo: path.join(app.getPath('desktop'), 'HE_Project', 'L2Dviewer'), script: path.join(__dirname, 'l2d-unpack.py') });
   registerIPC();
@@ -765,6 +985,10 @@ app.whenReady().then(async () => {
 }).catch(() => {
   console.error("HE Manager startup failed; check configuration and runtime resources");
   app.exit(1);
+});
+app.on('before-quit', () => {
+  app._heQuitting = true;
+  destroyTray();
 });
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin" && !uiTestConfigPath) app.quit();

@@ -163,7 +163,7 @@ function playTrigger(id) {
     @pointerdown="pointerDown" @pointerup="pointerUp" @pointercancel="pointerUp">
     <!-- 舞台永远占满容器，两侧栏作为蒙板浮在上面 -->
     <L2dStage v-if="activeModel" ref="stageRef" class="stage" :key="activeModel.id" :model-url="activeModel.url"
-      :fill="0.8" :immersive="immersive" :paused="wallpaper && wallpaperPaused" :controls-visible="!wallpaper && (!immersive || showControls)" @stage-result="reportStage" @playback-state="reportPlayback" @motions="triggers = $event" @enter-fullscreen="enterFullscreen" />
+      :fill="wallpaper ? 1 : 0.8" :immersive="immersive" :wallpaper="wallpaper" :paused="wallpaper && wallpaperPaused" :controls-visible="!wallpaper && (!immersive || showControls)" @stage-result="reportStage" @playback-state="reportPlayback" @motions="triggers = $event" @enter-fullscreen="enterFullscreen" />
     <SkinTab v-if="!wallpaper" v-show="!immersive || showControls" v-model="activeId" :tabs="tabs" title="皮肤列表" />
     <StateTab v-if="!wallpaper" v-show="!immersive || showControls" :items="triggerItems" :active="activeTrigger" title="状态触发" @select="playTrigger" />
     <template v-if="immersive">

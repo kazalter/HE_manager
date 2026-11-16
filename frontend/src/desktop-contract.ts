@@ -36,9 +36,10 @@ export interface DesktopBridge {
   l2dUpdateStart?(): Promise<L2dUpdateState>
   l2dUpdateStatus?(): Promise<L2dUpdateState>
   wallpaperState(): Promise<WallpaperState>
-  wallpaperStart(modelId: string): Promise<WallpaperState>
+  wallpaperStart(modelId: string, options?: { displayId?: number | null }): Promise<WallpaperState>
   wallpaperStop(): Promise<WallpaperState>
-  wallpaperPreferences(value: { pauseWhenCovered: boolean }): Promise<WallpaperState>
+  wallpaperPreferences(value: WallpaperPreferencesPatch): Promise<WallpaperState>
+  onWallpaperChanged?(callback: (state: WallpaperState) => void): () => void
   authentication(): Promise<DesktopSessionSnapshot>
   login(value: { username: string; password: string; bootstrap?: boolean }): Promise<DesktopSessionSnapshot>
   logout(): Promise<DesktopSessionSnapshot>
@@ -66,5 +67,23 @@ export interface DesktopBridge {
   exitFullscreen?(): Promise<boolean>
 }
 export interface L2dUpdateState { running: boolean; message: string; failures: { id: string; error: string }[] }
-export interface WallpaperState { running: boolean; modelId: string; pauseWhenCovered: boolean; playing: boolean | null }
+export interface WallpaperDisplayInfo { id: number; label: string; width: number; height: number; primary: boolean }
+export interface WallpaperPreferencesPatch {
+  pauseWhenCovered?: boolean
+  muted?: boolean
+  keepInTray?: boolean
+  autoRestore?: boolean
+  displayId?: number | null
+}
+export interface WallpaperState {
+  running: boolean
+  modelId: string
+  pauseWhenCovered: boolean
+  muted?: boolean
+  keepInTray?: boolean
+  autoRestore?: boolean
+  displayId?: number | null
+  displays?: WallpaperDisplayInfo[]
+  playing: boolean | null
+}
 

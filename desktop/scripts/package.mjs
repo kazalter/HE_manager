@@ -36,7 +36,7 @@ dest.mkdir(parents=True,exist_ok=True)
 for name in ['src','ui']:
     shutil.copytree(root/name,dest/name,symlinks=True,dirs_exist_ok=True)
     print('Copied',name,flush=True)
-for name in ['shaders','licenses','test']:
+for name in ['shaders','licenses','test','icons']:
     shutil.copytree(root/'resources'/name,dest/'resources'/name,symlinks=True,dirs_exist_ok=True)
 shutil.copytree(root/'resources/runtime'/${JSON.stringify(target)},dest/'resources/runtime',symlinks=True,dirs_exist_ok=True)
 native=root/'native'

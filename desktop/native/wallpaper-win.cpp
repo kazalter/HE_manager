@@ -32,7 +32,7 @@ static bool desktopForeground(HWND foreground, HWND progman, const DesktopWindow
 
 // Chromium may retain non-client insets even for a frameless child window.
 // Match the drawable client area, not just the outer window, to the monitor.
-static void fitClientToMonitor(HWND target, const DesktopWindows& desktop, const RECT& monitor) {
+static void fitClientToMonitor(HWND target, const DesktopWindows& desktop, HWND insertAfter, const RECT& monitor) {
     RECT window{}, client{};
     if (!GetWindowRect(target, &window) || !GetClientRect(target, &client)) return;
     POINT clientOrigin{client.left, client.top};
@@ -46,8 +46,46 @@ static void fitClientToMonitor(HWND target, const DesktopWindows& desktop, const
     if (EqualRect(&window, &desired)) return;
     POINT origin{desired.left, desired.top};
     if (!ScreenToClient(desktop.layer, &origin)) return;
-    SetWindowPos(target, desktop.raised ? desktop.view : HWND_BOTTOM, origin.x, origin.y,
+    SetWindowPos(target, insertAfter, origin.x, origin.y,
         desired.right - desired.left, desired.bottom - desired.top, SWP_NOACTIVATE);
+}
+
+static bool discoverDesktop(HWND& progman, DesktopWindows& desktop) {
+    progman = FindWindowW(L"Progman", nullptr);
+    if (!progman) return false;
+    DWORD_PTR ignored = 0;
+    SendMessageTimeoutW(progman, 0x052c, 0x0d, 0x01, SMTO_ABORTIFHUNG, 1000, &ignored);
+    desktop = {};
+    EnumWindows(findDesktop, reinterpret_cast<LPARAM>(&desktop));
+    if (!desktop.layer) desktop.layer = FindWindowExW(progman, nullptr, L"WorkerW", nullptr);
+    return desktop.layer != nullptr && desktop.icons != nullptr;
+}
+
+static HWND resolveInsertAfter(const DesktopWindows& desktop, HWND target, HWND& behind) {
+    if (behind && (behind == target || !IsWindow(behind) || GetParent(behind) != desktop.layer)) {
+        behind = nullptr;
+    }
+    return behind ? behind : (desktop.raised ? desktop.view : HWND_BOTTOM);
+}
+
+static int attachToDesktop(HWND target, HWND& progman, DesktopWindows& desktop, HWND& behind, const RECT& monitor, LONG_PTR baseExStyle) {
+    if (desktop.raised) {
+        SetWindowLongPtrW(target, GWL_EXSTYLE, baseExStyle | WS_EX_LAYERED);
+        if (!SetLayeredWindowAttributes(target, 0, 255, LWA_ALPHA)) return 9;
+    } else {
+        SetWindowLongPtrW(target, GWL_EXSTYLE, baseExStyle);
+    }
+    SetLastError(0);
+    if (!SetParent(target, desktop.layer) && GetLastError()) return 6;
+    POINT origin{monitor.left, monitor.top};
+    ScreenToClient(desktop.layer, &origin);
+    const HWND insertAfter = resolveInsertAfter(desktop, target, behind);
+    if (!SetWindowPos(target, insertAfter, origin.x, origin.y,
+        monitor.right - monitor.left, monitor.bottom - monitor.top,
+        SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW)) return 8;
+    // Correct any non-client border insets immediately so no gap flashes on startup.
+    fitClientToMonitor(target, desktop, insertAfter, monitor);
+    return 0;
 }
 
 // LVM_HITTEST uses the receiving process's address space. If Explorer cannot
@@ -79,64 +117,76 @@ static bool isBackground(HWND icons, POINT point) {
 }
 
 int wmain(int argc, wchar_t** argv) {
-    if (argc != 3) return 2;
+    if (argc < 3 || argc > 4) return 2;
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     const HWND target = reinterpret_cast<HWND>(static_cast<uintptr_t>(_wcstoui64(argv[1], nullptr, 10)));
     const DWORD ownerPid = wcstoul(argv[2], nullptr, 10);
+    HWND behind = argc == 4 ? reinterpret_cast<HWND>(static_cast<uintptr_t>(_wcstoui64(argv[3], nullptr, 10))) : nullptr;
     DWORD actualPid = 0; GetWindowThreadProcessId(target, &actualPid);
     if (!IsWindow(target) || !ownerPid || actualPid != ownerPid) return 3;
-    const HWND progman = FindWindowW(L"Progman", nullptr);
-    if (!progman) return 4;
-    DWORD_PTR ignored = 0;
-    SendMessageTimeoutW(progman, 0x052c, 0x0d, 0x01, SMTO_ABORTIFHUNG, 1000, &ignored);
-    DesktopWindows desktop; EnumWindows(findDesktop, reinterpret_cast<LPARAM>(&desktop));
-    if (!desktop.layer) desktop.layer = FindWindowExW(progman, nullptr, L"WorkerW", nullptr);
-    if (!desktop.layer || !desktop.icons) return 5;
+    HWND progman = nullptr;
+    DesktopWindows desktop;
+    if (!discoverDesktop(progman, desktop)) return progman ? 5 : 4;
     HMONITOR monitor = MonitorFromWindow(target, MONITOR_DEFAULTTOPRIMARY);
     MONITORINFO monitorInfo{}; monitorInfo.cbSize = sizeof(monitorInfo);
     if (!GetMonitorInfoW(monitor, &monitorInfo)) return 7;
-    POINT origin{monitorInfo.rcMonitor.left, monitorInfo.rcMonitor.top};
-    ScreenToClient(desktop.layer, &origin);
+    POINT monitorAnchor{
+        (monitorInfo.rcMonitor.left + monitorInfo.rcMonitor.right) / 2,
+        (monitorInfo.rcMonitor.top + monitorInfo.rcMonitor.bottom) / 2,
+    };
     const LONG_PTR oldStyle = GetWindowLongPtrW(target, GWL_STYLE);
+    const LONG_PTR baseExStyle = GetWindowLongPtrW(target, GWL_EXSTYLE);
     // Electron's frameless top-level window can still carry a resize frame.
     // Once reparented, Windows reserves that non-client border inside the
     // monitor-sized window, leaving gaps around the rendered wallpaper.
-    SetWindowLongPtrW(target, GWL_STYLE, (oldStyle & ~(WS_POPUP | WS_CAPTION | WS_THICKFRAME)) | WS_CHILD);
-    if (desktop.raised) {
-        const LONG_PTR exStyle = GetWindowLongPtrW(target, GWL_EXSTYLE);
-        SetWindowLongPtrW(target, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
-        if (!SetLayeredWindowAttributes(target, 0, 255, LWA_ALPHA)) return 9;
+    SetWindowLongPtrW(target, GWL_STYLE,
+        (oldStyle & ~(WS_POPUP | WS_CAPTION | WS_THICKFRAME | WS_BORDER | WS_DLGFRAME)) | WS_CHILD);
+    const int attachResult = attachToDesktop(target, progman, desktop, behind, monitorInfo.rcMonitor, baseExStyle);
+    if (attachResult != 0) {
+        if (attachResult == 6) SetWindowLongPtrW(target, GWL_STYLE, oldStyle);
+        return attachResult;
     }
-    SetLastError(0);
-    if (!SetParent(target, desktop.layer) && GetLastError()) {
-        SetWindowLongPtrW(target, GWL_STYLE, oldStyle); return 6;
-    }
-    if (!SetWindowPos(target, desktop.raised ? desktop.view : HWND_BOTTOM, origin.x, origin.y,
-        monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
-        monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
-        SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW)) return 8;
     printf("ready\n"); fflush(stdout);
-    bool pressed = false;
+    bool pressed = false, forwarding = false;
     bool lastForeground = false, lastDown = false, lastForwarding = false, sentState = false;
     POINT lastCursor{};
     unsigned int ticks = 0;
-    while (IsWindow(target) && IsWindow(desktop.layer) && IsWindow(desktop.icons)) {
-        if (++ticks % 60 == 0) {
-            // Resolution, DPI, or primary monitor may change while running.
-            POINT primaryPoint{0, 0};
-            monitor = MonitorFromPoint(primaryPoint, MONITOR_DEFAULTTOPRIMARY);
+    while (IsWindow(target)) {
+        if (!IsWindow(desktop.layer) || !IsWindow(desktop.icons)) {
+            bool reattached = false;
+            for (int attempt = 0; attempt < 20 && IsWindow(target); ++attempt) {
+                Sleep(250);
+                if (discoverDesktop(progman, desktop) &&
+                    attachToDesktop(target, progman, desktop, behind, monitorInfo.rcMonitor, baseExStyle) == 0) {
+                    reattached = true;
+                    break;
+                }
+            }
+            if (!reattached) break;
+            ticks = 0;
+        }
+        ++ticks;
+        if (ticks <= 120 ? (ticks % 2 == 0) : (ticks % 60 == 0)) {
+            // Resolution, DPI, or monitor layout may change while running, and
+            // Electron's showInactive() can briefly re-apply non-client insets.
+            monitor = MonitorFromPoint(monitorAnchor, MONITOR_DEFAULTTOPRIMARY);
             MONITORINFO updated{}; updated.cbSize = sizeof(updated);
+            const HWND insertAfter = resolveInsertAfter(desktop, target, behind);
             if (GetMonitorInfoW(monitor, &updated) &&
                 !EqualRect(&updated.rcMonitor, &monitorInfo.rcMonitor)) {
                 monitorInfo = updated;
+                monitorAnchor = {
+                    (updated.rcMonitor.left + updated.rcMonitor.right) / 2,
+                    (updated.rcMonitor.top + updated.rcMonitor.bottom) / 2,
+                };
                 POINT nextOrigin{updated.rcMonitor.left, updated.rcMonitor.top};
                 ScreenToClient(desktop.layer, &nextOrigin);
-                SetWindowPos(target, desktop.raised ? desktop.view : HWND_BOTTOM, nextOrigin.x, nextOrigin.y,
+                SetWindowPos(target, insertAfter, nextOrigin.x, nextOrigin.y,
                     updated.rcMonitor.right - updated.rcMonitor.left,
                     updated.rcMonitor.bottom - updated.rcMonitor.top,
                     SWP_NOACTIVATE);
             }
-            fitClientToMonitor(target, desktop, monitorInfo.rcMonitor);
+            fitClientToMonitor(target, desktop, insertAfter, monitorInfo.rcMonitor);
         }
         const bool foreground = desktopForeground(GetForegroundWindow(), progman, desktop);
         POINT cursor{};
@@ -146,7 +196,6 @@ int wmain(int argc, wchar_t** argv) {
         const bool down = foreground && (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
         const bool background = foreground && down && !pressed && isBackground(desktop.icons, cursor);
         // Dragging can continue across a desktop icon only if it began on the background.
-        static bool forwarding = false;
         if (!foreground) forwarding = false;
         if (down && !pressed) forwarding = background;
         if (!sentState || foreground != lastForeground || down != lastDown || forwarding != lastForwarding ||
@@ -159,7 +208,7 @@ int wmain(int argc, wchar_t** argv) {
         }
         pressed = down;
         if (!down) forwarding = false;
-        Sleep(16);
+        Sleep(foreground ? 16 : 60);
     }
     return 0;
 }
