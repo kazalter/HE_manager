@@ -1,5 +1,6 @@
 import logging
 import os
+import stat
 import threading
 from contextlib import asynccontextmanager
 
@@ -37,7 +38,12 @@ from .dedup import worker as dedup_worker
 from .services import job_lifecycle
 from .services.external.pawchive import creator_images as pawchive_creator_images, downloader as pawchive_downloader
 from .services.external.pawchive.media_cache import media_cache as pawchive_media_cache
-from .services.thumbnails import THUMBNAIL_DIR, cleanup_orphaned_thumbnails
+from .services.thumbnails import (
+    THUMBNAIL_DIR,
+    accel_thumbnail_response,
+    cleanup_orphaned_thumbnails,
+    should_accel_thumbnail,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -130,9 +136,19 @@ app.include_router(x_import_routes.router)
 app.include_router(root_routes.router)
 
 class CachedThumbnailStaticFiles(StaticFiles):
-    """Serve thumbnail files with private browser caching to cut 304 roundtrips."""
+    """Serve thumbnail files with private browser caching and optional X-Accel-Redirect."""
 
     async def get_response(self, path: str, scope):
+        if should_accel_thumbnail(scope.get("headers", ())):
+            full_path, stat_result = self.lookup_path(path)
+            if stat_result is not None and stat.S_ISREG(stat_result.st_mode):
+                accel = accel_thumbnail_response(
+                    full_path,
+                    base_dir=self.directory,
+                    cache_control="private, max-age=86400",
+                )
+                if accel is not None:
+                    return accel
         response = await super().get_response(path, scope)
         if response.status_code in (200, 304):
             response.headers["Cache-Control"] = "private, max-age=86400"

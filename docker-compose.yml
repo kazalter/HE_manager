@@ -31,6 +31,7 @@ services:
       HE_PAWCHIVE_STORAGE_SENTINEL: "${HE_PAWCHIVE_STORAGE_SENTINEL:-}"
       # Media/cursor signing key; blank keeps an auto-generated key in /data.
       HE_PAWCHIVE_STREAM_SECRET: "${HE_PAWCHIVE_STREAM_SECRET:-}"
+      HE_THUMBNAIL_ACCEL_PREFIX: "/_internal_thumbnails"
       HE_AI_CONFIG_PATH: "/data/deepseek.json"
       HF_HOME: "/data/huggingface"
       SENTENCE_TRANSFORMERS_HOME: "/data/huggingface"
@@ -75,6 +76,7 @@ services:
     volumes:
       - ./frontend/dist:/usr/share/nginx/html:ro
       - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./volumes/thumbnails:/srv/.thumbnails:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
       interval: 30s

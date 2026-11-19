@@ -20,7 +20,12 @@ from ..database import get_db
 from ..services.manga_pages import get_manga_image_files, get_manga_page_dimensions
 from ..services.media_access import get_media_or_404
 from ..services.range_response import get_ranged_file_response
-from ..services.thumbnails import THUMBNAIL_DIR, remove_cover_thumbnails, remove_manga_page_thumbnails
+from ..services.thumbnails import (
+    THUMBNAIL_DIR,
+    remove_cover_thumbnails,
+    remove_manga_page_thumbnails,
+    serve_thumbnail_file,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -369,12 +374,20 @@ def get_mobile_media(media_id: int, _: models.User = Depends(auth.get_current_us
 
 
 @router.get("/mobile/thumbnails/{filename}")
-def get_mobile_thumbnail(filename: str, _: models.User = Depends(auth.get_current_user)):
+def get_mobile_thumbnail(
+    filename: str,
+    _: models.User = Depends(auth.get_current_user),
+    request: Request = None,
+):
     safe_name = os.path.basename(filename)
     thumb_path = os.path.join(THUMBNAIL_DIR, safe_name)
-    if not os.path.exists(thumb_path):
+    if not os.path.isfile(thumb_path):
         raise HTTPException(status_code=404, detail="Thumbnail not found")
-    return FileResponse(thumb_path)
+    return serve_thumbnail_file(
+        thumb_path,
+        request=request,
+        cache_control="private, max-age=86400",
+    )
 
 
 @router.get("/media/{media_id}", response_model=schemas.Media)
@@ -755,6 +768,7 @@ def get_manga_page(
     track_progress: bool = False,
     thumbnail: bool = False,
     db: Session = Depends(get_db),
+    request: Request = None,
 ):
     media = get_media_or_404(media_id, db)
     if media.media_type != "manga":
@@ -772,10 +786,11 @@ def get_manga_page(
     # a different image. Keep the media-id prefix for existing cleanup logic.
     thumb_path = os.path.join(THUMBNAIL_DIR, f"manga_page_{book.id}_{page_index}_v2.jpg") if thumbnail else None
     if thumbnail and thumb_path and os.path.exists(thumb_path):
-        return FileResponse(
+        return serve_thumbnail_file(
             thumb_path,
+            request=request,
             media_type="image/jpeg",
-            headers={"Cache-Control": "public, max-age=604800, immutable"},
+            cache_control="public, max-age=604800, immutable",
         )
 
     try:
@@ -824,10 +839,11 @@ def get_manga_page(
                     finally:
                         if temp_path and os.path.exists(temp_path):
                             os.unlink(temp_path)
-                return FileResponse(
+                return serve_thumbnail_file(
                     thumb_path,
+                    request=request,
                     media_type="image/jpeg",
-                    headers={"Cache-Control": "public, max-age=604800, immutable"},
+                    cache_control="public, max-age=604800, immutable",
                 )
             except Exception as e:
                 logger.warning("Failed to generate thumbnail for manga %s page %s: %s", media_id, page_index, e)
@@ -898,5 +914,6 @@ def get_mobile_manga_page(
     thumbnail: bool = False,
     _: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    request: Request = None,
 ):
-    return get_manga_page(media_id, page_index, track_progress, thumbnail, db)
+    return get_manga_page(media_id, page_index, track_progress, thumbnail, db, request)

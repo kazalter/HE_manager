@@ -1,6 +1,11 @@
 import logging
+import mimetypes
 import os
 import re
+import urllib.parse
+
+from fastapi import Request, Response
+from fastapi.responses import FileResponse
 
 from .. import database, models
 
@@ -11,6 +16,81 @@ os.makedirs(THUMBNAIL_DIR, exist_ok=True)
 
 _MANGA_PAGE_THUMB_RE = re.compile(r"^manga_page_(\d+)_\d+_v2\.jpg$")
 _SPRITE_SHEET_STEM_RE = re.compile(r"^(.+)_\d+$")
+
+
+def thumbnail_accel_prefix() -> str:
+    """Return configured Nginx internal redirect prefix, or empty when disabled."""
+    return os.getenv("HE_THUMBNAIL_ACCEL_PREFIX", "").strip().rstrip("/")
+
+
+def should_accel_thumbnail(headers) -> bool:
+    """True when Nginx internal redirect is enabled and the request came through it."""
+    if not thumbnail_accel_prefix():
+        return False
+    if hasattr(headers, "get"):
+        return headers.get("x-he-accel-thumbnails") == "1"
+    for key, value in headers:
+        if key.lower() == b"x-he-accel-thumbnails":
+            return value == b"1"
+    return False
+
+
+def accel_thumbnail_response(
+    thumb_path: str,
+    *,
+    base_dir: str | None = None,
+    media_type: str | None = None,
+    cache_control: str = "private, max-age=86400",
+) -> Response | None:
+    """Build an X-Accel-Redirect response when thumb_path is a file inside base_dir."""
+    prefix = thumbnail_accel_prefix()
+    if not prefix:
+        return None
+    root_dir = os.path.realpath(base_dir or THUMBNAIL_DIR)
+    real_file = os.path.realpath(thumb_path)
+    try:
+        if os.path.commonpath([root_dir, real_file]) != root_dir or not os.path.isfile(real_file):
+            return None
+    except ValueError:
+        return None
+    rel_path = os.path.relpath(real_file, root_dir).replace(os.sep, "/")
+    encoded_rel = urllib.parse.quote(rel_path, safe="/")
+    guessed = media_type or mimetypes.guess_type(real_file)[0]
+    if not guessed and real_file.lower().endswith(".vtt"):
+        guessed = "text/vtt; charset=utf-8"
+    return Response(
+        status_code=200,
+        media_type=guessed or "application/octet-stream",
+        headers={
+            "X-Accel-Redirect": f"{prefix}/{encoded_rel}",
+            "Cache-Control": cache_control,
+        },
+    )
+
+
+def serve_thumbnail_file(
+    thumb_path: str,
+    *,
+    request: Request | None = None,
+    base_dir: str | None = None,
+    media_type: str | None = None,
+    cache_control: str = "private, max-age=86400",
+) -> Response:
+    """Serve a thumbnail via Nginx X-Accel-Redirect when proxied, else FileResponse."""
+    if request is not None and should_accel_thumbnail(request.headers):
+        accel = accel_thumbnail_response(
+            thumb_path,
+            base_dir=base_dir,
+            media_type=media_type,
+            cache_control=cache_control,
+        )
+        if accel is not None:
+            return accel
+    return FileResponse(
+        thumb_path,
+        media_type=media_type,
+        headers={"Cache-Control": cache_control},
+    )
 
 
 def remove_cover_thumbnails(cover_path: str | None) -> None:
