@@ -35,6 +35,20 @@ def should_accel_thumbnail(headers) -> bool:
     return False
 
 
+def _ensure_world_readable(path: str) -> bool:
+    """Ensure thumbnail files are readable by the non-root Nginx worker on POSIX."""
+    if os.name == "nt":
+        return True
+    try:
+        mode = os.stat(path).st_mode & 0o777
+        if mode & 0o004:
+            return True
+        os.chmod(path, mode | 0o644)
+        return bool(os.stat(path).st_mode & 0o004)
+    except OSError:
+        return False
+
+
 def accel_thumbnail_response(
     thumb_path: str,
     *,
@@ -52,6 +66,8 @@ def accel_thumbnail_response(
         if os.path.commonpath([root_dir, real_file]) != root_dir or not os.path.isfile(real_file):
             return None
     except ValueError:
+        return None
+    if not _ensure_world_readable(real_file):
         return None
     rel_path = os.path.relpath(real_file, root_dir).replace(os.sep, "/")
     encoded_rel = urllib.parse.quote(rel_path, safe="/")
@@ -168,6 +184,7 @@ def cleanup_orphaned_thumbnails():
                     if not entry.is_file(follow_symlinks=False):
                         continue
                     if _is_valid_thumbnail(entry.name, valid_bases, valid_manga_ids):
+                        _ensure_world_readable(entry.path)
                         continue
                     try:
                         os.remove(entry.path)

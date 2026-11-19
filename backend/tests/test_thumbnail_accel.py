@@ -50,6 +50,11 @@ class ThumbnailAccelRedirectTest(unittest.TestCase):
             with open(sample_jpg, "wb") as fp:
                 fp.write(b"\xff\xd8\xff\xd9")
 
+            restricted_jpg = os.path.join(tmpdir, "restricted.jpg")
+            with open(restricted_jpg, "wb") as fp:
+                fp.write(b"\xff\xd8\xff\xe0")
+            os.chmod(restricted_jpg, 0o600)
+
             book_path = os.path.join(tmpdir, "book.cbz")
             buf = BytesIO()
             Image.new("RGB", (32, 48), color="red").save(buf, format="PNG")
@@ -147,6 +152,29 @@ class ThumbnailAccelRedirectTest(unittest.TestCase):
                         page_thumb.headers.get("cache-control"),
                         "public, max-age=604800, immutable",
                     )
+
+                    # 0600 thumbnails are promoted to world-readable before X-Accel-Redirect;
+                    # if chmod fails, FastAPI falls back to serving bytes directly.
+                    promoted = client.get(
+                        f"/thumbnails/restricted.jpg?token={self.token}",
+                        headers=accel_headers,
+                    )
+                    self.assertEqual(promoted.status_code, 200)
+                    self.assertEqual(
+                        promoted.headers.get("x-accel-redirect"),
+                        "/_internal_thumbnails/restricted.jpg",
+                    )
+                    self.assertTrue(bool(os.stat(restricted_jpg).st_mode & 0o004))
+
+                    os.chmod(restricted_jpg, 0o600)
+                    with patch("app.services.thumbnails.os.chmod", side_effect=OSError("readonly")):
+                        fallback = client.get(
+                            f"/thumbnails/restricted.jpg?token={self.token}",
+                            headers=accel_headers,
+                        )
+                        self.assertEqual(fallback.status_code, 200)
+                        self.assertEqual(fallback.content, b"\xff\xd8\xff\xe0")
+                        self.assertNotIn("x-accel-redirect", fallback.headers)
             finally:
                 thumbnails_mount.app = orig_app
 

@@ -917,6 +917,8 @@ def get_manga_page(
                         with tempfile.NamedTemporaryFile(dir=THUMBNAIL_DIR, suffix=".tmp", delete=False) as temp:
                             temp_path = temp.name
                             img.save(temp, "JPEG", quality=80)
+                        if os.name != "nt":
+                            os.chmod(temp_path, 0o644)
                         os.replace(temp_path, thumb_path)
                     finally:
                         if temp_path and os.path.exists(temp_path):
