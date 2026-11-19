@@ -11,12 +11,23 @@ const props = defineProps<{
 }>()
 
 const imageLoadFailed = ref(false)
-watch(() => props.media.cover_path, () => { imageLoadFailed.value = false })
+const imageRetried = ref(false)
+const onImageError = () => {
+  if (props.media.cover_path && !imageRetried.value) {
+    imageRetried.value = true
+    return
+  }
+  imageLoadFailed.value = true
+}
+watch(() => props.media.cover_path, () => {
+  imageLoadFailed.value = false
+  imageRetried.value = false
+})
 
 const coverUrl = computed(() =>
   imageLoadFailed.value || !props.media.cover_path
     ? mediaPlaceholderUrl
-    : thumbnailUrl(props.media.cover_path)
+    : thumbnailUrl(props.media.cover_path, imageRetried.value)
 )
 
 const typeLabel = computed(() => {
@@ -79,7 +90,7 @@ const imageAspect = computed(() => {
     :aria-label="media.title"
   >
     <div class="relative h-[72px] w-12 shrink-0 overflow-hidden rounded-lg bg-surface-2 sm:h-20 sm:w-[54px]">
-      <img :src="coverUrl" alt="" loading="lazy" decoding="async" class="h-full w-full object-cover" @error="imageLoadFailed = true" />
+      <img :src="coverUrl" alt="" loading="lazy" decoding="async" class="h-full w-full object-cover" @error="onImageError" />
       <div v-if="progressPercent" class="absolute inset-x-0 bottom-0 h-[3px] bg-black/50">
         <div class="h-full bg-accent" :style="{ width: `${progressPercent}%` }"></div>
       </div>
@@ -111,7 +122,7 @@ const imageAspect = computed(() => {
     :aria-label="media.title"
   >
     <div class="relative w-full overflow-hidden bg-surface-2">
-      <img :src="coverUrl" alt="" loading="lazy" decoding="async" class="block h-auto w-full" :style="imageAspect" @error="imageLoadFailed = true" />
+      <img :src="coverUrl" alt="" loading="lazy" decoding="async" class="block h-auto w-full" :style="imageAspect" @error="onImageError" />
       <div class="absolute right-2 top-2 inline-flex h-6 items-center rounded-md bg-black/60 px-1.5 text-caption font-medium text-white/90">{{ typeLabel }}</div>
       <span v-if="media.favorite" class="absolute left-2 top-2 grid size-6 place-items-center rounded-md bg-black/60 text-star"><Star :size="13" fill="currentColor" aria-hidden="true" /></span>
       <div v-if="progressPercent" class="absolute inset-x-0 bottom-0 h-[3px] bg-black/50">
@@ -135,7 +146,7 @@ const imageAspect = computed(() => {
     :aria-label="media.title"
   >
     <div class="relative aspect-video w-full overflow-hidden rounded-2xl bg-surface-2 group-focus-visible:ring-2 group-focus-visible:ring-accent group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-background">
-      <img :src="coverUrl" alt="" loading="lazy" decoding="async" class="h-full w-full object-cover transition-transform duration-200 ease-out group-hover:scale-[1.03]" @error="imageLoadFailed = true" />
+      <img :src="coverUrl" alt="" loading="lazy" decoding="async" class="h-full w-full object-cover transition-transform duration-200 ease-out group-hover:scale-[1.03]" @error="onImageError" />
       <div class="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/8 transition-colors group-hover:ring-white/20"></div>
       <div class="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-150 group-hover:opacity-100">
         <span class="grid size-12 place-items-center rounded-full bg-black/60 text-white"><Play :size="20" fill="currentColor" aria-hidden="true" /></span>

@@ -61,6 +61,22 @@ describe('home performance optimizations', () => {
     expect(forcedEager.findAll('img').map(img => img.attributes('loading'))).toEqual(['eager', 'eager'])
   })
 
+  it('retries a failed MediaCard cover once with a cache-busting parameter before falling back to placeholder', async () => {
+    const card = mount(MediaCard, { props: { media: sampleMedia(9, { media_type: 'image', cover_path: 'broken.jpg' }), index: 0 } })
+    wrappers.push(card)
+
+    const img = () => card.get('img.he-media-card__art')
+    expect(img().attributes('src')).toContain('/thumbnails/broken.jpg')
+    expect(img().attributes('src')).not.toContain('retry=1')
+
+    await img().trigger('error')
+    expect(img().attributes('src')).toContain('/thumbnails/broken.jpg')
+    expect(img().attributes('src')).toContain('retry=1')
+
+    await img().trigger('error')
+    expect(img().attributes('src')).not.toContain('/thumbnails/broken.jpg')
+  })
+
   it('throttles missing-file recheck across HomeView mounts', async () => {
     authState.user = { id: 1, username: 'admin', is_admin: true, is_active: true, created_at: '' }
     vi.spyOn(axios, 'get').mockImplementation(async (url) => ({

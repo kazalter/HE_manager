@@ -23,7 +23,10 @@ export function authUrl(url: string): string {
 /** Resolve a Media.cover_path (relative, possibly null) to a full thumbnail URL.
  *  Returns an empty string for missing / null paths so <img :src=""> renders nothing
  *  instead of a broken-image icon. Pattern matches MediaCard.vue's getThumb. */
-export function thumbnailUrl(path: string | null | undefined): string {
+export function thumbnailUrl(path: string | null | undefined, cacheBust = false): string {
     if (!path) return '';
-    return authUrl(`${THUMBNAIL_URL}/${path}`);
+    const base = authUrl(`${THUMBNAIL_URL}/${path}`);
+    if (!cacheBust) return base;
+    const sep = base.includes('?') ? '&' : '?';
+    return `${base}${sep}retry=1`;
 }

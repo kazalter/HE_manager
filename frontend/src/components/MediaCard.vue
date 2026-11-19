@@ -28,15 +28,21 @@ const props = withDefaults(defineProps<{
 })
 
 const imageLoadFailed = ref(false)
+const imageRetried = ref(false)
 const onImageError = () => {
+  if (props.media.cover_path && !imageRetried.value) {
+    imageRetried.value = true
+    return
+  }
   imageLoadFailed.value = true
 }
 
 watch(() => props.media.cover_path, () => {
   imageLoadFailed.value = false
+  imageRetried.value = false
 })
 
-const getThumb = (path: string | null) => path ? thumbnailUrl(path) : mediaPlaceholderUrl
+const getThumb = (path: string | null) => path ? thumbnailUrl(path, imageRetried.value) : mediaPlaceholderUrl
 const coverSrc = computed(() => imageLoadFailed.value ? mediaPlaceholderUrl : getThumb(props.media.cover_path))
 
 const formatSize = (bytes: number) => {
