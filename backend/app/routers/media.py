@@ -12,11 +12,12 @@ from PIL import Image
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.responses import FileResponse
-from sqlalchemy import and_, exists, func, or_
+from sqlalchemy import and_, exists, func, or_, text
 from sqlalchemy.orm import Session, selectinload
 
 from .. import auth, database, manga_search, media_cleanup, models, scanner, schemas, tagging, zh_conv
 from ..database import get_db
+from ..services import media_fts
 from ..services.manga_pages import get_manga_image_files, get_manga_page_dimensions
 from ..services.media_access import get_media_or_404
 from ..services.range_response import get_ranged_file_response
@@ -157,10 +158,72 @@ def _escape_like(term: str) -> str:
     return term.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
 
 
-def _apply_media_search_filter(query, search: Optional[str]):
+def _parse_csv_values(raw: Optional[str]) -> list[str]:
+    if not raw:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for part in raw.split(","):
+        cleaned = part.strip()
+        if cleaned and cleaned not in seen:
+            seen.add(cleaned)
+            out.append(cleaned)
+    return out
+
+
+def _apply_media_tag_filters(
+    query,
+    *,
+    tag: Optional[str] = None,
+    tags: Optional[str] = None,
+    tag_mode: str = "all",
+    exclude_tags: Optional[str] = None,
+    tag_namespace: Optional[str] = None,
+):
+    include_tags: list[str] = []
+    for item in ([tag.strip()] if tag and tag.strip() else []) + _parse_csv_values(tags):
+        if item not in include_tags:
+            include_tags.append(item)
+
+    if include_tags:
+        include_clauses = []
+        for item in include_tags:
+            variants = zh_conv.expand_zh_variants(item)
+            if len(variants) > 1:
+                include_clauses.append(models.Media.tags.any(models.Tag.name.in_(variants)))
+            else:
+                include_clauses.append(models.Media.tags.any(models.Tag.name == item))
+        if (tag_mode or "all").strip().lower() == "any":
+            query = query.filter(or_(*include_clauses))
+        else:
+            for clause in include_clauses:
+                query = query.filter(clause)
+
+    for item in _parse_csv_values(exclude_tags):
+        variants = zh_conv.expand_zh_variants(item)
+        if len(variants) > 1:
+            query = query.filter(~models.Media.tags.any(models.Tag.name.in_(variants)))
+        else:
+            query = query.filter(~models.Media.tags.any(models.Tag.name == item))
+
+    ns = (tag_namespace or "").strip()
+    if ns:
+        query = query.filter(models.Media.tags.any(models.Tag.namespace == ns))
+
+    return query
+
+
+def _apply_media_search_filter(query, search: Optional[str], db: Optional[Session] = None):
     raw = (search or "").strip()
     if not raw:
         return query
+    if db is not None and media_fts.fts_is_ready(db):
+        fts_expr = media_fts.build_fts_match_expression(raw)
+        if fts_expr:
+            query = query.filter(
+                text("media.id IN (SELECT media_id FROM media_fts WHERE media_fts MATCH :fts_expr)")
+                .bindparams(fts_expr=fts_expr)
+            )
     terms = [t for t in raw.split() if t][:6]
     for term in terms:
         seed_variants = zh_conv.expand_zh_variants(term) or [term]
@@ -224,6 +287,10 @@ def list_media(
     media_type: Optional[str] = None,
     search: Optional[str] = None,
     tag: Optional[str] = None,
+    tags: Optional[str] = None,
+    tag_mode: str = "all",
+    exclude_tags: Optional[str] = None,
+    tag_namespace: Optional[str] = None,
     favorite: Optional[bool] = None,
     view_status: Optional[str] = None,
     min_rating: Optional[int] = None,
@@ -241,13 +308,15 @@ def list_media(
     if media_type:
         query = query.filter(models.Media.media_type == media_type)
     if search:
-        query = _apply_media_search_filter(query, search)
-    if tag:
-        tag_variants = zh_conv.expand_zh_variants(tag)
-        if len(tag_variants) > 1:
-            query = query.join(models.Media.tags).filter(models.Tag.name.in_(tag_variants))
-        else:
-            query = query.join(models.Media.tags).filter(models.Tag.name == tag)
+        query = _apply_media_search_filter(query, search, db=db)
+    query = _apply_media_tag_filters(
+        query,
+        tag=tag,
+        tags=tags,
+        tag_mode=tag_mode,
+        exclude_tags=exclude_tags,
+        tag_namespace=tag_namespace,
+    )
     if favorite is not None:
         query = query.filter(models.Media.favorite == favorite)
     if view_status:
@@ -329,6 +398,11 @@ def list_mobile_media(
     response: Response,
     media_type: Optional[str] = None,
     search: Optional[str] = None,
+    tag: Optional[str] = None,
+    tags: Optional[str] = None,
+    tag_mode: str = "all",
+    exclude_tags: Optional[str] = None,
+    tag_namespace: Optional[str] = None,
     view_status: Optional[str] = None,
     min_rating: Optional[int] = None,
     sort: str = "date",
@@ -347,7 +421,15 @@ def list_mobile_media(
     if media_type:
         query = query.filter(models.Media.media_type == media_type)
     if search:
-        query = _apply_media_search_filter(query, search)
+        query = _apply_media_search_filter(query, search, db=db)
+    query = _apply_media_tag_filters(
+        query,
+        tag=tag,
+        tags=tags,
+        tag_mode=tag_mode,
+        exclude_tags=exclude_tags,
+        tag_namespace=tag_namespace,
+    )
     if view_status:
         query = query.filter(models.Media.view_status == view_status)
     if min_rating is not None and min_rating > 0:

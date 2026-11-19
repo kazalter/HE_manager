@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import { ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, Eye, LayoutGrid, List, Play, Rows3, Search, Shuffle, SlidersHorizontal, Star, Tag as TagIcon, TriangleAlert, Trash2, X } from 'lucide-vue-next'
+import { ArrowUpDown, Ban, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, Eye, LayoutGrid, List, Play, Rows3, Search, Shuffle, SlidersHorizontal, Star, Tag as TagIcon, TriangleAlert, Trash2, X } from 'lucide-vue-next'
 import { API_BASE_URL, thumbnailUrl } from '../config'
 import { authHeaders, authIdentity, authState } from '../auth'
 import { desktopBridge } from '../desktop'
@@ -57,7 +57,30 @@ const viewStatusFilter = ref(validViewStatus(route.query.view_status))
 const validMinRating = (value: unknown): '' | '1' | '3' | '4' | '5' =>
   value === '1' || value === '3' || value === '4' || value === '5' ? value : ''
 const minRatingFilter = ref(validMinRating(route.query.min_rating))
-const selectedTag = ref(typeof route.query.tag === 'string' ? route.query.tag : '')
+const parseCsvTags = (raw: unknown): string[] => {
+  const value = Array.isArray(raw) ? raw.join(',') : typeof raw === 'string' ? raw : ''
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const part of value.split(',')) {
+    const cleaned = part.trim()
+    if (cleaned && !seen.has(cleaned)) {
+      seen.add(cleaned)
+      out.push(cleaned)
+    }
+  }
+  return out
+}
+const readIncludedTagsFromQuery = (query: typeof route.query) => {
+  const list = [...parseCsvTags(query.tag), ...parseCsvTags(query.tags)]
+  return [...new Set(list)]
+}
+const validTagMode = (value: unknown): 'all' | 'any' => (value === 'any' ? 'any' : 'all')
+
+const includedTags = ref<string[]>(readIncludedTagsFromQuery(route.query))
+const excludedTags = ref<string[]>(parseCsvTags(route.query.exclude_tags))
+const tagMode = ref<'all' | 'any'>(validTagMode(route.query.tag_mode))
+const selectedNamespace = ref(typeof route.query.tag_namespace === 'string' ? route.query.tag_namespace : '')
+const dropdownNamespace = ref(selectedNamespace.value)
 const tagDropdownOpen = ref(false)
 const tagSearchQuery = ref('')
 const tagDropdownRef = ref<HTMLElement | null>(null)
@@ -123,14 +146,50 @@ watch(continueCollapsed, (val) => {
   localStorage.setItem('he_continue_collapsed', String(val))
 })
 
-const filteredTags = computed(() => {
-  const query = tagSearchQuery.value.trim().toLowerCase()
-  if (!query) return tags.value
-  return tags.value.filter(tag => tag.name.toLowerCase().includes(query))
+const TAG_NAMESPACE_LABELS: Record<string, string> = {
+  general: '通用',
+  artist: '作者',
+  circle: '社团',
+  parody: '原作',
+  character: '角色',
+  category: '分类',
+  language: '语言',
+  source: '来源',
+}
+const formatNamespaceLabel = (ns: string) => TAG_NAMESPACE_LABELS[ns] ?? ns
+
+const availableNamespaces = computed(() => {
+  const counts = new Map<string, number>()
+  for (const tag of tags.value) {
+    const ns = tag.namespace || 'general'
+    counts.set(ns, (counts.get(ns) ?? 0) + 1)
+  }
+  if (counts.size <= 1 && !selectedNamespace.value) return []
+  return [...counts.entries()].map(([value, count]) => ({
+    value,
+    label: formatNamespaceLabel(value),
+    count,
+  }))
 })
 
+const filteredTags = computed(() => {
+  const query = tagSearchQuery.value.trim().toLowerCase()
+  const nsFilter = dropdownNamespace.value
+  return tags.value.filter(tag => {
+    if (nsFilter && (tag.namespace || 'general') !== nsFilter) return false
+    if (query && !tag.name.toLowerCase().includes(query)) return false
+    return true
+  })
+})
+
+const hasTagFilter = computed(() =>
+  includedTags.value.length > 0 || excludedTags.value.length > 0 || Boolean(selectedNamespace.value)
+)
+
 const activeFilterCount = computed(() => {
-  return Number(Boolean(selectedTag.value)) +
+  return includedTags.value.length +
+    excludedTags.value.length +
+    Number(Boolean(selectedNamespace.value)) +
     Number(Boolean(sourceFilter.value)) +
     Number(Boolean(viewStatusFilter.value)) +
     Number(Boolean(minRatingFilter.value)) +
@@ -148,6 +207,10 @@ const clearFilters = () => {
   delete query.page
   delete query.search
   delete query.tag
+  delete query.tags
+  delete query.tag_mode
+  delete query.exclude_tags
+  delete query.tag_namespace
   delete query.sort
   delete query.seed
   delete query.source
@@ -312,7 +375,11 @@ const syncPageQuery = (page: number, replace = false) => {
 const mediaParamsForPage = (page: number): Record<string, string | number | boolean | undefined> => ({
   media_type: props.mediaType,
   search: searchQuery.value.trim() || undefined,
-  tag: selectedTag.value || undefined,
+  tag: includedTags.value.length === 1 ? includedTags.value[0] : undefined,
+  tags: includedTags.value.length > 1 ? includedTags.value.join(',') : undefined,
+  tag_mode: includedTags.value.length > 1 ? tagMode.value : undefined,
+  exclude_tags: excludedTags.value.length ? excludedTags.value.join(',') : undefined,
+  tag_namespace: selectedNamespace.value || undefined,
   favorite: favoriteOnly.value ? true : undefined,
   view_status: viewStatusFilter.value || undefined,
   min_rating: minRatingFilter.value ? Number(minRatingFilter.value) : undefined,
@@ -353,7 +420,16 @@ const pageTitle = computed(() => {
   return '全部媒体'
 })
 
-const selectedTagLabel = computed(() => selectedTag.value || '全部标签')
+const selectedTagLabel = computed(() => {
+  if (includedTags.value.length === 1 && excludedTags.value.length === 0 && !selectedNamespace.value) {
+    return includedTags.value[0]!
+  }
+  const parts: string[] = []
+  if (selectedNamespace.value) parts.push(formatNamespaceLabel(selectedNamespace.value))
+  if (includedTags.value.length > 0) parts.push(`已选 ${includedTags.value.length}`)
+  if (excludedTags.value.length > 0) parts.push(`排除 ${excludedTags.value.length}`)
+  return parts.length ? parts.join(' · ') : '全部标签'
+})
 
 type SortKey = 'date' | 'title' | 'rating' | 'opened' | 'random'
 const sortOptions: SegmentedOption<SortKey>[] = [
@@ -461,10 +537,41 @@ const selectMinRating = (value: '' | '1' | '3' | '4' | '5') => {
   ratingButtonRef.value?.focus()
 }
 
-const selectTag = (tagName: string) => {
-  selectedTag.value = tagName
+const toggleIncludeTag = (tagName: string) => {
+  excludedTags.value = excludedTags.value.filter(t => t !== tagName)
+  if (includedTags.value.includes(tagName)) {
+    includedTags.value = includedTags.value.filter(t => t !== tagName)
+  } else {
+    includedTags.value = [...includedTags.value, tagName]
+  }
+}
+
+const toggleExcludeTag = (tagName: string) => {
+  includedTags.value = includedTags.value.filter(t => t !== tagName)
+  if (excludedTags.value.includes(tagName)) {
+    excludedTags.value = excludedTags.value.filter(t => t !== tagName)
+  } else {
+    excludedTags.value = [...excludedTags.value, tagName]
+  }
+}
+
+const clearTagFilters = () => {
+  includedTags.value = []
+  excludedTags.value = []
+  selectedNamespace.value = ''
+  dropdownNamespace.value = ''
   tagSearchQuery.value = ''
   tagDropdownOpen.value = false
+}
+
+const toggleNamespaceFilter = (ns: string) => {
+  if (!ns) {
+    dropdownNamespace.value = ''
+    selectedNamespace.value = ''
+    return
+  }
+  dropdownNamespace.value = ns
+  selectedNamespace.value = selectedNamespace.value === ns ? '' : ns
 }
 
 const closeTagDropdown = async () => {
@@ -759,9 +866,17 @@ const toggleFavoriteFilter = () => {
 let searchTimer: number | undefined
 const syncFilters = () => {
   const desiredSeed = sortBy.value === 'random' ? String(randomSeed.value) : ''
+  const desiredSingleTag = includedTags.value.length === 1 ? includedTags.value[0]! : ''
+  const desiredMultiTags = includedTags.value.length > 1 ? includedTags.value.join(',') : ''
+  const desiredTagMode = includedTags.value.length > 1 && tagMode.value === 'any' ? 'any' : ''
+  const desiredExcludeTags = excludedTags.value.length ? excludedTags.value.join(',') : ''
   const current = [
     route.query.search || '',
     route.query.tag || '',
+    route.query.tags || '',
+    route.query.tag_mode || '',
+    route.query.exclude_tags || '',
+    route.query.tag_namespace || '',
     validSort(route.query.sort),
     validSource(route.query.source),
     validViewStatus(route.query.view_status),
@@ -770,7 +885,11 @@ const syncFilters = () => {
   ]
   const desired = [
     searchQuery.value,
-    selectedTag.value,
+    desiredSingleTag,
+    desiredMultiTags,
+    desiredTagMode,
+    desiredExcludeTags,
+    selectedNamespace.value,
     sortBy.value,
     sourceFilter.value,
     viewStatusFilter.value,
@@ -782,7 +901,11 @@ const syncFilters = () => {
   delete query.page
   for (const [key, value] of Object.entries({
     search: searchQuery.value,
-    tag: selectedTag.value,
+    tag: desiredSingleTag,
+    tags: desiredMultiTags,
+    tag_mode: desiredTagMode,
+    exclude_tags: desiredExcludeTags,
+    tag_namespace: selectedNamespace.value,
     sort: sortBy.value === 'date' ? '' : sortBy.value,
     seed: desiredSeed,
     source: sourceFilter.value,
@@ -798,11 +921,15 @@ watch(searchQuery, () => {
   window.clearTimeout(searchTimer)
   searchTimer = window.setTimeout(syncFilters, 250)
 })
-watch([selectedTag, sortBy, sourceFilter, viewStatusFilter, minRatingFilter], syncFilters)
-watch(() => JSON.stringify([props.mediaType, route.query.search, route.query.tag, route.query.sort, route.query.seed, route.query.source, route.query.view_status, route.query.min_rating, route.query.favorite, route.query.page]), () => {
+watch([includedTags, excludedTags, tagMode, selectedNamespace, sortBy, sourceFilter, viewStatusFilter, minRatingFilter], syncFilters, { deep: true })
+watch(() => JSON.stringify([props.mediaType, route.query.search, route.query.tag, route.query.tags, route.query.tag_mode, route.query.exclude_tags, route.query.tag_namespace, route.query.sort, route.query.seed, route.query.source, route.query.view_status, route.query.min_rating, route.query.favorite, route.query.page]), () => {
   window.clearTimeout(searchTimer)
   searchQuery.value = typeof route.query.search === 'string' ? route.query.search : ''
-  selectedTag.value = typeof route.query.tag === 'string' ? route.query.tag : ''
+  includedTags.value = readIncludedTagsFromQuery(route.query)
+  excludedTags.value = parseCsvTags(route.query.exclude_tags)
+  tagMode.value = validTagMode(route.query.tag_mode)
+  selectedNamespace.value = typeof route.query.tag_namespace === 'string' ? route.query.tag_namespace : ''
+  if (selectedNamespace.value) dropdownNamespace.value = selectedNamespace.value
   sortBy.value = validSort(route.query.sort)
   if (route.query.seed) randomSeed.value = parseSeed(route.query.seed)
   sourceFilter.value = validSource(route.query.source)
@@ -975,7 +1102,7 @@ onMounted(async () => {
                     buttonClass('secondary', compact ? 'lg' : 'md', compact),
                     'justify-between',
                     compact ? '' : 'max-w-52',
-                    selectedTag ? '!border-accent/50 !bg-accent/15 !text-accent-glow' : '',
+                    hasTagFilter ? '!border-accent/50 !bg-accent/15 !text-accent-glow' : '',
                   ]"
                   :aria-expanded="tagDropdownOpen"
                   aria-controls="he-tag-options"
@@ -983,7 +1110,7 @@ onMounted(async () => {
                   @click="tagDropdownOpen = !tagDropdownOpen"
                 >
                   <span class="flex min-w-0 items-center gap-2">
-                    <TagIcon :size="15" class="shrink-0" :class="selectedTag ? '' : 'text-subtle'" aria-hidden="true" />
+                    <TagIcon :size="15" class="shrink-0" :class="hasTagFilter ? '' : 'text-subtle'" aria-hidden="true" />
                     <span class="truncate">{{ selectedTagLabel }}</span>
                   </span>
                   <ChevronDown :size="15" class="shrink-0 text-subtle transition-transform duration-150" :class="tagDropdownOpen ? 'rotate-180' : ''" aria-hidden="true" />
@@ -991,10 +1118,10 @@ onMounted(async () => {
                 <div
                   v-if="tagDropdownOpen"
                   id="he-tag-options"
-                  :class="[popoverClass, compact ? 'mt-2 w-full' : 'absolute left-0 top-full z-50 mt-1.5 w-64']"
-                  class="flex max-h-80 flex-col"
+                  :class="[popoverClass, compact ? 'mt-2 w-full' : 'absolute left-0 top-full z-50 mt-1.5 w-72']"
+                  class="flex max-h-96 flex-col"
                 >
-                  <div class="p-1 pb-1.5">
+                  <div class="space-y-1.5 p-1 pb-1.5">
                     <input
                       ref="tagSearchRef"
                       v-model="tagSearchQuery"
@@ -1004,23 +1131,73 @@ onMounted(async () => {
                       :class="controlClass('sm')"
                       @click.stop
                     />
+                    <div v-if="availableNamespaces.length" class="flex flex-wrap gap-1">
+                      <button
+                        type="button"
+                        class="rounded-md px-2 py-0.5 text-caption transition-colors"
+                        :class="!dropdownNamespace && !selectedNamespace ? 'bg-accent/20 text-accent-glow font-medium' : 'bg-surface-2 text-subtle hover:text-ink'"
+                        @click.stop="toggleNamespaceFilter('')"
+                      >全部类</button>
+                      <button
+                        v-for="ns in availableNamespaces"
+                        :key="ns.value"
+                        type="button"
+                        class="rounded-md px-2 py-0.5 text-caption transition-colors"
+                        :class="selectedNamespace === ns.value ? 'bg-accent/20 text-accent-glow font-medium' : 'bg-surface-2 text-subtle hover:text-ink'"
+                        :title="`按 ${ns.label} 分类筛选`"
+                        @click.stop="toggleNamespaceFilter(ns.value)"
+                      >{{ ns.label }}</button>
+                    </div>
+                    <div v-if="includedTags.length > 1" class="flex items-center justify-between rounded-lg bg-surface-2 px-2 py-1 text-caption text-subtle">
+                      <span>多标签匹配</span>
+                      <div class="flex gap-1">
+                        <button
+                          type="button"
+                          class="rounded px-1.5 py-0.5 transition-colors"
+                          :class="tagMode === 'all' ? 'bg-accent text-on-accent font-medium' : 'hover:text-ink'"
+                          @click.stop="tagMode = 'all'"
+                        >全部(AND)</button>
+                        <button
+                          type="button"
+                          class="rounded px-1.5 py-0.5 transition-colors"
+                          :class="tagMode === 'any' ? 'bg-accent text-on-accent font-medium' : 'hover:text-ink'"
+                          @click.stop="tagMode = 'any'"
+                        >任一(OR)</button>
+                      </div>
+                    </div>
                   </div>
                   <div class="custom-scrollbar min-h-0 flex-1 space-y-0.5 overflow-y-auto">
-                    <button type="button" :class="[menuItemClass, selectedTag === '' ? '!text-ink font-medium' : '']" @click="selectTag('')">
+                    <button type="button" :class="[menuItemClass, !hasTagFilter ? '!text-ink font-medium' : '']" @click="clearTagFilters()">
                       <span class="truncate">全部标签</span>
-                      <Check v-if="selectedTag === ''" :size="15" class="ml-auto shrink-0 text-accent" aria-hidden="true" />
+                      <Check v-if="!hasTagFilter" :size="15" class="ml-auto shrink-0 text-accent" aria-hidden="true" />
                     </button>
-                    <button
+                    <div
                       v-for="tag in filteredTags"
                       :key="tag.id"
-                      type="button"
-                      :class="[menuItemClass, selectedTag === tag.name ? '!text-ink font-medium' : '']"
-                      @click="selectTag(tag.name)"
+                      class="flex items-center gap-1 pr-1"
                     >
-                      <span class="truncate">{{ tag.name }}</span>
-                      <Check v-if="selectedTag === tag.name" :size="15" class="ml-auto shrink-0 text-accent" aria-hidden="true" />
-                      <span v-else-if="tag.count" class="ml-auto shrink-0 text-caption text-subtle tabular-nums">{{ tag.count }}</span>
-                    </button>
+                      <button
+                        type="button"
+                        :class="[menuItemClass, 'min-w-0 flex-1', includedTags.includes(tag.name) ? '!text-ink font-medium' : excludedTags.includes(tag.name) ? 'text-danger line-through' : '']"
+                        @click="toggleIncludeTag(tag.name)"
+                      >
+                        <span class="truncate">{{ tag.name }}</span>
+                        <span v-if="tag.namespace && tag.namespace !== 'general'" class="shrink-0 rounded bg-surface-3 px-1 text-[10px] text-subtle">{{ formatNamespaceLabel(tag.namespace) }}</span>
+                        <Check v-if="includedTags.includes(tag.name)" :size="15" class="ml-auto shrink-0 text-accent" aria-hidden="true" />
+                        <span v-else-if="tag.count" class="ml-auto shrink-0 text-caption text-subtle tabular-nums">{{ tag.count }}</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="grid size-7 shrink-0 place-items-center rounded-lg transition-colors focus-ring"
+                        :class="excludedTags.includes(tag.name) ? 'bg-danger/20 text-danger' : 'text-subtle hover:bg-surface-3 hover:text-danger'"
+                        :title="`排除标签 ${tag.name}`"
+                        :aria-label="`排除标签 ${tag.name}`"
+                        :aria-pressed="excludedTags.includes(tag.name)"
+                        @click.stop="toggleExcludeTag(tag.name)"
+                      >
+                        <Ban :size="13" aria-hidden="true" />
+                      </button>
+                    </div>
                     <p v-if="filteredTags.length === 0" class="py-3 text-center text-meta text-subtle">无匹配标签</p>
                   </div>
                 </div>
@@ -1182,9 +1359,40 @@ onMounted(async () => {
           >{{ category.label }}</router-link>
         </div>
       </nav>
+      <div v-if="includedTags.length > 1 || excludedTags.length > 0 || selectedNamespace" class="flex flex-wrap items-center gap-1.5 pt-1">
+        <button
+          v-if="selectedNamespace"
+          type="button"
+          class="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2.5 py-0.5 text-caption text-accent-glow hover:bg-accent/25"
+          @click="selectedNamespace = ''; dropdownNamespace = ''"
+        >
+          <span>分类: {{ formatNamespaceLabel(selectedNamespace) }}</span>
+          <X :size="12" aria-hidden="true" />
+        </button>
+        <button
+          v-for="tag in includedTags"
+          :key="`inc-${tag}`"
+          type="button"
+          class="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2.5 py-0.5 text-caption text-accent-glow hover:bg-accent/25"
+          @click="toggleIncludeTag(tag)"
+        >
+          <span>+ {{ tag }}</span>
+          <X :size="12" aria-hidden="true" />
+        </button>
+        <button
+          v-for="tag in excludedTags"
+          :key="`exc-${tag}`"
+          type="button"
+          class="inline-flex items-center gap-1 rounded-full border border-danger/40 bg-danger/15 px-2.5 py-0.5 text-caption text-danger hover:bg-danger/25"
+          @click="toggleExcludeTag(tag)"
+        >
+          <span>- {{ tag }}</span>
+          <X :size="12" aria-hidden="true" />
+        </button>
+      </div>
     </PageHeader>
 
-    <section v-if="featuredContinue && !searchQuery && !selectedTag" class="page-gutter mt-6" aria-label="今晚继续">
+    <section v-if="featuredContinue && !searchQuery && !hasTagFilter" class="page-gutter mt-6" aria-label="今晚继续">
       <div class="page-container">
         <div class="grid overflow-hidden rounded-3xl border border-line bg-surface sm:grid-cols-[240px_1fr]">
           <button type="button" class="group relative min-h-44 overflow-hidden bg-surface-2 text-left focus-ring sm:min-h-full" :aria-label="`打开媒体：${featuredContinue.title}`" @click="openMedia(featuredContinue)">
@@ -1216,7 +1424,7 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section v-if="recentlyOpened.length > 0 && !searchQuery && !selectedTag" ref="continueSectionRef" class="page-gutter mt-6 select-none" aria-label="继续观看">
+    <section v-if="recentlyOpened.length > 0 && !searchQuery && !hasTagFilter" ref="continueSectionRef" class="page-gutter mt-6 select-none" aria-label="继续观看">
       <div class="page-container">
         <SectionHeader :title="continueTitle">
           <template #actions>
@@ -1285,7 +1493,7 @@ onMounted(async () => {
       </div>
     </section>
 
-    <div ref="containerRef" class="page-gutter pb-12" :class="recentlyOpened.length > 0 && !searchQuery && !selectedTag ? 'mt-8' : 'mt-6'">
+    <div ref="containerRef" class="page-gutter pb-12" :class="recentlyOpened.length > 0 && !searchQuery && !hasTagFilter ? 'mt-8' : 'mt-6'">
       <div class="page-container">
         <div v-if="loading && !mediaList.length" data-media-grid :class="viewMode === 'list' ? 'flex flex-col gap-2' : viewMode === 'wide' ? 'grid grid-cols-1 gap-x-5 gap-y-7 md:grid-cols-2 xl:grid-cols-3' : viewMode === 'poster' ? posterGridClass : 'poster-grid'">
           <template v-if="viewMode === 'list'">

@@ -35,7 +35,7 @@ from .routers import stats as stats_routes
 from .routers import system as system_routes
 from .routers import x_import as x_import_routes
 from .dedup import worker as dedup_worker
-from .services import job_lifecycle
+from .services import job_lifecycle, media_fts
 from .services.external.pawchive import creator_images as pawchive_creator_images, downloader as pawchive_downloader
 from .services.external.pawchive.media_cache import media_cache as pawchive_media_cache
 from .services.thumbnails import (
@@ -83,7 +83,14 @@ async def lifespan(app: FastAPI):
     from .services.media_discard import recover_pending_cleanup
     recover_pending_cleanup()
     auto_sync_routes.init_scheduler()
+    media_fts.install_fts_session_hooks()
     threading.Thread(target=cleanup_orphaned_thumbnails, name="cleanup-thumbnails", daemon=True).start()
+    threading.Thread(
+        target=media_fts.rebuild_media_fts_background,
+        args=(database.SessionLocal,),
+        name="media-fts-sync",
+        daemon=True,
+    ).start()
     assistant_routes.sessions.start_background()
     try:
         yield
