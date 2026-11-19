@@ -1,3 +1,4 @@
+import base64
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -14,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from . import models
 from .database import get_db
+from .services import login_throttle
 
 
 PASSWORD_ITERATIONS = 260_000
@@ -28,6 +30,10 @@ AUTH_CACHE_TTL_SECONDS = max(
     0.0, float(os.getenv("HE_AUTH_CACHE_TTL_SECONDS", "20"))
 )
 AUTH_CACHE_MAX_SIZE = 256
+BASIC_AUTH_CACHE_TTL_SECONDS = max(
+    0.0, float(os.getenv("HE_BASIC_AUTH_CACHE_TTL_SECONDS", "60"))
+)
+BASIC_AUTH_CACHE_MAX_SIZE = 128
 
 
 @dataclass(frozen=True)
@@ -50,6 +56,7 @@ class _AuthCacheEntry:
 
 
 _auth_cache: OrderedDict[str, _AuthCacheEntry] = OrderedDict()
+_basic_auth_cache: OrderedDict[str, tuple[CachedAuthUser, float]] = OrderedDict()
 _auth_cache_lock = threading.Lock()
 
 
@@ -57,6 +64,7 @@ def invalidate_auth_cache() -> None:
     """Clear all cached request auth snapshots."""
     with _auth_cache_lock:
         _auth_cache.clear()
+        _basic_auth_cache.clear()
 
 
 def invalidate_token_hash(token_hash: str) -> None:
@@ -71,6 +79,42 @@ def invalidate_user_auth_cache(user_id: int) -> None:
         keys = [key for key, entry in _auth_cache.items() if entry.user.id == user_id]
         for key in keys:
             _auth_cache.pop(key, None)
+        basic_keys = [key for key, (user, _) in _basic_auth_cache.items() if user.id == user_id]
+        for key in basic_keys:
+            _basic_auth_cache.pop(key, None)
+
+
+def basic_auth_allowed(path: str) -> bool:
+    """Only allow HTTP Basic Auth on external protocol endpoints (OPDS / WebDAV)."""
+    norm = path[4:] if path.startswith("/api/") else path
+    return (
+        norm == "/opds"
+        or norm.startswith("/opds/")
+        or norm == "/webdav"
+        or norm.startswith("/webdav/")
+    )
+
+
+def parse_basic_authorization(authorization: str | None) -> tuple[str, str] | None:
+    """Decode an HTTP Basic Authorization header into (username, password)."""
+    if not authorization:
+        return None
+    if not authorization[:6].lower() == "basic ":
+        return None
+    raw = authorization[6:].strip()
+    if not raw:
+        return None
+    try:
+        decoded = base64.b64decode(raw, validate=True).decode("utf-8")
+    except Exception:
+        return None
+    if ":" not in decoded:
+        return None
+    username, password = decoded.split(":", 1)
+    username = username.strip()
+    if not username or not password:
+        return None
+    return username, password
 
 
 def query_token_allowed(method: str, path: str) -> bool:
@@ -269,6 +313,83 @@ def authenticate_request_token(db: Session, raw_token: str) -> CachedAuthUser | 
         return authenticate_access_token(db, raw_token)
     user, db_token = _authenticate_access_token_row(db, raw_token)
     return _cache_authenticated_user(db_token.token_hash, db_token, user)
+
+
+def get_cached_basic_user(username: str, password: str) -> CachedAuthUser | None:
+    """Return a cached user snapshot for HTTP Basic Auth when fresh."""
+    if BASIC_AUTH_CACHE_TTL_SECONDS <= 0:
+        return None
+    cache_key = hash_token(f"{username}\0{password}")
+    mono_now = time.monotonic()
+    with _auth_cache_lock:
+        entry = _basic_auth_cache.get(cache_key)
+        if entry is None:
+            return None
+        user, cached_at = entry
+        if mono_now - cached_at >= BASIC_AUTH_CACHE_TTL_SECONDS or not user.is_active:
+            _basic_auth_cache.pop(cache_key, None)
+            return None
+        _basic_auth_cache.move_to_end(cache_key)
+        return user
+
+
+def authenticate_basic_credentials(
+    db: Session,
+    username: str,
+    password: str,
+    *,
+    failure_key: str | None = None,
+) -> CachedAuthUser:
+    """Verify HTTP Basic username + password (or active token) with short-TTL caching."""
+    cached = get_cached_basic_user(username, password)
+    if cached is not None:
+        return cached
+
+    user_key = f"user:{username.strip().lower()}"
+    if (
+        (failure_key and len(login_throttle._pruned_login_failures(failure_key)) >= login_throttle.LOGIN_MAX_FAILURES)
+        or len(login_throttle._pruned_login_failures(user_key)) >= login_throttle.LOGIN_MAX_FAILURES_PER_USER
+    ):
+        raise HTTPException(status_code=429, detail="Too many failed authentication attempts")
+
+    user = db.query(models.User).filter(models.User.username == username.strip()).first()
+    authenticated = False
+    if user and user.is_active:
+        if verify_password(password, user.password_hash):
+            authenticated = True
+        else:
+            # Also allow passing an active API access token as the Basic password.
+            try:
+                token_user, _ = _authenticate_access_token_row(db, password)
+                authenticated = token_user.id == user.id
+            except HTTPException:
+                authenticated = False
+
+    if not authenticated or not user:
+        if failure_key:
+            login_throttle._record_login_failure(failure_key)
+        login_throttle._record_login_failure(user_key)
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    if failure_key:
+        login_throttle.LOGIN_FAILURES.pop(failure_key, None)
+    login_throttle.LOGIN_FAILURES.pop(user_key, None)
+
+    snapshot = CachedAuthUser(
+        id=user.id,
+        username=user.username,
+        is_admin=bool(user.is_admin),
+        is_active=bool(user.is_active),
+        created_at=user.created_at,
+    )
+    if BASIC_AUTH_CACHE_TTL_SECONDS > 0:
+        cache_key = hash_token(f"{username}\0{password}")
+        with _auth_cache_lock:
+            _basic_auth_cache[cache_key] = (snapshot, time.monotonic())
+            _basic_auth_cache.move_to_end(cache_key)
+            while len(_basic_auth_cache) > BASIC_AUTH_CACHE_MAX_SIZE:
+                _basic_auth_cache.popitem(last=False)
+    return snapshot
 
 
 def revoke_access_token(db: Session, raw_token: str) -> bool:

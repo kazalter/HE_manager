@@ -28,11 +28,13 @@ from .routers import external as external_routes
 from .routers import discard as discard_routes
 from .routers import l2d as l2d_routes
 from .routers import media as media_routes
+from .routers import opds as opds_routes
 from .routers import pawchive as pawchive_routes
 from .routers import recommend as recommend_routes
 from .routers import root as root_routes
 from .routers import stats as stats_routes
 from .routers import system as system_routes
+from .routers import webdav as webdav_routes
 from .routers import x_import as x_import_routes
 from .dedup import worker as dedup_worker
 from .services import job_lifecycle, media_fts
@@ -134,6 +136,8 @@ app.include_router(auto_sync_routes.router)
 app.include_router(bd2_routes.router)
 app.include_router(auth_routes.router)
 app.include_router(media_routes.router)
+app.include_router(opds_routes.router)
+app.include_router(webdav_routes.router)
 app.include_router(l2d_routes.router)
 app.include_router(discard_routes.router)
 app.include_router(audio_routes.router)
@@ -210,8 +214,8 @@ def _admin_path(method: str, path: str) -> bool:
     return False
 
 
-def _json_error(status_code: int, detail: str) -> JSONResponse:
-    return JSONResponse(status_code=status_code, content={"detail": detail})
+def _json_error(status_code: int, detail: str, headers: dict[str, str] | None = None) -> JSONResponse:
+    return JSONResponse(status_code=status_code, content={"detail": detail}, headers=headers)
 
 
 @app.middleware("http")
@@ -220,37 +224,61 @@ async def require_authenticated_request(request: Request, call_next):
     if request.method == "OPTIONS" or _public_path(path):
         response = await call_next(request)
     else:
+        allow_basic = auth.basic_auth_allowed(path)
+        basic_challenge = {"WWW-Authenticate": 'Basic realm="HE Manager"'} if allow_basic else None
+        auth_header = request.headers.get("authorization")
         query_token = (
             request.query_params.get("token")
             if auth.query_token_allowed(request.method, path)
             else None
         )
         raw_token = auth.extract_token(
-            authorization=request.headers.get("authorization"),
+            authorization=auth_header,
             query_token=query_token,
         )
         if not raw_token and request.method == "GET" and path.startswith("/l2d/models/"):
             raw_token = request.cookies.get("he_l2d_token")
-        if not raw_token:
-            logger.warning("Auth intercepted: %s %s", request.method, path)
-            return _json_error(401, "Missing access token")
+        basic_creds = auth.parse_basic_authorization(auth_header) if (not raw_token and allow_basic) else None
 
-        def authenticate():
-            db = database.SessionLocal()
-            try:
-                return auth.authenticate_request_token(db, raw_token)
-            finally:
-                db.close()
+        if not raw_token and not basic_creds:
+            logger.warning("Auth intercepted: %s %s", request.method, path)
+            return _json_error(401, "Missing access token", headers=basic_challenge)
 
         try:
-            user = auth.get_cached_request_user(raw_token)
-            if user is None:
-                user = await run_in_threadpool(authenticate)
+            if raw_token:
+                def authenticate():
+                    db = database.SessionLocal()
+                    try:
+                        return auth.authenticate_request_token(db, raw_token)
+                    finally:
+                        db.close()
+
+                user = auth.get_cached_request_user(raw_token)
+                if user is None:
+                    user = await run_in_threadpool(authenticate)
+            else:
+                username, password = basic_creds
+                failure_key = auth.login_throttle._login_failure_key(request, username)
+
+                def authenticate_basic():
+                    db = database.SessionLocal()
+                    try:
+                        return auth.authenticate_basic_credentials(
+                            db, username, password, failure_key=failure_key
+                        )
+                    finally:
+                        db.close()
+
+                user = auth.get_cached_basic_user(username, password)
+                if user is None:
+                    user = await run_in_threadpool(authenticate_basic)
+
             if _admin_path(request.method, path) and not user.is_admin:
                 return _json_error(403, "Admin permission required")
             request.state.current_user = user
         except HTTPException as exc:
-            return _json_error(exc.status_code, str(exc.detail))
+            headers = basic_challenge if exc.status_code == 401 else None
+            return _json_error(exc.status_code, str(exc.detail), headers=headers)
         response = await call_next(request)
 
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
