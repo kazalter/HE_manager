@@ -25,7 +25,7 @@ const cancel = async (store: typeof externalDownloadStore | typeof asmrDownloadS
 
     <div class="page-gutter pb-12">
       <div class="page-container">
-        <div class="max-w-[960px] space-y-10">
+        <div class="max-w-[1040px] space-y-10">
           <section>
             <SectionHeader title="WNACG 与 ASMR" :count="jobs.length ? `${jobs.length} 个任务` : undefined" />
             <p v-if="actionError" role="alert" class="mb-3 flex items-start gap-3 rounded-lg border border-danger/25 bg-danger/10 px-3.5 py-3 text-meta text-danger">{{ actionError }}</p>

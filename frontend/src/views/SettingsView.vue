@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import axios from 'axios'
-import { Check, CheckCircle2, FolderOpen, FolderPlus, HardDrive, Pipette, RefreshCw, Trash2 } from 'lucide-vue-next'
+import { Check, CheckCircle2, FolderOpen, FolderPlus, HardDrive, Layers, Pipette, RefreshCw, Trash2 } from 'lucide-vue-next'
 import { EmptyState, PageHeader, SectionHeader, UiBadge, UiButton, UiCard, UiIconButton, UiModal, UiSpinner, controlClass, fieldHintClass, fieldLabelClass } from '../components/ui'
 import { API_BASE_URL } from '../config'
 import { applyTheme, themeState, themeOptionsForMode } from '../theme'
+import { applyDensity, DENSITY_OPTIONS, densityState } from '../density'
 import ColorModeSelect from '../components/ColorModeSelect.vue'
 import WallpaperSettings from '../components/WallpaperSettings.vue'
 import { desktopBridge, desktopState } from '../desktop'
@@ -277,13 +278,60 @@ const formatLocalTime = (timeStr: string | null) => {
   return minutes.startsWith(`${new Date().getFullYear()}-`) ? minutes.slice(5) : minutes
 }
 
+const activeSettingsSection = ref('settings-folders')
+let settingsObserver: IntersectionObserver | null = null
+let manualSettingsScrollTimer: number | undefined
+let isManualSettingsScroll = false
+
+const settingsSections = computed(() => ([
+  { id: 'settings-folders', label: '媒体库目录' },
+  ...(authState.user?.is_admin ? [{ id: 'settings-assistant', label: '智能与元数据' }] : []),
+  { id: 'settings-appearance', label: '外观与舒适度' },
+  { id: 'settings-proxy', label: '网络代理' },
+  { id: 'settings-shortcuts', label: '键盘快捷键' },
+]))
+
+const scrollToSettingsSection = (id: string) => {
+  activeSettingsSection.value = id
+  isManualSettingsScroll = true
+  if (manualSettingsScrollTimer) clearTimeout(manualSettingsScrollTimer)
+  manualSettingsScrollTimer = window.setTimeout(() => { isManualSettingsScroll = false }, 700)
+  document.getElementById(id)?.scrollIntoView({
+    behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    block: 'start',
+  })
+}
+
+const initSettingsObserver = () => {
+  if (typeof IntersectionObserver === 'undefined') return
+  settingsObserver?.disconnect()
+  settingsObserver = new IntersectionObserver(
+    entries => {
+      if (isManualSettingsScroll) return
+      const visible = entries.filter(e => e.isIntersecting)
+      if (visible.length > 0) {
+        visible.sort((a, b) => Math.abs(a.boundingClientRect.top) - Math.abs(b.boundingClientRect.top))
+        if (visible[0]?.target?.id) activeSettingsSection.value = visible[0].target.id
+      }
+    },
+    { rootMargin: '-12% 0px -65% 0px', threshold: [0, 0.25] },
+  )
+  for (const s of settingsSections.value) {
+    const el = document.getElementById(s.id)
+    if (el) settingsObserver.observe(el)
+  }
+}
+
 onMounted(() => {
   void fetchFolders()
   void fetchExternalProxy()
+  void nextTick(initSettingsObserver)
 })
 
 onUnmounted(() => {
   disposed = true
+  settingsObserver?.disconnect()
+  if (manualSettingsScrollTimer) window.clearTimeout(manualSettingsScrollTimer)
   if (toastTimer) window.clearTimeout(toastTimer)
   if (pollTimer) window.clearTimeout(pollTimer)
 })
@@ -303,10 +351,31 @@ onUnmounted(() => {
 
     <div class="page-gutter pb-12">
       <div class="page-container">
-        <div class="max-w-[960px] space-y-10">
+        <div class="max-w-[1180px] lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start lg:gap-10">
+          <!-- Sticky Section Index (Desktop) / Horizontal Pills (Mobile/Tablet) -->
+          <nav
+            aria-label="设置分区"
+            class="he-scroll-fade-x -mx-4 mb-6 flex gap-1.5 overflow-x-auto px-4 scrollbar-none sm:-mx-6 sm:px-6 lg:sticky lg:top-6 lg:mx-0 lg:mb-0 lg:flex-col lg:gap-1 lg:overflow-visible lg:px-0"
+          >
+            <button
+              v-for="item in settingsSections"
+              :key="item.id"
+              type="button"
+              :aria-current="activeSettingsSection === item.id ? 'true' : undefined"
+              class="shrink-0 whitespace-nowrap rounded-xl px-3.5 py-2 text-left text-meta font-medium transition-colors duration-150 focus-ring"
+              :class="activeSettingsSection === item.id
+                ? 'bg-accent/14 text-ink ring-1 ring-inset ring-accent/30'
+                : 'text-muted hover:bg-surface-2 hover:text-ink'"
+              @click="scrollToSettingsSection(item.id)"
+            >
+              {{ item.label }}
+            </button>
+          </nav>
+
+          <div class="min-w-0 space-y-10">
           <WallpaperSettings v-if="desktopBridge && desktopState.platform === 'win32'" />
           <!-- 媒体库目录 -->
-          <section>
+          <section id="settings-folders" class="scroll-mt-6">
             <SectionHeader title="媒体库目录" :count="folders.length ? `${folders.length} 个` : undefined" description="扫描这些目录中的视频、漫画、图片和音频">
               <template #actions>
                 <UiButton
@@ -370,13 +439,45 @@ onUnmounted(() => {
             </UiCard>
           </section>
 
-          <AssistantModelSettings v-if="authState.user?.is_admin" />
-          <MetadataEnrichmentSettings v-if="authState.user?.is_admin" />
+          <div v-if="authState.user?.is_admin" id="settings-assistant" class="scroll-mt-6 space-y-10">
+            <AssistantModelSettings />
+            <MetadataEnrichmentSettings />
+          </div>
 
-          <!-- 界面主题 -->
-          <section>
-            <SectionHeader title="界面主题" description="明暗模式与强调色可独立选择，自动记住你的偏好" />
-            <ColorModeSelect class="mb-4" />
+          <!-- 界面主题与布局舒适度 -->
+          <section id="settings-appearance" class="scroll-mt-6">
+            <SectionHeader title="界面主题与舒适度" description="明暗模式、强调色与画廊留白可独立调整，自动记住你的偏好" />
+            <ColorModeSelect class="mb-5" />
+
+            <!-- 布局舒适度 Choice Cards -->
+            <fieldset class="mb-6">
+              <legend class="mb-2.5 flex items-center gap-1.5 text-meta font-medium text-muted">
+                <Layers :size="15" class="text-subtle" aria-hidden="true" />
+                <span>布局舒适度</span>
+              </legend>
+              <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <label
+                  v-for="opt in DENSITY_OPTIONS"
+                  :key="opt.id"
+                  class="he-choice-card squircle relative flex cursor-pointer flex-col gap-2 rounded-2xl bg-surface p-3.5 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent"
+                  :class="densityState.density === opt.id ? 'border-accent bg-accent/8' : ''"
+                >
+                  <input
+                    type="radio"
+                    name="visual-density"
+                    :value="opt.id"
+                    :checked="densityState.density === opt.id"
+                    class="sr-only"
+                    @change="applyDensity(opt.id)"
+                  />
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-body font-semibold text-ink">{{ opt.label }}</span>
+                    <Check v-if="densityState.density === opt.id" :size="16" class="shrink-0 text-accent" aria-hidden="true" />
+                  </div>
+                  <p class="text-caption leading-relaxed text-subtle">{{ opt.description }}</p>
+                </label>
+              </div>
+            </fieldset>
             <div class="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3">
               <button
                 v-for="theme in themes"
@@ -424,7 +525,7 @@ onUnmounted(() => {
           </section>
 
           <!-- 外部收藏代理 -->
-          <section>
+          <section id="settings-proxy" class="scroll-mt-6">
             <SectionHeader title="网络代理" description="统一用于 WNACG、X 收藏和 Pawchive 的服务端请求">
               <template #actions>
                 <span v-if="loadingProxy" role="status" class="flex items-center gap-1.5 text-meta text-subtle">
@@ -472,7 +573,7 @@ onUnmounted(() => {
           </section>
 
           <!-- 全站键盘快捷键指南 -->
-          <section class="pointer-coarse:hidden">
+          <section id="settings-shortcuts" class="scroll-mt-6 pointer-coarse:hidden">
             <SectionHeader title="键盘快捷键" description="熟悉快捷键，浏览与播放更顺手" />
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <UiCard v-for="group in shortcutGroups" :key="group.title" padding="none">
@@ -486,6 +587,7 @@ onUnmounted(() => {
               </UiCard>
             </div>
           </section>
+          </div>
         </div>
       </div>
     </div>

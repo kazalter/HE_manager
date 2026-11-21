@@ -172,11 +172,11 @@ const frameStyle = computed(() => {
         <span>{{ typeLabel(media.media_type) }}</span>
       </div>
 
-      <div v-if="media.is_missing" class="absolute bottom-2.5 left-2 inline-flex min-h-6 items-center rounded-lg bg-danger px-1.5 py-0.5 text-caption font-semibold text-black/85 shadow-sm">
+      <div v-if="media.is_missing" class="he-badge-missing absolute bottom-2.5 left-2 inline-flex min-h-6 items-center rounded-lg bg-danger px-1.5 py-0.5 text-caption font-semibold text-black/85 shadow-sm">
         文件丢失
       </div>
 
-      <span v-if="showDuration" class="absolute bottom-2.5 right-2 inline-flex min-h-6 items-center rounded-lg bg-black/65 px-1.5 py-0.5 text-caption font-medium tabular-nums text-white backdrop-blur-md ring-1 ring-inset ring-white/10">
+      <span v-if="showDuration" class="he-card-duration absolute bottom-2.5 right-2 inline-flex min-h-6 items-center rounded-lg bg-black/65 px-1.5 py-0.5 text-caption font-medium tabular-nums text-white backdrop-blur-md ring-1 ring-inset ring-white/10 transition-[bottom] duration-150">
         {{ formatDuration(media.duration!) }}
       </span>
 
@@ -185,7 +185,7 @@ const frameStyle = computed(() => {
       </div>
     </div>
 
-    <div class="mt-2.5 w-full min-w-0 px-0.5">
+    <div class="he-media-card__body mt-2.5 w-full min-w-0 px-0.5">
       <h3 class="line-clamp-2 min-h-[2.75em] wrap-anywhere text-meta font-medium leading-snug text-ink transition-colors duration-150 group-hover:text-accent-glow sm:text-body sm:leading-snug" :title="media.title">
         {{ media.title }}
       </h3>
@@ -210,6 +210,15 @@ const frameStyle = computed(() => {
 <style>
 .he-media-card__frame {
   box-shadow: var(--he-shadow-card);
+}
+
+/* Scoped content-based styling via :has() without extra template classes. */
+.he-media-card:has([role="progressbar"]) .he-card-duration {
+  bottom: 12px;
+}
+
+.he-media-card:has(.he-badge-missing) .he-media-card__frame {
+  box-shadow: 0 0 0 1px rgb(var(--color-danger) / 0.45), var(--he-shadow-card);
 }
 
 .he-media-card__backdrop {
