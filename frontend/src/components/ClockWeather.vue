@@ -141,12 +141,12 @@ onBeforeUnmount(() => { disposed = true; weatherRequest++; searchRequest++; loca
     </div>
     <div ref="weatherRoot" class="he-weather">
       <button ref="weatherTrigger" type="button" class="he-weather-trigger focus-ring" :aria-expanded="weatherOpen" :aria-controls="weatherPanelId" :title="weather ? `${placeLabel} ${description} ${Math.round(weather.temperature)}°C` : message" @click="weatherOpen = !weatherOpen">
-        <component :is="weatherIcon" :size="18" aria-hidden="true" />
+        <component :is="weatherIcon" :size="16" class="text-accent-glow" aria-hidden="true" />
         <span v-if="weather" class="he-weather-label">{{ Math.round(weather.temperature) }}° <span class="he-weather-place">{{ place?.name }}</span></span>
         <span v-else>天气</span>
       </button>
       <Transition name="he-pop">
-      <div v-show="weatherOpen" :id="weatherPanelId" :inert="!weatherOpen" class="he-weather-popover">
+      <div v-show="weatherOpen" :id="weatherPanelId" :inert="!weatherOpen" class="he-weather-popover glass-elevated">
         <div class="flex items-center justify-between gap-3">
           <span class="min-w-0 text-meta font-medium text-ink">{{ placeLabel }}</span>
           <button type="button" class="he-weather-action focus-ring" @click="locate"><MapPin :size="14" />自动定位</button>
@@ -154,13 +154,13 @@ onBeforeUnmount(() => { disposed = true; weatherRequest++; searchRequest++; loca
         <p v-if="weather" class="mt-2 text-meta text-muted">{{ description }} · {{ Math.round(weather.temperature) }}°C <button type="button" class="he-weather-action focus-ring" aria-label="刷新天气" @click="refreshWeather"><RefreshCw :size="13" /></button></p>
         <p v-if="message" role="status" class="mt-2 text-meta text-subtle">{{ message }}</p>
         <form class="mt-3 flex gap-2" @submit.prevent="searchPlaces()">
-          <input v-model="searchText" class="min-w-0 flex-1 rounded-lg border border-line bg-surface-2 px-2.5 py-2 text-meta text-ink focus-ring" aria-label="搜索城市" placeholder="输入城市名称" />
+          <input v-model="searchText" class="min-w-0 flex-1 rounded-xl border border-line bg-surface-2 px-2.5 py-2 text-meta text-ink focus-ring" aria-label="搜索城市" placeholder="输入城市名称" />
           <button class="he-weather-action focus-ring" :disabled="searching" type="submit">{{ searching ? '搜索中' : '搜索' }}</button>
         </form>
-        <ul v-if="provinceResults" class="mt-2 max-h-40 overflow-y-auto" :aria-label="`${provinceResults.name}城市`">
+        <ul v-if="provinceResults" class="custom-scrollbar mt-2 max-h-40 overflow-y-auto" :aria-label="`${provinceResults.name}城市`">
           <li v-for="city in provinceResults.cities" :key="city.name"><button type="button" class="w-full rounded-lg px-2 py-2 text-left text-meta text-muted hover:bg-surface-2 focus-ring" @click="searchPlaces(city, provinceResults!)">{{ city.name }} · {{ provinceResults.name }}</button></li>
         </ul>
-        <ul v-else-if="searchResults.length" class="mt-2 max-h-40 overflow-y-auto">
+        <ul v-else-if="searchResults.length" class="custom-scrollbar mt-2 max-h-40 overflow-y-auto">
           <li v-for="result in searchResults" :key="`${result.latitude},${result.longitude}`"><button type="button" class="w-full rounded-lg px-2 py-2 text-left text-meta text-muted hover:bg-surface-2 focus-ring" @click="selectPlace(result)">{{ [...new Set([result.name, result.admin2, result.admin1, result.country].filter(Boolean))].join(' · ') }}</button></li>
         </ul>
         <p class="mt-3 text-caption text-subtle">天气数据：<a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" class="underline">Open-Meteo</a></p>
@@ -171,21 +171,21 @@ onBeforeUnmount(() => { disposed = true; weatherRequest++; searchRequest++; loca
 </template>
 
 <style scoped>
-.he-clock-weather { display: flex; align-items: center; gap: 12px; color: rgb(var(--color-muted)); }
+.he-clock-weather { display: flex; align-items: center; gap: 8px; color: rgb(var(--color-muted)); }
 .he-clock-weather--compact { flex: none; }
-.he-clock-weather--panel { justify-content: space-between; padding: 14px 16px; border: 1px solid rgb(var(--color-line)); border-radius: 16px; background: rgb(var(--color-surface)); }
-.he-clock { display: flex; flex-direction: column; line-height: 1.25; white-space: nowrap; }
-.he-clock-date { font-size: 11px; color: rgb(var(--color-subtle)); }
-.he-clock-time { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; color: rgb(var(--color-ink)); }
+.he-clock-weather--panel { justify-content: space-between; padding: 14px 16px; border: 1px solid rgb(var(--color-line)); border-radius: 18px; background: rgb(var(--color-surface)); box-shadow: inset 0 1px 0 var(--he-border-specular); }
+.he-clock { display: flex; flex-direction: column; line-height: 1.2; white-space: nowrap; }
+.he-clock-date { font-size: 10.5px; color: rgb(var(--color-subtle)); }
+.he-clock-time { font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: rgb(var(--color-ink)); }
 .he-clock-weather--panel .he-clock-date { font-size: 12px; }
 .he-clock-weather--panel .he-clock-time { font-size: 20px; }
 .he-weather { position: relative; }
-.he-weather-trigger { display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 8px; border-radius: 8px; cursor: pointer; font-size: 12px; white-space: nowrap; list-style: none; }
+.he-weather-trigger { display: flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 10px; border: 1px solid rgb(var(--color-line)); border-radius: 12px; background: rgb(var(--color-surface-2) / 0.75); cursor: pointer; font-size: 12px; white-space: nowrap; list-style: none; transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease; }
 .he-weather-trigger::-webkit-details-marker { display: none; }
-.he-weather-label { display: flex; gap: 4px; align-items: center; }
+.he-weather-label { display: flex; gap: 4px; align-items: center; font-variant-numeric: tabular-nums; }
 .he-weather-place { display: inline-block; max-width: 64px; overflow: hidden; text-overflow: ellipsis; }
-.he-weather-trigger:hover { background: rgb(var(--color-surface-2)); color: rgb(var(--color-ink)); }
-.he-weather-popover { position: absolute; z-index: 80; top: calc(100% + 8px); right: 0; width: min(288px, calc(100vw - 32px)); padding: 14px; border: 1px solid rgb(var(--color-line-strong)); border-radius: 14px; background: rgb(var(--color-surface)); box-shadow: var(--he-shadow-pop); }
-.he-weather-action { display: inline-flex; align-items: center; gap: 4px; padding: 6px; border-radius: 6px; color: rgb(var(--color-muted)); font-size: 12px; }
+.he-weather-trigger:hover { border-color: rgb(var(--color-line-strong)); background: rgb(var(--color-surface-3)); color: rgb(var(--color-ink)); }
+.he-weather-popover { position: absolute; z-index: 80; top: calc(100% + 8px); right: 0; width: min(296px, calc(100vw - 32px)); padding: 14px; border: 1px solid rgb(var(--color-line-strong)); border-radius: 18px; box-shadow: var(--he-shadow-pop); }
+.he-weather-action { display: inline-flex; align-items: center; gap: 4px; padding: 6px 8px; border-radius: 8px; color: rgb(var(--color-muted)); font-size: 12px; }
 .he-weather-action:hover { background: rgb(var(--color-surface-2)); color: rgb(var(--color-ink)); }
 </style>

@@ -74,7 +74,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocPointer))
       :aria-expanded="open"
       @click="toggle"
       :class="[
-        'w-full h-10 flex items-center justify-between gap-2 rounded-lg border bg-surface-2 px-3 text-body text-ink text-left transition-colors duration-150 ease-out focus:outline-none',
+        'w-full min-h-10 flex items-center justify-between gap-2 rounded-xl border bg-surface-2/90 px-3 py-1.5 text-body text-ink text-left transition-colors duration-150 ease-out focus:outline-none',
         open ? 'border-accent ring-2 ring-accent/25' : 'border-line hover:border-line-strong focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/25',
       ]"
     >
@@ -93,7 +93,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocPointer))
       <div
         v-if="open"
         role="listbox"
-        class="absolute left-0 right-0 mt-1.5 z-50 max-h-72 overflow-y-auto p-1.5 rounded-2xl border border-line-strong bg-surface-3 shadow-pop"
+        class="custom-scrollbar absolute left-0 right-0 mt-1.5 z-50 max-h-72 overflow-y-auto p-1.5 rounded-2xl squircle border border-line-strong glass-elevated shadow-pop"
       >
         <button
           v-for="(opt, i) in options"
@@ -104,9 +104,9 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocPointer))
           @click="pick(opt.value)"
           @mousemove="activeIndex = i"
           :class="[
-            'w-full h-9 flex items-center justify-between gap-2 px-2.5 rounded-lg text-body text-left transition-colors duration-100',
-            opt.value === modelValue ? 'text-ink font-medium' : 'text-muted',
-            activeIndex === i ? 'bg-line-strong/60 text-ink' : '',
+            'w-full min-h-9 flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl text-body text-left transition-colors duration-100',
+            opt.value === modelValue ? 'text-ink font-medium bg-accent/12' : 'text-muted',
+            activeIndex === i && opt.value !== modelValue ? 'bg-line-strong/55 text-ink' : '',
           ]"
         >
           <span class="truncate">{{ opt.label }}</span>

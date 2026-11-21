@@ -862,17 +862,17 @@ const lastOpenedText = (item: StatAttentionItem) => {
     <nav
       v-if="!loading && !errorMessage"
       aria-label="看板分区"
-      class="page-gutter sticky top-0 z-20 -mt-2 border-b border-line bg-background/95 py-2 lg:-mt-3"
+      class="page-gutter sticky top-0 z-20 -mt-2 border-b border-line/80 glass-surface py-2 lg:-mt-3"
     >
       <div class="page-container">
-        <div class="flex w-full gap-0.5 rounded-lg border border-line bg-surface p-0.5 sm:inline-flex sm:w-auto">
+        <div class="flex w-full gap-0.5 rounded-xl border border-line bg-surface-2/85 p-0.5 sm:inline-flex sm:w-auto">
           <button
             v-for="item in navSections"
             :key="item.id"
             type="button"
             :aria-current="activeSection === item.id ? 'true' : undefined"
-            class="h-8 flex-1 whitespace-nowrap rounded-md px-3 text-meta font-medium transition-colors duration-150 focus-ring sm:flex-none pointer-coarse:h-10"
-            :class="activeSection === item.id ? 'bg-surface-3 text-ink shadow-[0_1px_2px_rgb(0_0_0/0.35)]' : 'text-subtle hover:text-ink'"
+            class="min-h-8 flex-1 whitespace-nowrap rounded-[9px] px-3 py-1 text-meta font-medium transition-colors duration-150 focus-ring sm:flex-none pointer-coarse:min-h-10"
+            :class="activeSection === item.id ? 'bg-surface-3 text-ink ring-1 ring-inset ring-line-strong/80 shadow-[0_1px_2px_rgb(0_0_0/0.25)]' : 'text-subtle hover:text-ink'"
             @click="scrollToSection(item.id)"
           >
             <span class="sm:hidden">{{ item.short }}</span>

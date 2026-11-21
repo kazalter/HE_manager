@@ -298,8 +298,8 @@ onUnmounted(() => {
           添加媒体库
         </UiButton>
       </template>
+      <p class="text-caption text-subtle tabular-nums">界面源码版本：{{ sourceVersion }}</p>
     </PageHeader>
-    <p class="mb-4 text-meta text-subtle">界面源码版本：{{ sourceVersion }}</p>
 
     <div class="page-gutter pb-12">
       <div class="page-container">
