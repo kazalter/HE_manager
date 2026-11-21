@@ -4,10 +4,19 @@ import ClockWeather from '../components/ClockWeather.vue'
 import { computed, ref } from 'vue'
 import { ArchiveX, BarChart3, Book, ChevronRight, CopyMinus, Download, LogOut, MessageSquare, Palette, Settings, Smartphone, Sparkles, Tags, Users } from 'lucide-vue-next'
 import { authState, logout } from '../auth'
-import { PageHeader, SectionHeader, UiButton, UiCard, UiModal } from '../components/ui'
+import { PageHeader, SectionHeader, UiButton, UiCard, UiModal, UiSegmented, type SegmentedOption } from '../components/ui'
+import { applyDensity, DENSITY_OPTIONS, densityState, type VisualDensity } from '../density'
 
 const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true
 const logoutConfirmOpen = ref(false)
+const densityOptions: SegmentedOption<VisualDensity>[] = DENSITY_OPTIONS.map(option => ({
+  value: option.id,
+  label: option.shortLabel,
+}))
+const densityModel = computed<VisualDensity>({
+  get: () => densityState.density,
+  set: value => applyDensity(value),
+})
 const links = [
   { to: '/downloads', label: '下载任务', hint: '查看服务器下载进度', icon: Download, group: 'tools' },
   { to: '/creators', label: '作者', hint: '浏览关注的创作者', icon: Book, group: 'library' },
@@ -58,8 +67,14 @@ const confirmSignOut = () => {
           </div>
 
           <section>
-            <SectionHeader title="外观模式" as="h2" description="选择适合当前光线的界面，自动记住你的偏好" />
-            <ColorModeSelect />
+            <SectionHeader title="外观与舒适度" as="h2" description="调整明暗主题与画廊排版密度，自动记住你的偏好" />
+            <div class="space-y-3">
+              <ColorModeSelect />
+              <UiCard padding="sm" class="space-y-2">
+                <p class="text-meta font-medium text-muted">布局舒适度</p>
+                <UiSegmented v-model="densityModel" label="布局舒适度" :options="densityOptions" block />
+              </UiCard>
+            </div>
           </section>
 
           <section v-for="group in groups" :key="group.key">

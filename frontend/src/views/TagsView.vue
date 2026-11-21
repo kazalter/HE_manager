@@ -270,12 +270,12 @@ const removeTag = async (t: Tag) => {
           排序：{{ sortBy === 'count' ? '按数量' : '按名称' }}
         </UiButton>
       </div>
-      <div v-if="tags.length > 0" class="mt-3 flex flex-wrap gap-1.5">
+      <div v-if="tags.length > 0" class="he-scroll-fade-x scrollbar-none -mx-4 mt-3 flex gap-1.5 overflow-x-auto px-4 sm:-mx-6 sm:px-6 lg:hidden">
         <button
           v-for="tab in namespaceTabs"
           :key="tab.value"
           type="button"
-          class="rounded-full border px-2.5 py-1 text-caption transition-colors"
+          class="shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-caption transition-colors"
           :class="selectedNamespace === tab.value
             ? 'border-accent bg-accent/15 text-ink font-medium'
             : 'border-line bg-surface-2 text-muted hover:text-ink'"
@@ -288,6 +288,28 @@ const removeTag = async (t: Tag) => {
 
     <div class="page-gutter pb-12">
       <div class="page-container">
+        <div class="lg:grid lg:grid-cols-[210px_minmax(0,1fr)] lg:items-start lg:gap-8">
+          <aside v-if="tags.length > 0" aria-label="标签分类筛选" class="hidden lg:block lg:sticky lg:top-6">
+            <p class="px-3 pb-2 text-[11px] font-semibold tracking-wider text-faint">命名空间</p>
+            <div class="space-y-1">
+              <button
+                v-for="tab in namespaceTabs"
+                :key="tab.value"
+                type="button"
+                :aria-current="selectedNamespace === tab.value ? 'true' : undefined"
+                class="flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-meta font-medium transition-colors duration-150 focus-ring"
+                :class="selectedNamespace === tab.value
+                  ? 'bg-accent/14 text-ink ring-1 ring-inset ring-accent/30'
+                  : 'text-muted hover:bg-surface-2 hover:text-ink'"
+                @click="selectedNamespace = tab.value"
+              >
+                <span class="truncate">{{ tab.label }}</span>
+                <span class="rounded-full bg-surface-2 px-2 py-0.5 text-caption text-subtle tabular-nums">{{ tab.count }}</span>
+              </button>
+            </div>
+          </aside>
+
+          <div class="min-w-0">
         <div v-if="loading" class="space-y-10" aria-busy="true">
           <section v-for="n in 2" :key="n">
             <UiSkeleton shape="text" class="mb-3 w-24" />
@@ -400,6 +422,8 @@ const removeTag = async (t: Tag) => {
               </div>
             </UiCard>
           </section>
+        </div>
+          </div>
         </div>
       </div>
     </div>
