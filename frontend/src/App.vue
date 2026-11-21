@@ -7,6 +7,7 @@ import { desktopBridge, desktopSession } from './desktop'
 import DesktopToolbar from './components/DesktopToolbar.vue'
 import TopBar from './components/TopBar.vue'
 import MobileNavigation from './components/MobileNavigation.vue'
+import CommandPalette from './components/CommandPalette.vue'
 import AuthView from './views/AuthView.vue'
 import AppUpdateNotice from './components/AppUpdateNotice.vue'
 import GlobalAudioPlayer from './components/GlobalAudioPlayer.vue'
@@ -16,6 +17,7 @@ import { useStandaloneViewport } from './composables/useStandaloneViewport'
 const compact = useCompactViewport()
 useStandaloneViewport()
 const route = useRoute(), router = useRouter()
+const commandPaletteOpen = ref(false)
 watch(() => desktopSession.generation, () => {
   audioPlaybackStore.stop()
   const query = { ...route.query }; delete query.media
@@ -50,24 +52,47 @@ const handleMainScroll = (event: Event) => { showBackToTop.value = (event.target
 const scrollToTop = () => mainScrollRef.value?.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
 const retryProgress = () => { void desktopBridge?.retryProgress().catch(() => {}) }
 const pauseAudioForVideo = (event: Event) => { if (event.target instanceof HTMLVideoElement && audioPlaybackStore.state.playing) audioPlaybackStore.togglePlay() }
-onMounted(() => { window.addEventListener('online', retryProgress); window.addEventListener('he:content-ready', onContentReady); window.addEventListener('he:scroll-top', scrollToTop); document.addEventListener('play', pauseAudioForVideo, true) })
-onBeforeUnmount(() => { window.removeEventListener('online', retryProgress); window.removeEventListener('he:content-ready', onContentReady); window.removeEventListener('he:scroll-top', scrollToTop); document.removeEventListener('play', pauseAudioForVideo, true) })
+const onGlobalKeydown = (event: KeyboardEvent) => {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+    if (!authState.user || isEmbed.value || route.query.media) return
+    event.preventDefault()
+    commandPaletteOpen.value = !commandPaletteOpen.value
+  }
+}
+onMounted(() => {
+  window.addEventListener('online', retryProgress)
+  window.addEventListener('he:content-ready', onContentReady)
+  window.addEventListener('he:scroll-top', scrollToTop)
+  window.addEventListener('keydown', onGlobalKeydown)
+  document.addEventListener('play', pauseAudioForVideo, true)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('online', retryProgress)
+  window.removeEventListener('he:content-ready', onContentReady)
+  window.removeEventListener('he:scroll-top', scrollToTop)
+  window.removeEventListener('keydown', onGlobalKeydown)
+  document.removeEventListener('play', pauseAudioForVideo, true)
+})
 </script>
 <template>
   <DesktopToolbar v-if="desktopBridge" />
   <AuthView v-if="authState.ready && !authState.user" :has-users="authState.hasUsers" :startup-error="authState.error" />
   <div v-else-if="authState.ready" :key="desktopBridge ? desktopSession.generation : undefined" class="he-app-shell w-full bg-background text-ink font-sans relative overflow-hidden flex flex-col" :class="{ 'he-compact-shell': compact && !isEmbed, 'he-has-mini': audioPlaybackStore.state.media && !audioPlaybackStore.state.expanded }">
-    <a href="#he-main-content" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-accent focus:px-4 focus:py-3 focus:text-on-accent">跳转到主要内容</a>
+    <a href="#he-main-content" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-xl focus:bg-accent focus:px-4 focus:py-3 focus:text-on-accent">跳转到主要内容</a>
     <div v-if="!isEmbed" class="he-ambient" aria-hidden="true"></div>
-    <TopBar v-if="!isEmbed && !compact" :user="authState.user" @logout="logout" />
+    <TopBar v-if="!isEmbed && !compact" :user="authState.user" @logout="logout" @open-command-palette="commandPaletteOpen = true" />
     <main id="he-main-content" ref="mainScrollRef" :inert="audioPlaybackStore.state.expanded || !!route.query.media" tabindex="-1" @scroll="handleMainScroll" class="flex-1 min-h-0 min-w-0 relative z-10 box-border main-scroll-container focus:outline-none" :class="isEmbed ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden custom-scrollbar'">
       <router-view v-slot="{ Component }"><transition name="page-fade" mode="out-in"><component :is="Component" /></transition></router-view>
       <div v-if="!isEmbed" class="h-8 w-full"></div>
     </main>
     <MobileNavigation v-if="compact && !isEmbed" :inert="audioPlaybackStore.state.expanded || !!route.query.media" /><GlobalAudioPlayer v-if="!isEmbed" /><AppUpdateNotice v-if="!isEmbed" />
-    <button v-if="showBackToTop && !isEmbed && !route.query.media && !audioPlaybackStore.state.expanded" type="button" @click="scrollToTop" class="he-back-top fixed right-6 z-30 size-11 rounded-full border border-line-strong bg-surface-3 text-muted shadow-pop flex items-center justify-center transition-colors duration-150 hover:text-ink focus-ring" aria-label="返回顶部"><ChevronUp :size="20" aria-hidden="true" /></button>
+    <CommandPalette v-if="!isEmbed" v-model:open="commandPaletteOpen" :user="authState.user" />
+    <button v-if="showBackToTop && !isEmbed && !route.query.media && !audioPlaybackStore.state.expanded" type="button" @click="scrollToTop" class="he-back-top fixed right-6 z-30 size-11 rounded-2xl squircle border border-line-strong glass-elevated text-muted shadow-pop flex items-center justify-center transition-colors duration-150 hover:text-ink focus-ring" aria-label="返回顶部"><ChevronUp :size="20" aria-hidden="true" /></button>
   </div>
-  <div v-else class="he-app-shell bg-background text-subtle text-body flex items-center justify-center">正在检查登录状态</div>
+  <div v-else class="he-app-shell bg-background text-subtle text-body flex flex-col items-center justify-center gap-3">
+    <span class="grid size-11 place-items-center rounded-2xl bg-accent/15 text-sm font-bold tracking-wider text-accent-glow ring-1 ring-inset ring-accent/30">HE</span>
+    <span>正在检查登录状态</span>
+  </div>
 </template>
 <style>
 .main-scroll-container {
@@ -79,17 +104,19 @@ onBeforeUnmount(() => { window.removeEventListener('online', retryProgress); win
   height: auto;
 }
 
-/* The one ambient accent wash: static, behind everything, never animated. */
+/* Atmospheric multi-pole ambient mesh behind everything; never animated. */
 .he-ambient {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background: radial-gradient(1400px 700px at 20% -20%, rgb(var(--color-accent) / 0.07), rgb(var(--color-accent) / 0.025) 45%, transparent 80%);
+  background:
+    radial-gradient(1200px 640px at 15% -15% var(--in-oklab), rgb(var(--color-accent) / 0.11), rgb(var(--color-accent) / 0.03) 45%, transparent 78%),
+    radial-gradient(900px 520px at 88% 8% var(--in-oklab), rgb(var(--color-accent-glow) / 0.05), transparent 72%);
 }
 
 .page-fade-enter-active {
-  transition: opacity var(--duration-base) var(--ease-out), transform var(--duration-base) var(--ease-out);
+  transition: opacity var(--duration-base) var(--ease-out), translate var(--duration-base) var(--ease-out);
 }
 
 .page-fade-leave-active {
@@ -98,10 +125,16 @@ onBeforeUnmount(() => { window.removeEventListener('online', retryProgress); win
 
 .page-fade-enter-from {
   opacity: 0;
-  transform: translateY(4px);
+  translate: 0 4px;
 }
 
 .page-fade-leave-to {
   opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-fade-enter-from {
+    translate: none;
+  }
 }
 </style>

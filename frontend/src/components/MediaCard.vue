@@ -108,6 +108,7 @@ const showDuration = computed(() => (props.media.media_type === 'video' || props
 // Video stills and album art are not 2:3; fit them whole inside a poster tile.
 const contained = computed(() => props.shape === 'poster' && (props.media.media_type === 'video' || props.media.media_type === 'audio'))
 const imageLoading = computed(() => (props.eager || props.index < 12 ? 'eager' : 'lazy'))
+const imagePriority = computed(() => (props.index < 4 ? 'high' : undefined))
 
 const frameStyle = computed(() => {
   if (props.shape === 'poster') return { aspectRatio: '2 / 3' }
@@ -131,7 +132,7 @@ const frameStyle = computed(() => {
     class="he-media-card lazy-card tap-active group relative flex w-full flex-col rounded-2xl text-left focus:outline-none"
   >
     <div
-      class="he-media-card__frame relative w-full overflow-hidden rounded-2xl bg-surface-2 transition-shadow duration-200 ease-out group-focus-visible:ring-2 group-focus-visible:ring-accent group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-background"
+      class="he-media-card__frame squircle relative w-full overflow-hidden rounded-2xl bg-surface-2 transition-[box-shadow,translate] duration-200 ease-out group-focus-visible:ring-2 group-focus-visible:ring-accent group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-background"
       :style="frameStyle"
     >
       <img
@@ -147,6 +148,7 @@ const frameStyle = computed(() => {
         :src="coverSrc"
         :alt="media.title"
         :loading="imageLoading"
+        :fetchpriority="imagePriority"
         decoding="async"
         class="he-media-card__art absolute inset-0 h-full w-full"
         :class="contained ? 'object-contain' : 'object-cover'"
@@ -154,15 +156,15 @@ const frameStyle = computed(() => {
       />
 
       <!-- Bottom scrim keeps overlay badges readable on bright art. -->
-      <div class="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/45 to-transparent"></div>
-      <div class="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/8 transition-colors duration-200 group-hover:ring-white/20"></div>
+      <div class="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/55 via-black/15 to-transparent"></div>
+      <div class="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10 transition-colors duration-200 group-hover:ring-white/25"></div>
 
-      <div v-if="media.favorite" class="absolute left-2 top-2 grid size-6 place-items-center rounded-md bg-black/60 text-star" title="已收藏">
+      <div v-if="media.favorite" class="absolute left-2 top-2 grid size-6 place-items-center rounded-lg bg-black/55 text-star backdrop-blur-md ring-1 ring-inset ring-white/15" title="已收藏">
         <Star :size="13" fill="currentColor" aria-hidden="true" />
         <span class="sr-only">已收藏</span>
       </div>
 
-      <div v-if="showType" class="absolute right-2 top-2 inline-flex h-6 items-center gap-1 rounded-md bg-black/60 px-1.5 text-caption font-medium text-white/90">
+      <div v-if="showType" class="absolute right-2 top-2 inline-flex min-h-6 items-center gap-1 rounded-lg bg-black/55 px-1.5 py-0.5 text-caption font-medium text-white/95 backdrop-blur-md ring-1 ring-inset ring-white/15">
         <Film v-if="media.media_type === 'video'" :size="12" aria-hidden="true" />
         <Book v-else-if="media.media_type === 'manga'" :size="12" aria-hidden="true" />
         <Headphones v-else-if="media.media_type === 'audio'" :size="12" aria-hidden="true" />
@@ -170,26 +172,25 @@ const frameStyle = computed(() => {
         <span>{{ typeLabel(media.media_type) }}</span>
       </div>
 
-      <div v-if="media.is_missing" class="absolute bottom-2.5 left-2 inline-flex h-6 items-center rounded-md bg-danger px-1.5 text-caption font-semibold text-black/85">
+      <div v-if="media.is_missing" class="absolute bottom-2.5 left-2 inline-flex min-h-6 items-center rounded-lg bg-danger px-1.5 py-0.5 text-caption font-semibold text-black/85 shadow-sm">
         文件丢失
       </div>
 
-      <span v-if="showDuration" class="absolute bottom-2.5 right-2 inline-flex h-6 items-center rounded-md bg-black/70 px-1.5 text-caption font-medium tabular-nums text-white">
+      <span v-if="showDuration" class="absolute bottom-2.5 right-2 inline-flex min-h-6 items-center rounded-lg bg-black/65 px-1.5 py-0.5 text-caption font-medium tabular-nums text-white backdrop-blur-md ring-1 ring-inset ring-white/10">
         {{ formatDuration(media.duration!) }}
       </span>
 
-      <div v-if="percent > 0" class="absolute inset-x-0 bottom-0 h-[3px] bg-black/45" role="progressbar" :aria-valuenow="percent" aria-valuemin="0" aria-valuemax="100" :aria-label="`进度 ${percent}%`">
-        <div class="h-full bg-accent" :style="{ width: `${percent}%` }"></div>
+      <div v-if="percent > 0" class="absolute inset-x-0 bottom-0 h-[3px] bg-black/50" role="progressbar" :aria-valuenow="percent" aria-valuemin="0" aria-valuemax="100" :aria-label="`进度 ${percent}%`">
+        <div class="h-full bg-accent shadow-[0_0_8px_rgb(var(--color-accent)/0.8)]" :style="{ width: `${percent}%` }"></div>
       </div>
     </div>
 
     <div class="mt-2.5 w-full min-w-0 px-0.5">
-      <h3 class="line-clamp-2 min-h-[2.75em] wrap-anywhere text-meta font-medium leading-snug text-ink sm:text-body sm:leading-snug" :title="media.title">
+      <h3 class="line-clamp-2 min-h-[2.75em] wrap-anywhere text-meta font-medium leading-snug text-ink transition-colors duration-150 group-hover:text-accent-glow sm:text-body sm:leading-snug" :title="media.title">
         {{ media.title }}
       </h3>
       <div class="mt-1 flex min-w-0 items-center gap-1.5 text-caption text-subtle tabular-nums">
-        <span class="shrink-0 font-medium text-muted">{{ extension }}</span>
-        <span class="shrink-0 text-faint" aria-hidden="true">·</span>
+        <span class="shrink-0 rounded bg-surface-2 px-1 py-px text-[11px] font-medium text-muted">{{ extension }}</span>
         <span class="truncate">{{ formatMeta(media) }}</span>
 
         <span v-if="media.rating" class="ml-auto inline-flex shrink-0 items-center gap-0.5 font-medium text-star" :title="`评分: ${media.rating} 星`">
@@ -207,18 +208,36 @@ const frameStyle = computed(() => {
 </template>
 
 <style>
+.he-media-card__frame {
+  box-shadow: var(--he-shadow-card);
+}
+
 .he-media-card__backdrop {
   transform: scale(1.25);
   filter: blur(16px) saturate(1.2) brightness(0.55);
 }
 
 .he-media-card__art {
-  transition: transform var(--duration-slow) var(--ease-out);
+  transition: scale var(--duration-slow) var(--ease-out);
 }
 
 @media (hover: hover) {
+  .he-media-card:hover .he-media-card__frame {
+    box-shadow: var(--he-shadow-card-hover);
+    translate: 0 -2px;
+  }
+
   .he-media-card:hover .he-media-card__art {
-    transform: scale(1.03);
+    scale: 1.035;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .he-media-card:hover .he-media-card__frame {
+    translate: none;
+  }
+  .he-media-card:hover .he-media-card__art {
+    scale: 1;
   }
 }
 </style>

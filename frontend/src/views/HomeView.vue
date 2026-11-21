@@ -19,6 +19,7 @@ import { useCompactViewport } from '../composables/useCompactViewport'
 const compact = useCompactViewport()
 const filterPanelRef = ref<HTMLElement | null>(null)
 const filterTriggerRef = ref<HTMLButtonElement | null>(null)
+const searchInputRef = ref<{ focus: () => void } | null>(null)
 
 const props = defineProps<{
   mediaType?: string
@@ -973,15 +974,24 @@ watch([selectedMedia, openingMedia, () => route.query.media], () => {
 })
 
 const onGlobalMediaUpdated = (event: Event) => updateMediaInList((event as CustomEvent<Media>).detail)
-const onOpeningKeydown = (event: KeyboardEvent) => {
-  if (openingMedia.value && event.key === 'Escape') closeMedia()
+const onGlobalHomeKeydown = (event: KeyboardEvent) => {
+  if (openingMedia.value && event.key === 'Escape') {
+    closeMedia()
+    return
+  }
+  if (event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey && !selectedMedia.value && !route.query.media) {
+    const target = event.target as HTMLElement | null
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return
+    event.preventDefault()
+    searchInputRef.value?.focus()
+  }
 }
 onUnmounted(() => {
   window.clearTimeout(loadingNoticeTimer)
   disposed = true; ++mediaRequestId; ++detailRequestId; ++viewerPageRequestId
   for (const controller of controllers.values()) controller.abort()
   window.removeEventListener('he:media-updated', onGlobalMediaUpdated)
-  window.removeEventListener('keydown', onOpeningKeydown)
+  window.removeEventListener('keydown', onGlobalHomeKeydown)
   window.clearTimeout(searchTimer)
   window.clearTimeout(gridResizeTimer)
   gridObserver?.disconnect()
@@ -1005,7 +1015,7 @@ const triggerMissingRecheck = async () => {
 
 onMounted(async () => {
   window.addEventListener('he:media-updated', onGlobalMediaUpdated)
-  window.addEventListener('keydown', onOpeningKeydown)
+  window.addEventListener('keydown', onGlobalHomeKeydown)
   document.addEventListener('pointerdown', handleTagOutsidePointer)
   await nextTick()
   measurePageSize(false)
@@ -1022,21 +1032,31 @@ onMounted(async () => {
 
 <template>
   <div class="relative z-10 min-h-full">
-    <PageHeader class="border-b border-line" :title="pageTitle" :count="loading && !totalItems ? undefined : `${totalItems.toLocaleString()} 项`">
+    <PageHeader class="border-b border-line/80" :title="pageTitle" :count="loading && !totalItems ? undefined : `${totalItems.toLocaleString()} 项`">
       <template #actions>
         <div role="status" class="min-h-5 w-28 text-right text-meta text-subtle"><span v-if="delayedLoading">正在加载媒体…</span></div>
       </template>
-      <p v-if="discardNotice" role="alert" class="w-full text-meta text-warning">文件清理未完成：{{ discardNotice }} <router-link to="/discarded" class="text-accent underline">查看丢弃记录</router-link> <button type="button" class="ml-2 underline focus-ring" @click="discardNotice = ''">关闭提示</button></p>
-      <p v-if="authState.user?.is_admin && hiddenDuplicatesCount > 0 && !hiddenDupNoticeDismissed" class="w-full text-meta text-subtle">有 {{ hiddenDuplicatesCount }} 项媒体因待检或疑似重复暂未展示 <router-link to="/dedup" class="text-accent underline">前往重复管理</router-link> <button type="button" class="ml-2 underline focus-ring" @click="hiddenDupNoticeDismissed = true">知道了</button></p>
-      <div class="flex flex-wrap items-center gap-2">
+      <p v-if="discardNotice" role="alert" class="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-warning/30 bg-warning/10 px-3.5 py-2.5 text-meta text-warning">
+        <span>文件清理未完成：{{ discardNotice }}</span>
+        <router-link to="/discarded" class="font-medium text-accent-glow underline">查看丢弃记录</router-link>
+        <button type="button" class="ml-auto underline focus-ring" @click="discardNotice = ''">关闭提示</button>
+      </p>
+      <p v-if="authState.user?.is_admin && hiddenDuplicatesCount > 0 && !hiddenDupNoticeDismissed" class="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface-2/80 px-3.5 py-2 text-meta text-subtle">
+        <span>有 {{ hiddenDuplicatesCount }} 项媒体因待检或疑似重复暂未展示</span>
+        <router-link to="/dedup" class="font-medium text-accent-glow underline">前往重复管理</router-link>
+        <button type="button" class="ml-auto underline focus-ring" @click="hiddenDupNoticeDismissed = true">知道了</button>
+      </p>
+
+      <div class="he-filter-bar squircle flex flex-wrap items-center gap-2 rounded-2xl border border-line/90 bg-surface/85 p-2 shadow-[inset_0_1px_0_var(--he-border-specular)]">
         <div class="he-home-search flex min-w-0 items-center gap-2" :class="compact ? 'w-full' : ''">
           <UiInput
+            ref="searchInputRef"
             v-model="searchQuery"
             type="text"
             :size="compact ? 'lg' : 'md'"
-            placeholder="搜索标题、作者、标签或推文…"
+            placeholder="搜索标题、作者、标签或推文… (按 / 聚焦)"
             aria-label="搜索标题或文件名"
-            :class="compact ? 'flex-1 pointer-coarse:[&_input]:h-11' : 'w-64 xl:w-72'"
+            :class="compact ? 'flex-1 pointer-coarse:[&_input]:min-h-11' : 'w-64 xl:w-80'"
           >
             <template #leading><Search :size="16" /></template>
             <template v-if="searchQuery" #trailing>
@@ -1078,13 +1098,14 @@ onMounted(async () => {
           <div
             ref="filterPanelRef"
             :class="compact
-              ? [filtersExpanded ? 'flex' : 'hidden', 'he-mobile-filters flex-col gap-5 rounded-t-3xl border-t border-line-strong bg-surface-3 px-4 pt-4 shadow-modal']
+              ? [filtersExpanded ? 'flex' : 'hidden', 'he-mobile-filters squircle flex-col gap-5 rounded-t-3xl border-t border-line-strong glass-elevated px-4 pt-3 shadow-modal']
               : 'flex flex-wrap items-center gap-2'"
             :role="compact ? 'dialog' : undefined"
             :aria-modal="compact ? true : undefined"
             aria-label="媒体筛选和排序"
             @keydown="filterKeydown"
           >
+            <div v-if="compact" class="mx-auto h-1 w-10 rounded-full bg-line-strong" aria-hidden="true"></div>
             <div v-if="compact" class="flex items-center justify-between">
               <h2 class="text-heading font-semibold text-ink">筛选和排序</h2>
               <button type="button" :class="iconButtonClass('ghost', 'lg')" aria-label="关闭筛选" title="关闭筛选" @click="filtersExpanded = false">
@@ -1118,7 +1139,7 @@ onMounted(async () => {
                 <div
                   v-if="tagDropdownOpen"
                   id="he-tag-options"
-                  :class="[popoverClass, compact ? 'mt-2 w-full' : 'absolute left-0 top-full z-50 mt-1.5 w-72']"
+                  :class="[popoverClass, compact ? 'mt-2 w-full' : 'absolute left-0 top-full z-50 mt-2 w-72']"
                   class="flex max-h-96 flex-col"
                 >
                   <div class="space-y-1.5 p-1 pb-1.5">
@@ -1134,7 +1155,7 @@ onMounted(async () => {
                     <div v-if="availableNamespaces.length" class="flex flex-wrap gap-1">
                       <button
                         type="button"
-                        class="rounded-md px-2 py-0.5 text-caption transition-colors"
+                        class="rounded-lg px-2 py-0.5 text-caption transition-colors"
                         :class="!dropdownNamespace && !selectedNamespace ? 'bg-accent/20 text-accent-glow font-medium' : 'bg-surface-2 text-subtle hover:text-ink'"
                         @click.stop="toggleNamespaceFilter('')"
                       >全部类</button>
@@ -1142,24 +1163,24 @@ onMounted(async () => {
                         v-for="ns in availableNamespaces"
                         :key="ns.value"
                         type="button"
-                        class="rounded-md px-2 py-0.5 text-caption transition-colors"
+                        class="rounded-lg px-2 py-0.5 text-caption transition-colors"
                         :class="selectedNamespace === ns.value ? 'bg-accent/20 text-accent-glow font-medium' : 'bg-surface-2 text-subtle hover:text-ink'"
                         :title="`按 ${ns.label} 分类筛选`"
                         @click.stop="toggleNamespaceFilter(ns.value)"
                       >{{ ns.label }}</button>
                     </div>
-                    <div v-if="includedTags.length > 1" class="flex items-center justify-between rounded-lg bg-surface-2 px-2 py-1 text-caption text-subtle">
+                    <div v-if="includedTags.length > 1" class="flex items-center justify-between rounded-xl bg-surface-2 px-2.5 py-1 text-caption text-subtle">
                       <span>多标签匹配</span>
                       <div class="flex gap-1">
                         <button
                           type="button"
-                          class="rounded px-1.5 py-0.5 transition-colors"
+                          class="rounded-md px-1.5 py-0.5 transition-colors"
                           :class="tagMode === 'all' ? 'bg-accent text-on-accent font-medium' : 'hover:text-ink'"
                           @click.stop="tagMode = 'all'"
                         >全部(AND)</button>
                         <button
                           type="button"
-                          class="rounded px-1.5 py-0.5 transition-colors"
+                          class="rounded-md px-1.5 py-0.5 transition-colors"
                           :class="tagMode === 'any' ? 'bg-accent text-on-accent font-medium' : 'hover:text-ink'"
                           @click.stop="tagMode = 'any'"
                         >任一(OR)</button>
@@ -1230,7 +1251,7 @@ onMounted(async () => {
                 <span>{{ viewStatusLabel }}</span>
                 <ChevronDown :size="15" class="text-subtle transition-transform duration-150" :class="viewStatusDropdownOpen ? 'rotate-180' : ''" aria-hidden="true" />
               </button>
-              <div v-if="viewStatusDropdownOpen" role="menu" aria-label="观看状态" :class="[popoverClass, 'absolute left-0 top-full z-50 mt-1.5 min-w-36']">
+              <div v-if="viewStatusDropdownOpen" role="menu" aria-label="观看状态" :class="[popoverClass, 'absolute left-0 top-full z-50 mt-2 min-w-36']">
                 <button
                   v-for="option in viewStatusOptions"
                   :key="option.value"
@@ -1267,7 +1288,7 @@ onMounted(async () => {
                 <span>{{ minRatingLabel }}</span>
                 <ChevronDown :size="15" class="text-subtle transition-transform duration-150" :class="ratingDropdownOpen ? 'rotate-180' : ''" aria-hidden="true" />
               </button>
-              <div v-if="ratingDropdownOpen" role="menu" aria-label="最低评分" :class="[popoverClass, 'absolute left-0 top-full z-50 mt-1.5 min-w-36']">
+              <div v-if="ratingDropdownOpen" role="menu" aria-label="最低评分" :class="[popoverClass, 'absolute left-0 top-full z-50 mt-2 min-w-36']">
                 <button
                   v-for="option in ratingOptions"
                   :key="option.value"
@@ -1306,7 +1327,7 @@ onMounted(async () => {
                   <span>{{ sortLabel }}</span>
                   <ChevronDown :size="15" class="text-subtle transition-transform duration-150" :class="sortDropdownOpen ? 'rotate-180' : ''" aria-hidden="true" />
                 </button>
-                <div v-if="sortDropdownOpen" role="menu" aria-label="排序方式" :class="[popoverClass, 'absolute left-0 top-full z-50 mt-1.5 min-w-44']">
+                <div v-if="sortDropdownOpen" role="menu" aria-label="排序方式" :class="[popoverClass, 'absolute left-0 top-full z-50 mt-2 min-w-44']">
                   <button
                     v-for="option in sortOptions"
                     :key="option.value"
@@ -1347,19 +1368,19 @@ onMounted(async () => {
         <UiSegmented v-if="!compact" v-model="viewModeModel" label="媒体显示视图" :options="viewSegments" class="ml-auto" />
       </div>
 
-      <nav v-if="compact" aria-label="媒体分类" class="he-media-categories -mx-4 mt-3 overflow-x-auto px-4 scrollbar-none">
+      <nav v-if="compact" aria-label="媒体分类" class="he-media-categories he-scroll-fade-x -mx-4 mt-3 overflow-x-auto px-4 scrollbar-none">
         <div class="flex w-max gap-2">
           <router-link
             v-for="category in mobileCategories"
             :key="category.path"
             :to="{ path: category.path, query: { ...route.query, page: undefined, media: undefined } }"
             :aria-current="route.path === category.path ? 'page' : undefined"
-            class="inline-flex h-10 shrink-0 items-center rounded-full border px-4 text-meta font-medium transition-colors duration-150 focus-ring"
-            :class="route.path === category.path ? 'border-accent/50 bg-accent/15 text-accent-glow' : 'border-line bg-surface text-muted'"
+            class="inline-flex min-h-10 shrink-0 items-center rounded-full border px-4 text-meta font-medium transition-colors duration-150 focus-ring"
+            :class="route.path === category.path ? 'border-accent/50 bg-accent/15 text-accent-glow shadow-[inset_0_1px_0_rgb(255_255_255/0.08)]' : 'border-line bg-surface text-muted'"
           >{{ category.label }}</router-link>
         </div>
       </nav>
-      <div v-if="includedTags.length > 1 || excludedTags.length > 0 || selectedNamespace" class="flex flex-wrap items-center gap-1.5 pt-1">
+      <div v-if="includedTags.length > 1 || excludedTags.length > 0 || selectedNamespace" class="flex flex-wrap items-center gap-1.5 pt-2.5">
         <button
           v-if="selectedNamespace"
           type="button"
@@ -1394,30 +1415,40 @@ onMounted(async () => {
 
     <section v-if="featuredContinue && !searchQuery && !hasTagFilter" class="page-gutter mt-6" aria-label="今晚继续">
       <div class="page-container">
-        <div class="grid overflow-hidden rounded-3xl border border-line bg-surface sm:grid-cols-[240px_1fr]">
-          <button type="button" class="group relative min-h-44 overflow-hidden bg-surface-2 text-left focus-ring sm:min-h-full" :aria-label="`打开媒体：${featuredContinue.title}`" @click="openMedia(featuredContinue)">
-            <img :src="featuredContinue.cover_path ? thumbnailUrl(featuredContinue.cover_path) : mediaPlaceholderUrl" :alt="featuredContinue.title" class="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-            <span class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></span>
-            <span class="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1.5 text-caption font-medium text-white"><Play :size="13" fill="currentColor" aria-hidden="true" />继续</span>
-          </button>
-          <div class="flex min-w-0 flex-col justify-center gap-3 p-5 sm:p-6">
-            <p class="text-caption font-medium uppercase tracking-wider text-accent-glow">今晚继续 · {{ continueTitle }}</p>
-            <h2 class="line-clamp-2 min-h-[2.5em] text-title font-semibold leading-tight text-ink">{{ featuredContinue.title }}</h2>
-            <p class="flex h-5 min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap text-meta text-subtle tabular-nums">
-              <span>{{ typeLabel(featuredContinue.media_type) }}</span>
-              <span v-if="continueMeta(featuredContinue)" aria-hidden="true">·</span>
-              <span v-if="continueMeta(featuredContinue)">{{ continueMeta(featuredContinue) }}</span>
-              <span v-if="featuredContinue.rating" aria-hidden="true">·</span>
-              <span v-if="featuredContinue.rating">★ {{ featuredContinue.rating }}</span>
-              <span v-if="featuredContinue.tags?.length" aria-hidden="true">·</span>
-              <span v-if="featuredContinue.tags?.length" class="truncate">{{ featuredContinue.tags.slice(0, 3).map(tag => tag.name).join(' / ') }}</span>
-            </p>
-            <div :class="{ invisible: progressPercent(featuredContinue) === 0 }" :aria-hidden="progressPercent(featuredContinue) === 0" class="h-1.5 w-full max-w-md overflow-hidden rounded-full bg-surface-3" role="progressbar" :aria-label="`${featuredContinue.title}观看进度`" :aria-valuenow="progressPercent(featuredContinue)" aria-valuemin="0" aria-valuemax="100">
-              <div class="h-full rounded-full bg-accent" :style="{ width: `${progressPercent(featuredContinue)}%` }"></div>
-            </div>
-            <div class="flex flex-wrap gap-2 pt-1">
-              <UiButton variant="primary" @click="openMedia(featuredContinue)"><template #icon><Play :size="15" fill="currentColor" aria-hidden="true" /></template>继续{{ featuredContinue.media_type === 'manga' ? '阅读' : featuredContinue.media_type === 'audio' ? '收听' : '观看' }}</UiButton>
-              <UiButton v-if="recentlyOpened.length > 1" variant="secondary" @click="showOtherContinueItems">看看其他继续项</UiButton>
+        <div class="he-hero-spotlight squircle relative overflow-hidden rounded-3xl border border-line bg-surface shadow-[var(--he-shadow-card),inset_0_1px_0_var(--he-border-specular)]">
+          <img
+            v-if="featuredContinue.cover_path"
+            :src="thumbnailUrl(featuredContinue.cover_path)"
+            alt=""
+            aria-hidden="true"
+            class="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-20 blur-3xl saturate-150"
+          />
+          <div class="he-hero-scrim pointer-events-none absolute inset-0"></div>
+
+          <div class="he-hero-inner relative z-10 grid">
+            <button type="button" class="he-hero-media group relative min-h-48 overflow-hidden bg-surface-2 text-left focus-ring" :aria-label="`打开媒体：${featuredContinue.title}`" @click="openMedia(featuredContinue)">
+              <img :src="featuredContinue.cover_path ? thumbnailUrl(featuredContinue.cover_path) : mediaPlaceholderUrl" :alt="featuredContinue.title" fetchpriority="high" loading="eager" class="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+              <span class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></span>
+              <span class="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1.5 text-caption font-medium text-white backdrop-blur-md ring-1 ring-inset ring-white/15"><Play :size="13" fill="currentColor" aria-hidden="true" />继续</span>
+            </button>
+            <div class="flex min-w-0 flex-col justify-center gap-3 p-5 sm:p-7">
+              <p class="inline-flex w-fit items-center gap-1.5 rounded-full border border-accent/30 bg-accent/12 px-2.5 py-0.5 text-[11px] font-medium tracking-wide text-accent-glow">
+                今晚继续 · {{ continueTitle }}
+              </p>
+              <h2 class="line-clamp-2 text-title font-semibold leading-tight text-ink">{{ featuredContinue.title }}</h2>
+              <p class="flex min-h-5 min-w-0 flex-wrap items-center gap-2 text-meta text-subtle tabular-nums">
+                <span class="rounded-md bg-surface-2 px-2 py-0.5 text-caption font-medium text-muted">{{ typeLabel(featuredContinue.media_type) }}</span>
+                <span v-if="continueMeta(featuredContinue)">{{ continueMeta(featuredContinue) }}</span>
+                <span v-if="featuredContinue.rating" class="text-star">★ {{ featuredContinue.rating }}</span>
+                <span v-if="featuredContinue.tags?.length" class="truncate text-muted">{{ featuredContinue.tags.slice(0, 3).map(tag => tag.name).join(' · ') }}</span>
+              </p>
+              <div :class="{ invisible: progressPercent(featuredContinue) === 0 }" :aria-hidden="progressPercent(featuredContinue) === 0" class="h-1.5 w-full max-w-md overflow-hidden rounded-full bg-surface-3" role="progressbar" :aria-label="`${featuredContinue.title}观看进度`" :aria-valuenow="progressPercent(featuredContinue)" aria-valuemin="0" aria-valuemax="100">
+                <div class="h-full rounded-full bg-accent shadow-[0_0_10px_rgb(var(--color-accent)/0.7)]" :style="{ width: `${progressPercent(featuredContinue)}%` }"></div>
+              </div>
+              <div class="flex flex-wrap gap-2.5 pt-1">
+                <UiButton variant="primary" @click="openMedia(featuredContinue)"><template #icon><Play :size="15" fill="currentColor" aria-hidden="true" /></template>继续{{ featuredContinue.media_type === 'manga' ? '阅读' : featuredContinue.media_type === 'audio' ? '收听' : '观看' }}</UiButton>
+                <UiButton v-if="recentlyOpened.length > 1" variant="secondary" @click="showOtherContinueItems">看看其他继续项</UiButton>
+              </div>
             </div>
           </div>
         </div>
@@ -1440,11 +1471,11 @@ onMounted(async () => {
         </SectionHeader>
         <div class="he-continue-reveal" :class="{ 'is-expanded': !continueCollapsed }" :inert="continueCollapsed" :aria-hidden="continueCollapsed">
         <div class="he-continue-reveal-clip">
-        <div ref="continueScrollRef" class="-mx-4 flex gap-3 overflow-x-auto px-4 scrollbar-none sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0" :class="continueDragging ? 'cursor-grabbing' : 'cursor-grab'" @pointerdown="startContinueDrag" @pointermove="moveContinueDrag" @pointerup="endContinueDrag" @pointercancel="endContinueDrag" @lostpointercapture="endContinueDrag" @click.capture="preventDraggedClick" @dragstart.prevent>
+        <div ref="continueScrollRef" class="he-scroll-fade-x -mx-4 flex gap-3 overflow-x-auto px-4 scrollbar-none sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0" :class="continueDragging ? 'cursor-grabbing' : 'cursor-grab'" @pointerdown="startContinueDrag" @pointermove="moveContinueDrag" @pointerup="endContinueDrag" @pointercancel="endContinueDrag" @lostpointercapture="endContinueDrag" @click.capture="preventDraggedClick" @dragstart.prevent>
           <div
             v-for="item in recentlyOpened"
             :key="item.id"
-            class="group relative flex w-72 shrink-0 items-center gap-3 rounded-2xl border border-line bg-surface p-2.5 transition-colors duration-150 ease-out hover:border-line-strong hover:bg-surface-2"
+            class="group relative flex w-72 shrink-0 items-center gap-3 rounded-2xl squircle border border-line bg-surface p-2.5 shadow-[inset_0_1px_0_var(--he-border-specular)] transition-colors duration-150 ease-out hover:border-line-strong hover:bg-surface-2"
           >
             <button
               type="button"
@@ -1452,9 +1483,8 @@ onMounted(async () => {
               :aria-label="`打开媒体：${item.title}`"
               @click="openMedia(item)"
             ></button>
-            <div class="relative h-16 shrink-0 overflow-hidden rounded-lg bg-surface-2" :class="continueThumbClass(item)">
+            <div class="relative h-16 shrink-0 overflow-hidden rounded-xl bg-surface-2 ring-1 ring-inset ring-white/8" :class="continueThumbClass(item)">
               <img :src="item.cover_path ? thumbnailUrl(item.cover_path) : mediaPlaceholderUrl" alt="" class="h-full w-full object-cover" />
-              <div class="pointer-events-none absolute inset-0 rounded-lg ring-1 ring-inset ring-white/8"></div>
             </div>
             <div class="min-w-0 flex-1">
               <h3 class="line-clamp-2 pr-6 text-meta font-medium leading-snug text-ink pointer-coarse:pr-8" :title="item.title">{{ item.title }}</h3>
@@ -1515,13 +1545,13 @@ onMounted(async () => {
           <div v-if="displayedView === 'poster'" data-media-grid :class="posterGridClass">
             <div v-for="(item, index) in mediaList" :key="item.id" class="he-media-actions relative min-w-0">
               <MediaCard :media="item" :index="index" :shape="cardShape" :show-type="!displayedType" @click="openMedia(item)" />
-              <button v-if="authState.user?.is_admin" type="button" class="he-media-delete absolute right-2 top-2 z-10 grid size-11 place-items-center rounded-xl bg-black/75 text-white/85 transition-colors hover:bg-danger hover:text-white focus-ring" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
+              <button v-if="authState.user?.is_admin" type="button" class="he-media-delete absolute right-2 top-2 z-10 grid size-11 place-items-center rounded-xl bg-black/75 text-white/85 backdrop-blur-md transition-colors hover:bg-danger hover:text-white focus-ring" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
             </div>
           </div>
-          <div v-else data-media-grid :class="displayedView === 'masonry' ? 'masonry-grid' : displayedView === 'wide' ? 'grid grid-cols-1 gap-x-5 gap-y-7 md:grid-cols-2 xl:grid-cols-3' : 'flex flex-col gap-2'">
+          <div v-else data-media-grid :class="displayedView === 'masonry' ? 'masonry-grid' : displayedView === 'wide' ? 'grid grid-cols-1 gap-x-5 gap-y-7 md:grid-cols-2 xl:grid-cols-3' : 'flex flex-col gap-2.5'">
             <div v-for="item in mediaList" :key="item.id" class="he-media-actions relative min-w-0" :class="displayedView === 'masonry' ? 'masonry-grid-item' : displayedView === 'list' ? 'flex items-center gap-2' : ''">
               <MediaViewCard :media="item" :mode="displayedView" :class="displayedView === 'list' ? 'min-w-0 flex-1' : ''" @click="openMedia(item)" />
-              <button v-if="authState.user?.is_admin" type="button" class="he-media-delete grid size-11 shrink-0 place-items-center rounded-xl transition-colors hover:bg-danger hover:text-white focus-ring" :class="displayedView === 'list' ? 'bg-surface text-subtle' : 'absolute right-2 top-2 z-10 bg-black/75 text-white/85'" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
+              <button v-if="authState.user?.is_admin" type="button" class="he-media-delete grid size-11 shrink-0 place-items-center rounded-xl transition-colors hover:bg-danger hover:text-white focus-ring" :class="displayedView === 'list' ? 'bg-surface text-subtle' : 'absolute right-2 top-2 z-10 bg-black/75 text-white/85 backdrop-blur-md'" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
             </div>
           </div>
           </div>
@@ -1565,6 +1595,27 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.he-hero-spotlight {
+  container: hero / inline-size;
+}
+
+.he-hero-inner {
+  grid-template-columns: 1fr;
+}
+
+@container hero (min-width: 580px) {
+  .he-hero-inner {
+    grid-template-columns: 240px 1fr;
+  }
+  .he-hero-media {
+    min-height: 100%;
+  }
+}
+
+.he-hero-scrim {
+  background: linear-gradient(120deg var(--in-oklab), rgb(var(--color-surface) / 0.88) 0%, rgb(var(--color-surface) / 0.94) 55%, rgb(var(--color-surface) / 0.98) 100%);
+}
+
 /* Animate the space around the row, keeping cards at their intrinsic height.
    Native interpolation also reverses smoothly during repeated clicks. */
 .he-continue-reveal {

@@ -1,18 +1,19 @@
 <script setup lang="ts">
 import ColorModeSelect from '../components/ColorModeSelect.vue'
 import ClockWeather from '../components/ClockWeather.vue'
-import { computed } from 'vue'
-import { ArchiveX, BarChart3, Book, ChevronRight, CopyMinus, Download, LogOut, MessageSquare, Palette, Settings, Smartphone, Tags, Users } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+import { ArchiveX, BarChart3, Book, ChevronRight, CopyMinus, Download, LogOut, MessageSquare, Palette, Settings, Smartphone, Sparkles, Tags, Users } from 'lucide-vue-next'
 import { authState, logout } from '../auth'
-import { PageHeader, SectionHeader, UiButton, UiCard } from '../components/ui'
+import { PageHeader, SectionHeader, UiButton, UiCard, UiModal } from '../components/ui'
 
 const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true
+const logoutConfirmOpen = ref(false)
 const links = [
   { to: '/downloads', label: '下载任务', hint: '查看服务器下载进度', icon: Download, group: 'tools' },
   { to: '/creators', label: '作者', hint: '浏览关注的创作者', icon: Book, group: 'library' },
   { to: '/tags', label: '标签', hint: '按标签整理媒体', icon: Tags, group: 'library' },
   { to: '/stats', label: '数据看板', hint: '查看媒体库概览', icon: BarChart3, group: 'tools' },
-  { to: '/bd2-spine', label: '角色鉴赏', hint: '浏览角色动画', icon: Palette, group: 'library' },
+  { to: '/bd2-spine', label: '角色鉴赏', hint: '浏览角色动画', icon: Sparkles, group: 'library' },
   { to: '/live2d', label: '碧蓝航线', hint: '浏览碧蓝航线皮肤', icon: Palette, group: 'library' },
   { to: '/settings', label: '设置', hint: '目录、同步与外观', icon: Settings, group: 'tools' },
 ]
@@ -28,7 +29,10 @@ const groups = computed(() => [
   ...(authState.user?.is_admin ? [{ key: 'admin', title: '管理', items: adminLinks }] : []),
 ])
 const userInitial = computed(() => (authState.user?.username?.trim()[0] || '?').toUpperCase())
-const signOut = () => { if (window.confirm('确定退出当前账号吗？')) void logout() }
+const confirmSignOut = () => {
+  logoutConfirmOpen.value = false
+  void logout()
+}
 </script>
 
 <template>
@@ -37,19 +41,21 @@ const signOut = () => { if (window.confirm('确定退出当前账号吗？')) vo
 
     <div class="page-gutter pb-12">
       <div class="page-container">
-        <div class="max-w-[960px] space-y-8">
-          <ClockWeather />
-          <UiCard padding="sm" class="flex items-center gap-3">
-            <div class="grid size-11 shrink-0 place-items-center rounded-full bg-surface-3 text-body font-medium text-muted" aria-hidden="true">{{ userInitial }}</div>
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-body font-medium text-ink">{{ authState.user?.username }}</p>
-              <p class="mt-0.5 text-meta text-subtle">{{ authState.user?.is_admin ? '管理员' : '普通用户' }}</p>
-            </div>
-            <UiButton variant="ghost" size="sm" class="hover:!bg-danger/12 hover:!text-danger" @click="signOut">
-              <template #icon><LogOut :size="14" /></template>
-              退出登录
-            </UiButton>
-          </UiCard>
+        <div class="max-w-[960px] space-y-7">
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <UiCard padding="sm" class="flex items-center gap-3">
+              <div class="grid size-11 shrink-0 place-items-center rounded-2xl bg-accent/15 text-body font-semibold text-accent-glow ring-1 ring-inset ring-accent/25" aria-hidden="true">{{ userInitial }}</div>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-body font-semibold text-ink">{{ authState.user?.username }}</p>
+                <p class="mt-0.5 text-meta text-subtle">{{ authState.user?.is_admin ? '管理员' : '普通用户' }}</p>
+              </div>
+              <UiButton variant="ghost" size="sm" class="hover:!bg-danger/12 hover:!text-danger" @click="logoutConfirmOpen = true">
+                <template #icon><LogOut :size="14" /></template>
+                退出登录
+              </UiButton>
+            </UiCard>
+            <ClockWeather />
+          </div>
 
           <section>
             <SectionHeader title="外观模式" as="h2" description="选择适合当前光线的界面，自动记住你的偏好" />
@@ -58,28 +64,28 @@ const signOut = () => { if (window.confirm('确定退出当前账号吗？')) vo
 
           <section v-for="group in groups" :key="group.key">
             <SectionHeader :title="group.title" as="h2" />
-            <UiCard padding="none" class="divide-y divide-line overflow-hidden">
+            <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
               <router-link
                 v-for="link in group.items"
                 :key="link.to"
                 :to="link.to"
-                class="flex min-h-16 items-center gap-3 px-4 py-3 transition-colors duration-150 hover:bg-surface-2 active:bg-surface-2 focus-ring-inset"
+                class="group flex min-h-16 items-center gap-3 rounded-2xl squircle border border-line bg-surface px-4 py-3 shadow-[inset_0_1px_0_var(--he-border-specular)] transition-[background-color,border-color] duration-150 hover:border-line-strong hover:bg-surface-2 focus-ring"
               >
-                <span class="grid size-9 shrink-0 place-items-center rounded-lg bg-surface-2 text-muted" aria-hidden="true">
+                <span class="grid size-10 shrink-0 place-items-center rounded-xl border border-line bg-surface-2 text-muted transition-colors group-hover:border-accent/35 group-hover:text-accent-glow" aria-hidden="true">
                   <component :is="link.icon" :size="18" />
                 </span>
                 <span class="min-w-0 flex-1">
                   <span class="block truncate text-body font-medium text-ink">{{ link.label }}</span>
                   <span class="mt-0.5 block truncate text-meta text-subtle">{{ link.hint }}</span>
                 </span>
-                <ChevronRight :size="18" class="shrink-0 text-faint" aria-hidden="true" />
+                <ChevronRight :size="17" class="shrink-0 text-faint transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-muted" aria-hidden="true" />
               </router-link>
-            </UiCard>
+            </div>
           </section>
 
-          <details v-if="!standalone" class="group rounded-2xl border border-line bg-surface">
+          <details v-if="!standalone" class="group rounded-2xl squircle border border-line bg-surface shadow-[inset_0_1px_0_var(--he-border-specular)]">
             <summary class="flex min-h-14 cursor-pointer list-none items-center gap-3 rounded-2xl px-4 py-3 focus-ring-inset [&::-webkit-details-marker]:hidden">
-              <span class="grid size-9 shrink-0 place-items-center rounded-lg bg-surface-2 text-muted" aria-hidden="true"><Smartphone :size="18" /></span>
+              <span class="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-muted" aria-hidden="true"><Smartphone :size="18" /></span>
               <span class="min-w-0 flex-1">
                 <span class="block text-body font-medium text-ink">添加到 iPhone 主屏幕</span>
                 <span class="mt-0.5 block text-meta text-subtle">像 App 一样全屏打开</span>
@@ -94,5 +100,13 @@ const signOut = () => { if (window.confirm('确定退出当前账号吗？')) vo
         </div>
       </div>
     </div>
+
+    <UiModal v-model:open="logoutConfirmOpen" title="退出登录" description="确定要退出当前账号吗？" size="sm">
+      <p class="text-body text-muted">退出后需要重新输入账号密码才能继续访问媒体库。</p>
+      <template #footer>
+        <UiButton variant="ghost" autofocus @click="logoutConfirmOpen = false">取消</UiButton>
+        <UiButton variant="danger" @click="confirmSignOut">退出登录</UiButton>
+      </template>
+    </UiModal>
   </div>
 </template>

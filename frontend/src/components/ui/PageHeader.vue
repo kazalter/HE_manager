@@ -18,16 +18,16 @@ withDefaults(defineProps<{
 <template>
   <header
     class="he-page-header page-gutter"
-    :class="sticky ? 'sticky top-0 z-30 border-b border-line bg-background/95 py-3 lg:py-4' : 'pt-6 pb-5 lg:pt-8 lg:pb-6'"
+    :class="sticky ? 'sticky top-0 z-30 border-b border-line glass-surface py-3 lg:py-4' : 'pt-6 pb-5 lg:pt-8 lg:pb-6'"
   >
     <div class="page-container">
       <div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <div class="flex min-w-0 items-center gap-3">
           <slot name="leading" />
           <div class="min-w-0">
-            <div class="flex min-w-0 items-baseline gap-2.5">
-              <component :is="as" class="truncate text-title font-semibold text-ink">{{ title }}</component>
-              <span v-if="count !== undefined" class="shrink-0 text-meta text-subtle tabular-nums">{{ count }}</span>
+            <div class="flex min-w-0 flex-wrap items-center gap-2.5">
+              <component :is="as" class="text-title font-semibold tracking-tight text-ink">{{ title }}</component>
+              <span v-if="count !== undefined" class="inline-flex shrink-0 items-center rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-caption font-medium text-muted tabular-nums">{{ count }}</span>
             </div>
             <p v-if="description || $slots.description" class="mt-1 text-meta text-subtle">
               <slot name="description">{{ description }}</slot>

@@ -20,11 +20,11 @@ withDefaults(defineProps<{
   <div class="flex flex-col items-center justify-center px-6 text-center" :class="compact ? 'py-10' : 'py-20'">
     <div
       v-if="icon || $slots.icon"
-      class="mb-4 grid size-12 place-items-center rounded-2xl border"
+      class="mb-4 grid size-13 place-items-center rounded-2xl squircle border shadow-[inset_0_1px_0_var(--he-border-specular)]"
       :class="{
         'border-line bg-surface-2 text-subtle': tone === 'neutral',
-        'border-warning/25 bg-warning/10 text-warning': tone === 'warning',
-        'border-danger/25 bg-danger/10 text-danger': tone === 'danger',
+        'border-warning/30 bg-warning/10 text-warning': tone === 'warning',
+        'border-danger/30 bg-danger/10 text-danger': tone === 'danger',
       }"
       aria-hidden="true"
     >

@@ -17,17 +17,17 @@ async function openFavorite() {
       : { creator_tags: true, image: true, video: ['mp4'] } }))
   wrapper = mount(PawchivePanel, { attachTo: document.body, global: { stubs: { Teleport: true } } })
   await flushPromises()
-  expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+  expect(wrapper.find('dialog').exists()).toBe(false)
   await wrapper.findAll('nav[aria-label="Pawchive 作者范围"] button')[1]!.trigger('click')
   await flushPromises()
   await wrapper.get('button[aria-label="收藏作者 Test artist"]').trigger('click')
-  expect(wrapper.get('[role="dialog"]').text()).toContain('登录后继续收藏作者 Test artist')
+  expect(wrapper.get('dialog').text()).toContain('登录后继续收藏作者 Test artist')
 }
 
 async function submitLogin() {
-  await wrapper!.get('[role="dialog"] input[autocomplete="username"]').setValue('test')
-  await wrapper!.get('[role="dialog"] input[type="password"]').setValue('test')
-  await wrapper!.get('[role="dialog"] form').trigger('submit')
+  await wrapper!.get('dialog input[autocomplete="username"]').setValue('test')
+  await wrapper!.get('dialog input[type="password"]').setValue('test')
+  await wrapper!.get('dialog form').trigger('submit')
   await flushPromises()
 }
 
@@ -39,7 +39,7 @@ describe('Pawchive favorite login continuation', () => {
     await submitLogin()
     expect(put).toHaveBeenCalledTimes(1)
     expect(String(put.mock.calls[0]![0])).toContain('/account/favorites/fanbox/12')
-    expect(wrapper!.find('[role="dialog"]').exists()).toBe(false)
+    expect(wrapper!.find('dialog').exists()).toBe(false)
     expect(wrapper!.find('button[aria-label="取消收藏作者 Test artist"]').exists()).toBe(true)
   })
 
@@ -50,12 +50,12 @@ describe('Pawchive favorite login continuation', () => {
     await submitLogin()
     expect(put).not.toHaveBeenCalled()
     expect(remove).not.toHaveBeenCalled()
-    expect(wrapper!.find('[role="dialog"]').exists()).toBe(false)
+    expect(wrapper!.find('dialog').exists()).toBe(false)
   })
 
   it('canceling settings clears the action before a later manual login', async () => {
     await openFavorite()
-    await wrapper!.get('[role="dialog"] button[aria-label="关闭"]').trigger('click')
+    await wrapper!.get('dialog button[aria-label="关闭"]').trigger('click')
     await wrapper!.get('header[aria-label="Pawchive 状态与设置"] button').trigger('click')
     vi.spyOn(axios, 'post').mockResolvedValue({ data: { connected: true, items: [] } })
     const put = vi.spyOn(axios, 'put')
@@ -69,7 +69,7 @@ describe('Pawchive favorite login continuation', () => {
     vi.spyOn(axios, 'post').mockReturnValue(new Promise(resolve => { finish = resolve }))
     const put = vi.spyOn(axios, 'put')
     await submitLogin()
-    await wrapper!.get('[role="dialog"] button[aria-label="关闭"]').trigger('click')
+    await wrapper!.get('dialog button[aria-label="关闭"]').trigger('click')
     finish({ data: { connected: true, items: [] } })
     await flushPromises()
     expect(put).not.toHaveBeenCalled()
