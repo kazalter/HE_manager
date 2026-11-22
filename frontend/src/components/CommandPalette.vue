@@ -27,6 +27,7 @@ import {
 } from 'lucide-vue-next'
 import type { User } from '../types'
 import { applyTheme, themeOptionsForMode, themeState, toggleColorMode } from '../theme'
+import { applyDensity, DENSITY_OPTIONS, densityState } from '../density'
 
 const open = defineModel<boolean>('open', { required: true })
 const props = defineProps<{ user: User | null }>()
@@ -133,6 +134,21 @@ const allItems = computed<PaletteItem[]>(() => {
       icon: Palette,
       action: () => {
         applyTheme(theme.id)
+        open.value = false
+      },
+    })
+  }
+
+  for (const opt of DENSITY_OPTIONS) {
+    items.push({
+      id: `action-density-${opt.id}`,
+      group: '外观快捷操作',
+      label: `切换布局舒适度：${opt.label}${densityState.density === opt.id ? '（当前）' : ''}`,
+      hint: opt.description,
+      keywords: `density layout spacious comfortable compact 密度 布局 舒适度 ${opt.label}`,
+      icon: Sparkles,
+      action: () => {
+        applyDensity(opt.id)
         open.value = false
       },
     })

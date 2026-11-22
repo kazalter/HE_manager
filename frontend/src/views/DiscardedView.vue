@@ -42,14 +42,14 @@ const action = async (row: DiscardRecord, name: 'retry' | 'allow-download') => {
     <PageHeader title="丢弃记录" description="这些内容已从媒体库移除，后续扫描、同步和下载会跳过。">
       <UiButton :loading="loading" @click="load"><template #icon><RefreshCw :size="16" /></template>刷新</UiButton>
     </PageHeader>
-    <div class="page-gutter pb-12"><div class="page-container space-y-5">
+    <div class="page-gutter pb-12"><div class="page-container max-w-[1040px] space-y-5">
       <label class="block max-w-lg"><span class="sr-only">搜索丢弃记录</span><UiInput v-model="search" placeholder="搜索丢弃记录…" /></label>
       <p v-if="error" role="alert" class="rounded-xl bg-danger/10 p-3 text-danger">{{ error }}</p>
       <p v-if="notice" role="status" class="rounded-xl bg-surface-2 p-3 text-muted">{{ notice }}</p>
       <EmptyState v-if="!loading && !items.length && !error" :icon="ArchiveX" title="没有丢弃记录" description="删除内容后，会在这里保留来源与处理状态。" />
       <p v-if="loading && !items.length" role="status" class="py-6 text-muted">正在读取…</p>
       <ul v-if="items.length" class="space-y-3">
-        <li v-for="row in items" :key="row.id" class="rounded-2xl border border-line bg-surface p-4 sm:p-5">
+        <li v-for="row in items" :key="row.id" class="squircle rounded-2xl border border-line bg-surface p-4 shadow-[inset_0_1px_0_var(--he-border-specular)] sm:p-5">
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div class="min-w-0 flex-1"><p class="break-words text-body font-medium text-ink">{{ row.title }}</p><p class="mt-2 text-caption text-subtle">{{ row.source_type.toUpperCase() }} · {{ row.media_count }} 项 · {{ formatBytes(row.file_size) }} · {{ formatDate(row.discarded_at) }}</p></div>
             <UiBadge tone="neutral">丢弃</UiBadge>

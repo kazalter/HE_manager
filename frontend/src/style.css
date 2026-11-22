@@ -169,6 +169,16 @@
   --duration-fast: 120ms;
   --duration-base: 180ms;
   --duration-slow: 240ms;
+  /* Visual comfort / density tokens (default: comfortable). */
+  --density: comfortable;
+  --he-grid-min-sm: 148px;
+  --he-grid-min: 174px;
+  --he-grid-gap-x: 22px;
+  --he-grid-gap-y: 30px;
+  --he-wide-grid-gap-x: 22px;
+  --he-wide-grid-gap-y: 30px;
+  --he-masonry-gap: 20px;
+  --he-section-space: 28px;
   /* Legacy easing names, kept for existing views. */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -325,16 +335,27 @@ dialog::backdrop {
   margin-inline: auto;
 }
 
-/* Poster wall: fills the row with 148px+ (168px+ from sm) columns. */
+/* Poster wall: fills the row smoothly, scaling via density tokens. */
 @utility poster-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
-  column-gap: 16px;
-  row-gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(var(--he-grid-min-sm), 1fr));
+  column-gap: var(--he-grid-gap-x);
+  row-gap: var(--he-grid-gap-y);
   @media (min-width: 640px) {
-    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
-    column-gap: 20px;
-    row-gap: 28px;
+    grid-template-columns: repeat(auto-fill, minmax(var(--he-grid-min), 1fr));
+  }
+}
+
+@utility he-wide-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  column-gap: var(--he-wide-grid-gap-x);
+  row-gap: var(--he-wide-grid-gap-y);
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  @media (min-width: 1280px) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -582,14 +603,13 @@ dialog::backdrop {
 /* CSS Columns Masonry layout */
 .masonry-grid {
   column-count: 2;
-  column-gap: 16px;
+  column-gap: var(--he-masonry-gap);
   width: 100%;
 }
 
 @media (min-width: 640px) {
   .masonry-grid {
     column-count: 3;
-    column-gap: 20px;
   }
 }
 
@@ -613,9 +633,142 @@ dialog::backdrop {
 
 .masonry-grid-item {
   break-inside: avoid;
-  margin-bottom: 20px;
+  margin-bottom: var(--he-masonry-gap);
   display: inline-block;
   width: 100%;
+}
+
+/* ---------- Density Reactivity (:where() selector fallback + @container style() progressive enhancement) ---------- */
+:where([data-density="spacious"]) {
+  --he-grid-min-sm: 170px;
+  --he-grid-min: 214px;
+  --he-grid-gap-x: 28px;
+  --he-grid-gap-y: 38px;
+  --he-wide-grid-gap-x: 28px;
+  --he-wide-grid-gap-y: 36px;
+  --he-masonry-gap: 26px;
+  --he-section-space: 36px;
+}
+
+:where([data-density="compact"]) {
+  --he-grid-min-sm: 132px;
+  --he-grid-min: 146px;
+  --he-grid-gap-x: 14px;
+  --he-grid-gap-y: 22px;
+  --he-wide-grid-gap-x: 16px;
+  --he-wide-grid-gap-y: 22px;
+  --he-masonry-gap: 14px;
+  --he-section-space: 20px;
+}
+
+@container style(--density: spacious) {
+  .he-density-scope {
+    --he-grid-min-sm: 170px;
+    --he-grid-min: 214px;
+    --he-grid-gap-x: 28px;
+    --he-grid-gap-y: 38px;
+    --he-wide-grid-gap-x: 28px;
+    --he-wide-grid-gap-y: 36px;
+    --he-masonry-gap: 26px;
+    --he-section-space: 36px;
+  }
+}
+
+@container style(--density: compact) {
+  .he-density-scope {
+    --he-grid-min-sm: 132px;
+    --he-grid-min: 146px;
+    --he-grid-gap-x: 14px;
+    --he-grid-gap-y: 22px;
+    --he-wide-grid-gap-x: 16px;
+    --he-wide-grid-gap-y: 22px;
+    --he-masonry-gap: 14px;
+    --he-section-space: 20px;
+  }
+}
+
+/* ---------- CSS Subgrid alignment across card walls ---------- */
+@supports (grid-template-rows: subgrid) {
+  .poster-grid.he-subgrid-wall > .he-media-actions,
+  .poster-grid.he-subgrid-wall > .he-media-card {
+    grid-row: span 2;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    grid-template-rows: subgrid;
+    align-content: start;
+  }
+
+  .poster-grid.he-subgrid-wall > .he-media-actions {
+    row-gap: 0;
+  }
+
+  .poster-grid.he-subgrid-wall > .he-media-actions > .he-media-card {
+    grid-row: span 2;
+    display: grid;
+    grid-template-rows: subgrid;
+    align-content: start;
+    row-gap: 10px;
+  }
+
+  .poster-grid.he-subgrid-wall > .he-media-card {
+    row-gap: 10px;
+  }
+
+  .poster-grid.he-subgrid-wall .he-media-card__body {
+    margin-top: 0;
+  }
+}
+
+/* ---------- Content-First Chrome Retraction (scroll-state + JS fallback) ---------- */
+@supports (container-type: scroll-state) {
+  .he-scroll-state-host {
+    container-type: scroll-state;
+    container-name: main-scroll;
+  }
+}
+
+.he-topbar {
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.he-topbar.is-retracted:not(:focus-within) {
+  transform: translateY(-100%);
+}
+
+@container main-scroll ((scrolled: bottom) and (scrollable: top)) {
+  .he-sticky-retract:not(:focus-within) {
+    transform: translateY(-100%);
+  }
+}
+
+.he-mobile-nav {
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.he-mobile-nav.is-retracted:not(:focus-within) {
+  transform: translateY(calc(100% + 16px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .he-topbar,
+  .he-mobile-nav {
+    transition: none;
+  }
+}
+
+/* Choice cards: constant border width so :has(> :checked) never causes layout shift. */
+.he-choice-card {
+  border: 2px solid rgb(var(--color-line));
+  transition: border-color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out);
+}
+
+.he-choice-card:hover {
+  border-color: rgb(var(--color-line-strong));
+}
+
+.he-choice-card:has(> :checked) {
+  border-color: rgb(var(--color-accent));
+  background: rgb(var(--color-accent) / 0.08);
 }
 
 /* Phone shell: floating pill navigation dock and dynamic Safari viewport. */
@@ -776,6 +929,7 @@ html.he-standalone.he-webtoon-document body,
   .he-standalone .he-compact-shell { flex-direction: column; }
   .he-standalone .he-compact-shell > .main-scroll-container { height: auto; min-height: 0; padding-bottom: 0; }
   .he-standalone .he-mobile-nav { position: relative; inset: auto; flex-shrink: 0; }
+  .he-standalone .he-mobile-nav.is-retracted:not(:focus-within) { transform: none; }
   .he-standalone .he-back-top { position: absolute; }
   .he-standalone .he-audio-host, .he-standalone .he-mobile-filters, .he-standalone .he-update-notice { position: absolute; }
   .he-standalone .he-has-mini.he-compact-shell > .main-scroll-container { padding-bottom: 96px; }

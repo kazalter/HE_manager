@@ -122,7 +122,7 @@ onMounted(fetchUsers)
 
     <div class="page-gutter pb-12">
       <div class="page-container">
-        <div class="max-w-[960px]">
+        <div class="max-w-[1040px]">
           <div v-if="!authState.user?.is_admin" role="alert" class="flex items-start gap-3 rounded-lg border border-warning/25 bg-warning/10 px-3.5 py-3 text-meta text-warning">
             <ShieldAlert :size="18" class="mt-0.5 shrink-0" aria-hidden="true" />
             <p><span class="font-medium text-ink">没有权限</span><br>当前账号不是管理员，不能管理用户。</p>

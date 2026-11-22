@@ -29,7 +29,9 @@ import ClockWeather from './ClockWeather.vue'
 import { UiButton, UiModal } from './ui'
 import type { User } from '../types'
 
-const props = defineProps<{ user: User | null }>()
+const props = withDefaults(defineProps<{ user: User | null; retracted?: boolean }>(), {
+  retracted: false,
+})
 const emit = defineEmits<{ logout: []; openCommandPalette: [] }>()
 
 const route = useRoute()
@@ -125,7 +127,10 @@ const confirmLogout = () => {
 </script>
 
 <template>
-  <header class="he-topbar sticky top-0 z-40 flex h-16 shrink-0 items-center gap-3 border-b border-line/80 glass-surface px-4 lg:px-6">
+  <header
+    class="he-topbar sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-line/80 glass-surface px-4 lg:px-6"
+    :class="{ 'is-retracted': retracted }"
+  >
     <router-link to="/" class="group flex shrink-0 items-center gap-2.5 rounded-xl px-1 py-1 focus-ring">
       <span class="grid size-9 place-items-center rounded-xl squircle bg-accent text-[13px] font-bold tracking-wider text-on-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.25),0_4px_12px_-3px_rgb(var(--color-accent)/0.55)] transition-transform duration-150 group-hover:scale-[1.03]">HE</span>
       <span class="hidden min-w-0 sm:block">

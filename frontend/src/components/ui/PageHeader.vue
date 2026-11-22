@@ -18,7 +18,7 @@ withDefaults(defineProps<{
 <template>
   <header
     class="he-page-header page-gutter"
-    :class="sticky ? 'sticky top-0 z-30 border-b border-line glass-surface py-3 lg:py-4' : 'pt-6 pb-5 lg:pt-8 lg:pb-6'"
+    :class="sticky ? 'he-sticky-retract sticky top-0 z-30 border-b border-line glass-surface py-3 lg:py-3.5 transition-transform duration-200' : 'pt-5 pb-4 lg:pt-7 lg:pb-5'"
   >
     <div class="page-container">
       <div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">

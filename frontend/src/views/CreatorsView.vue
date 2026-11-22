@@ -251,7 +251,7 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
       </div>
       <div
         v-if="availableLetters.length > 2"
-        class="scrollbar-none -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:flex-wrap lg:px-0"
+        class="he-scroll-fade-x scrollbar-none -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:flex-wrap lg:px-0"
         role="group"
         aria-label="按首字母筛选"
       >
@@ -276,16 +276,16 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
           </div>
         </div>
 
-        <div v-else-if="displayedCreators.length > 0" class="poster-grid">
+        <div v-else-if="displayedCreators.length > 0" class="poster-grid he-subgrid-wall">
           <button
             v-for="c in displayedCreators"
             :key="c.key"
             type="button"
             :disabled="!c.screen_name"
-            class="group flex flex-col rounded-2xl text-left focus-ring enabled:cursor-pointer disabled:cursor-default"
+            class="he-media-card group flex flex-col rounded-2xl text-left focus-ring enabled:cursor-pointer disabled:cursor-default"
             @click="c.screen_name && openCreator(c.screen_name)"
           >
-            <div class="relative aspect-[3/4] overflow-hidden rounded-2xl bg-surface-2">
+            <div class="he-media-card__frame squircle relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-surface-2 transition-[box-shadow,translate] duration-200 ease-out">
               <img
                 v-if="c.cover_path"
                 :src="thumbnailUrl(c.cover_path)"
@@ -304,7 +304,7 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
                 :title="`还有 ${c.posts_pending} 条已知推文未入库`"
               >+{{ c.posts_pending }} 待入库</span>
             </div>
-            <div class="mt-2.5 min-w-0 px-0.5">
+            <div class="he-media-card__body mt-2.5 min-w-0 px-0.5">
               <h3 class="truncate text-body font-medium text-ink" :title="displayName(c)">{{ displayName(c) }}</h3>
               <p class="mt-0.5 truncate text-meta text-subtle">{{ c.kind === 'x' && c.screen_name ? `@${c.screen_name}` : '漫画作者' }}</p>
               <p class="mt-0.5 text-caption text-subtle tabular-nums">
@@ -325,7 +325,16 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
 
   <!-- ===== detail mode ===== -->
   <div v-else>
-    <PageHeader :title="detail?.creator.display_name || '@' + screenName">
+    <div class="relative overflow-hidden border-b border-line/70">
+      <img
+        v-if="detailMedia[0]?.cover_path"
+        :src="thumbnailUrl(detailMedia[0].cover_path)"
+        alt=""
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-15 blur-3xl saturate-150"
+      />
+      <div v-if="detailMedia[0]?.cover_path" class="pointer-events-none absolute inset-0 bg-gradient-to-b from-background/55 to-background/95" aria-hidden="true"></div>
+      <PageHeader class="relative z-10" :title="detail?.creator.display_name || '@' + screenName">
       <template #leading>
         <UiIconButton label="返回创作者列表" variant="secondary" @click="handleBack"><ArrowLeft :size="18" /></UiIconButton>
       </template>
@@ -350,7 +359,7 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
         </span>
       </template>
       <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div class="scrollbar-none -mx-4 flex gap-2 overflow-x-auto px-4 sm:-mx-6 sm:px-6 md:mx-0 md:px-0" role="group" aria-label="按类型筛选">
+        <div class="he-scroll-fade-x scrollbar-none -mx-4 flex gap-2 overflow-x-auto px-4 sm:-mx-6 sm:px-6 md:mx-0 md:px-0" role="group" aria-label="按类型筛选">
           <UiChip
             v-for="t in detailTypeOptions"
             :key="t.k"
@@ -362,8 +371,9 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
         <UiSegmented v-model="detailSort" label="排序方式" :options="detailSortOptions" class="self-start md:self-auto" />
       </div>
     </PageHeader>
+    </div>
 
-    <div class="page-gutter pb-12">
+    <div class="page-gutter mt-6 pb-12">
       <div class="page-container">
         <div v-if="detailLoading" class="poster-grid" aria-busy="true">
           <div v-for="i in 12" :key="i">
@@ -381,7 +391,7 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
           <UiButton variant="secondary" size="sm" @click="detailTypeFilter = 'all'">查看全部</UiButton>
         </EmptyState>
 
-        <div v-else class="creator-media-grid poster-grid">
+        <div v-else class="creator-media-grid poster-grid he-subgrid-wall">
           <MediaCard
             v-for="item in filteredDetailMedia"
             :key="item.id"

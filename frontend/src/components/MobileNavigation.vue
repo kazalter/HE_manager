@@ -2,6 +2,9 @@
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Compass, Ellipsis, Library, Star } from 'lucide-vue-next'
+const props = withDefaults(defineProps<{ retracted?: boolean }>(), {
+  retracted: false,
+})
 const route = useRoute()
 const router = useRouter()
 const saved = reactive({ library: '/', favorites: '/?favorite=true', discover: '/external' })
@@ -93,7 +96,7 @@ watch(() => route.fullPath, resetGesture)
 onBeforeUnmount(() => { resetGesture(); window.clearTimeout(clickTimer) })
 </script>
 <template>
-  <nav class="he-mobile-nav" aria-label="手机主导航">
+  <nav class="he-mobile-nav" :class="{ 'is-retracted': props.retracted && dragPosition === null }" aria-label="手机主导航">
     <div ref="surface" class="he-nav-surface" :class="{ 'is-dragging': dragPosition !== null }" :style="{ '--he-nav-index': lensPosition }" @pointerdown="onPointerDown" @pointermove="onPointerMove" @pointerup="onPointerUp" @pointercancel="resetGesture" @lostpointercapture="onLostPointerCapture" @click.capture="onClick" @dragstart.prevent>
       <div class="he-nav-lens" aria-hidden="true"></div>
       <router-link v-for="(item, index) in items" :key="item.key" :to="item.to" :aria-current="section === item.key ? 'page' : undefined" :class="{ active: section === item.key, 'is-preview': previewIndex === index }" draggable="false" @click="onItemClick(item)">

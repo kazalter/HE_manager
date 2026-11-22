@@ -915,7 +915,7 @@ const lastOpenedText = (item: StatAttentionItem) => {
                 v-for="card in overviewCards"
                 :key="card.label"
                 :to="card.to ?? undefined"
-                class="group flex min-w-0 flex-col rounded-2xl border border-line bg-surface p-4 sm:p-5"
+                class="he-kpi-card squircle group flex min-w-0 flex-col rounded-2xl border border-line bg-surface p-4 sm:p-5"
                 :class="card.to ? 'transition-colors duration-150 hover:border-line-strong hover:bg-surface-2 focus-ring' : ''"
               >
                 <div class="flex items-center justify-between gap-2">
@@ -923,7 +923,7 @@ const lastOpenedText = (item: StatAttentionItem) => {
                   <component :is="card.icon" :size="16" class="shrink-0 text-subtle transition-colors group-hover:text-muted" aria-hidden="true" />
                 </div>
                 <p class="mt-1.5 flex min-w-0 items-baseline gap-1 whitespace-nowrap">
-                  <span class="truncate text-title font-semibold text-ink tabular-nums">{{ card.value }}</span>
+                  <span class="he-kpi-value truncate font-semibold text-ink tabular-nums">{{ card.value }}</span>
                   <span v-if="card.unit" class="shrink-0 text-meta text-subtle">{{ card.unit }}</span>
                 </p>
                 <p class="mt-1 truncate text-caption text-muted tabular-nums" :title="card.detail">{{ card.detail }}</p>
@@ -1477,6 +1477,18 @@ const lastOpenedText = (item: StatAttentionItem) => {
 </template>
 
 <style scoped>
+.he-kpi-card {
+  container: kpi / inline-size;
+}
+.he-kpi-value {
+  font-size: clamp(1.25rem, 1rem + 0.9vw, 1.65rem);
+  line-height: 1.25;
+}
+@supports (font-size: 1cqi) {
+  .he-kpi-value {
+    font-size: clamp(1.25rem, 0.95rem + 4cqi, 1.65rem);
+  }
+}
 .stats-tooltip {
   transform: translate(-50%, calc(-100% - 8px));
 }
