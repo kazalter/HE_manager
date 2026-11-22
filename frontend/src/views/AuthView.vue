@@ -42,7 +42,7 @@ const submit = async () => {
 
 <template>
   <div class="he-auth-view relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-background px-4 py-10 text-ink">
-    <div class="absolute right-4 top-4 z-20"><ColorModeToggle compact /></div>
+    <div class="absolute right-4 top-4 z-20"><ColorModeToggle compact :show-tooltip="false" /></div>
     <div class="he-auth-ambient" aria-hidden="true"></div>
 
     <div class="relative z-10 grid w-full max-w-[840px] items-stretch overflow-hidden rounded-3xl squircle border border-line bg-surface shadow-modal lg:grid-cols-[1.05fr_1fr]">

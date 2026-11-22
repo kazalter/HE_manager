@@ -3,7 +3,7 @@ import { Moon, Sun } from 'lucide-vue-next'
 import { themeState, toggleColorMode } from '../theme'
 withDefaults(defineProps<{ compact?: boolean; showTooltip?: boolean; generatedIcon?: boolean }>(), {
   compact: false,
-  showTooltip: true,
+  showTooltip: false,
   generatedIcon: false,
 })
 </script>

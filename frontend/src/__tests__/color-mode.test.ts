@@ -112,6 +112,13 @@ describe('color modes', () => {
     select.unmount()
   })
 
+  it('keeps compact mode free of unstyled rail tooltip text by default', () => {
+    const toggle = mount(ColorModeToggle, { props: { compact: true } })
+    expect(toggle.text().trim()).toBe('')
+    expect(toggle.get('button').attributes('aria-label')).toBe('切换到白天模式')
+    toggle.unmount()
+  })
+
   it('reveals the selected mode from the clicked control when transitions are available', async () => {
     const animate = vi.fn()
     document.documentElement.animate = animate as typeof document.documentElement.animate
