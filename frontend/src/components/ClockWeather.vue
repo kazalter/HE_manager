@@ -27,8 +27,10 @@ const closeOnEscape = (event: KeyboardEvent) => {
 const placeLabel = computed(() => place.value ? [...new Set([place.value.name, place.value.admin2, place.value.admin1, place.value.country].filter(Boolean))].join(' · ') : '天气位置')
 let clockTimer: number | undefined, weatherTimer: number | undefined
 let weatherRequest = 0, searchRequest = 0, locationRequest = 0, disposed = false
-const dateText = computed(() => new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short' }).format(now.value))
-const timeText = computed(() => new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(now.value))
+const DATE_FORMATTER = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short' })
+const TIME_FORMATTER = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+const dateText = computed(() => DATE_FORMATTER.format(now.value))
+const timeText = computed(() => TIME_FORMATTER.format(now.value))
 const description = computed(() => {
   const w = weather.value
   if (!w) return ''

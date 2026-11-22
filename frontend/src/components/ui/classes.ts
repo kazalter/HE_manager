@@ -74,7 +74,7 @@ const BADGE_TONE: Record<Tone, string> = {
   warning: 'bg-warning/12 text-warning ring-1 ring-inset ring-warning/20',
   danger: 'bg-danger/12 text-danger ring-1 ring-inset ring-danger/20',
   info: 'bg-info/12 text-info ring-1 ring-inset ring-info/20',
-  overlay: 'bg-black/65 text-white backdrop-blur-md ring-1 ring-inset ring-white/15',
+  overlay: 'bg-black/72 text-white ring-1 ring-inset ring-white/15',
 }
 
 export const badgeClass = (tone: Tone = 'neutral') =>

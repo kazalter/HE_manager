@@ -139,4 +139,12 @@ describe('home performance optimizations', () => {
     await flushPromises()
     expect(tagCallsAfterMount()).toBe(2)
   })
+
+  it('avoids expensive backdrop-blur layers on repeating MediaCard badges for smooth scrolling', () => {
+    const card = mount(MediaCard, {
+      props: { media: sampleMedia(5, { favorite: true, duration: 120 }), index: 0, showType: true },
+    })
+    wrappers.push(card)
+    expect(card.html()).not.toContain('backdrop-blur')
+  })
 })

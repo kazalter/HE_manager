@@ -86,7 +86,7 @@ const imageAspect = computed(() => {
   <button
     v-if="mode === 'list'"
     type="button"
-    class="group flex w-full items-center gap-3 rounded-2xl squircle border border-line bg-surface p-2 pr-4 text-left shadow-[inset_0_1px_0_var(--he-border-specular)] transition-[background-color,border-color,box-shadow] duration-150 ease-out hover:border-line-strong hover:bg-surface-2 focus-ring sm:gap-4"
+    class="group flex w-full items-center gap-3 rounded-2xl border border-line bg-surface p-2 pr-4 text-left shadow-[inset_0_1px_0_var(--he-border-specular)] transition-[background-color,border-color] duration-150 ease-out hover:border-line-strong hover:bg-surface-2 focus-ring sm:gap-4"
     :aria-label="media.title"
   >
     <div class="relative h-[72px] w-12 shrink-0 overflow-hidden rounded-xl bg-surface-2 ring-1 ring-inset ring-white/8 sm:h-20 sm:w-[54px]">
@@ -117,13 +117,13 @@ const imageAspect = computed(() => {
   <button
     v-else-if="mode === 'masonry'"
     type="button"
-    class="group w-full overflow-hidden rounded-2xl squircle bg-surface text-left ring-1 ring-inset ring-line shadow-[var(--he-shadow-card)] transition-[box-shadow,translate] duration-150 ease-out hover:ring-line-strong hover:shadow-[var(--he-shadow-card-hover)] focus-ring"
+    class="tap-active group w-full overflow-hidden rounded-2xl bg-surface text-left ring-1 ring-inset ring-line shadow-[var(--he-shadow-card)] transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:ring-line-strong hover:shadow-[var(--he-shadow-card-hover)] focus-ring"
     :aria-label="media.title"
   >
     <div class="relative w-full overflow-hidden bg-surface-2">
       <img :src="coverUrl" alt="" loading="lazy" decoding="async" class="block h-auto w-full transition-transform duration-200 ease-out group-hover:scale-[1.03]" :style="imageAspect" @error="onImageError" />
-      <div class="absolute right-2 top-2 inline-flex min-h-6 items-center rounded-lg bg-black/55 px-1.5 py-0.5 text-caption font-medium text-white/95 backdrop-blur-md ring-1 ring-inset ring-white/15">{{ typeLabel }}</div>
-      <span v-if="media.favorite" class="absolute left-2 top-2 grid size-6 place-items-center rounded-lg bg-black/55 text-star backdrop-blur-md ring-1 ring-inset ring-white/15"><Star :size="13" fill="currentColor" aria-hidden="true" /></span>
+      <div class="absolute right-2 top-2 inline-flex min-h-6 items-center rounded-lg bg-black/72 px-1.5 py-0.5 text-caption font-medium text-white/95 ring-1 ring-inset ring-white/15">{{ typeLabel }}</div>
+      <span v-if="media.favorite" class="absolute left-2 top-2 grid size-6 place-items-center rounded-lg bg-black/72 text-star ring-1 ring-inset ring-white/15"><Star :size="13" fill="currentColor" aria-hidden="true" /></span>
       <div v-if="progressPercent" class="absolute inset-x-0 bottom-0 h-[3px] bg-black/50">
         <div class="h-full bg-accent" :style="{ width: `${progressPercent}%` }"></div>
       </div>
@@ -144,15 +144,15 @@ const imageAspect = computed(() => {
     class="group w-full text-left focus:outline-none"
     :aria-label="media.title"
   >
-    <div class="relative aspect-video w-full overflow-hidden rounded-2xl squircle bg-surface-2 shadow-[var(--he-shadow-card)] transition-[box-shadow,translate] duration-200 group-hover:shadow-[var(--he-shadow-card-hover)] group-focus-visible:ring-2 group-focus-visible:ring-accent group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-background">
+    <div class="relative aspect-video w-full overflow-hidden rounded-2xl bg-surface-2 shadow-[var(--he-shadow-card)] transition-transform duration-200 ease-out group-hover:-translate-y-0.5 group-hover:shadow-[var(--he-shadow-card-hover)] group-focus-visible:ring-2 group-focus-visible:ring-accent group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-background">
       <img :src="coverUrl" alt="" loading="lazy" decoding="async" class="h-full w-full object-cover transition-transform duration-200 ease-out group-hover:scale-[1.03]" @error="onImageError" />
       <div class="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10 transition-colors group-hover:ring-white/25"></div>
       <div class="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100">
-        <span class="grid size-12 place-items-center rounded-full bg-black/60 text-white backdrop-blur-md ring-1 ring-inset ring-white/25 shadow-lg"><Play :size="20" fill="currentColor" aria-hidden="true" /></span>
+        <span class="grid size-12 place-items-center rounded-full bg-black/72 text-white ring-1 ring-inset ring-white/25 shadow-lg"><Play :size="20" fill="currentColor" aria-hidden="true" /></span>
       </div>
-      <span v-if="media.duration" class="absolute bottom-2.5 right-2 inline-flex min-h-6 items-center rounded-lg bg-black/65 px-1.5 py-0.5 text-caption font-medium tabular-nums text-white backdrop-blur-md ring-1 ring-inset ring-white/10">{{ formatDuration(media.duration) }}</span>
+      <span v-if="media.duration" class="absolute bottom-2.5 right-2 inline-flex min-h-6 items-center rounded-lg bg-black/75 px-1.5 py-0.5 text-caption font-medium tabular-nums text-white ring-1 ring-inset ring-white/12">{{ formatDuration(media.duration) }}</span>
       <span v-if="media.is_missing" class="absolute right-2 top-2 inline-flex min-h-6 items-center rounded-lg bg-danger px-1.5 py-0.5 text-caption font-semibold text-black/85">文件丢失</span>
-      <span v-if="media.favorite" class="absolute left-2 top-2 grid size-6 place-items-center rounded-lg bg-black/55 text-star backdrop-blur-md ring-1 ring-inset ring-white/15"><Star :size="13" fill="currentColor" aria-hidden="true" /></span>
+      <span v-if="media.favorite" class="absolute left-2 top-2 grid size-6 place-items-center rounded-lg bg-black/72 text-star ring-1 ring-inset ring-white/15"><Star :size="13" fill="currentColor" aria-hidden="true" /></span>
       <div v-if="progressPercent" class="absolute inset-x-0 bottom-0 h-[3px] bg-black/50">
         <div class="h-full bg-accent shadow-[0_0_8px_rgb(var(--color-accent)/0.8)]" :style="{ width: `${progressPercent}%` }"></div>
       </div>

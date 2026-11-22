@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useRoute, type RouteLocationRaw } from 'vue-router'
 import {
   ArchiveX,
@@ -121,6 +121,14 @@ const isItemActive = (item: RailItem) => {
 const currentDensityOption = computed(
   () => DENSITY_OPTIONS.find(opt => opt.id === densityState.density) ?? DENSITY_OPTIONS[1]!,
 )
+const densityChangedBadge = ref(false)
+let densityBadgeTimer: number | undefined
+const onCycleDensity = () => {
+  cycleDensity()
+  densityChangedBadge.value = true
+  window.clearTimeout(densityBadgeTimer)
+  densityBadgeTimer = window.setTimeout(() => { densityChangedBadge.value = false }, 1500)
+}
 
 const userInitial = computed(() => (props.user?.username?.trim()[0] || 'U').toUpperCase())
 
@@ -128,6 +136,7 @@ const confirmLogout = () => {
   logoutConfirmOpen.value = false
   emit('logout')
 }
+onBeforeUnmount(() => window.clearTimeout(densityBadgeTimer))
 </script>
 
 <template>
@@ -206,18 +215,23 @@ const confirmLogout = () => {
             :to="item.to"
             :aria-current="isItemActive(item) ? 'page' : undefined"
             :title="collapsed ? item.label : undefined"
-            class="group relative flex items-center rounded-xl text-meta font-medium transition-[background-color,color,box-shadow] duration-150 focus-ring-inset"
+            class="group relative flex items-center rounded-xl text-meta font-medium transition-[background-color,color,box-shadow,transform] duration-150 focus-ring-inset active:scale-[0.98]"
             :class="[
               collapsed ? 'size-10 justify-center' : 'gap-2.5 px-2.5 py-2',
               isItemActive(item)
-                ? 'bg-accent/14 text-ink ring-1 ring-inset ring-accent/32 shadow-[inset_0_1px_0_var(--he-border-specular)]'
-                : 'text-muted hover:bg-surface-2/80 hover:text-ink',
+                ? 'bg-accent/15 text-ink ring-1 ring-inset ring-accent/32 shadow-[inset_0_1px_0_var(--he-border-specular)]'
+                : 'text-muted hover:bg-surface-2/85 hover:text-ink',
             ]"
           >
+            <span
+              v-if="isItemActive(item) && !collapsed"
+              class="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-accent shadow-[0_0_8px_rgb(var(--color-accent)/0.65)]"
+              aria-hidden="true"
+            ></span>
             <component
               :is="item.icon"
               :size="16"
-              class="shrink-0 transition-colors"
+              class="shrink-0 transition-transform duration-150 group-hover:scale-105"
               :class="isItemActive(item) ? 'text-accent-glow' : 'text-subtle group-hover:text-ink'"
               aria-hidden="true"
             />
@@ -245,12 +259,14 @@ const confirmLogout = () => {
           <ColorModeToggle compact :show-tooltip="false" />
           <button
             type="button"
-            class="grid size-9 place-items-center rounded-xl border border-transparent text-subtle transition-colors duration-150 hover:border-line hover:bg-surface-2 hover:text-ink focus-ring"
+            class="relative grid h-9 place-items-center rounded-xl border border-transparent text-subtle transition-[background-color,border-color,color,width] duration-150 hover:border-line hover:bg-surface-2 hover:text-ink focus-ring"
+            :class="densityChangedBadge && !collapsed ? 'px-2.5 gap-1.5 inline-flex border-accent/40 bg-accent/14 text-accent-glow' : 'w-9'"
             :title="`布局舒适度：${currentDensityOption.label}（点击切换）`"
             :aria-label="`切换布局舒适度，当前：${currentDensityOption.label}`"
-            @click="cycleDensity()"
+            @click="onCycleDensity"
           >
             <Layers :size="16" aria-hidden="true" />
+            <span v-if="densityChangedBadge && !collapsed" class="text-[11px] font-medium whitespace-nowrap">{{ currentDensityOption.shortLabel }}</span>
           </button>
         </div>
 

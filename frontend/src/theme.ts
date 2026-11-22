@@ -8,6 +8,15 @@ export interface ThemeOption {
   description: string
   /** Hex colors for previews: [background, surface, accent]. */
   swatches: string[]
+  preview?: {
+    background: string
+    sidebar: string
+    surface: string
+    surface2: string
+    line: string
+    ink: string
+    accent: string
+  }
 }
 
 const STORAGE_KEY = 'he-manager-theme'
@@ -56,10 +65,10 @@ export type ThemeTokens = Record<ThemeToken, string>
 
 /** Accent colors of the named themes. All other tokens derive from these. */
 const THEME_ACCENTS: Record<string, string> = {
-  midnight: '#6366f1',
-  sakura: '#f27aba',
-  forest: '#3ccf97',
-  amber: '#f2a33a',
+  midnight: '#656af6',
+  sakura: '#f076b4',
+  forest: '#38c993',
+  amber: '#eea23b',
 }
 
 const hexToRgb = (hex: string): number[] => {
@@ -131,45 +140,45 @@ const contrast = (a: number[], b: number[]) => {
 export const buildThemeTokens = (accentHex: string, mode: ResolvedColorMode = 'dark'): ThemeTokens => {
   let accent = hexToRgb(accentHex)
   const [h, s, l] = rgbToHsl(accent[0]!, accent[1]!, accent[2]!)
-  const ns = Math.min(0.12, s)
-  const ts = Math.min(0.08, s)
+  const ns = Math.min(0.14, s)
+  const ts = Math.min(0.085, s)
   const neutral = (lightness: number, saturation = ns) => hslToRgb(h, saturation, lightness)
   const white = [255, 255, 255]
   if (mode === 'light') {
-    // Keep pale neutrals independent of the accent so pink/green/custom themes
-    // do not tint the entire page. Reserve color for selected controls and links.
-    const lightSurface3 = [229, 233, 239]
-    const accentSaturation = s * 0.82
-    let lightness = Math.min(l, 0.46)
+    // Clean gallery-paper light neutrals so cards lift cleanly off the canvas
+    // while keeping strong contrast for text and accents.
+    const lightSurface3 = [231, 235, 242]
+    const accentSaturation = Math.min(0.74, s * 0.82)
+    let lightness = Math.min(l, 0.48)
     accent = hslToRgb(h, accentSaturation, lightness)
     while (contrast(accent, lightSurface3) < 4.5 && lightness > 0.05) {
       lightness -= 0.01
       accent = hslToRgb(h, accentSaturation, lightness)
     }
     const tokens: Record<ThemeToken, number[]> = {
-      background: [239, 241, 244], sidebar: [232, 235, 239], surface: [250, 251, 252],
-      'surface-2': [242, 244, 247], 'surface-3': lightSurface3,
-      line: [215, 221, 229], 'line-strong': [184, 195, 208],
-      ink: [32, 40, 53], muted: [76, 89, 106],
-      subtle: [87, 101, 120], faint: [109, 121, 139],
+      background: [245, 246, 250], sidebar: [238, 240, 246], surface: [255, 255, 255],
+      'surface-2': [241, 243, 248], 'surface-3': lightSurface3,
+      line: [217, 222, 232], 'line-strong': [184, 194, 210],
+      ink: [22, 28, 40], muted: [64, 76, 95],
+      subtle: [82, 95, 114], faint: [110, 122, 140],
       accent, 'accent-glow': accent, 'on-accent': white,
     }
     return Object.fromEntries(Object.entries(tokens).map(([key, rgb]) => [key, rgb.join(' ')])) as ThemeTokens
   }
   const onAccent = contrast(white, accent) >= 4.2 ? white : hslToRgb(h, Math.min(0.3, s), 0.07)
-  const glow = hslToRgb(h, Math.min(1, s + 0.1), Math.min(0.88, Math.max(l + 0.2, 0.78)))
+  const glow = hslToRgb(h, Math.min(1, s + 0.1), Math.min(0.9, Math.max(l + 0.18, 0.8)))
   const tokens: Record<ThemeToken, number[]> = {
-    background: neutral(0.045),
-    sidebar: neutral(0.062),
-    surface: neutral(0.078),
-    'surface-2': neutral(0.11),
-    'surface-3': neutral(0.14),
-    line: neutral(0.165),
-    'line-strong': neutral(0.235),
-    ink: neutral(0.95, ts),
-    muted: neutral(0.72, ts),
-    subtle: neutral(0.57, ts * 0.9),
-    faint: neutral(0.4, ts * 0.8),
+    background: neutral(0.068),
+    sidebar: neutral(0.088),
+    surface: neutral(0.106),
+    'surface-2': neutral(0.142),
+    'surface-3': neutral(0.184),
+    line: neutral(0.215),
+    'line-strong': neutral(0.295),
+    ink: neutral(0.955, ts),
+    muted: neutral(0.76, ts),
+    subtle: neutral(0.61, ts * 0.9),
+    faint: neutral(0.45, ts * 0.8),
     accent,
     'accent-glow': glow,
     'on-accent': onAccent,
@@ -181,7 +190,21 @@ const tokenHex = (tokens: ThemeTokens, key: ThemeToken) => rgbToHex(tokens[key].
 
 const option = (id: string, name: string, description: string, mode: ResolvedColorMode = 'dark'): ThemeOption => {
   const tokens = buildThemeTokens(THEME_ACCENTS[id]!, mode)
-  return { id, name, description, swatches: [tokenHex(tokens, 'background'), tokenHex(tokens, 'surface-2'), tokenHex(tokens, 'accent')] }
+  return {
+    id,
+    name,
+    description,
+    swatches: [tokenHex(tokens, 'background'), tokenHex(tokens, 'surface-2'), tokenHex(tokens, 'accent')],
+    preview: {
+      background: tokenHex(tokens, 'background'),
+      sidebar: tokenHex(tokens, 'sidebar'),
+      surface: tokenHex(tokens, 'surface'),
+      surface2: tokenHex(tokens, 'surface-2'),
+      line: tokenHex(tokens, 'line'),
+      ink: tokenHex(tokens, 'ink'),
+      accent: tokenHex(tokens, 'accent'),
+    },
+  }
 }
 
 export const themes: ThemeOption[] = [
@@ -233,10 +256,20 @@ const renderTheme = () => {
   if (meta) meta.content = state.resolvedMode
 }
 
-export const applyTheme = (themeId: string) => {
-  state.theme = isThemeId(themeId) ? themeId : DEFAULT_THEME
-  writeStorage(STORAGE_KEY, state.theme)
-  renderTheme()
+export const applyTheme = (themeId: string, event?: MouseEvent) => {
+  const next = isThemeId(themeId) ? themeId : DEFAULT_THEME
+  const apply = () => {
+    state.theme = next
+    writeStorage(STORAGE_KEY, state.theme)
+    renderTheme()
+  }
+  const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  if (!event || typeof document === 'undefined' || !document.startViewTransition || reducedMotion || next === state.theme) {
+    apply()
+    return
+  }
+  const transition = document.startViewTransition(async () => { apply(); await nextTick() })
+  transition.ready.catch(() => {})
 }
 
 export const applyColorMode = (mode: ColorMode) => {

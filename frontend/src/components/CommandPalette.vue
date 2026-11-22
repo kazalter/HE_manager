@@ -28,6 +28,7 @@ import {
 import type { User } from '../types'
 import { applyTheme, themeOptionsForMode, themeState, toggleColorMode } from '../theme'
 import { applyDensity, DENSITY_OPTIONS, densityState } from '../density'
+import { closeTopLayer } from '../utils/topLayer'
 
 const open = defineModel<boolean>('open', { required: true })
 const props = defineProps<{ user: User | null }>()
@@ -39,6 +40,7 @@ const panelRef = ref<HTMLElement | null>(null)
 const inputRef = ref<HTMLInputElement | null>(null)
 const query = ref('')
 const activeIndex = ref(0)
+const rendered = ref(open.value)
 const usesNativeModal = ref(false)
 let pressedOutside = false
 let restoreFocus: HTMLElement | null = null
@@ -184,11 +186,12 @@ watch(filteredItems, items => {
 })
 
 const syncDialogState = async (value: boolean) => {
-  await nextTick()
-  const dialog = dialogRef.value
-  if (!dialog) return
-
   if (value) {
+    rendered.value = true
+    await nextTick()
+    const dialog = dialogRef.value
+    if (!dialog) return
+    dialog.removeAttribute('data-closing')
     restoreFocus = document.activeElement as HTMLElement | null
     query.value = ''
     activeIndex.value = 0
@@ -207,11 +210,10 @@ const syncDialogState = async (value: boolean) => {
     await nextTick()
     inputRef.value?.focus()
   } else {
-    if (typeof dialog.close === 'function' && dialog.open) {
-      try { dialog.close() } catch { dialog.removeAttribute('open') }
-    } else {
-      dialog.removeAttribute('open')
-    }
+    const dialog = dialogRef.value
+    await closeTopLayer(dialog, () => {
+      if (!open.value) rendered.value = false
+    })
     if (!usesNativeModal.value) restoreFocus?.focus?.()
     restoreFocus = null
   }
@@ -277,7 +279,7 @@ const onPointerUp = (event: PointerEvent) => {
       @pointerup="onPointerUp"
       @click.self="close"
     >
-      <div v-if="open" class="flex h-full w-full items-start justify-center px-4 pt-[12vh]" @click.self="close">
+      <div v-if="rendered" class="flex h-full w-full items-start justify-center px-4 pt-[12vh]" @click.self="close">
         <section
           ref="panelRef"
           class="he-palette-panel squircle flex w-full max-w-[600px] flex-col overflow-hidden rounded-3xl border border-line-strong glass-elevated shadow-modal"
@@ -369,14 +371,27 @@ const onPointerUp = (event: PointerEvent) => {
   height: 100%;
   z-index: 240;
   overflow: visible;
+  opacity: 0;
+  transition-property: opacity, display, overlay;
+  transition-duration: 160ms;
+  transition-timing-function: var(--ease-out);
+  transition-behavior: allow-discrete;
 }
 
-.he-palette-dialog[open],
-.he-palette-dialog.is-open {
+.he-palette-dialog:is([open], .is-open):where(:not([data-closing])) {
   display: block;
+  opacity: 1;
+  @starting-style {
+    opacity: 0;
+  }
 }
 
-.he-palette-dialog:not(:modal).is-open {
+.he-palette-dialog:is([open], .is-open)[data-closing] {
+  display: block;
+  opacity: 0;
+}
+
+.he-palette-dialog:not(:modal).is-open:where(:not([data-closing])) {
   background: rgb(0 0 0 / 0.6);
 }
 
@@ -384,12 +399,12 @@ const onPointerUp = (event: PointerEvent) => {
   background: rgb(0 0 0 / 0);
   backdrop-filter: blur(0px);
   transition-property: background-color, backdrop-filter, display, overlay;
-  transition-duration: 160ms;
+  transition-duration: 170ms;
   transition-timing-function: var(--ease-out);
   transition-behavior: allow-discrete;
 }
 
-.he-palette-dialog[open]::backdrop {
+.he-palette-dialog[open]:where(:not([data-closing]))::backdrop {
   background: rgb(0 0 0 / 0.58);
   backdrop-filter: blur(8px);
   @starting-style {
@@ -400,19 +415,35 @@ const onPointerUp = (event: PointerEvent) => {
 
 .he-palette-panel {
   box-shadow: var(--he-shadow-modal), inset 0 1px 0 var(--he-border-specular);
+  opacity: 0;
+  transition: opacity 160ms var(--ease-out), translate 220ms var(--ease-snappy), scale 220ms var(--ease-snappy);
+}
+
+.he-palette-dialog:is([open], .is-open):where(:not([data-closing])) .he-palette-panel {
+  opacity: 1;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .he-palette-dialog[open] .he-palette-panel {
-    opacity: 1;
+  .he-palette-panel {
+    translate: 0 -10px;
+    scale: 0.975;
+  }
+  .he-palette-dialog:is([open], .is-open):where(:not([data-closing])) .he-palette-panel {
     translate: 0 0;
     scale: 1;
-    transition: opacity 150ms var(--ease-out), translate 180ms var(--ease-out), scale 180ms var(--ease-out);
     @starting-style {
       opacity: 0;
       translate: 0 -10px;
-      scale: 0.98;
+      scale: 0.975;
     }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .he-palette-dialog,
+  .he-palette-dialog::backdrop,
+  .he-palette-panel {
+    transition-duration: 80ms;
   }
 }
 </style>

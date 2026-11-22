@@ -68,21 +68,33 @@ watch(() => route.fullPath, async (next, previous) => {
   restoreScroll()
 })
 const onContentReady = () => { restoreScroll(); pendingPosition = null }
-const handleMainScroll = (event: Event) => {
-  const el = event.target as HTMLElement
+let scrollRafId = 0
+let latestScrollEl: HTMLElement | null = null
+const flushMainScroll = () => {
+  scrollRafId = 0
+  const el = latestScrollEl
+  if (!el) return
+  const y = Math.max(0, el.scrollTop)
+  const nextBackToTop = y > 360
+  if (showBackToTop.value !== nextBackToTop) showBackToTop.value = nextBackToTop
+  if (showRail.value) return
   const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight)
-  const y = Math.max(0, Math.min(el.scrollTop, maxScroll))
-  showBackToTop.value = y > 360
-  if (y <= 72) {
+  const clampedY = Math.min(y, maxScroll)
+  if (clampedY <= 72) {
     chromeRetracted.value = false
-    lastScrollTop = y
+    lastScrollTop = clampedY
     return
   }
-  const delta = y - lastScrollTop
+  const delta = clampedY - lastScrollTop
   if (Math.abs(delta) >= 12) {
     chromeRetracted.value = delta > 0
-    lastScrollTop = y
+    lastScrollTop = clampedY
   }
+}
+const handleMainScroll = (event: Event) => {
+  latestScrollEl = event.target as HTMLElement
+  if (scrollRafId) return
+  scrollRafId = window.requestAnimationFrame(flushMainScroll)
 }
 const scrollToTop = () => {
   chromeRetracted.value = false
@@ -112,6 +124,7 @@ onMounted(() => {
   document.addEventListener('play', pauseAudioForVideo, true)
 })
 onBeforeUnmount(() => {
+  if (scrollRafId) window.cancelAnimationFrame(scrollRafId)
   window.removeEventListener('online', retryProgress)
   window.removeEventListener('he:content-ready', onContentReady)
   window.removeEventListener('he:scroll-top', scrollToTop)
@@ -158,7 +171,7 @@ onBeforeUnmount(() => {
       ref="mainScrollRef"
       :inert="audioPlaybackStore.state.expanded || !!route.query.media"
       tabindex="-1"
-      @scroll="handleMainScroll"
+      @scroll.passive="handleMainScroll"
       class="he-shell-main he-scroll-state-host flex-1 min-h-0 min-w-0 relative z-10 box-border main-scroll-container focus:outline-none"
       :class="isEmbed ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden custom-scrollbar'"
     >
@@ -181,7 +194,7 @@ onBeforeUnmount(() => {
   grid-template-areas: "rail main";
   grid-template-columns: var(--he-rail-width) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
-  transition: grid-template-columns var(--duration-base) var(--ease-out);
+  transition: grid-template-columns var(--duration-slow) var(--ease-snappy);
 }
 
 .he-studio-shell.is-rail-collapsed {
@@ -219,22 +232,25 @@ onBeforeUnmount(() => {
   inset: 0;
   z-index: 0;
   pointer-events: none;
+  contain: strict;
+  transform: translateZ(0);
   background:
-    radial-gradient(1200px 640px at 18% -15% var(--in-oklab), rgb(var(--color-accent) / 0.1), rgb(var(--color-accent) / 0.025) 45%, transparent 78%),
-    radial-gradient(900px 520px at 88% 8% var(--in-oklab), rgb(var(--color-accent-glow) / 0.045), transparent 72%);
+    radial-gradient(1280px 680px at 16% -14% var(--in-oklab), rgb(var(--color-accent) / 0.14), rgb(var(--color-accent) / 0.035) 46%, transparent 78%),
+    radial-gradient(920px 560px at 88% 6% var(--in-oklab), rgb(var(--color-accent-glow) / 0.065), transparent 72%),
+    radial-gradient(760px 480px at 50% 108% var(--in-oklab), rgb(var(--color-accent) / 0.05), transparent 72%);
 }
 
 .page-fade-enter-active {
-  transition: opacity var(--duration-base) var(--ease-out), translate var(--duration-base) var(--ease-out);
+  transition: opacity 220ms var(--ease-out), translate 240ms var(--ease-snappy);
 }
 
 .page-fade-leave-active {
-  transition: opacity var(--duration-fast) ease-in;
+  transition: opacity 110ms ease-in;
 }
 
 .page-fade-enter-from {
   opacity: 0;
-  translate: 0 4px;
+  translate: 0 6px;
 }
 
 .page-fade-leave-to {

@@ -50,28 +50,32 @@ onBeforeUnmount(() => player.stop())
 </script>
 <template>
   <Teleport to="body">
-    <div v-if="player.state.media" class="he-audio-host" :class="{ 'is-expanded': player.state.expanded, 'is-mobile': compact }">
-      <section v-show="player.state.expanded" ref="panelRef" role="dialog" aria-modal="true" :aria-label="'音频播放器：' + player.state.media.title" class="he-audio-panel flex flex-col bg-background text-ink" @keydown="onKeydown">
-        <header class="he-audio-header flex items-center gap-2 border-b border-line/80 glass-surface p-3 shrink-0">
-          <button ref="minimizeRef" type="button" class="min-h-11 min-w-11 rounded-xl text-muted transition-colors hover:bg-surface-2 hover:text-ink focus-ring" aria-label="收起播放器，继续播放" @click="player.minimize"><ChevronDown :size="22" class="mx-auto" aria-hidden="true" /></button>
-          <h2 class="min-w-0 flex-1 truncate text-heading font-semibold">{{ player.state.media.title }}</h2>
-          <button type="button" class="min-h-11 min-w-11 rounded-xl transition-colors hover:bg-surface-2 focus-ring" :class="player.state.media.favorite ? 'text-star' : 'text-muted hover:text-ink'" :aria-pressed="player.state.media.favorite" :aria-label="player.state.media.favorite ? '取消收藏' : '收藏音频'" @click="toggleFavorite"><Star :size="20" class="mx-auto" :fill="player.state.media.favorite ? 'currentColor' : 'none'" aria-hidden="true" /></button>
-          <button type="button" class="min-h-11 min-w-11 rounded-xl text-muted transition-colors hover:bg-danger/12 hover:text-danger focus-ring" aria-label="停止播放并关闭" @click="player.stop"><X :size="20" class="mx-auto" aria-hidden="true" /></button>
-        </header>
-        <p v-if="favoriteError" role="alert" class="px-4 py-2 text-meta text-danger">{{ favoriteError }}</p>
-        <AudioPlayer :media="player.state.media" :cover-url="cover" />
-      </section>
-      <div v-show="!player.state.expanded" class="he-mini-player squircle flex items-center gap-1.5 rounded-2xl border border-line-strong glass-elevated px-2.5 py-2 text-ink shadow-pop">
-        <button ref="openRef" type="button" class="flex-1 min-w-0 flex items-center gap-3 min-h-12 rounded-xl text-left focus-ring" aria-label="展开音频播放器" @click="player.state.expanded = true">
-          <img v-if="cover" :src="cover" alt="" class="w-11 h-11 rounded-xl object-cover shrink-0 ring-1 ring-white/10" /><Headphones v-else :size="24" class="mx-2 shrink-0 text-accent" aria-hidden="true" />
-          <span class="min-w-0"><span class="block text-body font-medium truncate">{{ player.state.trackTitle || player.state.media.title }}</span><span class="block text-caption text-subtle truncate">{{ player.state.media.title }}</span></span>
-        </button>
-        <button type="button" class="min-w-11 min-h-11 rounded-full bg-accent text-on-accent shadow-[0_4px_14px_-3px_rgb(var(--color-accent)/0.6)] transition-colors hover:bg-accent/90 focus-ring" :aria-label="player.state.playing ? '暂停音频' : '播放音频'" @click="player.togglePlay"><Pause v-if="player.state.playing" :size="20" class="mx-auto" aria-hidden="true" /><Play v-else :size="20" class="mx-auto" aria-hidden="true" /></button>
-        <button type="button" class="min-w-11 min-h-11 rounded-xl text-muted transition-colors hover:bg-surface-2 hover:text-ink focus-ring" aria-label="下一首音频" @click="player.nextTrack"><SkipForward :size="20" class="mx-auto" aria-hidden="true" /></button>
-        <button type="button" class="min-w-11 min-h-11 rounded-xl text-subtle transition-colors hover:bg-surface-2 hover:text-ink focus-ring" aria-label="停止音频" @click="player.stop"><X :size="18" class="mx-auto" aria-hidden="true" /></button>
-        <div class="he-mini-progress" aria-hidden="true" :style="{ width: (player.state.duration ? Math.min(100, player.state.currentTime / player.state.duration * 100) : 0) + '%' }"></div>
+    <Transition name="he-dock">
+      <div v-if="player.state.media" class="he-audio-host" :class="{ 'is-expanded': player.state.expanded, 'is-mobile': compact }">
+        <Transition name="he-sheet">
+          <section v-show="player.state.expanded" ref="panelRef" role="dialog" aria-modal="true" :aria-label="'音频播放器：' + player.state.media.title" class="he-audio-panel flex flex-col bg-background text-ink" @keydown="onKeydown">
+            <header class="he-audio-header flex items-center gap-2 border-b border-line/80 glass-surface p-3 shrink-0">
+              <button ref="minimizeRef" type="button" class="min-h-11 min-w-11 rounded-xl text-muted transition-colors hover:bg-surface-2 hover:text-ink focus-ring" aria-label="收起播放器，继续播放" @click="player.minimize"><ChevronDown :size="22" class="mx-auto" aria-hidden="true" /></button>
+              <h2 class="min-w-0 flex-1 truncate text-heading font-semibold">{{ player.state.media.title }}</h2>
+              <button type="button" class="min-h-11 min-w-11 rounded-xl transition-colors hover:bg-surface-2 focus-ring" :class="player.state.media.favorite ? 'text-star' : 'text-muted hover:text-ink'" :aria-pressed="player.state.media.favorite" :aria-label="player.state.media.favorite ? '取消收藏' : '收藏音频'" @click="toggleFavorite"><Star :size="20" class="mx-auto" :fill="player.state.media.favorite ? 'currentColor' : 'none'" aria-hidden="true" /></button>
+              <button type="button" class="min-h-11 min-w-11 rounded-xl text-muted transition-colors hover:bg-danger/12 hover:text-danger focus-ring" aria-label="停止播放并关闭" @click="player.stop"><X :size="20" class="mx-auto" aria-hidden="true" /></button>
+            </header>
+            <p v-if="favoriteError" role="alert" class="px-4 py-2 text-meta text-danger">{{ favoriteError }}</p>
+            <AudioPlayer :media="player.state.media" :cover-url="cover" />
+          </section>
+        </Transition>
+        <div v-show="!player.state.expanded" class="he-mini-player squircle flex items-center gap-1.5 rounded-2xl border border-line-strong glass-elevated px-2.5 py-2 text-ink shadow-pop">
+          <button ref="openRef" type="button" class="flex-1 min-w-0 flex items-center gap-3 min-h-12 rounded-xl text-left focus-ring" aria-label="展开音频播放器" @click="player.state.expanded = true">
+            <img v-if="cover" :src="cover" alt="" class="w-11 h-11 rounded-xl object-cover shrink-0 ring-1 ring-white/10" /><Headphones v-else :size="24" class="mx-2 shrink-0 text-accent" aria-hidden="true" />
+            <span class="min-w-0"><span class="block text-body font-medium truncate">{{ player.state.trackTitle || player.state.media.title }}</span><span class="block text-caption text-subtle truncate">{{ player.state.media.title }}</span></span>
+          </button>
+          <button type="button" class="min-w-11 min-h-11 rounded-full bg-accent text-on-accent shadow-[0_4px_14px_-3px_rgb(var(--color-accent)/0.6)] transition-[background-color,scale] duration-150 hover:bg-accent/90 active:scale-95 focus-ring" :aria-label="player.state.playing ? '暂停音频' : '播放音频'" @click="player.togglePlay"><Pause v-if="player.state.playing" :size="20" class="mx-auto" aria-hidden="true" /><Play v-else :size="20" class="mx-auto" aria-hidden="true" /></button>
+          <button type="button" class="min-w-11 min-h-11 rounded-xl text-muted transition-colors hover:bg-surface-2 hover:text-ink focus-ring" aria-label="下一首音频" @click="player.nextTrack"><SkipForward :size="20" class="mx-auto" aria-hidden="true" /></button>
+          <button type="button" class="min-w-11 min-h-11 rounded-xl text-subtle transition-colors hover:bg-surface-2 hover:text-ink focus-ring" aria-label="停止音频" @click="player.stop"><X :size="18" class="mx-auto" aria-hidden="true" /></button>
+          <div class="he-mini-progress" aria-hidden="true" :style="{ width: (player.state.duration ? Math.min(100, player.state.currentTime / player.state.duration * 100) : 0) + '%' }"></div>
+        </div>
       </div>
-    </div>
+    </Transition>
   </Teleport>
 </template>
 <style>

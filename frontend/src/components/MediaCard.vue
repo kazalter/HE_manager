@@ -132,7 +132,7 @@ const frameStyle = computed(() => {
     class="he-media-card lazy-card tap-active group relative flex w-full flex-col rounded-2xl text-left focus:outline-none"
   >
     <div
-      class="he-media-card__frame squircle relative w-full overflow-hidden rounded-2xl bg-surface-2 transition-[box-shadow,translate] duration-200 ease-out group-focus-visible:ring-2 group-focus-visible:ring-accent group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-background"
+      class="he-media-card__frame relative w-full overflow-hidden rounded-2xl bg-surface-2 transition-transform duration-200 ease-out group-focus-visible:ring-2 group-focus-visible:ring-accent group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-background"
       :style="frameStyle"
     >
       <img
@@ -159,12 +159,12 @@ const frameStyle = computed(() => {
       <div class="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/55 via-black/15 to-transparent"></div>
       <div class="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10 transition-colors duration-200 group-hover:ring-white/25"></div>
 
-      <div v-if="media.favorite" class="absolute left-2 top-2 grid size-6 place-items-center rounded-lg bg-black/55 text-star backdrop-blur-md ring-1 ring-inset ring-white/15" title="已收藏">
+      <div v-if="media.favorite" class="absolute left-2 top-2 grid size-6 place-items-center rounded-lg bg-black/72 text-star ring-1 ring-inset ring-white/15" title="已收藏">
         <Star :size="13" fill="currentColor" aria-hidden="true" />
         <span class="sr-only">已收藏</span>
       </div>
 
-      <div v-if="showType" class="absolute right-2 top-2 inline-flex min-h-6 items-center gap-1 rounded-lg bg-black/55 px-1.5 py-0.5 text-caption font-medium text-white/95 backdrop-blur-md ring-1 ring-inset ring-white/15">
+      <div v-if="showType" class="absolute right-2 top-2 inline-flex min-h-6 items-center gap-1 rounded-lg bg-black/72 px-1.5 py-0.5 text-caption font-medium text-white/95 ring-1 ring-inset ring-white/15">
         <Film v-if="media.media_type === 'video'" :size="12" aria-hidden="true" />
         <Book v-else-if="media.media_type === 'manga'" :size="12" aria-hidden="true" />
         <Headphones v-else-if="media.media_type === 'audio'" :size="12" aria-hidden="true" />
@@ -176,7 +176,7 @@ const frameStyle = computed(() => {
         文件丢失
       </div>
 
-      <span v-if="showDuration" class="he-card-duration absolute bottom-2.5 right-2 inline-flex min-h-6 items-center rounded-lg bg-black/65 px-1.5 py-0.5 text-caption font-medium tabular-nums text-white backdrop-blur-md ring-1 ring-inset ring-white/10 transition-[bottom] duration-150">
+      <span v-if="showDuration" class="he-card-duration absolute bottom-2.5 right-2 inline-flex min-h-6 items-center rounded-lg bg-black/75 px-1.5 py-0.5 text-caption font-medium tabular-nums text-white ring-1 ring-inset ring-white/12 transition-[bottom] duration-150">
         {{ formatDuration(media.duration!) }}
       </span>
 
@@ -209,7 +209,9 @@ const frameStyle = computed(() => {
 
 <style>
 .he-media-card__frame {
+  contain: paint;
   box-shadow: var(--he-shadow-card);
+  transition: translate 220ms var(--ease-snappy);
 }
 
 /* Scoped content-based styling via :has() without extra template classes. */
@@ -222,26 +224,30 @@ const frameStyle = computed(() => {
 }
 
 .he-media-card__backdrop {
-  transform: scale(1.25);
-  filter: blur(16px) saturate(1.2) brightness(0.55);
+  transform: scale(1.12);
+  filter: blur(8px) brightness(0.5);
 }
 
 .he-media-card__art {
-  transition: scale var(--duration-slow) var(--ease-out);
+  transition: scale 280ms var(--ease-snappy);
 }
 
 @media (hover: hover) {
   .he-media-card:hover .he-media-card__frame {
     box-shadow: var(--he-shadow-card-hover);
-    translate: 0 -2px;
+    translate: 0 -3px;
   }
 
   .he-media-card:hover .he-media-card__art {
-    scale: 1.035;
+    scale: 1.04;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .he-media-card__frame,
+  .he-media-card__art {
+    transition: none;
+  }
   .he-media-card:hover .he-media-card__frame {
     translate: none;
   }

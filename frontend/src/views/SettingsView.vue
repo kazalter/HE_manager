@@ -59,8 +59,8 @@ const scanModeLabel = (mode: Folder['scan_mode']) => {
   return modes.find(item => item.id === mode)?.label || mode
 }
 
-const selectTheme = (themeId: string) => {
-  applyTheme(themeId)
+const selectTheme = (themeId: string, event?: MouseEvent) => {
+  applyTheme(themeId, event)
 }
 
 const fetchExternalProxy = async () => {
@@ -264,7 +264,7 @@ const addModalOpen = computed({
 })
 
 const shortcutGroups = [
-  { title: '全局与导航', items: [['打开 / 聚焦搜索', '/ 或 Ctrl+K'], ['关闭浮层 / 弹窗', 'Esc'], ['展开 / 折叠侧栏', '点击底栏']] },
+  { title: '全局与导航', items: [['打开 / 聚焦搜索', '/ 或 Ctrl+K'], ['关闭浮层 / 弹窗', 'Esc'], ['展开 / 折叠侧栏', '[ 键或点击折叠按钮']] },
   { title: '漫画阅读器', items: [['前一页 / 后一页', '← / →'], ['重置 / 适合屏幕', '0'], ['放大 / 缩小图像', '+ / -']] },
   { title: '视频播放器', items: [['播放 / 暂停', 'Space'], ['快退 / 快进 5 秒', '← / →'], ['音量调节 / 全屏', '↑ / ↓ / F']] },
   { title: '音频与打标', items: [['音频播放 / 暂停', 'Space'], ['一键快速打星', '1 ~ 5'], ['联想选择补全标签', 'Enter']] },
@@ -478,21 +478,44 @@ onUnmounted(() => {
                 </label>
               </div>
             </fieldset>
-            <div class="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3">
+            <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
               <button
                 v-for="theme in themes"
                 :key="theme.id"
                 type="button"
                 :aria-pressed="selectedTheme === theme.id"
-                class="group rounded-2xl border bg-surface p-2 text-left transition-colors duration-150 focus-ring"
-                :class="selectedTheme === theme.id ? 'border-accent' : 'border-line hover:border-line-strong'"
-                @click="selectTheme(theme.id)"
+                class="group rounded-2xl squircle border bg-surface p-2 text-left transition-[border-color,background-color,box-shadow,scale] duration-150 ease-out active:scale-[0.98] focus-ring"
+                :class="selectedTheme === theme.id ? 'border-accent bg-accent/6 ring-1 ring-inset ring-accent/35' : 'border-line hover:border-line-strong hover:bg-surface-2/60'"
+                @click="selectTheme(theme.id, $event)"
               >
-                <span class="block h-14 overflow-hidden rounded-lg border border-line p-2" :style="{ backgroundColor: theme.swatches[0] }" aria-hidden="true">
-                  <span class="flex h-full items-end gap-1.5">
-                    <span class="h-full flex-1 rounded-md" :style="{ backgroundColor: theme.swatches[1] }"></span>
-                    <span class="h-3/5 flex-1 rounded-md" :style="{ backgroundColor: theme.swatches[1] }"></span>
-                    <span class="size-4 shrink-0 self-start rounded-full" :style="{ backgroundColor: theme.swatches[2] }"></span>
+                <span
+                  class="flex h-16 overflow-hidden rounded-xl border"
+                  :style="{
+                    backgroundColor: theme.preview?.background ?? theme.swatches[0],
+                    borderColor: theme.preview?.line ?? 'rgb(var(--color-line))',
+                  }"
+                  aria-hidden="true"
+                >
+                  <span
+                    class="flex w-5 shrink-0 flex-col gap-1 border-r p-1"
+                    :style="{
+                      backgroundColor: theme.preview?.sidebar ?? theme.swatches[1],
+                      borderColor: theme.preview?.line ?? 'rgb(var(--color-line))',
+                    }"
+                  >
+                    <span class="h-1.5 w-full rounded-sm" :style="{ backgroundColor: theme.preview?.accent ?? theme.swatches[2] }"></span>
+                    <span class="h-1 w-3/4 rounded-sm opacity-35" :style="{ backgroundColor: theme.preview?.ink ?? '#fff' }"></span>
+                    <span class="h-1 w-3/4 rounded-sm opacity-20" :style="{ backgroundColor: theme.preview?.ink ?? '#fff' }"></span>
+                  </span>
+                  <span class="flex flex-1 flex-col justify-between p-1.5">
+                    <span class="flex items-center justify-between gap-1">
+                      <span class="h-1.5 w-7 rounded-full opacity-60" :style="{ backgroundColor: theme.preview?.ink ?? '#fff' }"></span>
+                      <span class="size-2.5 rounded-full" :style="{ backgroundColor: theme.preview?.accent ?? theme.swatches[2] }"></span>
+                    </span>
+                    <span class="grid grid-cols-2 gap-1">
+                      <span class="h-5 rounded-md border" :style="{ backgroundColor: theme.preview?.surface ?? theme.swatches[1], borderColor: theme.preview?.line ?? 'transparent' }"></span>
+                      <span class="h-5 rounded-md border" :style="{ backgroundColor: theme.preview?.surface2 ?? theme.swatches[1], borderColor: theme.preview?.line ?? 'transparent' }"></span>
+                    </span>
                   </span>
                 </span>
                 <span class="mt-2 flex items-center gap-1.5 px-1 pb-0.5">
@@ -502,18 +525,18 @@ onUnmounted(() => {
               </button>
 
               <label
-                class="group relative cursor-pointer rounded-2xl border bg-surface p-2 text-left transition-colors duration-150 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent"
-                :class="selectedTheme.startsWith('#') ? 'border-accent' : 'border-line hover:border-line-strong'"
+                class="group relative cursor-pointer rounded-2xl squircle border bg-surface p-2 text-left transition-[border-color,background-color,scale] duration-150 ease-out active:scale-[0.98] focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent"
+                :class="selectedTheme.startsWith('#') ? 'border-accent bg-accent/6 ring-1 ring-inset ring-accent/35' : 'border-line hover:border-line-strong hover:bg-surface-2/60'"
               >
                 <input
                   type="color"
-                  :value="selectedTheme.startsWith('#') ? selectedTheme : '#818cf8'"
+                  :value="selectedTheme.startsWith('#') ? selectedTheme : '#656af6'"
                   @input="(e) => selectTheme((e.target as HTMLInputElement).value)"
                   class="absolute h-0 w-0 opacity-0"
                   title="选择自定义颜色"
                 />
-                <span class="grid h-14 place-items-center rounded-lg border border-dashed border-line-strong bg-surface-2 text-subtle" aria-hidden="true">
-                  <span v-if="selectedTheme.startsWith('#')" class="size-6 rounded-full" :style="{ backgroundColor: selectedTheme }"></span>
+                <span class="grid h-16 place-items-center rounded-xl border border-dashed border-line-strong bg-surface-2 text-subtle transition-colors group-hover:text-ink" aria-hidden="true">
+                  <span v-if="selectedTheme.startsWith('#')" class="size-7 rounded-full ring-2 ring-white/25" :style="{ backgroundColor: selectedTheme }"></span>
                   <Pipette v-else :size="18" />
                 </span>
                 <span class="pointer-events-none mt-2 flex items-center gap-1.5 px-1 pb-0.5">
@@ -681,11 +704,11 @@ onUnmounted(() => {
     </UiModal>
 
     <Teleport to="body">
-      <Transition name="fade">
+      <Transition name="he-dock">
         <div
           v-if="scanToast"
           role="status"
-          class="settings-toast fixed right-6 bottom-6 z-[270] flex max-w-sm items-start gap-3 rounded-2xl border border-line-strong bg-surface-3 px-4 py-3 text-body text-ink shadow-pop"
+          class="settings-toast fixed right-6 bottom-6 z-[270] flex max-w-sm items-start gap-3 rounded-2xl squircle border border-line-strong glass-elevated px-4 py-3 text-body text-ink shadow-pop"
         >
           <CheckCircle2 class="mt-0.5 shrink-0 text-info" :size="18" aria-hidden="true" />
           <span class="min-w-0 break-words">{{ scanToast }}</span>

@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { X } from 'lucide-vue-next'
 import UiIconButton from './UiIconButton.vue'
+import { closeTopLayer } from '../../utils/topLayer'
 
 const open = defineModel<boolean>('open', { required: true })
 const props = withDefaults(defineProps<{
@@ -27,6 +28,7 @@ const emit = defineEmits<{ close: [] }>()
 const id = useId()
 const dialogRef = ref<HTMLDialogElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
+const rendered = ref(open.value)
 const usesNativeModal = ref(false)
 let restoreFocus: HTMLElement | null = null
 let pressedOutside = false
@@ -40,11 +42,12 @@ const close = () => {
 }
 
 const syncDialogState = async (value: boolean) => {
-  await nextTick()
-  const dialog = dialogRef.value
-  if (!dialog) return
-
   if (value) {
+    rendered.value = true
+    await nextTick()
+    const dialog = dialogRef.value
+    if (!dialog) return
+    dialog.removeAttribute('data-closing')
     restoreFocus = document.activeElement as HTMLElement | null
     if (typeof dialog.showModal === 'function') {
       try {
@@ -62,15 +65,10 @@ const syncDialogState = async (value: boolean) => {
     const autofocusTarget = panelRef.value?.querySelector<HTMLElement>('[autofocus]')
     if (autofocusTarget) autofocusTarget.focus()
   } else {
-    if (typeof dialog.close === 'function' && dialog.open) {
-      try {
-        dialog.close()
-      } catch {
-        dialog.removeAttribute('open')
-      }
-    } else {
-      dialog.removeAttribute('open')
-    }
+    const dialog = dialogRef.value
+    await closeTopLayer(dialog, () => {
+      if (!open.value) rendered.value = false
+    })
     if (!usesNativeModal.value) {
       restoreFocus?.focus?.()
     }
@@ -151,7 +149,7 @@ const widths = { sm: 'sm:max-w-[400px]', md: 'sm:max-w-[560px]', lg: 'sm:max-w-[
 <template>
   <Teleport to="body">
     <dialog
-      v-if="open"
+      v-if="rendered"
       ref="dialogRef"
       :closedby="closeOnBackdrop ? 'any' : 'closerequest'"
       :role="usesNativeModal ? undefined : 'dialog'"
@@ -169,7 +167,7 @@ const widths = { sm: 'sm:max-w-[400px]', md: 'sm:max-w-[560px]', lg: 'sm:max-w-[
       @keydown="onFallbackKeydown"
     >
       <div
-        v-if="open"
+        v-if="rendered"
         class="ui-modal-backdrop-grid flex h-full w-full"
         :class="props.placement === 'right' ? 'justify-end' : 'items-end justify-center sm:items-center sm:p-6'"
         @click.self="closeOnBackdrop && close()"
@@ -215,14 +213,27 @@ html.he-keyboard-open .ui-modal-dialog {
   width: 100%;
   height: 100%;
   overflow: visible;
+  opacity: 0;
+  transition-property: opacity, display, overlay;
+  transition-duration: 180ms;
+  transition-timing-function: var(--ease-out);
+  transition-behavior: allow-discrete;
 }
 
-.ui-modal-dialog[open],
-.ui-modal-dialog.is-open {
+.ui-modal-dialog:is([open], .is-open):where(:not([data-closing])) {
   display: block;
+  opacity: 1;
+  @starting-style {
+    opacity: 0;
+  }
 }
 
-.ui-modal-dialog:not(:modal).is-open {
+.ui-modal-dialog:is([open], .is-open)[data-closing] {
+  display: block;
+  opacity: 0;
+}
+
+.ui-modal-dialog:not(:modal).is-open:where(:not([data-closing])) {
   background: rgb(0 0 0 / 0.6);
 }
 
@@ -230,14 +241,14 @@ html.he-keyboard-open .ui-modal-dialog {
   background: rgb(0 0 0 / 0);
   backdrop-filter: blur(0px);
   transition-property: background-color, backdrop-filter, display, overlay;
-  transition-duration: 180ms;
+  transition-duration: 200ms;
   transition-timing-function: var(--ease-out);
   transition-behavior: allow-discrete;
 }
 
-.ui-modal-dialog[open]::backdrop {
+.ui-modal-dialog[open]:where(:not([data-closing]))::backdrop {
   background: rgb(0 0 0 / 0.62);
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(8px);
   @starting-style {
     background: rgb(0 0 0 / 0);
     backdrop-filter: blur(0px);
@@ -247,22 +258,33 @@ html.he-keyboard-open .ui-modal-dialog {
 .ui-modal-panel {
   padding-bottom: var(--he-safe-bottom, env(safe-area-inset-bottom, 0px));
   box-shadow: var(--he-shadow-modal), inset 0 1px 0 var(--he-border-specular);
+  opacity: 0;
+  transition: opacity 180ms var(--ease-out), translate 240ms var(--ease-snappy), scale 240ms var(--ease-snappy);
+}
+
+.ui-modal-dialog:is([open], .is-open):where(:not([data-closing])) .ui-modal-panel {
+  opacity: 1;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .ui-modal-dialog[open] .ui-modal-panel {
-    opacity: 1;
+  .ui-modal-dialog--center .ui-modal-panel {
+    translate: 0 14px;
+    scale: 0.975;
+  }
+  .ui-modal-dialog--right .ui-modal-panel {
+    translate: 24px 0;
+    scale: 1;
+  }
+  .ui-modal-dialog:is([open], .is-open):where(:not([data-closing])) .ui-modal-panel {
     translate: 0 0;
     scale: 1;
-    transition: opacity 180ms var(--ease-out), translate 220ms var(--ease-out), scale 220ms var(--ease-out);
     @starting-style {
       opacity: 0;
       translate: 0 14px;
-      scale: 0.985;
+      scale: 0.975;
     }
   }
-
-  .ui-modal-dialog--right[open] .ui-modal-panel {
+  .ui-modal-dialog--right:is([open], .is-open):where(:not([data-closing])) .ui-modal-panel {
     @starting-style {
       opacity: 0;
       translate: 24px 0;
@@ -272,11 +294,10 @@ html.he-keyboard-open .ui-modal-dialog {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ui-modal-dialog::backdrop {
+  .ui-modal-dialog,
+  .ui-modal-dialog::backdrop,
+  .ui-modal-panel {
     transition-duration: 80ms;
-  }
-  .ui-modal-dialog[open] .ui-modal-panel {
-    transition: opacity 80ms linear;
   }
 }
 </style>

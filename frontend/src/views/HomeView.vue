@@ -338,6 +338,27 @@ const recentlyOpened = computed(() => {
 })
 
 const featuredContinue = computed(() => recentlyOpened.value[0] ?? null)
+const otherContinueItems = computed(() => recentlyOpened.value.slice(1))
+
+const drawerDragY = ref(0)
+let drawerTouchStartY = 0
+let drawerDragging = false
+const onDrawerTouchStart = (event: TouchEvent) => {
+  if (!compact.value || event.touches.length !== 1) return
+  drawerTouchStartY = event.touches[0]!.clientY
+  drawerDragging = true
+}
+const onDrawerTouchMove = (event: TouchEvent) => {
+  if (!drawerDragging || event.touches.length !== 1) return
+  const dy = event.touches[0]!.clientY - drawerTouchStartY
+  if (dy > 0) drawerDragY.value = Math.min(dy, 220)
+}
+const onDrawerTouchEnd = () => {
+  if (!drawerDragging) return
+  drawerDragging = false
+  if (drawerDragY.value > 72) filtersExpanded.value = false
+  drawerDragY.value = 0
+}
 
 const basePageSize = desktopBridge ? 60 : 36
 const pageSize = ref(basePageSize)
@@ -1106,6 +1127,7 @@ onMounted(async () => {
               </span>
               <ChevronDown :size="15" class="shrink-0 text-subtle transition-transform duration-150" :class="tagDropdownOpen ? 'rotate-180' : ''" aria-hidden="true" />
             </button>
+            <Transition name="he-pop">
             <div
               v-if="tagDropdownOpen"
               id="he-tag-options"
@@ -1191,6 +1213,7 @@ onMounted(async () => {
                 <p v-if="filteredTags.length === 0" class="py-3 text-center text-meta text-subtle">无匹配标签</p>
               </div>
             </div>
+            </Transition>
           </div>
 
           <div class="flex items-center gap-1">
@@ -1208,6 +1231,7 @@ onMounted(async () => {
                 <span>{{ sortLabel }}</span>
                 <ChevronDown :size="15" class="text-subtle transition-transform duration-150" :class="sortDropdownOpen ? 'rotate-180' : ''" aria-hidden="true" />
               </button>
+              <Transition name="he-pop">
               <div v-if="sortDropdownOpen" role="menu" aria-label="排序方式" :class="[popoverClass, 'absolute right-0 top-full z-50 mt-2 min-w-44']">
                 <button
                   v-for="option in sortOptions"
@@ -1222,6 +1246,7 @@ onMounted(async () => {
                   <Check v-if="sortBy === option.value" :size="15" class="ml-auto text-accent" aria-hidden="true" />
                 </button>
               </div>
+              </Transition>
             </div>
             <UiButton v-if="sortBy === 'random'" variant="ghost" size="sm" title="换一批随机顺序" aria-label="换一批随机顺序" @click="reshuffleRandom">
               <template #icon><Shuffle :size="14" aria-hidden="true" /></template>
@@ -1254,34 +1279,55 @@ onMounted(async () => {
 
       <!-- Universal Slide-Over Filter Drawer (Desktop right-side drawer + Mobile bottom sheet) -->
       <Teleport to="body">
-        <div
-          v-if="filtersExpanded"
-          class="fixed inset-0 z-[110] bg-black/55 backdrop-blur-[2px]"
-          aria-hidden="true"
-          @click="filtersExpanded = false"
-        ></div>
-        <div
-          v-if="filtersExpanded"
-          id="he-filter-drawer"
-          ref="filterPanelRef"
-          role="dialog"
-          :aria-modal="true"
-          aria-label="媒体筛选和排序"
-          :class="compact
-            ? 'he-mobile-filters squircle flex flex-col gap-5 rounded-t-3xl border-t border-line-strong glass-elevated px-4 pt-3 shadow-modal'
-            : 'he-desktop-drawer fixed inset-y-0 right-0 z-[120] flex w-full max-w-[400px] flex-col border-l border-line-strong glass-elevated shadow-modal'"
-          @keydown="filterKeydown"
-        >
-          <div v-if="compact" class="mx-auto h-1 w-10 shrink-0 rounded-full bg-line-strong" aria-hidden="true"></div>
-          <div class="flex shrink-0 items-center justify-between gap-3" :class="compact ? '' : 'border-b border-line/80 px-5 py-4'">
-            <div>
-              <h2 class="text-heading font-semibold text-ink">筛选与布局</h2>
-              <p v-if="!compact" class="mt-0.5 text-caption text-subtle">调节浏览密度，或按标签、来源与评分精简视图</p>
+        <Transition name="he-backdrop">
+          <div
+            v-if="filtersExpanded"
+            class="fixed inset-0 z-[110] bg-black/55 backdrop-blur-[2px]"
+            aria-hidden="true"
+            @click="filtersExpanded = false"
+          ></div>
+        </Transition>
+        <Transition name="he-drawer">
+          <div
+            v-if="filtersExpanded"
+            id="he-filter-drawer"
+            ref="filterPanelRef"
+            role="dialog"
+            :aria-modal="true"
+            aria-label="媒体筛选和排序"
+            :class="compact
+              ? 'he-mobile-filters squircle flex flex-col gap-5 rounded-t-3xl border-t border-line-strong glass-elevated px-4 pt-3 shadow-modal'
+              : 'he-desktop-drawer fixed inset-y-0 right-0 z-[120] flex w-full max-w-[400px] flex-col border-l border-line-strong glass-elevated shadow-modal'"
+            :style="compact && drawerDragY ? { transform: `translateY(${drawerDragY}px)`, transition: 'none' } : undefined"
+            @keydown="filterKeydown"
+          >
+            <div
+              v-if="compact"
+              class="-mx-4 -mt-3 flex justify-center pt-3 pb-1 touch-none"
+              aria-hidden="true"
+              @touchstart.passive="onDrawerTouchStart"
+              @touchmove.passive="onDrawerTouchMove"
+              @touchend.passive="onDrawerTouchEnd"
+              @touchcancel.passive="onDrawerTouchEnd"
+            >
+              <span class="h-1 w-10 shrink-0 rounded-full bg-line-strong"></span>
             </div>
-            <button type="button" :class="iconButtonClass('ghost', compact ? 'lg' : 'md')" aria-label="关闭筛选" title="关闭筛选" @click="filtersExpanded = false">
-              <X :size="20" aria-hidden="true" />
-            </button>
-          </div>
+            <div
+              class="flex shrink-0 items-center justify-between gap-3"
+              :class="compact ? '' : 'border-b border-line/80 px-5 py-4'"
+              @touchstart.passive="onDrawerTouchStart"
+              @touchmove.passive="onDrawerTouchMove"
+              @touchend.passive="onDrawerTouchEnd"
+              @touchcancel.passive="onDrawerTouchEnd"
+            >
+              <div>
+                <h2 class="text-heading font-semibold text-ink">筛选与布局</h2>
+                <p v-if="!compact" class="mt-0.5 text-caption text-subtle">调节浏览密度，或按标签、来源与评分精简视图</p>
+              </div>
+              <button type="button" :class="iconButtonClass('ghost', compact ? 'lg' : 'md')" aria-label="关闭筛选" title="关闭筛选" @click="filtersExpanded = false">
+                <X :size="20" aria-hidden="true" />
+              </button>
+            </div>
 
           <div class="custom-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain" :class="compact ? '' : 'px-5 py-5'">
             <div>
@@ -1423,7 +1469,8 @@ onMounted(async () => {
             <UiButton v-if="activeFilterCount > 0" variant="secondary" :size="compact ? 'lg' : 'md'" @click="clearFilters">清除</UiButton>
             <UiButton variant="primary" :size="compact ? 'lg' : 'md'" block class="flex-1" @click="filtersExpanded = false">查看 {{ totalItems.toLocaleString() }} 项媒体</UiButton>
           </div>
-        </div>
+          </div>
+        </Transition>
       </Teleport>
 
       <nav v-if="compact" aria-label="媒体分类" class="he-media-categories he-scroll-fade-x -mx-4 mt-3 overflow-x-auto px-4 scrollbar-none">
@@ -1440,11 +1487,12 @@ onMounted(async () => {
       </nav>
 
       <!-- Always-visible Active Filter Summary Bar -->
-      <div v-if="activeFilterCount > 0" class="flex flex-wrap items-center gap-1.5 pt-3">
+      <TransitionGroup v-if="activeFilterCount > 0" name="he-chip" tag="div" class="flex flex-wrap items-center gap-1.5 pt-3">
         <button
           v-if="searchQuery"
+          key="chip-search"
           type="button"
-          class="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2.5 py-0.5 text-caption text-accent-glow hover:bg-accent/25 focus-ring"
+          class="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2.5 py-0.5 text-caption text-accent-glow transition-colors hover:bg-accent/25 focus-ring"
           @click="searchQuery = ''"
         >
           <span>搜索: {{ searchQuery }}</span>
@@ -1452,8 +1500,9 @@ onMounted(async () => {
         </button>
         <button
           v-if="favoriteOnly"
+          key="chip-fav"
           type="button"
-          class="inline-flex items-center gap-1 rounded-full border border-star/40 bg-star/12 px-2.5 py-0.5 text-caption text-star hover:bg-star/20 focus-ring"
+          class="inline-flex items-center gap-1 rounded-full border border-star/40 bg-star/12 px-2.5 py-0.5 text-caption text-star transition-colors hover:bg-star/20 focus-ring"
           @click="toggleFavoriteFilter"
         >
           <span>仅收藏</span>
@@ -1461,8 +1510,9 @@ onMounted(async () => {
         </button>
         <button
           v-if="sortBy !== 'date'"
+          key="chip-sort"
           type="button"
-          class="inline-flex items-center gap-1 rounded-full border border-line-strong bg-surface-2 px-2.5 py-0.5 text-caption text-ink hover:bg-surface-3 focus-ring"
+          class="inline-flex items-center gap-1 rounded-full border border-line-strong bg-surface-2 px-2.5 py-0.5 text-caption text-ink transition-colors hover:bg-surface-3 focus-ring"
           @click="sortBy = 'date'"
         >
           <span>排序: {{ sortLabel }}</span>
@@ -1470,8 +1520,9 @@ onMounted(async () => {
         </button>
         <button
           v-if="sourceFilter"
+          key="chip-source"
           type="button"
-          class="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2.5 py-0.5 text-caption text-accent-glow hover:bg-accent/25 focus-ring"
+          class="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2.5 py-0.5 text-caption text-accent-glow transition-colors hover:bg-accent/25 focus-ring"
           @click="sourceFilter = ''"
         >
           <span>来源: {{ sourceLabel }}</span>
@@ -1479,8 +1530,9 @@ onMounted(async () => {
         </button>
         <button
           v-if="viewStatusFilter"
+          key="chip-status"
           type="button"
-          class="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2.5 py-0.5 text-caption text-accent-glow hover:bg-accent/25 focus-ring"
+          class="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2.5 py-0.5 text-caption text-accent-glow transition-colors hover:bg-accent/25 focus-ring"
           @click="viewStatusFilter = ''"
         >
           <span>状态: {{ viewStatusLabel }}</span>
@@ -1488,8 +1540,9 @@ onMounted(async () => {
         </button>
         <button
           v-if="minRatingFilter"
+          key="chip-rating"
           type="button"
-          class="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2.5 py-0.5 text-caption text-accent-glow hover:bg-accent/25 focus-ring"
+          class="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2.5 py-0.5 text-caption text-accent-glow transition-colors hover:bg-accent/25 focus-ring"
           @click="minRatingFilter = ''"
         >
           <span>评分: {{ minRatingLabel }}</span>
@@ -1497,8 +1550,9 @@ onMounted(async () => {
         </button>
         <button
           v-if="selectedNamespace"
+          key="chip-ns"
           type="button"
-          class="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2.5 py-0.5 text-caption text-accent-glow hover:bg-accent/25 focus-ring"
+          class="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2.5 py-0.5 text-caption text-accent-glow transition-colors hover:bg-accent/25 focus-ring"
           @click="selectedNamespace = ''; dropdownNamespace = ''"
         >
           <span>分类: {{ formatNamespaceLabel(selectedNamespace) }}</span>
@@ -1508,7 +1562,7 @@ onMounted(async () => {
           v-for="tag in includedTags"
           :key="`inc-${tag}`"
           type="button"
-          class="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2.5 py-0.5 text-caption text-accent-glow hover:bg-accent/25 focus-ring"
+          class="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2.5 py-0.5 text-caption text-accent-glow transition-colors hover:bg-accent/25 focus-ring"
           @click="toggleIncludeTag(tag)"
         >
           <span>+ {{ tag }}</span>
@@ -1518,28 +1572,28 @@ onMounted(async () => {
           v-for="tag in excludedTags"
           :key="`exc-${tag}`"
           type="button"
-          class="inline-flex items-center gap-1 rounded-full border border-danger/40 bg-danger/15 px-2.5 py-0.5 text-caption text-danger hover:bg-danger/25 focus-ring"
+          class="inline-flex items-center gap-1 rounded-full border border-danger/40 bg-danger/15 px-2.5 py-0.5 text-caption text-danger transition-colors hover:bg-danger/25 focus-ring"
           @click="toggleExcludeTag(tag)"
         >
           <span>- {{ tag }}</span>
           <X :size="12" aria-hidden="true" />
         </button>
-        <UiButton variant="ghost" size="sm" class="ml-auto" @click="clearFilters">
+        <UiButton key="chip-clear" variant="ghost" size="sm" class="ml-auto" @click="clearFilters">
           <template #icon><X :size="14" aria-hidden="true" /></template>
           清除筛选
         </UiButton>
-      </div>
+      </TransitionGroup>
     </PageHeader>
 
     <section v-if="featuredContinue && !searchQuery && !hasTagFilter" class="page-gutter mt-6" aria-label="今晚继续">
       <div class="page-container">
-        <div class="he-hero-spotlight squircle relative overflow-hidden rounded-3xl border border-line bg-surface shadow-[var(--he-shadow-card),inset_0_1px_0_var(--he-border-specular)]">
+        <div class="he-hero-spotlight relative overflow-hidden rounded-3xl border border-line bg-surface shadow-[var(--he-shadow-card),inset_0_1px_0_var(--he-border-specular)]">
           <img
             v-if="featuredContinue.cover_path"
             :src="thumbnailUrl(featuredContinue.cover_path)"
             alt=""
             aria-hidden="true"
-            class="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-20 blur-3xl saturate-150"
+            class="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-20 blur-xl"
           />
           <div class="he-hero-scrim pointer-events-none absolute inset-0"></div>
 
@@ -1547,7 +1601,7 @@ onMounted(async () => {
             <button type="button" class="he-hero-media group relative min-h-48 overflow-hidden bg-surface-2 text-left focus-ring" :aria-label="`打开媒体：${featuredContinue.title}`" @click="openMedia(featuredContinue)">
               <img :src="featuredContinue.cover_path ? thumbnailUrl(featuredContinue.cover_path) : mediaPlaceholderUrl" :alt="featuredContinue.title" fetchpriority="high" loading="eager" class="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
               <span class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></span>
-              <span class="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1.5 text-caption font-medium text-white backdrop-blur-md ring-1 ring-inset ring-white/15"><Play :size="13" fill="currentColor" aria-hidden="true" />继续</span>
+              <span class="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-black/75 px-3 py-1.5 text-caption font-medium text-white ring-1 ring-inset ring-white/15"><Play :size="13" fill="currentColor" aria-hidden="true" />继续</span>
             </button>
             <div class="he-hero-body flex min-w-0 flex-col justify-center gap-3">
               <p class="inline-flex w-fit items-center gap-1.5 rounded-full border border-accent/30 bg-accent/12 px-2.5 py-0.5 text-[11px] font-medium tracking-wide text-accent-glow">
@@ -1573,7 +1627,7 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section v-if="recentlyOpened.length > 0 && !searchQuery && !hasTagFilter" ref="continueSectionRef" class="page-gutter mt-6 select-none" aria-label="继续观看">
+    <section v-if="otherContinueItems.length > 0 && !searchQuery && !hasTagFilter" ref="continueSectionRef" class="page-gutter mt-6 select-none" aria-label="继续观看">
       <div class="page-container">
         <SectionHeader :title="continueTitle">
           <template #actions>
@@ -1591,9 +1645,9 @@ onMounted(async () => {
         <div class="he-continue-reveal-clip">
         <div ref="continueScrollRef" class="he-scroll-fade-x -mx-4 flex gap-3 overflow-x-auto px-4 scrollbar-none sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0" :class="continueDragging ? 'cursor-grabbing' : 'cursor-grab'" @pointerdown="startContinueDrag" @pointermove="moveContinueDrag" @pointerup="endContinueDrag" @pointercancel="endContinueDrag" @lostpointercapture="endContinueDrag" @click.capture="preventDraggedClick" @dragstart.prevent>
           <div
-            v-for="item in recentlyOpened"
+            v-for="item in otherContinueItems"
             :key="item.id"
-            class="group relative flex w-72 shrink-0 items-center gap-3 rounded-2xl squircle border border-line bg-surface p-2.5 shadow-[inset_0_1px_0_var(--he-border-specular)] transition-colors duration-150 ease-out hover:border-line-strong hover:bg-surface-2"
+            class="group relative flex w-72 shrink-0 items-center gap-3 rounded-2xl squircle border border-line bg-surface p-2.5 shadow-[inset_0_1px_0_var(--he-border-specular)] transition-[background-color,border-color,translate] duration-150 ease-out hover:-translate-y-0.5 hover:border-line-strong hover:bg-surface-2"
           >
             <button
               type="button"
@@ -1641,7 +1695,7 @@ onMounted(async () => {
       </div>
     </section>
 
-    <div ref="containerRef" class="page-gutter pb-12" :class="recentlyOpened.length > 0 && !searchQuery && !hasTagFilter ? 'mt-8' : 'mt-6'">
+    <div ref="containerRef" class="page-gutter pb-12" :class="(featuredContinue || otherContinueItems.length > 0) && !searchQuery && !hasTagFilter ? 'mt-7' : 'mt-6'">
       <div class="page-container">
         <div v-if="loading && !mediaList.length" data-media-grid :class="viewMode === 'list' ? 'flex flex-col gap-2' : viewMode === 'wide' ? 'grid grid-cols-1 gap-x-5 gap-y-7 md:grid-cols-2 xl:grid-cols-3' : viewMode === 'poster' ? posterGridClass : 'poster-grid'">
           <template v-if="viewMode === 'list'">
@@ -1660,16 +1714,21 @@ onMounted(async () => {
 
         <div v-else-if="mediaList.length > 0" class="relative flex flex-col gap-10" :aria-busy="loading">
           <div :inert="loading">
-          <div v-if="displayedView === 'poster'" data-media-grid :class="posterGridClass">
-            <div v-for="(item, index) in mediaList" :key="item.id" class="he-media-actions relative min-w-0">
+          <div v-if="displayedView === 'poster'" data-media-grid :class="[posterGridClass, 'he-stagger-grid']">
+            <div
+              v-for="(item, index) in mediaList"
+              :key="item.id"
+              v-memo="[item.id, item.cover_path, item.title, item.favorite, item.rating, item.view_status, item.progress, item.is_missing, displayedType, authState.user?.is_admin]"
+              class="he-media-actions relative min-w-0"
+            >
               <MediaCard :media="item" :index="index" :shape="cardShape" :show-type="!displayedType" @click="openMedia(item)" />
-              <button v-if="authState.user?.is_admin" type="button" class="he-media-delete absolute right-2 top-2 z-10 grid size-11 place-items-center rounded-xl bg-black/75 text-white/85 backdrop-blur-md transition-colors hover:bg-danger hover:text-white focus-ring" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
+              <button v-if="authState.user?.is_admin" type="button" class="he-media-delete absolute right-2 z-10 grid size-9 pointer-coarse:size-11 place-items-center rounded-xl bg-black/78 text-white/90 ring-1 ring-inset ring-white/15 transition-colors hover:bg-danger hover:text-white focus-ring" :class="!displayedType ? 'top-10' : 'top-2'" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="16" aria-hidden="true" /></button>
             </div>
           </div>
-          <div v-else data-media-grid :class="displayedView === 'masonry' ? 'masonry-grid' : displayedView === 'wide' ? 'he-wide-grid' : 'flex flex-col gap-2.5'">
+          <div v-else data-media-grid :class="displayedView === 'masonry' ? 'masonry-grid' : displayedView === 'wide' ? 'he-wide-grid he-stagger-grid' : 'he-stagger-list flex flex-col gap-2.5'">
             <div v-for="item in mediaList" :key="item.id" class="he-media-actions relative min-w-0" :class="displayedView === 'masonry' ? 'masonry-grid-item' : displayedView === 'list' ? 'flex items-center gap-2' : ''">
               <MediaViewCard :media="item" :mode="displayedView" :class="displayedView === 'list' ? 'min-w-0 flex-1' : ''" @click="openMedia(item)" />
-              <button v-if="authState.user?.is_admin" type="button" class="he-media-delete grid size-11 shrink-0 place-items-center rounded-xl transition-colors hover:bg-danger hover:text-white focus-ring" :class="displayedView === 'list' ? 'bg-surface text-subtle' : 'absolute right-2 top-2 z-10 bg-black/75 text-white/85 backdrop-blur-md'" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="17" aria-hidden="true" /></button>
+              <button v-if="authState.user?.is_admin" type="button" class="he-media-delete grid size-9 pointer-coarse:size-11 shrink-0 place-items-center rounded-xl transition-colors hover:bg-danger hover:text-white focus-ring" :class="displayedView === 'list' ? 'bg-surface text-subtle' : ['absolute right-2 z-10 bg-black/78 text-white/90 ring-1 ring-inset ring-white/15', displayedView === 'masonry' ? 'top-10' : 'top-2']" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="16" aria-hidden="true" /></button>
             </div>
           </div>
           </div>
@@ -1715,6 +1774,7 @@ onMounted(async () => {
 <style scoped>
 .he-hero-spotlight {
   container: hero / inline-size;
+  contain: layout paint;
 }
 
 .he-hero-inner {
@@ -1740,9 +1800,9 @@ onMounted(async () => {
 
 @container hero (min-width: 580px) {
   .he-hero-inner {
-    grid-template-columns: 250px 1fr;
-    grid-template-columns: clamp(220px, 28cqi, 310px) minmax(0, 1fr);
-    min-height: 196px;
+    grid-template-columns: 240px 1fr;
+    grid-template-columns: clamp(200px, 25cqi, 280px) minmax(0, 1fr);
+    min-height: 172px;
   }
   .he-hero-media {
     min-height: 100%;

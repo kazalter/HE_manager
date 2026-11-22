@@ -42,15 +42,17 @@ const submit = async () => {
 
 <template>
   <div class="he-auth-view relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-background px-4 py-10 text-ink">
+    <div class="he-studio-texture pointer-events-none fixed inset-0 opacity-45" aria-hidden="true"></div>
     <div class="absolute right-4 top-4 z-20"><ColorModeToggle compact :show-tooltip="false" /></div>
     <div class="he-auth-ambient" aria-hidden="true"></div>
 
-    <div class="relative z-10 grid w-full max-w-[840px] items-stretch overflow-hidden rounded-3xl squircle border border-line bg-surface shadow-modal lg:grid-cols-[1.05fr_1fr]">
+    <div class="he-auth-card relative z-10 grid w-full max-w-[880px] items-stretch overflow-hidden rounded-3xl squircle border border-line-strong/75 bg-surface shadow-modal lg:grid-cols-[1.08fr_1fr]">
       <!-- Editorial left showcase panel (desktop) -->
-      <aside class="hidden lg:flex flex-col justify-between border-r border-line/80 bg-surface-2/60 p-8 relative overflow-hidden">
-        <div class="pointer-events-none absolute -left-24 -top-24 size-72 rounded-full bg-accent/15 blur-3xl" aria-hidden="true"></div>
+      <aside class="hidden lg:flex flex-col justify-between border-r border-line/80 bg-sidebar/85 p-8 relative overflow-hidden">
+        <div class="pointer-events-none absolute -left-24 -top-24 size-80 rounded-full bg-accent/18 blur-3xl" aria-hidden="true"></div>
+        <div class="pointer-events-none absolute -right-16 -bottom-16 size-64 rounded-full bg-accent-glow/10 blur-3xl" aria-hidden="true"></div>
         <div class="relative z-10 flex items-center gap-3">
-          <div class="grid size-10 place-items-center rounded-xl squircle bg-accent text-sm font-bold tracking-wider text-on-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.25),0_4px_12px_-3px_rgb(var(--color-accent)/0.55)]">HE</div>
+          <div class="grid size-10 place-items-center rounded-xl squircle bg-accent text-sm font-bold tracking-wider text-on-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.25),0_4px_14px_-3px_rgb(var(--color-accent)/0.55)]">HE</div>
           <div>
             <p class="text-body font-semibold leading-tight text-ink">HE Manager</p>
             <p class="text-caption text-subtle">个人自托管多媒体中心</p>
@@ -59,21 +61,21 @@ const submit = async () => {
 
         <div class="relative z-10 space-y-5 my-8">
           <h2 class="text-title font-semibold leading-snug text-ink">沉浸、克制、全能的私人媒体画廊</h2>
-          <ul class="space-y-3 text-meta text-muted">
+          <ul class="he-stagger-list space-y-3 text-meta text-muted">
             <li class="flex items-center gap-3">
-              <span class="grid size-8 shrink-0 place-items-center rounded-lg border border-line bg-surface text-accent-glow" aria-hidden="true"><Film :size="15" /></span>
+              <span class="grid size-8 shrink-0 place-items-center rounded-lg border border-line-strong/70 bg-surface text-accent-glow shadow-[inset_0_1px_0_var(--he-border-specular)]" aria-hidden="true"><Film :size="15" /></span>
               <span>本地视频、断点续播与智能缩略图预览</span>
             </li>
             <li class="flex items-center gap-3">
-              <span class="grid size-8 shrink-0 place-items-center rounded-lg border border-line bg-surface text-accent-glow" aria-hidden="true"><Book :size="15" /></span>
+              <span class="grid size-8 shrink-0 place-items-center rounded-lg border border-line-strong/70 bg-surface text-accent-glow shadow-[inset_0_1px_0_var(--he-border-specular)]" aria-hidden="true"><Book :size="15" /></span>
               <span>单双页与长条漫阅读，自适应手机与桌面</span>
             </li>
             <li class="flex items-center gap-3">
-              <span class="grid size-8 shrink-0 place-items-center rounded-lg border border-line bg-surface text-accent-glow" aria-hidden="true"><Headphones :size="15" /></span>
+              <span class="grid size-8 shrink-0 place-items-center rounded-lg border border-line-strong/70 bg-surface text-accent-glow shadow-[inset_0_1px_0_var(--he-border-specular)]" aria-hidden="true"><Headphones :size="15" /></span>
               <span>ASMR 音频歌单与全局悬浮播放条</span>
             </li>
             <li class="flex items-center gap-3">
-              <span class="grid size-8 shrink-0 place-items-center rounded-lg border border-line bg-surface text-accent-glow" aria-hidden="true"><ImageIcon :size="15" /></span>
+              <span class="grid size-8 shrink-0 place-items-center rounded-lg border border-line-strong/70 bg-surface text-accent-glow shadow-[inset_0_1px_0_var(--he-border-specular)]" aria-hidden="true"><ImageIcon :size="15" /></span>
               <span>多标签组合筛选、创作者聚合与相似去重</span>
             </li>
           </ul>
@@ -87,7 +89,7 @@ const submit = async () => {
 
       <!-- Sign-in form -->
       <form
-        class="relative z-10 flex flex-col justify-center space-y-6 p-6 sm:p-8 lg:p-10"
+        class="relative z-10 flex flex-col justify-center space-y-6 bg-surface p-6 shadow-[inset_0_1px_0_var(--he-border-specular)] sm:p-8 lg:p-10"
         @submit.prevent="submit"
       >
         <div>
@@ -163,7 +165,13 @@ const submit = async () => {
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(1200px 680px at 50% -20% var(--in-oklab), rgb(var(--color-accent) / 0.14), rgb(var(--color-accent) / 0.04) 45%, transparent 78%),
-    radial-gradient(800px 500px at 85% 95% var(--in-oklab), rgb(var(--color-accent-glow) / 0.06), transparent 72%);
+    radial-gradient(1280px 700px at 45% -18% var(--in-oklab), rgb(var(--color-accent) / 0.18), rgb(var(--color-accent) / 0.05) 45%, transparent 78%),
+    radial-gradient(840px 540px at 88% 92% var(--in-oklab), rgb(var(--color-accent-glow) / 0.08), transparent 72%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .he-auth-card {
+    animation: he-stagger-in 320ms var(--ease-snappy) both;
+  }
 }
 </style>

@@ -42,6 +42,9 @@ describe('modern UI foundation & CSS guidance compliance', () => {
     expect(styleCss).toContain('@container style(--density: spacious)')
     expect(styleCss).toContain('grid-template-rows: subgrid')
     expect(styleCss).toContain('@supports (container-type: scroll-state)')
+    expect(styleCss).toContain('@supports (transition-timing-function: linear(0, 1))')
+    expect(styleCss).toContain('@supports (animation-delay: calc(sibling-index() * 0.1s))')
+    expect(styleCss).toContain('.he-drawer-enter-active')
   })
 
   it('resolves descriptive document titles for library routes', async () => {
@@ -239,5 +242,69 @@ describe('SettingsView visual density choice cards', () => {
     await spaciousRadio.trigger('change')
     expect(densityState.density).toBe('spacious')
     expect(document.documentElement.dataset.density).toBe('spacious')
+  })
+})
+
+describe('HomeView continue spotlight deduplication', () => {
+  it('omits duplicate continue carousel when only one continue item exists and shows remaining items otherwise', async () => {
+    authState.user = { id: 1, username: 'reader', is_admin: false, is_active: true, created_at: '' }
+    const makeItem = (id: number) => ({
+      id,
+      title: `Work ${id}`,
+      relative_path: `work-${id}.mp4`,
+      media_type: 'video',
+      extension: '.mp4',
+      file_size: 1000,
+      cover_path: null,
+      duration: 60,
+      width: 1280,
+      height: 720,
+      page_count: null,
+      rating: 0,
+      favorite: false,
+      view_status: 'viewing',
+      progress: 12,
+      last_opened_at: `2026-11-22T0${id}:00:00Z`,
+      source_url: null,
+      source_site: null,
+      is_missing: false,
+      missing_since: null,
+      created_at: '',
+      tags: [],
+    })
+    let continueCount = 1
+    vi.spyOn(axios, 'get').mockImplementation(async (url, config) => ({
+      data: String(url).endsWith('/tags')
+        ? []
+        : config?.params?.sort === 'opened'
+          ? Array.from({ length: continueCount }, (_, i) => makeItem(i + 1))
+          : [makeItem(1)],
+      headers: { 'x-total-count': '1' },
+    }))
+    const testRouter = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div />' } }],
+    })
+    await testRouter.push('/')
+    const singleWrapper = mount(HomeView, {
+      global: { plugins: [testRouter], stubs: { MediaDetail: true } },
+    })
+    wrappers.push(singleWrapper)
+    await flushPromises()
+    expect(singleWrapper.find('section[aria-label="今晚继续"]').exists()).toBe(true)
+    expect(singleWrapper.find('section[aria-label="继续观看"]').exists()).toBe(false)
+    singleWrapper.unmount()
+
+    continueCount = 3
+    const multiWrapper = mount(HomeView, {
+      global: { plugins: [testRouter], stubs: { MediaDetail: true } },
+    })
+    wrappers.push(multiWrapper)
+    await flushPromises()
+    expect(multiWrapper.find('section[aria-label="今晚继续"]').text()).toContain('Work 3')
+    const continueRow = multiWrapper.get('section[aria-label="继续观看"]')
+    expect(continueRow.text()).not.toContain('Work 3')
+    expect(continueRow.text()).toContain('Work 2')
+    expect(continueRow.text()).toContain('Work 1')
   })
 })

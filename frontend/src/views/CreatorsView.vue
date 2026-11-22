@@ -285,7 +285,7 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
             class="he-media-card group flex flex-col rounded-2xl text-left focus-ring enabled:cursor-pointer disabled:cursor-default"
             @click="c.screen_name && openCreator(c.screen_name)"
           >
-            <div class="he-media-card__frame squircle relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-surface-2 transition-[box-shadow,translate] duration-200 ease-out">
+            <div class="he-media-card__frame relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-surface-2 transition-transform duration-200 ease-out">
               <img
                 v-if="c.cover_path"
                 :src="thumbnailUrl(c.cover_path)"
@@ -300,7 +300,7 @@ const xProfileUrl = (sn: string) => `https://x.com/${sn}`
               <div class="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/8 transition-colors group-hover:ring-white/20"></div>
               <span
                 v-if="c.posts_pending > 0"
-                class="absolute top-2 right-2 inline-flex min-h-6 items-center gap-1 rounded-lg bg-black/60 px-1.5 py-0.5 text-caption font-medium text-white/95 backdrop-blur-md ring-1 ring-inset ring-white/15 tabular-nums"
+                class="absolute top-2 right-2 inline-flex min-h-6 items-center gap-1 rounded-lg bg-black/72 px-1.5 py-0.5 text-caption font-medium text-white/95 ring-1 ring-inset ring-white/15 tabular-nums"
                 :title="`还有 ${c.posts_pending} 条已知推文未入库`"
               >+{{ c.posts_pending }} 待入库</span>
             </div>
