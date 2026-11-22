@@ -221,27 +221,42 @@ onBeforeUnmount(() => {
 <template>
   <div class="he-assistant-page min-w-0 min-h-full">
     <PageHeader title="媒体库管家" description="搜索、推荐与整理；变更由你确认">
-      <template #leading
-        ><MessageSquare :size="24" class="text-accent" aria-hidden="true"
-      /></template>
+      <template #leading>
+        <span class="grid size-10 shrink-0 place-items-center rounded-2xl border border-accent/25 bg-accent/12 text-accent shadow-[0_6px_20px_-6px_rgb(var(--color-accent)/0.45)]" aria-hidden="true">
+          <MessageSquare :size="20" />
+        </span>
+      </template>
+      <template v-if="allowed" #actions>
+        <span class="inline-flex items-center gap-2 rounded-full border border-line bg-surface/80 px-3 py-1.5 text-xs font-medium text-muted">
+          <span
+            class="size-2 rounded-full"
+            :class="!availability.enabled ? 'bg-subtle/60' : active ? 'bg-accent animate-pulse' : 'bg-emerald-400'"
+            aria-hidden="true"
+          ></span>
+          <span>{{ !availability.enabled ? '服务未启用' : active ? '正在执行回复' : '管家在线' }}</span>
+        </span>
+      </template>
     </PageHeader>
     <div class="page-gutter pb-8">
-      <div v-if="!allowed" class="page-container text-muted">
+      <div v-if="!allowed" class="page-container rounded-2xl border border-line bg-surface/60 p-6 text-muted">
         此功能仅向管理员开放。
       </div>
       <div v-else class="page-container min-w-0">
         <div
-          class="mx-auto grid max-w-[1280px] min-w-0 gap-5 lg:grid-cols-[264px_minmax(0,1fr)] lg:gap-7"
+          class="mx-auto grid max-w-[1440px] min-w-0 gap-4 lg:grid-cols-[276px_minmax(0,1fr)] lg:gap-6 xl:grid-cols-[296px_minmax(0,1fr)]"
         >
-          <aside class="assistant-history min-w-0 self-start rounded-2xl border border-line bg-surface/70" aria-label="对话历史">
-            <div class="space-y-3 p-3.5">
-              <div class="hidden items-center gap-2.5 px-1 lg:flex">
-                <MessageSquare :size="17" class="text-accent" aria-hidden="true" />
-                <h2 class="text-sm font-semibold text-ink">对话历史</h2>
+          <aside class="assistant-history min-w-0 self-start rounded-2xl border border-line bg-surface/80 shadow-[var(--he-shadow-card)]" aria-label="对话历史">
+            <div class="space-y-3 border-b border-line/70 p-3.5">
+              <div class="hidden items-center justify-between gap-2 px-1 lg:flex">
+                <div class="flex items-center gap-2">
+                  <MessageSquare :size="16" class="text-accent" aria-hidden="true" />
+                  <h2 class="text-sm font-semibold text-ink">对话历史</h2>
+                </div>
+                <span v-if="sessions.length" class="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium tabular-nums text-subtle">{{ sessions.length }}</span>
               </div>
               <button
                 type="button"
-                class="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl px-1 text-left focus-ring lg:hidden"
+                class="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl px-1.5 text-left hover:bg-surface-2/60 focus-ring lg:hidden"
                 :aria-expanded="historyExpanded"
                 aria-controls="assistant-history-list"
                 @click="historyExpanded = !historyExpanded"
@@ -249,23 +264,23 @@ onBeforeUnmount(() => {
                 <span class="flex min-w-0 items-center gap-2.5">
                   <MessageSquare :size="18" class="shrink-0 text-accent" aria-hidden="true" />
                   <span class="min-w-0">
-                    <span class="block text-xs text-muted">对话历史</span>
+                    <span class="block text-[11px] text-subtle">对话历史 · {{ sessions.length }}</span>
                     <span class="block truncate text-sm font-medium text-ink">{{ session?.title || '开始新对话' }}</span>
                   </span>
                 </span>
-                <ChevronDown :size="17" class="shrink-0 text-muted transition-transform motion-reduce:transition-none" :class="{ 'rotate-180': historyExpanded }" aria-hidden="true" />
+                <ChevronDown :size="17" class="shrink-0 text-muted transition-transform duration-200 motion-reduce:transition-none" :class="{ 'rotate-180': historyExpanded }" aria-hidden="true" />
               </button>
-              <UiButton class="min-h-11 w-full" :disabled="!availability.enabled || loading || sending" @click="newConversation">
-                <template #icon><Plus :size="17" /></template>新对话
+              <UiButton class="min-h-10 w-full" size="sm" variant="primary" :disabled="!availability.enabled || loading || sending" @click="newConversation">
+                <template #icon><Plus :size="16" /></template>新对话
               </UiButton>
             </div>
             <div id="assistant-history-list" :class="historyExpanded ? 'block' : 'hidden lg:block'">
-              <nav class="assistant-history-list custom-scrollbar space-y-4 overflow-y-auto overscroll-contain px-2.5 pb-3" aria-label="历史对话">
-                <div v-if="!sessions.length" class="px-3 py-7 text-center text-sm leading-relaxed text-muted">
+              <nav class="assistant-history-list custom-scrollbar space-y-4 overflow-y-auto overscroll-contain p-2.5" aria-label="历史对话">
+                <div v-if="!sessions.length" class="px-3 py-8 text-center text-sm leading-relaxed text-subtle">
                   {{ loading ? '正在加载对话…' : '还没有对话，开始聊聊你的媒体库吧。' }}
                 </div>
                 <section v-for="group in sessionGroups" :key="group.label" :aria-label="group.label">
-                  <h3 class="px-3 pb-2 pt-1 text-xs font-medium text-subtle">{{ group.label }}</h3>
+                  <h3 class="px-3 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-wider text-subtle">{{ group.label }}</h3>
                   <div class="space-y-1">
                     <button
                       v-for="item in group.items"
@@ -274,26 +289,31 @@ onBeforeUnmount(() => {
                       :aria-current="session?.id === item.id ? 'page' : undefined"
                       :disabled="loading || sending"
                       :title="item.title"
-                      class="assistant-history-row group flex min-h-14 w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors duration-150 focus-ring-inset disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
-                      :class="session?.id === item.id ? 'border-accent/25 bg-accent/10 text-ink' : 'border-transparent text-muted hover:bg-surface-2 hover:text-ink'"
+                      class="assistant-history-row group relative flex min-h-13 w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition-colors duration-150 focus-ring-inset disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
+                      :class="session?.id === item.id ? 'border-accent/30 bg-accent/12 text-ink shadow-[inset_0_1px_0_var(--he-border-specular)]' : 'border-transparent text-muted hover:bg-surface-2/80 hover:text-ink'"
                       @click="chooseSession(item)"
                     >
+                      <span
+                        v-if="session?.id === item.id"
+                        class="h-6 w-1 shrink-0 rounded-full bg-accent"
+                        aria-hidden="true"
+                      ></span>
                       <span class="min-w-0 flex-1">
                         <span class="block truncate text-sm font-medium">{{ item.title }}</span>
-                        <span class="mt-1 flex items-center gap-2 text-xs text-subtle">
+                        <span class="mt-0.5 flex items-center gap-2 text-[11px] text-subtle">
                           <span v-if="item.state === 'deleting'" class="text-muted">正在清除</span>
                           <span v-else>{{ sessionDateLabel(item) || '媒体库管家' }}</span>
-                          <span v-if="session?.id === item.id" class="text-accent-glow">当前对话</span>
+                          <span v-if="session?.id === item.id" class="font-medium text-accent-glow">当前对话</span>
                         </span>
                       </span>
-                      <Check v-if="session?.id === item.id" :size="15" class="shrink-0 text-accent" aria-hidden="true" />
+                      <Check v-if="session?.id === item.id" :size="14" class="shrink-0 text-accent" aria-hidden="true" />
                     </button>
                   </div>
                 </section>
-                <UiButton v-if="moreSessions" variant="ghost" class="min-h-11 w-full" :disabled="loading || sending" @click="chat.loadMoreSessions">加载更多对话</UiButton>
+                <UiButton v-if="moreSessions" variant="ghost" size="sm" class="min-h-10 w-full" :disabled="loading || sending" @click="chat.loadMoreSessions">加载更多对话</UiButton>
               </nav>
             </div>
-            <div class="mt-auto border-t border-line px-4 py-3.5">
+            <div class="mt-auto hidden border-t border-line/70 px-4 py-3 lg:block">
               <p v-if="!availability.enabled" class="mb-2 text-xs leading-relaxed text-muted">管家暂未启用，历史和停止操作仍可使用。</p>
               <div class="flex items-start gap-2 text-xs leading-relaxed text-subtle">
                 <ShieldCheck :size="15" class="mt-0.5 shrink-0 text-muted" aria-hidden="true" />
@@ -301,65 +321,64 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </aside>
-          <div class="min-w-0 space-y-5">
-            <div
-              class="flex min-w-0 flex-wrap items-center justify-between gap-3"
-            >
+
+          <section class="assistant-stage flex min-w-0 flex-col rounded-2xl border border-line bg-surface/65 shadow-[var(--he-shadow-card)]" aria-label="对话工作区">
+            <header class="assistant-stage-header flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-t-2xl border-b border-line/80 bg-surface/92 px-4 py-3 backdrop-blur-xl sm:px-5">
               <div class="min-w-0 flex-1 basis-full sm:basis-auto">
-                <h2 class="mb-1 line-clamp-2 text-base font-semibold text-ink sm:text-lg">{{ session?.title || '开始一段新对话' }}</h2>
-                <p role="status" aria-live="polite" class="text-sm text-muted">
+                <div class="flex min-w-0 items-center gap-2.5">
+                  <span
+                    class="size-2 shrink-0 rounded-full"
+                    :class="active ? 'bg-accent animate-pulse' : 'bg-accent/55'"
+                    aria-hidden="true"
+                  ></span>
+                  <h2 class="line-clamp-1 text-base font-semibold text-ink sm:text-[1.05rem]">{{ session?.title || '开始一段新对话' }}</h2>
+                </div>
+                <p role="status" aria-live="polite" class="mt-0.5 pl-4.5 text-xs text-muted sm:text-sm">
                   {{ loading ? '正在加载…' : status }}<span v-if="active && !connected"> · 未连接</span>
                 </p>
               </div>
-              <div class="flex flex-wrap gap-2">
-                <UiButton class="min-h-11" size="sm" @click="approvalOpen = true; approvals.refresh()"><template #icon><ShieldCheck :size="16" /></template>待审批 <span class="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-accent/15 px-1.5 text-xs text-accent-glow" aria-live="polite">{{ pendingCount }}</span></UiButton>
+              <div class="flex flex-wrap items-center gap-2">
+                <UiButton class="min-h-9" size="sm" @click="approvalOpen = true; approvals.refresh()">
+                  <template #icon><ShieldCheck :size="15" /></template>待审批
+                  <span class="ml-1 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-xs tabular-nums" :class="pendingCount > 0 ? 'bg-accent text-on-accent' : 'bg-accent/15 text-accent-glow'" aria-live="polite">{{ pendingCount }}</span>
+                </UiButton>
                 <UiButton
                   v-if="run"
-                  class="min-h-11"
+                  class="min-h-9"
                   size="sm"
+                  variant="ghost"
                   @click="chat.reconnect"
-                  ><template #icon><RefreshCw :size="15" /></template
+                  ><template #icon><RefreshCw :size="14" /></template
                   >重新连接</UiButton
                 ><UiButton
                   v-if="active"
-                  class="min-h-11"
+                  class="min-h-9"
                   size="sm"
+                  variant="danger"
                   @click="chat.stop"
-                  ><template #icon><Square :size="15" /></template
+                  ><template #icon><Square :size="14" /></template
                   >停止回复</UiButton
                 ><UiButton
                   v-if="session"
-                  class="min-h-11"
+                  class="min-h-9"
                   size="sm"
+                  variant="ghost"
                   @click="clearPrompt = true"
-                  ><template #icon><Trash2 :size="15" /></template
+                  ><template #icon><Trash2 :size="14" /></template
                   >清除对话</UiButton
                 >
               </div>
-            </div>
-            <UiCard v-if="clearPrompt" padding="sm" class="space-y-3"
-              ><p class="text-ink">
-                清除这段对话会先停止回复，并作废待确认建议。已批准的任务和长期偏好会保留。
-              </p>
-              <div class="flex flex-wrap gap-3">
-                <UiButton class="min-h-11" @click="clear">确认清除</UiButton
-                ><UiButton
-                  class="min-h-11"
-                  variant="ghost"
-                  @click="clearPrompt = false"
-                  >取消</UiButton
-                >
-              </div></UiCard
-            >
-            <UiButton
-              v-if="olderOffset > 0"
-              class="min-h-11"
-              @click="chat.loadOlder"
-              >更早的消息</UiButton
-            >
-            <details class="rounded-xl border border-line bg-surface/70 px-3 text-sm text-muted">
-              <summary class="flex min-h-11 cursor-pointer items-center gap-2 focus-ring"><ShieldCheck :size="15" aria-hidden="true" />读取无需审批 · 日常修改按你的要求执行</summary>
-              <div class="space-y-2 pb-3 leading-relaxed">
+            </header>
+
+            <details class="assistant-cap-disclosure border-b border-line/70 bg-surface-2/40 px-4 text-sm text-muted sm:px-5">
+              <summary class="flex min-h-10 cursor-pointer items-center justify-between gap-2 text-xs font-medium text-subtle hover:text-ink focus-ring sm:text-sm">
+                <span class="flex min-w-0 items-center gap-2">
+                  <ShieldCheck :size="14" class="shrink-0 text-accent" aria-hidden="true" />
+                  <span class="truncate">读取无需审批 · 日常修改按你的要求执行</span>
+                </span>
+                <ChevronDown :size="15" class="assistant-cap-chevron shrink-0 text-subtle" aria-hidden="true" />
+              </summary>
+              <div class="space-y-1.5 pb-3 pt-1 text-xs leading-relaxed text-muted sm:text-sm">
                 <template v-if="capabilities">
                   <p>可连续查询媒体资料、作者、文件目录、任务、日志和存储状态。</p>
                   <p>文件读取范围：{{ readableRoots || '暂无可读目录' }}</p>
@@ -370,99 +389,143 @@ onBeforeUnmount(() => {
                 <p v-else>能力信息暂不可用，请稍后重新连接。</p>
               </div>
             </details>
-            <ChatMessages :messages="messages" :disabled="!availability.enabled || sending" @suggest="useSuggestion" />
-            <p v-if="toolStatus" role="status" class="inline-flex max-w-full items-center gap-2 rounded-full border border-line bg-surface/70 px-3 py-1.5 text-sm text-muted">
-              <Loader2 v-if="active" :size="14" class="shrink-0 animate-spin text-accent motion-reduce:animate-none" aria-hidden="true" />
-              <span class="min-w-0 truncate">{{ toolStatus }}</span>
-            </p>
-            <MediaResults :results="results" @open="openMedia" />
-            <ProjectResultCard :results="results" />
-            <p v-if="truncated" class="text-sm text-muted">
-              本轮部分结果超出展示上限，请缩小查询范围。
-            </p>
-            <section
-              v-if="proposals.length"
-              aria-label="待审阅建议"
-              class="space-y-3"
-            >
-              <h2 class="font-semibold text-ink">整理建议</h2>
-              <ProposalCard
-                v-for="proposal in proposals"
-                :key="proposal.id"
-                :proposal="proposal"
-                :enabled="availability.enabled"
 
-              /><UiButton
-                v-if="moreProposals"
-                class="min-h-11"
-                @click="chat.loadMoreProposals"
-                >更多建议</UiButton
-              >
-            </section>
-            <p v-if="run" class="text-sm text-subtle [overflow-wrap:anywhere]">
-              用量：<template v-if="run.usage"
-                >输入 {{ run.usage.input_tokens ?? '不可用' }} · 输出
-                {{ run.usage.output_tokens ?? '不可用' }} · 合计
-                {{ run.usage.total_tokens ?? '不可用' }} token</template
-              ><template v-else>本轮不可用</template>
-            </p>
-            <div
-              v-if="error || mediaError"
-              role="alert"
-              class="rounded-xl border border-danger/30 bg-danger/5 p-3 text-sm text-danger [overflow-wrap:anywhere]"
-            >
-              {{ error || mediaError
-              }}<UiButton
-                v-if="hasRetry"
-                class="mt-3 min-h-11"
-                :disabled="sending"
-                @click="chat.retrySend"
-                >重试原消息</UiButton
-              >
-            </div>
-            <form
-              class="assistant-composer min-w-0 rounded-2xl border border-line bg-surface p-2 transition-colors duration-150 focus-within:border-accent/50 sm:p-2.5 motion-reduce:transition-none"
-              @submit.prevent="send"
-            >
-              <label for="assistant-input" class="sr-only">发送消息</label>
-              <textarea
-                ref="input"
-                @focus="keepComposerVisible"
-                id="assistant-input"
-                v-model="draft"
-                rows="3"
-                maxlength="8000"
-                :disabled="
-                  !availability.enabled ||
-                  sending ||
-                  session?.state === 'deleting'
-                "
-                aria-describedby="assistant-input-hint"
-                class="block max-h-[40vh] min-h-[4.5rem] w-full min-w-0 resize-y rounded-xl bg-transparent px-3 py-2.5 text-base leading-relaxed text-ink outline-none placeholder:text-subtle"
-                placeholder="告诉管家你想找什么，例如：找一些温馨、还没看过的短篇漫画"
-                @keydown="key"
-              />
-              <div
-                class="flex flex-wrap items-center justify-between gap-3 border-t border-line px-2 pt-2"
-              >
-                <p id="assistant-input-hint" class="text-xs text-subtle tabular-nums">
-                  {{ draft.length }}/8000 · Ctrl/⌘ + Enter 发送
+            <div class="min-w-0 flex-1 space-y-5 px-4 py-5 sm:px-6">
+              <UiCard v-if="clearPrompt" padding="sm" class="space-y-3 border-danger/30 bg-danger/5">
+                <p class="text-sm leading-relaxed text-ink">
+                  清除这段对话会先停止回复，并作废待确认建议。已批准的任务和长期偏好会保留。
                 </p>
+                <div class="flex flex-wrap gap-2.5">
+                  <UiButton class="min-h-10" size="sm" variant="danger" @click="clear">确认清除</UiButton>
+                  <UiButton
+                    class="min-h-10"
+                    size="sm"
+                    variant="ghost"
+                    @click="clearPrompt = false"
+                    >取消</UiButton
+                  >
+                </div>
+              </UiCard>
+
+              <div v-if="olderOffset > 0" class="flex justify-center">
                 <UiButton
-                  class="min-h-11"
-                  type="submit"
-                  variant="primary"
-                  :loading="sending"
-                  :disabled="!canSend || !draft.trim()"
-                  ><template #icon><Send :size="16" /></template>发送</UiButton
+                  size="sm"
+                  variant="ghost"
+                  class="min-h-10 border border-line bg-surface-2/70"
+                  @click="chat.loadOlder"
+                  >更早的消息</UiButton
                 >
               </div>
+
+              <ChatMessages :messages="messages" :disabled="!availability.enabled || sending" @suggest="useSuggestion" />
+
+              <p v-if="toolStatus" role="status" class="inline-flex max-w-full items-center gap-2 rounded-full border border-accent/25 bg-accent/8 px-3.5 py-1.5 text-sm text-ink">
+                <Loader2 v-if="active" :size="14" class="shrink-0 animate-spin text-accent motion-reduce:animate-none" aria-hidden="true" />
+                <span class="min-w-0 truncate">{{ toolStatus }}</span>
+              </p>
+
+              <MediaResults :results="results" @open="openMedia" />
+              <ProjectResultCard :results="results" />
+
+              <p v-if="truncated" class="text-xs text-muted">
+                本轮部分结果超出展示上限，请缩小查询范围。
+              </p>
+
+              <section
+                v-if="proposals.length"
+                aria-label="待审阅建议"
+                class="space-y-3"
+              >
+                <div class="flex items-center gap-2">
+                  <h2 class="text-sm font-semibold text-ink sm:text-base">整理建议</h2>
+                  <span class="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-medium tabular-nums text-accent-glow">{{ proposals.length }}</span>
+                </div>
+                <ProposalCard
+                  v-for="proposal in proposals"
+                  :key="proposal.id"
+                  :proposal="proposal"
+                  :enabled="availability.enabled"
+                />
+                <UiButton
+                  v-if="moreProposals"
+                  variant="ghost"
+                  class="min-h-10"
+                  @click="chat.loadMoreProposals"
+                  >更多建议</UiButton
+                >
+              </section>
+
+              <p v-if="run" class="text-xs text-subtle [overflow-wrap:anywhere]">
+                用量：<template v-if="run.usage"
+                  >输入 {{ run.usage.input_tokens ?? '不可用' }} · 输出
+                  {{ run.usage.output_tokens ?? '不可用' }} · 合计
+                  {{ run.usage.total_tokens ?? '不可用' }} token</template
+                ><template v-else>本轮不可用</template>
+              </p>
+
+              <div
+                v-if="error || mediaError"
+                role="alert"
+                class="rounded-xl border border-danger/30 bg-danger/8 p-3.5 text-sm text-danger [overflow-wrap:anywhere]"
+              >
+                {{ error || mediaError }}
+                <UiButton
+                  v-if="hasRetry"
+                  class="mt-3 min-h-10"
+                  size="sm"
+                  :disabled="sending"
+                  @click="chat.retrySend"
+                  >重试原消息</UiButton
+                >
+              </div>
+            </div>
+
+            <form
+              class="assistant-composer mt-auto min-w-0 rounded-b-2xl border-t border-line/80 bg-surface/94 p-3 backdrop-blur-xl transition-colors duration-150 focus-within:border-accent/45 sm:px-5 sm:py-3.5 motion-reduce:transition-none"
+              @submit.prevent="send"
+            >
+              <div class="rounded-2xl border border-line bg-surface-2/85 p-2 transition-[border-color,box-shadow] duration-150 focus-within:border-accent/55 focus-within:ring-2 focus-within:ring-accent/20 motion-reduce:transition-none">
+                <label for="assistant-input" class="sr-only">发送消息</label>
+                <textarea
+                  ref="input"
+                  id="assistant-input"
+                  v-model="draft"
+                  rows="2"
+                  maxlength="8000"
+                  :disabled="
+                    !availability.enabled ||
+                    sending ||
+                    session?.state === 'deleting'
+                  "
+                  aria-describedby="assistant-input-hint"
+                  class="block max-h-[36vh] min-h-[3.75rem] w-full min-w-0 resize-y rounded-xl bg-transparent px-3 py-2 text-base leading-relaxed text-ink outline-none placeholder:text-subtle"
+                  placeholder="告诉管家你想找什么，例如：找一些温馨、还没看过的短篇漫画"
+                  @focus="keepComposerVisible"
+                  @keydown="key"
+                />
+                <div
+                  class="flex flex-wrap items-center justify-between gap-3 border-t border-line/60 px-2 pt-2"
+                >
+                  <p id="assistant-input-hint" class="text-xs text-subtle tabular-nums">
+                    {{ draft.length }}/8000 · Ctrl/⌘ + Enter 发送
+                  </p>
+                  <UiButton
+                    class="min-h-10"
+                    size="sm"
+                    type="submit"
+                    variant="primary"
+                    :loading="sending"
+                    :disabled="!canSend || !draft.trim()"
+                    ><template #icon><Send :size="15" /></template>发送</UiButton
+                  >
+                </div>
+              </div>
             </form>
-          </div>
+          </section>
         </div>
       </div>
     </div>
-    <ApprovalPanel v-if="allowed" v-model:open="approvalOpen" :items="approvalItems" :pending-count="pendingCount" :tab="approvalTab" :busy="approvalBusy" :error="approvalError" :has-more="approvalMore" :enabled="availability.enabled" @tab="approvalTab = $event" @refresh="approvals.refresh()" @more="approvals.loadMore()"  @jump="jumpToProposal" />
+    <ApprovalPanel v-if="allowed" v-model:open="approvalOpen" :items="approvalItems" :pending-count="pendingCount" :tab="approvalTab" :busy="approvalBusy" :error="approvalError" :has-more="approvalMore" :enabled="availability.enabled" @tab="approvalTab = $event" @refresh="approvals.refresh()" @more="approvals.loadMore()" @jump="jumpToProposal" />
     <MediaDetail
       v-if="allowed && selectedMedia"
       :initial-media="selectedMedia"
@@ -480,21 +543,55 @@ onBeforeUnmount(() => {
 .assistant-history-list {
   max-height: 320px;
 }
+.assistant-cap-disclosure::details-content {
+  block-size: 0;
+  overflow: hidden;
+  transition: block-size 220ms var(--ease-snappy), content-visibility 220ms allow-discrete;
+}
+.assistant-cap-disclosure[open]::details-content {
+  block-size: auto;
+}
+.assistant-cap-chevron {
+  transition: transform 200ms var(--ease-snappy);
+}
+.assistant-cap-disclosure[open] .assistant-cap-chevron {
+  transform: rotate(180deg);
+}
 @media (min-width: 1024px) {
   .assistant-history {
     position: sticky;
-    top: 1.5rem;
+    top: 1.25rem;
     display: flex;
     flex-direction: column;
-    min-height: min(640px, calc(100dvh - 210px));
+    max-height: calc(100dvh - 2.5rem);
+    min-height: min(620px, calc(100dvh - 180px));
   }
   .assistant-history-list {
-    max-height: max(240px, calc(100dvh - 330px));
+    max-height: max(240px, calc(100dvh - 340px));
+  }
+  .assistant-stage-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  .assistant-composer {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+  }
+  :global(.he-app-shell:has(.he-assistant-page) .he-back-top) {
+    bottom: 10.25rem;
   }
 }
 .assistant-composer {
   scroll-margin-block: 1rem;
-  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  padding-bottom: max(0.875rem, env(safe-area-inset-bottom));
+}
+@media (prefers-reduced-motion: reduce) {
+  .assistant-cap-disclosure::details-content,
+  .assistant-cap-chevron {
+    transition: none;
+  }
 }
 :global(.he-app-shell:has(.he-assistant-page textarea:focus) .he-back-top) {
   display: none;

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { UiButton, UiCard } from '../ui'
+import { ShieldAlert, ArrowRight, ChevronDown } from 'lucide-vue-next'
+import { UiBadge, UiButton, UiCard } from '../ui'
 import {
   confirmProposal,
   rejectProposal,
@@ -91,6 +92,18 @@ const status = computed(() =>
     ? '已过期'
     : stateLabels[state.value] || '建议不可用',
 )
+const statusTone = computed<'accent' | 'success' | 'warning' | 'danger' | 'neutral'>(() => {
+  if (job.value) {
+    if (job.value.status === 'completed') return 'success'
+    if (['failed', 'interrupted', 'needs_recovery'].includes(job.value.status)) return 'danger'
+    return 'accent'
+  }
+  if (state.value === 'pending' && expired.value) return 'neutral'
+  if (state.value === 'pending') return 'warning'
+  if (state.value === 'applied' || state.value === 'queued') return 'success'
+  if (state.value === 'rejected') return 'danger'
+  return 'neutral'
+})
 const resultItems = computed(() => props.proposal.result?.items || [])
 const jobLabels: Record<string, string> = {
   queued: '等待执行',
@@ -241,38 +254,56 @@ onBeforeUnmount(() => {
 })
 </script>
 <template>
-  <UiCard class="min-w-0 space-y-3 [overflow-wrap:anywhere]" padding="sm">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-      <h3 class="font-semibold text-ink">
-        {{ kindLabels[proposal.kind] || '操作审批' }}
-      </h3>
-      <span class="rounded-full bg-surface-2 px-3 py-1 text-sm text-muted">{{
+  <UiCard class="min-w-0 space-y-3.5 [overflow-wrap:anywhere]" padding="sm">
+    <div class="flex flex-wrap items-start justify-between gap-2 border-b border-line/70 pb-3">
+      <div class="flex min-w-0 items-center gap-2.5">
+        <span class="grid size-8 shrink-0 place-items-center rounded-xl bg-accent/12 text-accent" aria-hidden="true">
+          <ShieldAlert :size="16" />
+        </span>
+        <div class="min-w-0">
+          <h3 class="text-sm font-semibold text-ink sm:text-base">
+            {{ kindLabels[proposal.kind] || '操作审批' }}
+          </h3>
+          <p class="mt-0.5 flex flex-wrap items-center gap-1.5 text-sm font-medium text-ink">
+            <span class="min-w-0 [overflow-wrap:anywhere]">{{ proposal.target_label }}</span>
+            <span v-if="proposal.target_id" class="rounded-md bg-surface-2 px-1.5 py-0.5 text-xs font-normal tabular-nums text-subtle">#{{ proposal.target_id }}</span>
+          </p>
+        </div>
+      </div>
+      <UiBadge :tone="statusTone">{{
         job ? jobLabels[job.status] || status : status
-      }}</span>
+      }}</UiBadge>
     </div>
-    <p class="font-medium text-ink">
-      {{ proposal.target_label }}
-      <span v-if="proposal.target_id" class="text-sm text-muted">#{{ proposal.target_id }}</span>
-    </p>
     <p v-if="proposal.reason" class="text-sm leading-relaxed text-muted">{{ proposal.reason }}</p>
-    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-      <span>影响 {{ proposal.impact_count || 1 }} 个对象</span><span v-if="proposal.reversibility">{{ proposal.reversibility }}</span>
+    <div class="flex flex-wrap items-center gap-1.5 text-xs text-muted">
+      <span class="rounded-full border border-line bg-surface-2 px-2.5 py-0.5 tabular-nums">影响 {{ proposal.impact_count || 1 }} 个对象</span>
+      <span v-if="proposal.reversibility" class="rounded-full border border-line bg-surface-2 px-2.5 py-0.5">{{ proposal.reversibility }}</span>
     </div>
-    <details v-if="batchItems.length" class="rounded-xl border border-line p-3">
-      <summary class="min-h-11 cursor-pointer text-sm text-ink focus-ring">选择要修改的媒体 · {{ selection.length }}/{{ batchItems.length }}</summary>
-      <label v-for="item in batchItems" :key="item.media_id" class="flex min-h-11 cursor-pointer items-center gap-3 py-2 text-sm text-ink"><input v-model="selection" type="checkbox" :value="item.media_id" :disabled="busy || state !== 'pending' || expired || !enabled" class="h-5 w-5 accent-accent" /><span class="min-w-0 [overflow-wrap:anywhere]">{{ item.title || '媒体' }} #{{ item.media_id }}</span></label>
-      <UiButton v-if="selectionDirty" class="mt-2 min-h-11" :disabled="!selection.length || busy || expired || !enabled" :loading="busy" @click="saveSelection">为选中的 {{ selection.length }} 项重新生成审批</UiButton>
+    <details v-if="batchItems.length" class="assistant-proposal-details rounded-xl border border-line bg-surface-2/40 p-3">
+      <summary class="flex min-h-10 cursor-pointer items-center justify-between gap-2 text-sm font-medium text-ink focus-ring">
+        <span>选择要修改的媒体 · {{ selection.length }}/{{ batchItems.length }}</span>
+        <ChevronDown :size="15" class="assistant-details-chevron shrink-0 text-subtle" aria-hidden="true" />
+      </summary>
+      <div class="mt-2 border-t border-line/70 pt-2">
+        <label v-for="item in batchItems" :key="item.media_id" class="flex min-h-10 cursor-pointer items-center gap-3 rounded-lg px-1.5 py-1.5 text-sm text-ink hover:bg-surface-2"><input v-model="selection" type="checkbox" :value="item.media_id" :disabled="busy || state !== 'pending' || expired || !enabled" class="h-4.5 w-4.5 accent-accent" /><span class="min-w-0 [overflow-wrap:anywhere]">{{ item.title || '媒体' }} <span class="text-subtle tabular-nums">#{{ item.media_id }}</span></span></label>
+        <UiButton v-if="selectionDirty" class="mt-2 min-h-10" size="sm" :disabled="!selection.length || busy || expired || !enabled" :loading="busy" @click="saveSelection">为选中的 {{ selection.length }} 项重新生成审批</UiButton>
+      </div>
     </details>
-    <div class="grid min-w-0 gap-3 sm:grid-cols-2">
-      <div class="min-w-0 rounded-xl bg-surface-2 p-3">
-        <h4 class="mb-2 text-sm font-medium text-muted">当前资料</h4>
+    <div class="grid min-w-0 gap-2.5 sm:grid-cols-2">
+      <div class="min-w-0 rounded-xl border border-line bg-surface-2/80 p-3">
+        <h4 class="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-subtle">
+          <span>当前资料</span>
+        </h4>
         <pre
           class="whitespace-pre-wrap font-sans text-sm leading-relaxed text-ink [overflow-wrap:anywhere]"
           >{{ preview(proposal.before) }}</pre
         >
       </div>
-      <div class="min-w-0 rounded-xl border border-accent/30 bg-accent/5 p-3">
-        <h4 class="mb-2 text-sm font-medium text-muted">拟议变更</h4>
+      <div class="min-w-0 rounded-xl border border-accent/35 bg-accent/8 p-3">
+        <h4 class="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-accent-glow">
+          <span>拟议变更</span>
+          <ArrowRight :size="13" aria-hidden="true" />
+        </h4>
         <pre
           class="whitespace-pre-wrap font-sans text-sm leading-relaxed text-ink [overflow-wrap:anywhere]"
           >{{ preview(proposal.after) }}</pre
@@ -280,28 +311,29 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <div v-if="(proposal.impact_count || 0) > 1 && proposal.kind !== 'media_batch_update'" class="space-y-2">
-      <UiButton class="min-h-11" variant="ghost" :disabled="affectedBusy" @click="loadAffected()">查看完整影响清单</UiButton>
-      <div v-if="affectedOpen" class="max-h-64 overflow-y-auto rounded-xl bg-surface-2 p-3 text-sm text-muted">
+      <UiButton class="min-h-10" size="sm" variant="ghost" :disabled="affectedBusy" @click="loadAffected()">查看完整影响清单</UiButton>
+      <div v-if="affectedOpen" class="custom-scrollbar max-h-64 overflow-y-auto rounded-xl border border-line bg-surface-2 p-3 text-sm text-muted">
         <p v-for="item in affected" :key="String(item.type) + String(item.id)" class="mb-2 [overflow-wrap:anywhere]">{{ item.label }} #{{ item.id }}<span v-if="item.before"><br />{{ preview(item.before as Record<string, unknown>) }} → {{ preview(item.after as Record<string, unknown>) }}</span></p>
-        <UiButton v-if="affectedMore" class="min-h-11" :disabled="affectedBusy" @click="loadAffected(true)">继续查看</UiButton>
+        <UiButton v-if="affectedMore" class="min-h-10" size="sm" :disabled="affectedBusy" @click="loadAffected(true)">继续查看</UiButton>
       </div>
     </div>
-    <p v-if="state === 'pending' && !expired" class="text-sm text-muted">
+    <p v-if="state === 'pending' && !expired" class="text-xs text-subtle">
       有效期至
       {{
         new Date(utcTime(proposal.expires_at)).toLocaleTimeString()
       }}。确认后才会执行。
     </p>
-    <p v-if="incomplete" role="alert" class="text-sm text-danger">
+    <p v-if="incomplete" role="alert" class="rounded-xl border border-danger/30 bg-danger/8 px-3 py-2 text-sm text-danger">
       旧建议的标签变更预览不完整，请重新生成建议。
     </p>
-    <p v-if="proposal.kind === 'scan'" class="text-sm text-muted">
+    <p v-if="proposal.kind === 'scan'" class="text-xs text-muted">
       扫描可能逐步处理文件；停止聊天不会停止已确认的扫描。
     </p>
-    <div class="flex flex-wrap gap-3">
+    <div class="flex flex-wrap gap-2.5 pt-0.5">
       <UiButton
         data-confirm
-        class="min-h-11"
+        class="min-h-10"
+        size="sm"
         variant="primary"
         :disabled="!actionable || selectionDirty"
         :loading="busy"
@@ -309,19 +341,30 @@ onBeforeUnmount(() => {
         >{{ confirmLabel }}</UiButton
       ><UiButton
         data-reject
-        class="min-h-11"
+        class="min-h-10"
+        size="sm"
         :disabled="!actionable"
         @click="act(false)"
         >拒绝</UiButton
       >
     </div>
-    <p v-if="job" role="status" class="text-sm text-muted">
-      {{ jobLabels[job.status] || '任务状态待核实' }}<span v-if="job.progress != null"> · {{ job.progress }}%</span> · {{ job.job_id
-      }}<br v-if="job.message" /><span v-if="job.message">{{
+    <p v-if="job" role="status" class="rounded-xl border border-line bg-surface-2/70 px-3 py-2 text-sm text-muted">
+      {{ jobLabels[job.status] || '任务状态待核实' }}<span v-if="job.progress != null"> · {{ job.progress }}%</span> · <span class="tabular-nums">{{ job.job_id }}</span><br v-if="job.message" /><span v-if="job.message">{{
         job.message
       }}</span>
     </p>
-    <details v-if="resultItems.length" class="rounded-xl border border-line p-3"><summary class="min-h-11 cursor-pointer text-sm text-muted focus-ring">逐项执行结果 · {{ resultItems.length }} 项</summary><p v-for="(item,index) in resultItems" :key="index" class="mb-2 text-sm text-ink [overflow-wrap:anywhere]">{{ preview(item) }}</p></details>
-    <p v-if="error" role="alert" class="text-sm text-danger">{{ error }}</p>
+    <details v-if="resultItems.length" class="assistant-proposal-details rounded-xl border border-line bg-surface-2/40 p-3"><summary class="flex min-h-10 cursor-pointer items-center justify-between gap-2 text-sm text-muted focus-ring"><span>逐项执行结果 · {{ resultItems.length }} 项</span><ChevronDown :size="15" class="assistant-details-chevron shrink-0 text-subtle" aria-hidden="true" /></summary><div class="mt-2 space-y-1.5 border-t border-line/70 pt-2"><p v-for="(item,index) in resultItems" :key="index" class="text-sm text-ink [overflow-wrap:anywhere]">{{ preview(item) }}</p></div></details>
+    <p v-if="error" role="alert" class="rounded-xl border border-danger/30 bg-danger/8 px-3 py-2 text-sm text-danger">{{ error }}</p>
   </UiCard>
 </template>
+<style scoped>
+.assistant-proposal-details .assistant-details-chevron {
+  transition: transform 200ms var(--ease-snappy);
+}
+.assistant-proposal-details[open] .assistant-details-chevron {
+  transform: rotate(180deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .assistant-proposal-details .assistant-details-chevron { transition: none; }
+}
+</style>
