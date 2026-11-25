@@ -14,6 +14,8 @@ import type {
   ToolResultsDTO,
   RequestOptions,
   ApprovalPageDTO,
+  AssistantModelConfigDTO,
+  AssistantModelUpdateRequest,
   CapabilitiesDTO,
 } from '../types/assistant'
 
@@ -321,12 +323,16 @@ export const assistantErrors: Record<string, string> = {
   assistant_invalid_proposal: '变更参数不正确。',
   assistant_file_unavailable: '文件暂时无法读取。',
   assistant_tag_exists: '目标标签已存在，请改用标签合并。',
+  assistant_invalid_model: '模型配置无效，请确认模型名与 HTTPS 接口地址。',
+  assistant_model_unconfigured: '媒体库管家模型尚未配置。',
 }
 export function assistantErrorText(error: unknown) {
   return error instanceof AssistantApiError ? assistantErrors[error.code] || '操作暂不可用，请刷新后核实状态。' : '连接失败，请稍后重试。'
 }
 export const listApprovals = (tab: 'pending' | 'history', opts: RequestOptions = {}) => json<ApprovalPageDTO>('/approvals' + query(opts, 50) + '&tab=' + tab, 'GET', undefined, opts)
 export const getCapabilities = (opts: RequestOptions = {}) => json<CapabilitiesDTO>('/capabilities', 'GET', undefined, opts)
+export const getAssistantModel = (opts: RequestOptions = {}) => json<AssistantModelConfigDTO>('/model', 'GET', undefined, opts)
+export const updateAssistantModel = (body: AssistantModelUpdateRequest, opts: RequestOptions = {}) => json<AssistantModelConfigDTO>('/model', 'PUT', body, opts)
 export const selectProposalTargets = (id: string, ids: number[], opts: RequestOptions = {}) => json<ProposalDTO>('/proposals/' + pathId(id) + '/selection', 'POST', { selected_target_ids: ids }, opts)
 export const getProposalTargets = (id: string, opts: RequestOptions = {}) => json<Page<Record<string, unknown>>>('/proposals/' + pathId(id) + '/targets' + query(opts, 50), 'GET', undefined, opts)
 export const getMediaCards = (ids: number[], opts: RequestOptions = {}) =>

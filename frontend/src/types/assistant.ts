@@ -101,3 +101,33 @@ export interface CapabilitiesDTO {
   image_analysis_supported: boolean
   writes_require_approval: boolean
 }
+
+export interface AssistantModelPresetDTO {
+  id: string
+  label: string
+  model: string
+  base_url: string
+  key_configured: boolean
+  thinking_disabled: boolean
+  custom: boolean
+}
+
+export interface AssistantModelConfigDTO {
+  model: string
+  display_model: string
+  base_url: string
+  key_configured: boolean
+  thinking_disabled: boolean
+  presets: AssistantModelPresetDTO[]
+}
+
+export interface AssistantModelUpdateRequest {
+  preset_id?: string
+  model?: string
+  display_model?: string
+  base_url?: string
+  api_key?: string
+  thinking_disabled?: boolean
+  save_preset?: boolean
+  delete_preset_id?: string
+}
