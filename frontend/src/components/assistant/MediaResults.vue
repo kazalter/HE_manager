@@ -6,7 +6,7 @@ import { UiButton } from '../ui'
 import { getMediaCards } from '../../utils/assistantApi'
 import type { ToolResultDTO } from '../../types/assistant'
 import type { Media, Tag } from '../../types'
-const props = defineProps<{ results: ToolResultDTO[] }>()
+const props = defineProps<{ results: ToolResultDTO[]; compact?: boolean }>()
 const emit = defineEmits<{ open: [id: number] }>()
 interface Item {
   id: number
@@ -197,7 +197,8 @@ const folderStatus: Record<string, string> = { idle: '空闲', scanning: '扫描
     <div
       v-for="call in stats"
       :key="call.tool_call_id"
-      class="grid grid-cols-1 gap-2.5 sm:grid-cols-3 sm:gap-3"
+      class="grid"
+      :class="compact ? 'grid-cols-3 gap-2' : 'grid-cols-1 gap-2.5 sm:grid-cols-3 sm:gap-3'"
       role="group"
       aria-label="媒体库统计"
     >
@@ -208,13 +209,14 @@ const folderStatus: Record<string, string> = { idle: '空闲', scanning: '扫描
           { label: '已看', value: call.result.watched_count, icon: Eye },
         ]"
         :key="tile.label"
-        class="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface-2/55 px-4 py-3.5"
+        class="flex items-center justify-between rounded-2xl border border-line bg-surface-2/55"
+        :class="compact ? 'gap-2 px-3 py-2.5' : 'gap-3 px-4 py-3.5'"
       >
-        <div>
+        <div class="min-w-0">
           <p class="text-xs font-medium text-subtle">{{ tile.label }}</p>
-          <p class="mt-1 text-2xl font-semibold tracking-tight tabular-nums text-ink sm:text-[1.65rem]">{{ tile.value ?? '—' }}</p>
+          <p class="mt-1 font-semibold tracking-tight tabular-nums text-ink" :class="compact ? 'text-lg' : 'text-2xl sm:text-[1.65rem]'">{{ tile.value ?? '—' }}</p>
         </div>
-        <span class="grid size-9 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent" aria-hidden="true">
+        <span v-if="!compact" class="grid size-9 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent" aria-hidden="true">
           <component :is="tile.icon" :size="17" />
         </span>
       </div>

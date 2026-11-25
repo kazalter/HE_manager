@@ -2,7 +2,7 @@
 import { Sparkles, BookOpen, Heart, Compass, BarChart3, ArrowUpRight } from 'lucide-vue-next'
 import type { Component } from 'vue'
 import type { MessageDTO } from '../../types/assistant'
-defineProps<{ messages: MessageDTO[]; disabled?: boolean }>()
+defineProps<{ messages: MessageDTO[]; disabled?: boolean; compact?: boolean }>()
 const emit = defineEmits<{ suggest: [text: string] }>()
 const suggestions: { text: string; tag: string; icon: Component }[] = [
   { text: '找一些温馨、还没看过的短篇漫画', tag: '精准检索', icon: BookOpen },
@@ -13,19 +13,20 @@ const suggestions: { text: string; tag: string; icon: Component }[] = [
 const waiting = ['running', 'submitting', 'submission_unknown', 'stopping', 'reconciling']
 </script>
 <template>
-  <div v-if="!messages.length" class="mx-auto max-w-2xl px-1 py-8 text-center text-muted sm:py-12">
+  <div v-if="!messages.length" class="mx-auto max-w-2xl px-1 text-center text-muted" :class="compact ? 'py-5' : 'py-8 sm:py-12'">
     <span
-      class="mx-auto mb-5 grid size-14 place-items-center rounded-2xl border border-accent/25 bg-accent/12 text-accent shadow-[0_8px_28px_-8px_rgb(var(--color-accent)/0.45)]"
+      class="mx-auto mb-4 grid place-items-center rounded-2xl border border-accent/25 bg-accent/12 text-accent shadow-[0_8px_28px_-8px_rgb(var(--color-accent)/0.45)]"
+      :class="compact ? 'size-12' : 'mb-5 size-14'"
       aria-hidden="true"
     >
-      <Sparkles :size="24" />
+      <Sparkles :size="compact ? 20 : 24" />
     </span>
-    <h2 class="text-lg font-semibold tracking-tight text-ink sm:text-xl">想从媒体库中发现什么？</h2>
-    <p class="mt-2 text-sm leading-relaxed text-subtle sm:text-base">
+    <h2 class="font-semibold tracking-tight text-ink" :class="compact ? 'text-base' : 'text-lg sm:text-xl'">想从媒体库中发现什么？</h2>
+    <p class="mt-2 leading-relaxed text-subtle" :class="compact ? 'text-xs' : 'text-sm sm:text-base'">
       可以找作品、按喜好推荐，或提出标签与资料整理建议。
     </p>
     <p class="mt-1 text-xs text-subtle">资料修改和扫描都需要你在建议卡上确认。</p>
-    <div class="mt-7 grid grid-cols-1 gap-2.5 text-left sm:grid-cols-2">
+    <div class="grid grid-cols-1 text-left" :class="compact ? 'mt-5 gap-2' : 'mt-7 gap-2.5 sm:grid-cols-2'">
       <button
         v-for="item in suggestions"
         :key="item.text"
@@ -56,15 +57,21 @@ const waiting = ['running', 'submitting', 'submission_unknown', 'stopping', 'rec
       v-for="message in messages"
       :key="message.id"
       :data-message-id="message.id"
-      class="assistant-msg flex min-w-0 gap-3"
-      :class="message.role === 'user' ? 'justify-end pl-6 sm:pl-16' : 'pr-2 sm:pr-12'"
+      class="assistant-msg flex min-w-0"
+      :class="[
+        compact ? 'gap-2.5' : 'gap-3',
+        message.role === 'user'
+          ? (compact ? 'justify-end pl-6' : 'justify-end pl-6 sm:pl-16')
+          : (compact ? 'pr-1' : 'pr-2 sm:pr-12'),
+      ]"
     >
       <span
         v-if="message.role !== 'user'"
-        class="mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl border border-accent/25 bg-accent/12 text-accent shadow-[0_2px_10px_-3px_rgb(var(--color-accent)/0.35)]"
+        class="mt-0.5 grid shrink-0 place-items-center rounded-xl border border-accent/25 bg-accent/12 text-accent shadow-[0_2px_10px_-3px_rgb(var(--color-accent)/0.35)]"
+        :class="compact ? 'size-7' : 'size-8'"
         aria-hidden="true"
       >
-        <Sparkles :size="15" />
+        <Sparkles :size="compact ? 14 : 15" />
       </span>
       <div
         class="min-w-0 rounded-2xl px-4 py-3 transition-colors duration-150"

@@ -6,6 +6,7 @@ import { ArchiveX, BarChart3, Book, ChevronRight, CopyMinus, Download, LogOut, M
 import { authState, logout } from '../auth'
 import { PageHeader, SectionHeader, UiButton, UiCard, UiModal, UiSegmented, type SegmentedOption } from '../components/ui'
 import { applyDensity, DENSITY_OPTIONS, densityState, type VisualDensity } from '../density'
+import { assistantPanelStore } from '../stores/assistantPanelStore'
 
 const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true
 const logoutConfirmOpen = ref(false)
@@ -17,7 +18,15 @@ const densityModel = computed<VisualDensity>({
   get: () => densityState.density,
   set: value => applyDensity(value),
 })
-const links = [
+interface MoreLinkItem {
+  to?: string
+  label: string
+  hint: string
+  icon: typeof ArchiveX
+  group: string
+  action?: () => void
+}
+const links: MoreLinkItem[] = [
   { to: '/downloads', label: '下载任务', hint: '查看服务器下载进度', icon: Download, group: 'tools' },
   { to: '/creators', label: '作者', hint: '浏览关注的创作者', icon: Book, group: 'library' },
   { to: '/tags', label: '标签', hint: '按标签整理媒体', icon: Tags, group: 'library' },
@@ -26,9 +35,9 @@ const links = [
   { to: '/live2d', label: '碧蓝航线', hint: '浏览碧蓝航线皮肤', icon: Palette, group: 'library' },
   { to: '/settings', label: '设置', hint: '目录、同步与外观', icon: Settings, group: 'tools' },
 ]
-const adminLinks = [
+const adminLinks: MoreLinkItem[] = [
   { to: '/discarded', label: '丢弃记录', hint: '管理已删除内容与下载拦截', icon: ArchiveX, group: 'admin' },
-  { to: '/assistant', label: '媒体库管家', hint: '聊天查询与确认整理建议', icon: MessageSquare, group: 'admin' },
+  { label: '媒体库管家', hint: '右侧栏聊天查询与确认整理建议', icon: MessageSquare, group: 'admin', action: () => assistantPanelStore.open() },
   { to: '/dedup', label: '重复媒体管理', hint: '检测并合并重复内容', icon: CopyMinus, group: 'admin' },
   { to: '/users', label: '用户管理', hint: '管理登录账号', icon: Users, group: 'admin' },
 ]
@@ -80,21 +89,37 @@ const confirmSignOut = () => {
           <section v-for="group in groups" :key="group.key">
             <SectionHeader :title="group.title" as="h2" />
             <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              <router-link
-                v-for="link in group.items"
-                :key="link.to"
-                :to="link.to"
-                class="group flex min-h-16 items-center gap-3 rounded-2xl squircle border border-line bg-surface px-4 py-3 shadow-[inset_0_1px_0_var(--he-border-specular)] transition-[background-color,border-color] duration-150 hover:border-line-strong hover:bg-surface-2 focus-ring"
-              >
-                <span class="grid size-10 shrink-0 place-items-center rounded-xl border border-line bg-surface-2 text-muted transition-colors group-hover:border-accent/35 group-hover:text-accent-glow" aria-hidden="true">
-                  <component :is="link.icon" :size="18" />
-                </span>
-                <span class="min-w-0 flex-1">
-                  <span class="block truncate text-body font-medium text-ink">{{ link.label }}</span>
-                  <span class="mt-0.5 block truncate text-meta text-subtle">{{ link.hint }}</span>
-                </span>
-                <ChevronRight :size="17" class="shrink-0 text-faint transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-muted" aria-hidden="true" />
-              </router-link>
+              <template v-for="link in group.items" :key="link.label">
+                <router-link
+                  v-if="link.to"
+                  :to="link.to"
+                  class="group flex min-h-16 items-center gap-3 rounded-2xl squircle border border-line bg-surface px-4 py-3 shadow-[inset_0_1px_0_var(--he-border-specular)] transition-[background-color,border-color] duration-150 hover:border-line-strong hover:bg-surface-2 focus-ring"
+                >
+                  <span class="grid size-10 shrink-0 place-items-center rounded-xl border border-line bg-surface-2 text-muted transition-colors group-hover:border-accent/35 group-hover:text-accent-glow" aria-hidden="true">
+                    <component :is="link.icon" :size="18" />
+                  </span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block truncate text-body font-medium text-ink">{{ link.label }}</span>
+                    <span class="mt-0.5 block truncate text-meta text-subtle">{{ link.hint }}</span>
+                  </span>
+                  <ChevronRight :size="17" class="shrink-0 text-faint transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-muted" aria-hidden="true" />
+                </router-link>
+                <button
+                  v-else
+                  type="button"
+                  class="group flex min-h-16 w-full items-center gap-3 rounded-2xl squircle border border-line bg-surface px-4 py-3 text-left shadow-[inset_0_1px_0_var(--he-border-specular)] transition-[background-color,border-color] duration-150 hover:border-line-strong hover:bg-surface-2 focus-ring"
+                  @click="link.action?.()"
+                >
+                  <span class="grid size-10 shrink-0 place-items-center rounded-xl border border-line bg-surface-2 text-muted transition-colors group-hover:border-accent/35 group-hover:text-accent-glow" aria-hidden="true">
+                    <component :is="link.icon" :size="18" />
+                  </span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block truncate text-body font-medium text-ink">{{ link.label }}</span>
+                    <span class="mt-0.5 block truncate text-meta text-subtle">{{ link.hint }}</span>
+                  </span>
+                  <ChevronRight :size="17" class="shrink-0 text-faint transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-muted" aria-hidden="true" />
+                </button>
+              </template>
             </div>
           </section>
 

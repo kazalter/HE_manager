@@ -2,17 +2,20 @@
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authState, logout } from './auth'
-import { ChevronUp } from 'lucide-vue-next'
+import { ChevronUp, MessageSquare } from 'lucide-vue-next'
 import { desktopBridge, desktopSession } from './desktop'
 import DesktopToolbar from './components/DesktopToolbar.vue'
 import NavigationRail from './components/NavigationRail.vue'
 import TopBar from './components/TopBar.vue'
 import MobileNavigation from './components/MobileNavigation.vue'
 import CommandPalette from './components/CommandPalette.vue'
+import ClockWeather from './components/ClockWeather.vue'
+import { AsyncAssistantSidebar as AssistantSidebar } from './components/asyncComponents'
 import AuthView from './views/AuthView.vue'
 import AppUpdateNotice from './components/AppUpdateNotice.vue'
 import GlobalAudioPlayer from './components/GlobalAudioPlayer.vue'
 import { audioPlaybackStore } from './stores/audioPlaybackStore'
+import { assistantPanelStore } from './stores/assistantPanelStore'
 import { useCompactViewport } from './composables/useCompactViewport'
 import { useDesktopRailViewport } from './composables/useDesktopRailViewport'
 import { useStandaloneViewport } from './composables/useStandaloneViewport'
@@ -32,8 +35,17 @@ const toggleRail = () => {
 
 watch(() => desktopSession.generation, () => {
   audioPlaybackStore.stop()
+  assistantPanelStore.reset()
   const query = { ...route.query }; delete query.media
   if (route.query.media) void router.replace({ path: route.path, query })
+})
+watch(() => [authState.user?.id, authState.user?.is_admin], ([, isAdmin]) => {
+  if (!isAdmin) assistantPanelStore.reset()
+})
+watch(() => route.path, path => {
+  if (path === '/assistant' && assistantPanelStore.state.open) {
+    assistantPanelStore.close()
+  }
 })
 const mainScrollRef = ref<HTMLElement | null>(null)
 const showBackToTop = ref(false)
@@ -42,6 +54,9 @@ let lastScrollTop = 0
 const isEmbed = computed(() => route.path.endsWith('/embed') || route.query.embed === 'true')
 const showRail = computed(() => !isEmbed.value && !compact.value && isWideDesktop.value)
 const showTopBar = computed(() => !isEmbed.value && !compact.value && !isWideDesktop.value)
+const showAssistantHost = computed(() =>
+  !isEmbed.value && Boolean(authState.user?.is_admin) && assistantPanelStore.state.activated && route.path !== '/assistant',
+)
 
 const scrollKey = (path: string) => {
   const [pathname, query = ''] = path.split('?')
@@ -159,6 +174,37 @@ onBeforeUnmount(() => {
       @open-command-palette="commandPaletteOpen = true"
       @toggle-collapse="toggleRail"
     />
+    <header
+      v-if="showRail"
+      aria-label="顶部工具栏"
+      class="he-shell-topbar relative z-30 flex h-12 shrink-0 items-center justify-end gap-2.5 border-b border-line/65 glass-surface px-5 lg:px-6"
+    >
+      <ClockWeather compact />
+      <button
+        v-if="authState.user?.is_admin"
+        type="button"
+        class="relative inline-flex h-9 items-center gap-2 rounded-xl border px-3 text-meta font-medium transition-colors duration-150 focus-ring"
+        :class="assistantPanelStore.state.open
+          ? 'border-accent/45 bg-accent/15 text-ink ring-1 ring-inset ring-accent/30'
+          : 'border-line bg-surface-2/75 text-muted hover:border-line-strong hover:bg-surface-3 hover:text-ink'"
+        :aria-expanded="assistantPanelStore.state.open"
+        aria-controls="he-assistant-sidebar"
+        title="打开或收起媒体库管家右侧边栏"
+        @click="assistantPanelStore.toggle()"
+      >
+        <MessageSquare :size="15" :class="assistantPanelStore.state.open ? 'text-accent-glow' : 'text-subtle'" aria-hidden="true" />
+        <span>媒体库管家</span>
+        <span
+          v-if="assistantPanelStore.state.pendingCount > 0"
+          class="inline-flex min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold tabular-nums text-on-accent"
+        >{{ assistantPanelStore.state.pendingCount }}</span>
+        <span
+          v-else-if="assistantPanelStore.state.activeRun"
+          class="size-2 rounded-full bg-accent animate-pulse"
+          aria-hidden="true"
+        ></span>
+      </button>
+    </header>
     <TopBar
       v-if="showTopBar"
       :user="authState.user"
@@ -178,6 +224,11 @@ onBeforeUnmount(() => {
       <router-view v-slot="{ Component }"><transition name="page-fade" mode="out-in"><component :is="Component" /></transition></router-view>
       <div v-if="!isEmbed" class="h-10 w-full"></div>
     </main>
+    <AssistantSidebar
+      v-if="showAssistantHost"
+      :open="assistantPanelStore.state.open"
+      @close="assistantPanelStore.close()"
+    />
     <MobileNavigation v-if="compact && !isEmbed" :retracted="chromeRetracted" :inert="audioPlaybackStore.state.expanded || !!route.query.media" /><GlobalAudioPlayer v-if="!isEmbed" /><AppUpdateNotice v-if="!isEmbed" />
     <CommandPalette v-if="!isEmbed" v-model:open="commandPaletteOpen" :user="authState.user" />
     <button v-if="showBackToTop && !isEmbed && !route.query.media && !audioPlaybackStore.state.expanded" type="button" @click="scrollToTop" class="he-back-top fixed right-6 z-30 size-11 rounded-2xl squircle border border-line-strong glass-elevated text-muted shadow-pop flex items-center justify-center transition-colors duration-150 hover:text-ink focus-ring" aria-label="返回顶部"><ChevronUp :size="20" aria-hidden="true" /></button>
@@ -191,9 +242,11 @@ onBeforeUnmount(() => {
 .he-studio-shell {
   --he-rail-width: 236px;
   display: grid;
-  grid-template-areas: "rail main";
+  grid-template-areas:
+    "rail topbar"
+    "rail main";
   grid-template-columns: var(--he-rail-width) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   transition: grid-template-columns var(--duration-slow) var(--ease-snappy);
 }
 
@@ -205,6 +258,11 @@ onBeforeUnmount(() => {
   grid-area: rail;
   min-width: 0;
   min-height: 0;
+}
+
+.he-shell-topbar {
+  grid-area: topbar;
+  min-width: 0;
 }
 
 .he-shell-main {

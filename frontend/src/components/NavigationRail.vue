@@ -26,9 +26,9 @@ import {
   Users,
 } from 'lucide-vue-next'
 import ColorModeToggle from './ColorModeToggle.vue'
-import ClockWeather from './ClockWeather.vue'
 import { UiButton, UiModal } from './ui'
 import { cycleDensity, DENSITY_OPTIONS, densityState } from '../density'
+import { assistantPanelStore } from '../stores/assistantPanelStore'
 import type { User } from '../types'
 
 const props = withDefaults(defineProps<{
@@ -48,11 +48,13 @@ const route = useRoute()
 const logoutConfirmOpen = ref(false)
 
 interface RailItem {
-  to: RouteLocationRaw
+  to?: RouteLocationRaw
   label: string
   icon: typeof Home
   active?: boolean
   admin?: boolean
+  onClick?: () => void
+  badgeDot?: boolean
 }
 
 const isHomeActive = computed(() => route.path === '/' && route.query.favorite !== 'true')
@@ -78,7 +80,14 @@ const navSections = computed(() => {
         { to: '/creators', label: '创作者', icon: Users },
         { to: '/tags', label: '标签管理', icon: Tags },
         { to: '/external', label: '外部收藏', icon: Compass, admin: true },
-        { to: '/assistant', label: '媒体库管家', icon: MessageSquare, admin: true },
+        {
+          label: '媒体库管家',
+          icon: MessageSquare,
+          admin: true,
+          active: assistantPanelStore.state.open,
+          badgeDot: assistantPanelStore.state.activeRun || assistantPanelStore.state.pendingCount > 0,
+          onClick: () => assistantPanelStore.toggle(),
+        },
       ],
     },
     {
@@ -209,35 +218,70 @@ onBeforeUnmount(() => window.clearTimeout(densityBadgeTimer))
         <div v-else class="mx-auto mb-1.5 h-px w-6 bg-line/70" aria-hidden="true"></div>
 
         <div class="space-y-0.5" :class="collapsed ? 'flex flex-col items-center' : ''">
-          <router-link
-            v-for="item in section.items"
-            :key="item.label"
-            :to="item.to"
-            :aria-current="isItemActive(item) ? 'page' : undefined"
-            :title="collapsed ? item.label : undefined"
-            class="group relative flex items-center rounded-xl text-meta font-medium transition-[background-color,color,box-shadow,transform] duration-150 focus-ring-inset active:scale-[0.98]"
-            :class="[
-              collapsed ? 'size-10 justify-center' : 'gap-2.5 px-2.5 py-2',
-              isItemActive(item)
-                ? 'bg-accent/15 text-ink ring-1 ring-inset ring-accent/32 shadow-[inset_0_1px_0_var(--he-border-specular)]'
-                : 'text-muted hover:bg-surface-2/85 hover:text-ink',
-            ]"
-          >
-            <span
-              v-if="isItemActive(item) && !collapsed"
-              class="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-accent shadow-[0_0_8px_rgb(var(--color-accent)/0.65)]"
-              aria-hidden="true"
-            ></span>
-            <component
-              :is="item.icon"
-              :size="16"
-              class="shrink-0 transition-transform duration-150 group-hover:scale-105"
-              :class="isItemActive(item) ? 'text-accent-glow' : 'text-subtle group-hover:text-ink'"
-              aria-hidden="true"
-            />
-            <span v-if="!collapsed" class="min-w-0 flex-1 truncate">{{ item.label }}</span>
-            <span v-else class="sr-only">{{ item.label }}</span>
-          </router-link>
+          <template v-for="item in section.items" :key="item.label">
+            <router-link
+              v-if="item.to"
+              :to="item.to"
+              :aria-current="isItemActive(item) ? 'page' : undefined"
+              :title="collapsed ? item.label : undefined"
+              class="group relative flex items-center rounded-xl text-meta font-medium transition-[background-color,color,box-shadow,transform] duration-150 focus-ring-inset active:scale-[0.98]"
+              :class="[
+                collapsed ? 'size-10 justify-center' : 'gap-2.5 px-2.5 py-2',
+                isItemActive(item)
+                  ? 'bg-accent/15 text-ink ring-1 ring-inset ring-accent/32 shadow-[inset_0_1px_0_var(--he-border-specular)]'
+                  : 'text-muted hover:bg-surface-2/85 hover:text-ink',
+              ]"
+            >
+              <span
+                v-if="isItemActive(item) && !collapsed"
+                class="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-accent shadow-[0_0_8px_rgb(var(--color-accent)/0.65)]"
+                aria-hidden="true"
+              ></span>
+              <component
+                :is="item.icon"
+                :size="16"
+                class="shrink-0 transition-transform duration-150 group-hover:scale-105"
+                :class="isItemActive(item) ? 'text-accent-glow' : 'text-subtle group-hover:text-ink'"
+                aria-hidden="true"
+              />
+              <span v-if="!collapsed" class="min-w-0 flex-1 truncate">{{ item.label }}</span>
+              <span v-else class="sr-only">{{ item.label }}</span>
+            </router-link>
+            <button
+              v-else
+              type="button"
+              :aria-pressed="isItemActive(item)"
+              :title="collapsed ? item.label : undefined"
+              class="group relative flex w-full items-center rounded-xl text-left text-meta font-medium transition-[background-color,color,box-shadow,transform] duration-150 focus-ring-inset active:scale-[0.98]"
+              :class="[
+                collapsed ? 'size-10 justify-center' : 'gap-2.5 px-2.5 py-2',
+                isItemActive(item)
+                  ? 'bg-accent/15 text-ink ring-1 ring-inset ring-accent/32 shadow-[inset_0_1px_0_var(--he-border-specular)]'
+                  : 'text-muted hover:bg-surface-2/85 hover:text-ink',
+              ]"
+              @click="item.onClick?.()"
+            >
+              <span
+                v-if="isItemActive(item) && !collapsed"
+                class="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-accent shadow-[0_0_8px_rgb(var(--color-accent)/0.65)]"
+                aria-hidden="true"
+              ></span>
+              <component
+                :is="item.icon"
+                :size="16"
+                class="shrink-0 transition-transform duration-150 group-hover:scale-105"
+                :class="isItemActive(item) ? 'text-accent-glow' : 'text-subtle group-hover:text-ink'"
+                aria-hidden="true"
+              />
+              <span v-if="!collapsed" class="min-w-0 flex-1 truncate">{{ item.label }}</span>
+              <span v-else class="sr-only">{{ item.label }}</span>
+              <span
+                v-if="item.badgeDot && !collapsed"
+                class="size-2 shrink-0 rounded-full bg-accent"
+                aria-hidden="true"
+              ></span>
+            </button>
+          </template>
         </div>
       </section>
     </nav>
@@ -247,9 +291,6 @@ onBeforeUnmount(() => window.clearTimeout(densityBadgeTimer))
       class="mt-3 shrink-0 border-t border-line/70 pt-3"
       :class="collapsed ? 'flex w-full flex-col items-center gap-2' : 'space-y-2.5'"
     >
-      <div v-if="!collapsed" class="px-1">
-        <ClockWeather compact />
-      </div>
 
       <div
         class="flex items-center"

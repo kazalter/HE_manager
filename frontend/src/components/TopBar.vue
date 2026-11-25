@@ -27,6 +27,7 @@ import {
 import ColorModeToggle from './ColorModeToggle.vue'
 import ClockWeather from './ClockWeather.vue'
 import { UiButton, UiModal } from './ui'
+import { assistantPanelStore } from '../stores/assistantPanelStore'
 import type { User } from '../types'
 
 const props = withDefaults(defineProps<{ user: User | null; retracted?: boolean }>(), {
@@ -49,11 +50,13 @@ interface NavItem {
   active?: boolean
 }
 interface OrganizeItem {
-  to: string
+  to?: string
   label: string
   hint: string
   icon: typeof Home
   admin?: boolean
+  active?: boolean
+  onClick?: () => void
 }
 
 const library = computed<NavItem[]>(() => [
@@ -72,7 +75,17 @@ const organizeSections = computed(() => ([
       { to: '/creators', label: '创作者', hint: '作者作品集', icon: Users },
       { to: '/tags', label: '标签管理', hint: '合并与整理', icon: Tags },
       { to: '/external', label: '外部收藏', hint: '同步外部站点', icon: Compass, admin: true },
-      { to: '/assistant', label: '媒体库管家', hint: '智能查找推荐', icon: MessageSquare, admin: true },
+      {
+        label: '媒体库管家',
+        hint: '右侧栏智能对话',
+        icon: MessageSquare,
+        admin: true,
+        active: assistantPanelStore.state.open,
+        onClick: () => {
+          closeOrganize()
+          assistantPanelStore.open()
+        },
+      },
     ],
   },
   {
@@ -105,7 +118,9 @@ const isActive = (item: NavItem) => {
 }
 
 const isOrganizeRouteActive = computed(() =>
-  organizeSections.value.some(section => section.items.some(item => route.path === item.to || route.path.startsWith(item.to + '/'))),
+  organizeSections.value.some(section =>
+    section.items.some(item => item.active || (item.to && (route.path === item.to || route.path.startsWith(item.to + '/')))),
+  ),
 )
 
 const userInitial = computed(() => (props.user?.username?.trim()[0] || 'U').toUpperCase())
@@ -196,27 +211,47 @@ const confirmLogout = () => {
               <section v-for="section in organizeSections" :key="section.label">
                 <p class="px-2 pb-1.5 text-caption font-medium text-subtle">{{ section.label }}</p>
                 <div class="grid grid-cols-2 gap-1.5">
-                  <router-link
-                    v-for="item in section.items"
-                    :key="item.label"
-                    :to="item.to"
-                    :title="item.hint"
-                    :aria-current="route.path === item.to ? 'page' : undefined"
-                    class="group flex items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors duration-150 focus-ring-inset"
-                    :class="route.path === item.to
-                      ? 'border-accent/40 bg-accent/12 text-ink'
-                      : 'border-transparent bg-surface-2/40 text-muted hover:border-line hover:bg-surface-2 hover:text-ink'"
-                    @click="closeOrganize"
-                  >
-                    <span
-                      class="grid size-8 shrink-0 place-items-center rounded-lg border"
-                      :class="route.path === item.to ? 'border-accent/35 bg-accent/15 text-accent-glow' : 'border-line bg-surface-2 text-subtle group-hover:text-ink'"
-                      aria-hidden="true"
+                  <template v-for="item in section.items" :key="item.label">
+                    <router-link
+                      v-if="item.to"
+                      :to="item.to"
+                      :title="item.hint"
+                      :aria-current="route.path === item.to ? 'page' : undefined"
+                      class="group flex items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors duration-150 focus-ring-inset"
+                      :class="route.path === item.to
+                        ? 'border-accent/40 bg-accent/12 text-ink'
+                        : 'border-transparent bg-surface-2/40 text-muted hover:border-line hover:bg-surface-2 hover:text-ink'"
+                      @click="closeOrganize"
                     >
-                      <component :is="item.icon" :size="15" />
-                    </span>
-                    <span class="min-w-0 flex-1 truncate text-meta font-medium text-ink">{{ item.label }}</span>
-                  </router-link>
+                      <span
+                        class="grid size-8 shrink-0 place-items-center rounded-lg border"
+                        :class="route.path === item.to ? 'border-accent/35 bg-accent/15 text-accent-glow' : 'border-line bg-surface-2 text-subtle group-hover:text-ink'"
+                        aria-hidden="true"
+                      >
+                        <component :is="item.icon" :size="15" />
+                      </span>
+                      <span class="min-w-0 flex-1 truncate text-meta font-medium text-ink">{{ item.label }}</span>
+                    </router-link>
+                    <button
+                      v-else
+                      type="button"
+                      :title="item.hint"
+                      class="group flex items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors duration-150 focus-ring-inset"
+                      :class="item.active
+                        ? 'border-accent/40 bg-accent/12 text-ink'
+                        : 'border-transparent bg-surface-2/40 text-muted hover:border-line hover:bg-surface-2 hover:text-ink'"
+                      @click="item.onClick?.()"
+                    >
+                      <span
+                        class="grid size-8 shrink-0 place-items-center rounded-lg border"
+                        :class="item.active ? 'border-accent/35 bg-accent/15 text-accent-glow' : 'border-line bg-surface-2 text-subtle group-hover:text-ink'"
+                        aria-hidden="true"
+                      >
+                        <component :is="item.icon" :size="15" />
+                      </span>
+                      <span class="min-w-0 flex-1 truncate text-meta font-medium text-ink">{{ item.label }}</span>
+                    </button>
+                  </template>
                 </div>
               </section>
             </div>
@@ -225,6 +260,26 @@ const confirmLogout = () => {
       </div>
 
       <ClockWeather compact />
+      <button
+        v-if="user?.is_admin"
+        type="button"
+        class="relative grid size-9 place-items-center rounded-xl border transition-colors duration-150 focus-ring"
+        :class="assistantPanelStore.state.open
+          ? 'border-accent/45 bg-accent/15 text-accent-glow'
+          : 'border-line bg-surface-2/75 text-muted hover:border-line-strong hover:bg-surface-3 hover:text-ink'"
+        :aria-expanded="assistantPanelStore.state.open"
+        aria-controls="he-assistant-sidebar"
+        title="媒体库管家"
+        aria-label="打开或收起媒体库管家"
+        @click="assistantPanelStore.toggle()"
+      >
+        <MessageSquare :size="16" aria-hidden="true" />
+        <span
+          v-if="assistantPanelStore.state.activeRun || assistantPanelStore.state.pendingCount > 0"
+          class="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-accent"
+          aria-hidden="true"
+        ></span>
+      </button>
       <ColorModeToggle compact :show-tooltip="false" />
 
       <div v-if="user" class="hidden xl:flex items-center gap-2 rounded-xl border border-line bg-surface-2/70 pl-1.5 pr-2.5 py-1">

@@ -28,6 +28,7 @@ import {
 import type { User } from '../types'
 import { applyTheme, themeOptionsForMode, themeState, toggleColorMode } from '../theme'
 import { applyDensity, DENSITY_OPTIONS, densityState } from '../density'
+import { assistantPanelStore } from '../stores/assistantPanelStore'
 import { closeTopLayer } from '../utils/topLayer'
 
 const open = defineModel<boolean>('open', { required: true })
@@ -79,7 +80,7 @@ const allItems = computed<PaletteItem[]>(() => {
     })
   }
 
-  const destinations: Array<Omit<PaletteItem, 'action'> & { to: string | { path: string; query?: Record<string, string> }; admin?: boolean }> = [
+  const destinations: Array<Omit<PaletteItem, 'action'> & { to?: string | { path: string; query?: Record<string, string> }; admin?: boolean; onSelect?: () => void }> = [
     { id: 'nav-all', group: '媒体库', label: '全部媒体', hint: '浏览所有视频、漫画、图片和音频', keywords: 'all home 首页 全部', icon: Home, to: '/' },
     { id: 'nav-video', group: '媒体库', label: '视频', hint: '本地与导入的视频作品', keywords: 'video 视频 mp4', icon: Film, to: '/type/video' },
     { id: 'nav-manga', group: '媒体库', label: '漫画', hint: '翻页与条漫阅读器', keywords: 'manga comic 漫画', icon: Book, to: '/type/manga' },
@@ -89,7 +90,19 @@ const allItems = computed<PaletteItem[]>(() => {
     { id: 'nav-creators', group: '发现与整理', label: '创作者', hint: '按作者浏览 X 与漫画作品', keywords: 'creators authors 创作者 作者', icon: Users, to: '/creators' },
     { id: 'nav-tags', group: '发现与整理', label: '标签管理', hint: '整理、重命名与合并标签', keywords: 'tags 标签', icon: Tags, to: '/tags' },
     { id: 'nav-external', group: '发现与整理', label: '外部收藏', hint: 'WNACG · X · ASMR · Pawchive', keywords: 'external discover wnacg pawchive 外部收藏 发现', icon: Compass, to: '/external', admin: true },
-    { id: 'nav-assistant', group: '发现与整理', label: '媒体库管家', hint: '自然语言查找、推荐与整理确认', keywords: 'assistant ai hermes 管家', icon: MessageSquare, to: '/assistant', admin: true },
+    {
+      id: 'nav-assistant',
+      group: '发现与整理',
+      label: '媒体库管家',
+      hint: '在右侧边栏打开自然语言查找、推荐与整理确认',
+      keywords: 'assistant ai hermes 管家',
+      icon: MessageSquare,
+      admin: true,
+      onSelect: () => {
+        open.value = false
+        assistantPanelStore.open()
+      },
+    },
     { id: 'nav-downloads', group: '系统与工具', label: '下载任务', hint: '查看服务器下载队列进度', keywords: 'downloads 下载', icon: Download, to: '/downloads' },
     { id: 'nav-stats', group: '系统与工具', label: '统计看板', hint: '容量、分布与观看活动概览', keywords: 'stats analytics 统计', icon: BarChart3, to: '/stats' },
     { id: 'nav-bd2', group: '系统与工具', label: 'BD2 动态', hint: 'Spine 角色动画鉴赏', keywords: 'bd2 spine 动态', icon: Sparkles, to: '/bd2-spine' },
@@ -109,7 +122,7 @@ const allItems = computed<PaletteItem[]>(() => {
       hint: dest.hint,
       keywords: dest.keywords,
       icon: dest.icon,
-      action: () => navigate(dest.to),
+      action: () => (dest.onSelect ? dest.onSelect() : navigate(dest.to!)),
     })
   }
 
