@@ -100,6 +100,36 @@ class SessionRequest(DTO):
     title: str = Field(default="新对话", min_length=1, max_length=100)
 
 
+class AssistantModelPresetDTO(DTO):
+    id: str
+    label: str
+    model: str
+    base_url: str
+    key_configured: bool
+    thinking_disabled: bool
+    custom: bool = False
+
+
+class AssistantModelConfigDTO(DTO):
+    model: str
+    display_model: str
+    base_url: str
+    key_configured: bool
+    thinking_disabled: bool
+    presets: list[AssistantModelPresetDTO] = Field(default_factory=list)
+
+
+class AssistantModelUpdateRequest(DTO):
+    preset_id: str | None = Field(default=None, max_length=120)
+    model: str | None = Field(default=None, max_length=200)
+    display_model: str | None = Field(default=None, max_length=120)
+    base_url: str | None = Field(default=None, max_length=500)
+    api_key: str | None = Field(default=None, max_length=1000)
+    thinking_disabled: bool | None = None
+    save_preset: bool = False
+    delete_preset_id: str | None = Field(default=None, max_length=120)
+
+
 class PageQuery(DTO):
     limit: Limit = 20
     offset: Count = 0

@@ -268,3 +268,21 @@ def proposal_selection(proposal_id: str,body: schemas.SelectionRequest,user=Depe
 def proposal_target_list(proposal_id: str,limit: int=Query(50,ge=1,le=50),offset: int=Query(0,ge=0),user=Depends(auth.require_admin),db=Depends(get_db)):
     from ..assistant.approval_queries import proposal_targets
     return proposal_targets(db,user.id,proposal_id,limit,offset)
+
+
+@router.get("/model", response_model=schemas.AssistantModelConfigDTO)
+def get_assistant_model(user=Depends(auth.require_admin), db=Depends(get_db)):
+    config.require_enabled()
+    store.require_admin(db, user.id)
+    return config.get_model_config_summary()
+
+
+@router.put("/model", response_model=schemas.AssistantModelConfigDTO)
+def update_assistant_model(
+    body: schemas.AssistantModelUpdateRequest,
+    user=Depends(auth.require_admin),
+    db=Depends(get_db),
+):
+    from ..assistant.identity import update_model_config
+
+    return update_model_config(db, user.id, body)

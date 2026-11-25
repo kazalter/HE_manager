@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 from fastapi import HTTPException
@@ -293,3 +294,163 @@ def prepare_profile(db, user_id, *, profile_root: Path | None = None) -> Profile
         row.enabled = True
         row.updated_at = utcnow()
         return binding
+
+
+def _sync_profile_model_files(home: Path, model: dict):
+    env_path = home / ".env"
+    if env_path.exists():
+        values = _read_env(env_path)
+        if values.get("HE_ASSISTANT_MODEL_KEY") != model["api_key"]:
+            values["HE_ASSISTANT_MODEL_KEY"] = model["api_key"]
+            config.atomic_private_write(
+                env_path, "\n".join(k + "=" + v for k, v in values.items()) + "\n"
+            )
+    cfg_path = home / "config.yaml"
+    if not cfg_path.exists():
+        return
+    if cfg_path.is_symlink() or (os.name != "nt" and cfg_path.stat().st_mode & 0o077):
+        raise HTTPException(503, "assistant_storage_unavailable")
+    text = cfg_path.read_text(encoding="utf-8")
+    quoted_model = json.dumps(model["model"])
+    quoted_url = json.dumps(model["base_url"])
+    updated = re.sub(
+        r"(?m)^(\s*default:\s*).*$",
+        lambda m: m.group(1) + quoted_model,
+        text,
+        count=1,
+    )
+    updated = re.sub(
+        r"(?m)^(\s*base_url:\s*).*$",
+        lambda m: m.group(1) + quoted_url,
+        updated,
+        count=1,
+    )
+    updated = re.sub(
+        r"(?m)^(\s*default_model:\s*).*$",
+        lambda m: m.group(1) + quoted_model,
+        updated,
+        count=1,
+    )
+    wants_thinking_disabled = model["extra_body"].get("thinking") == {"type": "disabled"}
+    has_thinking_block = "      thinking:\n        type: disabled\n" in updated
+    if wants_thinking_disabled and not has_thinking_block:
+        updated = updated.replace(
+            "      max_tokens: 4096\n",
+            "      max_tokens: 4096\n      thinking:\n        type: disabled\n",
+            1,
+        )
+    elif not wants_thinking_disabled and has_thinking_block:
+        updated = updated.replace("      thinking:\n        type: disabled\n", "")
+    if updated != text:
+        config.atomic_private_write(cfg_path, updated)
+
+
+def update_model_config(db, user_id: int, request, *, profile_root: Path | None = None) -> dict:
+    from .schemas import AssistantModelUpdateRequest
+
+    config.require_enabled()
+    require_admin(db, user_id)
+    req = AssistantModelUpdateRequest.model_validate(request)
+    if db.execute(
+        select(AssistantRun.id)
+        .where(AssistantRun.executor_exited_at.is_(None))
+        .limit(1)
+    ).first():
+        raise HTTPException(409, "assistant_operation_busy")
+
+    raw, _ = config._raw_model_source()
+    current = config._validate_model_record(raw)
+    stored_list = [dict(x) for x in raw.get("presets", []) if isinstance(x, dict)]
+
+    if req.delete_preset_id:
+        next_presets = [x for x in stored_list if x.get("id") != req.delete_preset_id]
+        next_raw = dict(raw)
+        next_raw["presets"] = next_presets
+        config.atomic_private_write(
+            config.data_dir() / "hermes-model.json",
+            json.dumps(next_raw, ensure_ascii=False, indent=2) + "\n",
+        )
+        return config.get_model_config_summary()
+
+    next_model = current["model"]
+    next_display = (
+        raw.get("display_model")
+        if isinstance(raw.get("display_model"), str) and raw.get("display_model")
+        else current["model"]
+    )
+    next_base_url = current["base_url"]
+    next_api_key = current["api_key"]
+    next_thinking_disabled = current["extra_body"].get("thinking") == {"type": "disabled"}
+
+    if req.preset_id:
+        stored_match = next((x for x in stored_list if x.get("id") == req.preset_id), None)
+        builtin_match = next(
+            (x for x in config._builtin_presets(current["base_url"], bool(current["api_key"])) if x["id"] == req.preset_id),
+            None,
+        )
+        chosen = stored_match or builtin_match
+        if not chosen:
+            raise HTTPException(400, "assistant_invalid_model")
+        next_model = str(chosen["model"]).strip()
+        next_display = str(chosen.get("label") or next_model).strip()
+        next_base_url = str(chosen["base_url"]).strip()
+        if isinstance(chosen.get("api_key"), str) and chosen["api_key"].strip():
+            next_api_key = chosen["api_key"].strip()
+        next_thinking_disabled = bool(chosen.get("thinking_disabled", False))
+    else:
+        if req.model is not None:
+            next_model = req.model.strip()
+        if req.display_model is not None:
+            next_display = req.display_model.strip() or next_model
+        elif req.model is not None:
+            next_display = next_model
+        if req.base_url is not None and req.base_url.strip():
+            next_base_url = req.base_url.strip()
+        if req.api_key is not None and req.api_key.strip():
+            next_api_key = req.api_key.strip()
+        if req.thinking_disabled is not None:
+            next_thinking_disabled = req.thinking_disabled
+
+    candidate = {
+        "provider": "custom",
+        "model": next_model,
+        "base_url": next_base_url.rstrip("/"),
+        "api_key": next_api_key,
+        "display_model": next_display,
+        "extra_body": {"thinking": {"type": "disabled"}} if next_thinking_disabled else {},
+    }
+    try:
+        validated = config._validate_model_record(candidate)
+    except HTTPException:
+        raise HTTPException(400, "assistant_invalid_model") from None
+
+    if req.save_preset:
+        preset_id = f"custom:{validated['model']}@{urlsplit_host(validated['base_url'])}"[:120]
+        preset_entry = {
+            "id": preset_id,
+            "label": next_display[:120],
+            "model": validated["model"],
+            "base_url": validated["base_url"],
+            "api_key": validated["api_key"],
+            "thinking_disabled": next_thinking_disabled,
+        }
+        stored_list = [x for x in stored_list if x.get("id") != preset_id]
+        stored_list.insert(0, preset_entry)
+
+    next_raw = {
+        **candidate,
+        "presets": stored_list,
+    }
+    config.atomic_private_write(
+        config.data_dir() / "hermes-model.json",
+        json.dumps(next_raw, ensure_ascii=False, indent=2) + "\n",
+    )
+    root = profile_root or config.data_dir().parent / "hermes"
+    _sync_profile_model_files(root / "profiles" / ("he-user-" + str(user_id)), validated)
+    return config.get_model_config_summary()
+
+
+def urlsplit_host(url: str) -> str:
+    from urllib.parse import urlsplit
+
+    return (urlsplit(url).hostname or "custom").lower()
