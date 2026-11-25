@@ -150,12 +150,12 @@ describe('top-right clock/weather and right-side assistant sidebar', () => {
               custom: false,
             },
             {
-              id: 'deepseek-chat',
-              label: 'DeepSeek Chat',
-              model: 'deepseek-chat',
+              id: 'deepseek-v4-pro',
+              label: 'DeepSeek-V4-Pro',
+              model: 'deepseek-v4-pro',
               base_url: 'https://api.deepseek.com/v1',
               key_configured: true,
-              thinking_disabled: true,
+              thinking_disabled: false,
               custom: false,
             },
           ],
@@ -173,15 +173,17 @@ describe('top-right clock/weather and right-side assistant sidebar', () => {
     await trigger.trigger('click')
     expect(trigger.attributes('aria-expanded')).toBe('true')
     const dialog = wrapper.get('[role="dialog"]')
-    expect(dialog.text()).toContain('DeepSeek Chat')
+    expect(dialog.text()).toContain('DeepSeek-V4-Pro')
 
-    const chatBtn = dialog.findAll('button').find(b => b.text().includes('DeepSeek Chat'))!
-    await chatBtn.trigger('click')
-    expect(wrapper.emitted('selectPreset')).toEqual([['deepseek-chat']])
+    const proBtn = dialog.findAll('button').find(b => b.text().includes('DeepSeek-V4-Pro'))!
+    await proBtn.trigger('click')
+    expect(wrapper.emitted('selectPreset')).toEqual([['deepseek-v4-pro']])
     expect(trigger.attributes('aria-expanded')).toBe('false')
 
     await trigger.trigger('click')
     expect(trigger.attributes('aria-expanded')).toBe('true')
+    await wrapper.get('button[role="switch"]').trigger('click')
+    expect(wrapper.emitted('toggleThinking')).toEqual([[false]])
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await flushPromises()
     expect(trigger.attributes('aria-expanded')).toBe('false')

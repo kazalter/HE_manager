@@ -556,6 +556,7 @@ onBeforeUnmount(() => {
                 @select-preset="applyModelUpdate({ preset_id: $event })"
                 @delete-preset="applyModelUpdate({ delete_preset_id: $event })"
                 @save-custom="applyModelUpdate($event)"
+                @toggle-thinking="applyModelUpdate({ thinking_disabled: $event })"
               />
               <p id="assistant-sidebar-input-hint" class="hidden min-[400px]:block text-[11px] text-subtle tabular-nums">
                 {{ draft.length }}/8000 · Ctrl/⌘+Enter
@@ -884,6 +885,7 @@ onBeforeUnmount(() => {
                       @select-preset="applyModelUpdate({ preset_id: $event })"
                       @delete-preset="applyModelUpdate({ delete_preset_id: $event })"
                       @save-custom="applyModelUpdate($event)"
+                      @toggle-thinking="applyModelUpdate({ thinking_disabled: $event })"
                     />
                     <p id="assistant-input-hint" class="text-xs text-subtle tabular-nums">
                       {{ draft.length }}/8000 · Ctrl/⌘ + Enter 发送

@@ -25,6 +25,7 @@ const emit = defineEmits<{
   selectPreset: [presetId: string]
   deletePreset: [presetId: string]
   saveCustom: [payload: AssistantModelUpdateRequest]
+  toggleThinking: [thinkingDisabled: boolean]
 }>()
 
 const rootRef = ref<HTMLElement | null>(null)
@@ -58,8 +59,7 @@ function isPresetActive(preset: AssistantModelPresetDTO) {
   if (!cfg) return false
   return (
     preset.model === cfg.model &&
-    preset.base_url.replace(/\/+$/, '') === cfg.base_url.replace(/\/+$/, '') &&
-    preset.thinking_disabled === cfg.thinking_disabled
+    preset.base_url.replace(/\/+$/, '') === cfg.base_url.replace(/\/+$/, '')
   )
 }
 
@@ -222,6 +222,23 @@ onBeforeUnmount(() => {
           {{ modelConfig ? '暂无预设，可在下方添加模型' : '模型配置未加载或暂不可用' }}
         </p>
 
+        <div v-if="modelConfig" class="mt-2 flex items-center justify-between gap-2 rounded-xl border border-line/70 bg-surface-2/50 px-2.5 py-2">
+          <span class="text-xs text-muted">深度思考模式</span>
+          <button
+            type="button"
+            role="switch"
+            :aria-checked="!modelConfig.thinking_disabled"
+            :disabled="disabled || busy"
+            class="inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors focus-ring disabled:opacity-55"
+            :class="!modelConfig.thinking_disabled
+              ? 'border-accent/45 bg-accent/15 text-accent-glow'
+              : 'border-line bg-surface text-subtle hover:text-ink'"
+            @click="emit('toggleThinking', !modelConfig.thinking_disabled)"
+          >
+            {{ !modelConfig.thinking_disabled ? '已开启' : '已关闭' }}
+          </button>
+        </div>
+
         <div class="mt-2 border-t border-line/70 pt-2">
           <button
             type="button"
@@ -242,7 +259,7 @@ onBeforeUnmount(() => {
                 v-model="customModel"
                 type="text"
                 class="w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs text-ink outline-none focus:border-accent"
-                placeholder="例如 deepseek-chat"
+                placeholder="例如 deepseek-v4-pro / gpt-4o"
               />
             </label>
             <label class="block">

@@ -76,7 +76,7 @@ class AssistantModelSwitcherTests(unittest.TestCase):
         self.assertTrue(summary["thinking_disabled"])
         self.assertEqual(
             [p["id"] for p in summary["presets"]],
-            ["deepseek-flash", "deepseek-chat", "deepseek-reasoner"],
+            ["deepseek-flash", "deepseek-v4-pro"],
         )
         self.assertNotIn(self.model_key, json.dumps(summary))
 
@@ -84,14 +84,14 @@ class AssistantModelSwitcherTests(unittest.TestCase):
         switched = self.identity.update_model_config(
             self.db,
             1,
-            {"preset_id": "deepseek-reasoner"},
+            {"preset_id": "deepseek-v4-pro"},
             profile_root=self.profile_root,
         )
-        self.assertEqual(switched["model"], "deepseek-reasoner")
+        self.assertEqual(switched["model"], "deepseek-v4-pro")
         self.assertFalse(switched["thinking_disabled"])
         cfg_text = (self.profile_root / "profiles/he-user-1/config.yaml").read_text()
-        self.assertIn('default: "deepseek-reasoner"', cfg_text)
-        self.assertIn('default_model: "deepseek-reasoner"', cfg_text)
+        self.assertIn('default: "deepseek-v4-pro"', cfg_text)
+        self.assertIn('default_model: "deepseek-v4-pro"', cfg_text)
         self.assertNotIn("thinking:\n        type: disabled", cfg_text)
 
         new_key = "synthetic_custom_key_" + ("b" * 30)
@@ -124,8 +124,8 @@ class AssistantModelSwitcherTests(unittest.TestCase):
             self.db,
             1,
             {
-                "model": "deepseek-chat",
-                "display_model": "DeepSeek Chat",
+                "model": "deepseek-flash",
+                "display_model": "DeepSeek-V4.1-Flash",
                 "base_url": "https://api.deepseek.com/v1",
                 "api_key": self.model_key,
                 "thinking_disabled": True,
