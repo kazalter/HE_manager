@@ -31,6 +31,22 @@ function compareSkinNames(a, b) {
   return la < lb ? -1 : la > lb ? 1 : 0
 }
 
+/**
+ * 按推出时间倒序排列（shop_id 从大到小，最新的在最上面）；
+ * 无 shop_id（免费/初始/巡游等皮肤）放到末尾，组内回退到名称/ID 排序。
+ */
+export function sortModels(models) {
+  return [...models].sort((a, b) => {
+    const sa = Number(a?.shop_id) > 0 ? Number(a.shop_id) : 0
+    const sb = Number(b?.shop_id) > 0 ? Number(b.shop_id) : 0
+    if ((sa > 0) !== (sb > 0)) return sb > 0 ? 1 : -1
+    if (sa !== sb) return sb - sa
+    const na = String(a?.name ?? a?.id ?? '')
+    const nb = String(b?.name ?? b?.id ?? '')
+    return compareSkinNames(na, nb) || String(a?.id ?? '').localeCompare(String(b?.id ?? ''))
+  })
+}
+
 /** 拉取皮肤清单；失败时仅报错，视图以空清单渲染。 */
 export async function loadModels() {
   try {
@@ -39,7 +55,7 @@ export async function loadModels() {
     const r = await fetch(`${import.meta.env.BASE_URL}models/manifest.json`, { headers })
     if (!r.ok) throw new Error(`HTTP ${r.status}`)
     const models = await r.json()
-    MODELS.push(...models.sort((a, b) => compareSkinNames(a.name, b.name) || a.id.localeCompare(b.id)))
+    MODELS.push(...sortModels(models))
   } catch (err) {
     console.error('皮肤清单加载失败：请确认 models/ 下存在 <角色>/<皮肤>/<皮肤>.model3.json', err)
   }

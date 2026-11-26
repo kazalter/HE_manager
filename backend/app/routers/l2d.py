@@ -1,3 +1,4 @@
+from functools import lru_cache
 import json
 import os
 import re
@@ -13,6 +14,34 @@ from fastapi.responses import FileResponse
 
 
 router = APIRouter(prefix="/l2d/models", tags=["live2d"])
+_SHOP_IDS_PATH = Path(__file__).resolve().parent.parent / "data" / "l2d_shop_ids.json"
+
+
+@lru_cache(maxsize=1)
+def _shop_ids() -> dict[str, int]:
+    try:
+        raw = json.loads(_SHOP_IDS_PATH.read_text(encoding="utf-8"))
+        if isinstance(raw, dict):
+            return {
+                str(k).lower(): int(v)
+                for k, v in raw.items()
+                if isinstance(v, (int, str)) and int(v) > 0
+            }
+    except (OSError, ValueError):
+        pass
+    return {}
+
+
+def _resolve_shop_id(skin_id: str, metadata: dict | None) -> int:
+    if isinstance(metadata, dict):
+        raw = metadata.get("shop_id")
+        if isinstance(raw, int) and not isinstance(raw, bool) and raw > 0:
+            return raw
+        if isinstance(raw, str) and raw.isdigit() and int(raw) > 0:
+            return int(raw)
+    lookup = _shop_ids()
+    key = skin_id.lower()
+    return lookup.get(key) or lookup.get(re.sub(r"_hx$", "", key)) or 0
 
 @router.post("/import/{skin_id}", status_code=201)
 def import_model(skin_id: str, archive: UploadFile = File(...), _user=Depends(auth.require_admin)):
@@ -105,19 +134,31 @@ def list_live2d_models():
                 continue
 
             name = skin.name
+            metadata = None
             try:
                 metadata = json.loads((skin / f"{skin.name}.l2d.json").read_text(encoding="utf-8"))
-                name = metadata.get("name") or name
+                if isinstance(metadata, dict):
+                    name = metadata.get("name") or name
             except (OSError, ValueError, AttributeError):
                 pass
 
+            shop_id = _resolve_shop_id(skin.name, metadata)
             path = "/".join(quote(part, safe="") for part in (character.name, skin.name, model_file.name))
             models.append({
                 "id": skin.name,
                 "name": name,
                 "url": f"/l2d/models/{path}",
+                "shop_id": shop_id,
             })
 
+    models.sort(
+        key=lambda item: (
+            0 if item["shop_id"] > 0 else 1,
+            -item["shop_id"] if item["shop_id"] > 0 else 0,
+            str(item["name"]).casefold(),
+            item["id"],
+        )
+    )
     return models
 
 
