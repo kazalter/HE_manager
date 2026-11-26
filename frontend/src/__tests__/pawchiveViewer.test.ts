@@ -224,4 +224,83 @@ describe('Pawchive fullscreen viewer', () => {
       vi.useRealTimers()
     }
   })
+
+  it('allows swiping back and forth and clicking thumbnails even while the next image is loading or busy', async () => {
+    const first: PawchiveAttachment = { ...attachment, attachment_key: 'a', filename: 'a.jpg', stream_ref: 'ref-a', preview_ref: 'prev-a' }
+    const second: PawchiveAttachment = { ...attachment, attachment_key: 'b', filename: 'b.jpg', stream_ref: 'ref-b', preview_ref: 'prev-b' }
+    const multiPost: PawchivePost = { ...post, playable_count: 2, attachments: [first, second] }
+    const secondSignals: AbortSignal[] = []
+    vi.stubGlobal('fetch', vi.fn((url: string, init: RequestInit) => {
+      if (url.includes('ref-a')) return Promise.resolve(imageResponse())
+      if (init.signal) secondSignals.push(init.signal)
+      return new Promise((_, reject) => init.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError'))))
+    }))
+    const wrapper = mount(PawchiveMediaViewer, {
+      attachTo: document.body,
+      props: {
+        post: multiPost, attachment: second, attachments: [first, second], attachmentIndex: 1, attachmentTotal: 2,
+        scopeLabel: 'Example', busy: true, error: '', hasPrevious: true, ended: false,
+        autoplay: false, interval: 5, downloadBusy: false, downloadMessage: '', downloadError: false,
+      },
+    })
+    try {
+      await nextTick()
+      const stage = wrapper.get('.he-pawchive-stage')
+      expect(wrapper.find('button[aria-label="上一项"]').exists()).toBe(true)
+      expect(wrapper.get('button[aria-label="上一项"]').attributes('disabled')).toBeUndefined()
+
+      // Touch swipe right on the loading stage returns to the previous image and aborts the slow download.
+      await stage.trigger('touchstart', { touches: [{ clientX: 80, clientY: 200 }] })
+      await stage.trigger('touchend', { touches: [], changedTouches: [{ clientX: 220, clientY: 205 }] })
+      expect(wrapper.emitted('previous')).toHaveLength(1)
+
+      // Thumbnail strip remains clickable even while busy=true.
+      await wrapper.get('button[aria-label*="第 1 个媒体"]').trigger('click')
+      expect(wrapper.emitted('selectAttachment')).toEqual([[0]])
+
+      await wrapper.setProps({ attachment: first, attachmentIndex: 0, busy: false })
+      await flushPromises()
+      expect(secondSignals[0]?.aborted).toBe(true)
+      expect(wrapper.get('img[alt="a.jpg"]').attributes('src')).toBe('blob:image')
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
+  it('reuses an in-flight preload request when navigating to that image instead of fetching twice', async () => {
+    const first: PawchiveAttachment = { ...attachment, attachment_key: 'a', filename: 'a.jpg', stream_ref: 'ref-a', preview_ref: 'prev-a' }
+    const second: PawchiveAttachment = { ...attachment, attachment_key: 'b', filename: 'b.jpg', stream_ref: 'ref-b', preview_ref: 'prev-b' }
+    const multiPost: PawchivePost = { ...post, playable_count: 2, attachments: [first, second] }
+    let resolveSecond!: (res: Response) => void
+    const requested: string[] = []
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      requested.push(url)
+      if (url.includes('ref-a')) return Promise.resolve(imageResponse())
+      return new Promise<Response>(resolve => { resolveSecond = resolve })
+    }))
+    const wrapper = mount(PawchiveMediaViewer, {
+      attachTo: document.body,
+      props: {
+        post: multiPost, attachment: first, attachments: [first, second], attachmentIndex: 0, attachmentTotal: 2,
+        scopeLabel: 'Example', busy: false, error: '', hasPrevious: false, ended: false,
+        autoplay: false, interval: 5, downloadBusy: false, downloadMessage: '', downloadError: false,
+      },
+    })
+    try {
+      await flushPromises()
+      await wrapper.get('img[alt="a.jpg"]').trigger('load')
+      await flushPromises()
+      expect(requested.filter(url => url.includes('ref-b'))).toHaveLength(1)
+
+      await wrapper.setProps({ attachment: second, attachmentIndex: 1, hasPrevious: true })
+      await nextTick()
+      expect(requested.filter(url => url.includes('ref-b'))).toHaveLength(1)
+
+      resolveSecond(imageResponse())
+      await flushPromises()
+      expect(wrapper.get('img[alt="b.jpg"]').attributes('src')).toBe('blob:image')
+    } finally {
+      wrapper.unmount()
+    }
+  })
 })

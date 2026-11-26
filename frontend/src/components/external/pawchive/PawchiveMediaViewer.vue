@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ArrowLeft, ArrowRight, Download, ExternalLink, Image as ImageIcon, ImageOff, Loader2, Maximize2, Minimize2, Pause, Play, RotateCw, X } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Download, ExternalLink, Image as ImageIcon, ImageOff, Loader2, Maximize2, Minimize2, Pause, Play, RotateCw, X } from 'lucide-vue-next'
 import ImageViewer from '../../media-detail/ImageViewer.vue'
 import type { PawchiveAttachment, PawchivePost } from '../../../types/pawchive'
 import { pawchiveMediaUrl, withRetryParam } from '../../../utils/pawchiveApi'
@@ -51,8 +51,25 @@ let controlsTimer: number | undefined
 const videoRef = ref<HTMLVideoElement | null>(null)
 const imageReady = ref(false)
 const displayImageUrl = ref('')
+type PreloadOutcome =
+  | { kind: 'ready'; url: string }
+  | { kind: 'missing-original' }
+  | { kind: 'failed' }
+  | { kind: 'aborted' }
+interface PreloadTask {
+  controller: AbortController
+  promise: Promise<PreloadOutcome>
+  progress: number | null
+  listeners: Set<(progress: number | null) => void>
+}
+
+const MAX_CACHED_POSTS = 4
+const PRELOAD_CONCURRENCY = 2
+const PRELOAD_LOOKAHEAD = 4
 const preloadedImageUrls = new Map<string, Map<string, string>>()
 const attemptedImageKeys = new Map<string, Set<string>>()
+const recentPostOrder: string[] = []
+const inFlightPreloads = new Map<string, PreloadTask>()
 let preloadController: AbortController | null = null
 let preloadPending = false
 let imageController: AbortController | null = null
@@ -86,11 +103,23 @@ const placeholderUrl = computed(() => props.attachment.media_type === 'image' &&
 let wheelGestureTimer: number | undefined
 let wheelGestureUsed = false
 let wheelDelta = 0
+let stageTouch: { x: number; y: number } | null = null
 
-const abortPostPreload = () => {
+const preloadTaskKey = (postKey: string, attachmentKey: string) => `${postKey}::${attachmentKey}`
+const abortBackgroundPreloads = (exceptKey?: string) => {
   preloadController?.abort()
   preloadController = null
   preloadPending = false
+  for (const [taskKey, task] of inFlightPreloads) {
+    if (taskKey === exceptKey) continue
+    task.controller.abort()
+    inFlightPreloads.delete(taskKey)
+  }
+}
+const touchCachedPost = (postKey: string) => {
+  const existing = recentPostOrder.indexOf(postKey)
+  if (existing >= 0) recentPostOrder.splice(existing, 1)
+  recentPostOrder.push(postKey)
 }
 const releaseOtherPosts = (keep: Set<string>) => {
   for (const [postKey, images] of preloadedImageUrls) {
@@ -101,9 +130,20 @@ const releaseOtherPosts = (keep: Set<string>) => {
   for (const postKey of attemptedImageKeys.keys()) {
     if (!keep.has(postKey)) attemptedImageKeys.delete(postKey)
   }
+  for (let i = recentPostOrder.length - 1; i >= 0; i--) {
+    if (!keep.has(recentPostOrder[i]!)) recentPostOrder.splice(i, 1)
+  }
+}
+const prunePostCache = () => {
+  const keep = new Set<string>([props.post.post_key])
+  if (props.nextPostKey) keep.add(props.nextPostKey)
+  for (let i = recentPostOrder.length - 1; i >= 0 && keep.size < MAX_CACHED_POSTS; i--) {
+    keep.add(recentPostOrder[i]!)
+  }
+  releaseOtherPosts(keep)
 }
 const stopPostPreload = () => {
-  abortPostPreload()
+  abortBackgroundPreloads()
   releaseOtherPosts(new Set())
 }
 const cacheImage = (postKey: string, key: string, blob: Blob) => {
@@ -142,10 +182,41 @@ const loadCurrentImage = async () => {
     displayImageUrl.value = pawchiveMediaUrl(item.preview_ref)
     return
   }
+  const taskKey = preloadTaskKey(postKey, item.attachment_key)
+  const existingTask = retryNonce.value === 0 ? inFlightPreloads.get(taskKey) : undefined
+  // Free browser connections and backend lanes for the image the user is waiting on.
+  abortBackgroundPreloads(existingTask ? taskKey : undefined)
   displayImageUrl.value = ''
-  loadProgress.value = null
+  loadProgress.value = existingTask ? existingTask.progress : null
   const controller = new AbortController()
   imageController = controller
+  if (existingTask) {
+    const onTaskProgress = (progress: number | null) => {
+      if (imageController === controller) loadProgress.value = progress
+    }
+    const forwardAbort = () => existingTask.controller.abort()
+    existingTask.listeners.add(onTaskProgress)
+    controller.signal.addEventListener('abort', forwardAbort, { once: true })
+    try {
+      const outcome = await existingTask.promise
+      if (controller.signal.aborted || imageController !== controller) return
+      if (outcome.kind === 'ready') {
+        displayImageUrl.value = outcome.url
+        return
+      }
+      if (outcome.kind === 'missing-original' && item.preview_ref) {
+        missingOriginals.value = new Set(missingOriginals.value).add(item.attachment_key)
+        displayImageUrl.value = pawchiveMediaUrl(item.preview_ref)
+        return
+      }
+      if (outcome.kind === 'failed') void onMediaFailed()
+    } finally {
+      existingTask.listeners.delete(onTaskProgress)
+      controller.signal.removeEventListener('abort', forwardAbort)
+      if (imageController === controller) imageController = null
+    }
+    return
+  }
   try {
     const blob = await fetchImageBlob(withNonce(pawchiveMediaUrl(item.stream_ref)), {
       signal: controller.signal,
@@ -167,40 +238,80 @@ const loadCurrentImage = async () => {
     if (imageController === controller) imageController = null
   }
 }
-const preloadImages = async (postKey: string, items: PawchiveAttachment[], controller: AbortController) => {
+const startPreloadItem = (postKey: string, item: PawchiveAttachment): Promise<PreloadOutcome> | null => {
   const images = preloadedImageUrls.get(postKey) || new Map<string, string>()
   const attempted = attemptedImageKeys.get(postKey) || new Set<string>()
   preloadedImageUrls.set(postKey, images)
   attemptedImageKeys.set(postKey, attempted)
-  for (const item of items) {
-    if (controller.signal.aborted) return
-    if (item.media_type !== 'image' || !item.stream_ref || images.has(item.attachment_key) || attempted.has(item.attachment_key)) continue
-    try {
-      const blob = await fetchImageBlob(pawchiveMediaUrl(item.stream_ref), { signal: controller.signal, idleMs: IMAGE_STALL_MS })
-      if (controller.signal.aborted) return
-      cacheImage(postKey, item.attachment_key, blob)
-    } catch {
-      if (controller.signal.aborted) return
-    } finally {
-      if (!controller.signal.aborted) attempted.add(item.attachment_key)
-    }
+  const taskKey = preloadTaskKey(postKey, item.attachment_key)
+  if (item.media_type !== 'image' || !item.stream_ref || images.has(item.attachment_key) || attempted.has(item.attachment_key) || inFlightPreloads.has(taskKey)) {
+    return null
   }
+  const itemController = new AbortController()
+  const task: PreloadTask = { controller: itemController, promise: Promise.resolve({ kind: 'aborted' }), progress: null, listeners: new Set() }
+  const promise = (async (): Promise<PreloadOutcome> => {
+    try {
+      const blob = await fetchImageBlob(pawchiveMediaUrl(item.stream_ref!), {
+        signal: itemController.signal,
+        idleMs: IMAGE_STALL_MS,
+        onProgress: (progress) => {
+          task.progress = progress
+          for (const listener of task.listeners) listener(progress)
+        },
+      })
+      if (itemController.signal.aborted) return { kind: 'aborted' }
+      const url = cacheImage(postKey, item.attachment_key, blob)
+      attempted.add(item.attachment_key)
+      return { kind: 'ready', url }
+    } catch (error) {
+      if (itemController.signal.aborted || isAbortError(error)) return { kind: 'aborted' }
+      attempted.add(item.attachment_key)
+      if (error instanceof PawchiveImageError && error.status === 404) {
+        if (postKey === props.post.post_key && item.preview_ref) {
+          missingOriginals.value = new Set(missingOriginals.value).add(item.attachment_key)
+        }
+        return { kind: 'missing-original' }
+      }
+      return { kind: 'failed' }
+    } finally {
+      if (inFlightPreloads.get(taskKey) === task) inFlightPreloads.delete(taskKey)
+    }
+  })()
+  task.promise = promise
+  inFlightPreloads.set(taskKey, task)
+  return promise
 }
 const preloadPostImages = () => {
+  if (props.attachment.media_type === 'image' && !imageReady.value) return
   if (preloadController) return
   const controller = new AbortController()
   preloadController = controller
   const postKey = props.post.post_key
-  const nextIndex = props.attachmentIndex + 1
-  const ordered = [...props.attachments.slice(nextIndex), ...props.attachments.slice(0, nextIndex)]
-  void (async () => {
-    await preloadImages(postKey, ordered, controller)
-    if (controller.signal.aborted) return
-    const nextPostKey = props.nextPostKey
-    if (nextPostKey && nextPostKey !== postKey) {
-      await preloadImages(nextPostKey, props.nextPostAttachments || [], controller)
+  const index = props.attachmentIndex
+  const queue: Array<{ postKey: string; item: PawchiveAttachment }> = []
+  for (const item of props.attachments.slice(index + 1, index + 1 + PRELOAD_LOOKAHEAD)) {
+    queue.push({ postKey, item })
+  }
+  if (index > 0 && props.attachments[index - 1]) {
+    queue.push({ postKey, item: props.attachments[index - 1]! })
+  }
+  const nextPostKey = props.nextPostKey
+  if (nextPostKey && nextPostKey !== postKey) {
+    for (const item of (props.nextPostAttachments || []).filter(entry => entry.media_type === 'image').slice(0, 2)) {
+      queue.push({ postKey: nextPostKey, item })
     }
-  })().finally(() => {
+  }
+  let cursor = 0
+  const worker = async () => {
+    while (!controller.signal.aborted) {
+      const target = queue[cursor++]
+      if (!target) return
+      const running = startPreloadItem(target.postKey, target.item)
+      if (running) await running
+    }
+  }
+  const workers = Array.from({ length: Math.min(PRELOAD_CONCURRENCY, Math.max(1, queue.length)) }, () => worker())
+  void Promise.all(workers).finally(() => {
     if (preloadController !== controller) return
     preloadController = null
     if (preloadPending) {
@@ -226,10 +337,43 @@ const onMediaWheel = (event: WheelEvent) => {
   wheelDelta += rawDelta * (event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? window.innerHeight : 1)
   window.clearTimeout(wheelGestureTimer)
   wheelGestureTimer = window.setTimeout(resetWheelGesture, 350)
-  if (wheelGestureUsed || props.busy || Math.abs(wheelDelta) < 8) return
+  if (wheelGestureUsed || Math.abs(wheelDelta) < 8) return
+  if (wheelDelta > 0 && props.busy) return
   wheelGestureUsed = true
   wheelDelta > 0 ? emit('next') : emit('previous')
   wheelDelta = 0
+}
+const canStageNavigate = () => props.attachment.media_type === 'image' && (!displayImageUrl.value || loadFailed.value)
+const onStageTouchStart = (event: TouchEvent) => {
+  if (!canStageNavigate() || event.touches.length !== 1) {
+    stageTouch = null
+    return
+  }
+  if ((event.target as HTMLElement | null)?.closest('button, a, input')) {
+    stageTouch = null
+    return
+  }
+  const touch = event.touches[0]!
+  stageTouch = { x: touch.clientX, y: touch.clientY }
+}
+const onStageTouchEnd = (event: TouchEvent) => {
+  const start = stageTouch
+  stageTouch = null
+  const touch = event.changedTouches[0]
+  if (!canStageNavigate() || event.type === 'touchcancel' || event.touches.length || !start || !touch) return
+  const dx = touch.clientX - start.x
+  const dy = touch.clientY - start.y
+  if (Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+    if (dx < 0) {
+      if (!props.ended && !props.busy) emit('next')
+    } else if (props.hasPrevious) {
+      emit('previous')
+    }
+  }
+}
+const onStageClick = (event: MouseEvent) => {
+  if (!canStageNavigate() || (event.target as HTMLElement | null)?.closest('button, a, input')) return
+  toggleControls()
 }
 const markPreviewFailed = (key: string) => {
   failedPreviewKeys.value = new Set(failedPreviewKeys.value).add(key)
@@ -266,7 +410,7 @@ const scrollActiveThumbnail = () => {
   })
 }
 const selectAttachment = (index: number) => {
-  if (props.busy || index === props.attachmentIndex) return
+  if (index === props.attachmentIndex) return
   emit('selectAttachment', index)
   scheduleControlsAutoHide()
 }
@@ -444,8 +588,9 @@ const onKeydown = (event: KeyboardEvent) => {
   else if (event.key === 'ArrowLeft') { event.preventDefault(); emit('previous') }
 }
 watch(() => props.post.post_key, () => {
-  abortPostPreload()
-  releaseOtherPosts(new Set([props.post.post_key]))
+  abortBackgroundPreloads()
+  touchCachedPost(props.post.post_key)
+  prunePostCache()
   missingOriginals.value = new Set()
   if (props.attachment.media_type !== 'image') preloadPostImages()
 }, { immediate: true })
@@ -509,13 +654,40 @@ onBeforeUnmount(() => {
       ><Download :size="17" aria-hidden="true" /><span class="hidden sm:inline">{{ downloadBusy ? '正在核对…' : '下载此图' }}</span></button>
       <button type="button" class="min-w-11 min-h-11 flex items-center justify-center rounded-lg text-white/90 hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-accent" :aria-label="isFullscreen ? '退出全屏' : '进入全屏'" :title="isFullscreen ? '退出全屏' : '进入全屏'" :aria-pressed="isFullscreen" @click="toggleFullscreen"><Minimize2 v-if="isFullscreen" :size="18" aria-hidden="true" /><Maximize2 v-else :size="18" aria-hidden="true" /></button>
     </header>
-    <div class="he-pawchive-stage flex-1 min-h-0 relative flex" @wheel.capture="onMediaWheel">
+    <div
+      class="he-pawchive-stage flex-1 min-h-0 relative flex"
+      @wheel.capture="onMediaWheel"
+      @touchstart.passive="onStageTouchStart"
+      @touchend.passive="onStageTouchEnd"
+      @touchcancel.passive="onStageTouchEnd"
+      @click="onStageClick"
+    >
       <img v-if="placeholderUrl && showPlaceholder && !imageReady && !loadFailed" :src="placeholderUrl" alt="" aria-hidden="true" draggable="false" class="pointer-events-none absolute inset-0 z-10 h-full w-full scale-105 object-contain opacity-60 blur-md" />
       <div v-if="attachment.media_type === 'image' && !displayImageUrl && showPlaceholder && !loadFailed" role="status" class="pointer-events-none absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/75 px-4 py-2 text-sm ">
         <Loader2 :size="16" class="shrink-0 animate-spin text-white/70" aria-hidden="true" />
         <span>正在加载原图<template v-if="loadProgress !== null"> {{ Math.round(loadProgress * 100) }}%</template></span>
       </div>
-      <ImageViewer v-if="attachment.media_type === 'image' && displayImageUrl" :key="attachment.attachment_key" :media="{ title: attachment.filename }" :image-url="displayImageUrl" :show-controls="true" :click-only-controls="false" :controls-visible="!isFullscreen || controlsVisible" @viewer-click="onMediaSurfaceClick" @previous="emit('previous')" @next="emit('next')" @viewer-double-click="() => {}" @controls-hover="onControlsHover" @loaded="onImageLoaded" @load-error="onImageError" />
+      <button
+        v-if="attachment.media_type === 'image' && (!displayImageUrl || loadFailed) && hasPrevious"
+        type="button"
+        :class="!isFullscreen || controlsVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-6 pointer-events-none'"
+        class="he-page-nav absolute left-2 sm:left-5 top-1/2 -translate-y-1/2 z-20 grid size-11 sm:size-12 place-items-center rounded-full bg-black/60 text-white/80 transition-[opacity,transform,background-color,color] duration-200 ease-out hover:bg-black/80 hover:text-white focus-ring cursor-pointer"
+        title="上一项" aria-label="上一项"
+        @click.stop="emit('previous')"
+      >
+        <ChevronLeft :size="26" aria-hidden="true" />
+      </button>
+      <button
+        v-if="attachment.media_type === 'image' && (!displayImageUrl || loadFailed) && !ended && !busy"
+        type="button"
+        :class="!isFullscreen || controlsVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-6 pointer-events-none'"
+        class="he-page-nav absolute right-2 sm:right-5 top-1/2 -translate-y-1/2 z-20 grid size-11 sm:size-12 place-items-center rounded-full bg-black/60 text-white/80 transition-[opacity,transform,background-color,color] duration-200 ease-out hover:bg-black/80 hover:text-white focus-ring cursor-pointer"
+        title="下一项" aria-label="下一项"
+        @click.stop="emit('next')"
+      >
+        <ChevronRight :size="26" aria-hidden="true" />
+      </button>
+      <ImageViewer v-if="attachment.media_type === 'image' && displayImageUrl && !loadFailed" :key="attachment.attachment_key" :media="{ title: attachment.filename }" :image-url="displayImageUrl" :show-controls="true" :click-only-controls="false" :controls-visible="!isFullscreen || controlsVisible" @viewer-click="onMediaSurfaceClick" @previous="emit('previous')" @next="emit('next')" @viewer-double-click="() => {}" @controls-hover="onControlsHover" @loaded="onImageLoaded" @load-error="onImageError" />
       <div v-else-if="attachment.media_type !== 'image'" class="w-full h-full flex items-center justify-center bg-black">
         <video ref="videoRef" :key="attachment.attachment_key" :src="videoUrl" controls playsinline preload="metadata" class="w-full h-full object-contain" @click="onMediaSurfaceClick" @ended="onVideoEnded" @pause="onVideoPaused" @loadeddata="loadFailed = false" @error="onMediaFailed" />
       </div>
@@ -565,12 +737,11 @@ onBeforeUnmount(() => {
             v-for="(item, index) in attachments"
             :key="item.attachment_key"
             type="button"
-            :disabled="busy"
             :aria-current="index === attachmentIndex ? 'true' : undefined"
             :aria-label="`查看本帖第 ${index + 1} 个媒体：${item.filename}`"
             :title="item.filename"
             :class="index === attachmentIndex ? 'border-accent ring-2 ring-accent/40' : 'border-white/15 hover:border-white/45'"
-            class="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 bg-white/5 transition-colors sm:h-20 sm:w-20 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white cursor-pointer"
+            class="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 bg-white/5 transition-colors sm:h-20 sm:w-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white cursor-pointer"
             @mouseenter="showHoverPreview(index)"
             @mouseleave="hideHoverPreview(index)"
             @focus="showHoverPreview(index)"
@@ -599,7 +770,7 @@ onBeforeUnmount(() => {
             </label>
           </div>
           <div class="grid grid-cols-3 gap-2 sm:flex sm:items-center">
-            <button type="button" :disabled="!hasPrevious || busy" class="min-h-11 px-3 rounded-lg border border-white/15 flex items-center justify-center gap-1 text-sm disabled:opacity-40 cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" @click="emit('previous')"><ArrowLeft :size="16" />上一项</button>
+            <button type="button" :disabled="!hasPrevious" class="min-h-11 px-3 rounded-lg border border-white/15 flex items-center justify-center gap-1 text-sm disabled:opacity-40 cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" @click="emit('previous')"><ArrowLeft :size="16" />上一项</button>
             <button type="button" class="min-h-11 px-3 rounded-lg border border-white/15 flex items-center justify-center gap-2 text-sm cursor-pointer hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent" :class="autoplay ? 'border-accent/60 bg-accent/15 text-accent-glow' : ''" :aria-pressed="autoplay" :aria-keyshortcuts="attachment.media_type === 'image' ? 'Space' : undefined" :title="attachment.media_type === 'image' ? '空格：开始或暂停自动连播' : undefined" @click="emit('update:autoplay', !autoplay)"><Pause v-if="autoplay" :size="16" /><Play v-else :size="16" />{{ autoplay ? '暂停连播' : '自动连播' }}</button>
             <button type="button" :disabled="ended || busy" class="min-h-11 px-3 rounded-lg bg-accent text-on-accent hover:bg-accent/90 flex items-center justify-center gap-1 text-sm font-medium disabled:opacity-40 cursor-pointer focus-visible:ring-2 focus-visible:ring-white" @click="emit('next')">{{ ended ? '范围末尾' : '下一项' }}<ArrowRight :size="16" /></button>
           </div>

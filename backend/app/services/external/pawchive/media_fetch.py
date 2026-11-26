@@ -21,7 +21,7 @@ from . import client
 from .media_cache import CacheLease, CacheWriter, media_cache
 
 logger = logging.getLogger(__name__)
-CHUNK_SIZE = 64 * 1024
+CHUNK_SIZE = 256 * 1024
 # Upper bound for queueing plus the upstream response headers.
 HEADER_TIMEOUT = 45.0
 # An unfinished download with no reader stops after this many seconds.
@@ -36,8 +36,8 @@ def _lane_size(name: str, default: int) -> int:
 
 
 _lanes = {
-    "image": threading.BoundedSemaphore(_lane_size("HE_PAWCHIVE_IMAGE_CONCURRENCY", 4)),
-    "preview": threading.BoundedSemaphore(_lane_size("HE_PAWCHIVE_PREVIEW_CONCURRENCY", 6)),
+    "image": threading.BoundedSemaphore(_lane_size("HE_PAWCHIVE_IMAGE_CONCURRENCY", 6)),
+    "preview": threading.BoundedSemaphore(_lane_size("HE_PAWCHIVE_PREVIEW_CONCURRENCY", 8)),
 }
 _lock = threading.Lock()
 _downloads: dict[tuple[str, str], "SharedDownload"] = {}
@@ -106,7 +106,8 @@ class SharedDownload:
             self._writer.content_type = content_type
             self._writer.expected_size = expected
             self._publish(ready=True, content_type=content_type, expected_size=expected)
-            while chunk := response.read(CHUNK_SIZE):
+            read_chunk = getattr(response, "read1", response.read)
+            while chunk := read_chunk(CHUNK_SIZE):
                 if self._abandoned():
                     raise client.PawchiveError("CANCELED", "已无读取者", 499)
                 self._writer.write(chunk)

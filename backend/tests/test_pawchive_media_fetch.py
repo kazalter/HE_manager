@@ -254,6 +254,36 @@ class ConcurrencyTests(unittest.TestCase):
             media_fetch._downloads.clear()
         self.assertEqual(received, [b"1", b"2", b"3"])
 
+    def test_shared_download_prefers_read1_for_incremental_streaming(self):
+        class Read1Response:
+            status = 200
+
+            def __init__(self):
+                self._parts = [b"aa", b"bb", b""]
+
+            def getheader(self, name):
+                return {"Content-Type": "image/png", "Content-Length": "4"}.get(name)
+
+            def read1(self, size):
+                return self._parts.pop(0)
+
+            def read(self, size):
+                raise AssertionError("read() should not be called when read1() is available")
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / ".mounted").write_text("")
+            cache = cache_module.RestartMediaCache()
+            with patch.object(cache_module, "MOUNT_ROOT", root), \
+                    patch.object(cache_module, "CACHE_ROOT", root / "cache"), \
+                    patch.object(media_fetch, "media_cache", cache), \
+                    patch.object(client, "open_media", return_value=(FakeConnection(), Read1Response())):
+                cache.reset_for_startup()
+                download = media_fetch.open_shared(IMAGE, "image")
+                download.wait_ready()
+                self.assertEqual(b"".join(download.reader()), b"aabb")
+            media_fetch._downloads.clear()
+
 
 if __name__ == "__main__":
     unittest.main()

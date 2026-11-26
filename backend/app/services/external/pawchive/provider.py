@@ -109,13 +109,17 @@ def creator_profile(service: str, creator_id: str) -> dict:
 
 
 def post_detail(service: str, creator_id: str, post_id: str) -> dict:
+    from . import creators
+
     service, creator_id, post_id = map(validate_id, (service, creator_id, post_id))
     raw = client.get_json(f"/api/v1/{service}/user/{creator_id}/post/{post_id}")
     if (not isinstance(raw, dict) or str(raw.get("id")) != post_id
             or str(raw.get("user")) != creator_id or str(raw.get("service")) != service):
         raise client.PawchiveError("UPSTREAM_INVALID", "帖子详情身份不匹配", 502)
-    try:
-        name = creator_profile(service, creator_id)["name"]
-    except client.PawchiveError:
-        name = creator_id
+    name = creators.cached_creator_name(service, creator_id)
+    if name is None:
+        try:
+            name = creator_profile(service, creator_id)["name"]
+        except client.PawchiveError:
+            name = creator_id
     return normalize.normalize_post(raw, creator_name=name, detail=True)

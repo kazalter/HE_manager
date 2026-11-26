@@ -78,6 +78,7 @@ def disk_path() -> Path | None:
 class CreatorDirectory:
     def __init__(self):
         self.items: tuple[dict, ...] | None = None
+        self.by_key: dict[tuple[str, str], str] = {}
         self.fetched_at = 0.0
         self.retry_at = 0.0
         self.last_error: client.PawchiveError | None = None
@@ -107,6 +108,7 @@ class CreatorDirectory:
                 rows = [dict(id=x.get('creator_id'), service=x.get('service'), name=x.get('creator_name'),
                              updated=x.get('updated_at'), favorited=x.get('favorite_count')) for x in raw['items']]
                 self.items, self.fetched_at = normalize_directory(rows), fetched
+                self.by_key = {(x['service'], x['creator_id']): x['creator_name'] for x in self.items}
             except (OSError, ValueError, KeyError, TypeError, AttributeError, client.PawchiveError):
                 return
 
@@ -118,6 +120,7 @@ class CreatorDirectory:
             fetched = time.time()
             with self._state_lock:
                 self.items, self.fetched_at, self.last_error = items, fetched, None
+                self.by_key = {(x['service'], x['creator_id']): x['creator_name'] for x in items}
                 self.retry_at = 0.0
             path = disk_path()
             if path is not None:
@@ -174,6 +177,15 @@ class CreatorDirectory:
 
 
 directory = CreatorDirectory()
+
+
+def cached_creator_name(service: str, creator_id: str) -> str | None:
+    """Return a cached creator name without blocking on a network directory fetch."""
+    directory._load_disk()
+    with directory._state_lock:
+        if directory.items is None or time.time() - directory.fetched_at > MAX_STALE:
+            return None
+        return directory.by_key.get((service, creator_id))
 
 
 def creator_dto(item: dict) -> dict:

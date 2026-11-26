@@ -150,4 +150,43 @@ describe('Pawchive media sequence', () => {
     expect(session.history.value).toEqual([])
     session.close()
   })
+
+  it('cancels a slow forward post search when the user navigates back or selects a thumbnail', async () => {
+    const first = counted('one', 2, [attachment('a1'), attachment('a2')])
+    const empty = counted('two', 1, [])
+    const third = counted('three', 1, [attachment('c1')])
+    let thirdSignal: AbortSignal | undefined
+    vi.spyOn(axios, 'get').mockImplementation(async (url, config) => {
+      if (url.endsWith('/one')) return { data: first }
+      if (url.endsWith('/two')) return { data: empty }
+      if (url.endsWith('/three')) {
+        thirdSignal = config?.signal as AbortSignal | undefined
+        return await new Promise((_, reject) => {
+          thirdSignal?.addEventListener('abort', () => reject(new axios.CanceledError('aborted')))
+        })
+      }
+      throw new Error(`unexpected ${url}`)
+    })
+    const session = usePawchiveSequence()
+    await session.open(0, [first, empty, third], null, false, scope)
+    expect(session.current.value?.attachment.attachment_key).toBe('a1')
+
+    await session.next()
+    expect(session.current.value?.attachment.attachment_key).toBe('a2')
+
+    const pendingNext = session.next()
+    await flush()
+    await flush()
+    expect(session.busy.value).toBe(true)
+
+    await session.previous()
+    await pendingNext
+    expect(thirdSignal?.aborted).toBe(true)
+    expect(session.busy.value).toBe(false)
+    expect(session.current.value?.attachment.attachment_key).toBe('a1')
+
+    session.selectAttachment(1)
+    expect(session.current.value?.attachment.attachment_key).toBe('a2')
+    session.close()
+  })
 })

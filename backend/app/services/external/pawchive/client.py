@@ -17,6 +17,7 @@ import ipaddress
 import json
 import re
 import socket
+import ssl
 import threading
 import time
 from collections import OrderedDict
@@ -35,8 +36,9 @@ _cache_bytes = 0
 _cache_lock = threading.Lock()
 _rate_lock = threading.Lock()
 _next_api_request = 0.0
-POOL_IDLE_SECONDS = 20.0
-POOL_MAX_IDLE = 8
+POOL_IDLE_SECONDS = 60.0
+POOL_MAX_IDLE = 16
+_SSL_CONTEXT = ssl.create_default_context()
 # Keyed by (host, proxy) so a proxy change in Settings never reuses an old tunnel.
 _pool: dict[tuple[str, str], list[tuple[float, http.client.HTTPSConnection]]] = {}
 _pool_lock = threading.Lock()
@@ -85,11 +87,11 @@ def _new_connection(host: str, *, timeout: float = 20) -> http.client.HTTPSConne
 
     proxy = get_external_favorites_proxy()
     if not proxy:
-        return PinnedHTTPSConnection(host, timeout=timeout)
+        return PinnedHTTPSConnection(host, timeout=timeout, context=_SSL_CONTEXT)
     try:
         proxy = validate_external_favorites_proxy(proxy)
         parsed = urlsplit(proxy or "")
-        connection = http.client.HTTPSConnection(parsed.hostname, parsed.port or 80, timeout=timeout)
+        connection = http.client.HTTPSConnection(parsed.hostname, parsed.port or 80, timeout=timeout, context=_SSL_CONTEXT)
     except (ValueError, TypeError) as exc:
         raise PawchiveError("INVALID_CONFIG", "外部收藏代理地址无效，请填写 HTTP 代理", 503) from exc
     connection.set_tunnel(host, 443)

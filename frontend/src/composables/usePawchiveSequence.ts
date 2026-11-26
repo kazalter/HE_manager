@@ -48,12 +48,21 @@ export function usePawchiveSequence() {
   const detailCache = new Map<string, { post: PawchivePost; at: number }>()
   const detailRequests = new Map<string, Promise<PawchivePost>>()
   let version = 0
+  let navVersion = 0
   let controller: AbortController | null = null
+  let navController: AbortController | null = null
   let postIndex = -1
   let nextPostIndex = -1
   let searchIndex: number | null = null
   let nextLookup = 0
   let pagePromise: Promise<boolean> | null = null
+
+  const abortNavigation = () => {
+    navVersion++
+    navController?.abort()
+    navController = null
+    busy.value = false
+  }
 
   const playable = (post: PawchivePost) => post.attachments.filter(attachment =>
     attachment.availability === 'playable' &&
@@ -69,8 +78,7 @@ export function usePawchiveSequence() {
   const postAttachments = computed(() => current.value ? playable(current.value.post) : [])
   const nextPostAttachments = computed(() => nextPost.value ? playable(nextPost.value) : [])
 
-  const fetchDetail = async (summary: PawchivePost) => {
-    const signal = controller?.signal
+  const fetchDetail = async (summary: PawchivePost, signal = controller?.signal) => {
     try { return await fetchPawchivePost(summary, signal) }
     catch (cause) {
       if (!isTransient(cause) || signal?.aborted) throw cause
@@ -80,7 +88,7 @@ export function usePawchiveSequence() {
     }
   }
 
-  const detailAt = (index: number, fresh = false): Promise<PawchivePost> => {
+  const detailAt = (index: number, fresh = false, signal = controller?.signal): Promise<PawchivePost> => {
     const summary = posts.value[index]
     if (!summary) return Promise.reject(new Error('missing post'))
     const key = summary.post_key
@@ -89,7 +97,7 @@ export function usePawchiveSequence() {
     const pending = detailRequests.get(key)
     if (pending && !fresh) return pending
     const requestedVersion = version
-    const request = fetchDetail(summary).then(detail => {
+    const request = fetchDetail(summary, signal).then(detail => {
       if (requestedVersion === version) {
         detailCache.delete(key)
         detailCache.set(key, { post: detail, at: Date.now() })
@@ -118,17 +126,18 @@ export function usePawchiveSequence() {
   }
 
   const selectAttachment = (attachmentIndex: number) => {
-    if (!active.value || busy.value || !current.value || !Number.isInteger(attachmentIndex)) return
+    if (!active.value || !current.value || !Number.isInteger(attachmentIndex)) return
+    if (busy.value) abortNavigation()
     if (attachmentIndex === current.value.index) return
     setCurrent(postIndex, current.value.post, attachmentIndex, true)
   }
 
-  const loadPage = async () => {
+  const loadPage = async (signal = controller?.signal) => {
     if (pagePromise) return pagePromise
     if (!hasMore.value || !cursor.value) return false
     const requestedVersion = version
     const pending = (async () => {
-      const page = await fetchPawchivePosts(scope.value, cursor.value!, controller?.signal)
+      const page = await fetchPawchivePosts(scope.value, cursor.value!, signal)
       if (requestedVersion !== version) return false
       const seen = new Set(posts.value.map(post => post.post_key))
       posts.value.push(...page.items.filter(post => {
@@ -145,9 +154,22 @@ export function usePawchiveSequence() {
     finally { if (pagePromise === pending) pagePromise = null }
   }
 
+  const raceAbort = <T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> => {
+    if (!signal) return promise
+    if (signal.aborted) return Promise.reject(new axios.CanceledError('aborted'))
+    return new Promise<T>((resolve, reject) => {
+      const onAbort = () => reject(new axios.CanceledError('aborted'))
+      signal.addEventListener('abort', onAbort, { once: true })
+      promise.then(
+        value => { signal.removeEventListener('abort', onAbort); resolve(value) },
+        error => { signal.removeEventListener('abort', onAbort); reject(error) },
+      )
+    })
+  }
+
   // Walk forward from `start` to the next post with playable media in scope.
   const search = async (start: number, stale: () => boolean, pageLimit: number,
-                        onSkip?: () => void): Promise<SearchResult> => {
+                        onSkip?: () => void, signal = controller?.signal): Promise<SearchResult> => {
     let index = start
     let pages = 0
     let checks = 0
@@ -155,7 +177,7 @@ export function usePawchiveSequence() {
       if (index >= posts.value.length) {
         if (!hasMore.value) return { kind: 'end' }
         if (pages >= pageLimit) return { kind: 'paused', index }
-        await loadPage()
+        await raceAbort(loadPage(signal), signal)
         pages++
         continue
       }
@@ -165,7 +187,7 @@ export function usePawchiveSequence() {
         continue
       }
       let detail: PawchivePost
-      try { detail = await detailAt(index) }
+      try { detail = await raceAbort(detailAt(index, false, signal), signal) }
       catch (cause) {
         if (!isNotFound(cause)) throw cause
         detail = { ...posts.value[index]!, attachments: [] }
@@ -195,26 +217,38 @@ export function usePawchiveSequence() {
   }
 
   const next = async () => {
-    if (!active.value || busy.value || ended.value) return
+    if (!active.value || ended.value) return
     if (current.value && searchIndex === null) {
       const inPost = playable(current.value.post)
       if (current.value.index + 1 < inPost.length) {
+        if (busy.value) abortNavigation()
         setCurrent(postIndex, current.value.post, current.value.index + 1, true)
         return
       }
       if (nextPost.value && nextPostIndex > postIndex) {
+        if (busy.value) abortNavigation()
         setCurrent(nextPostIndex, nextPost.value, 0, true)
         return
       }
     }
+    if (busy.value) return
+    navController?.abort()
+    navController = new AbortController()
     busy.value = true
     error.value = ''
     skipped.value = 0
     const requestedVersion = version
+    const requestedNavVersion = ++navVersion
     const start = searchIndex ?? (postIndex >= 0 ? postIndex + 1 : 0)
     try {
-      const result = await search(start, () => requestedVersion !== version, SEARCH_PAGE_LIMIT, () => { skipped.value++ })
-      if (result.kind === 'stale') return
+      const result = await search(
+        start,
+        () => requestedVersion !== version || requestedNavVersion !== navVersion,
+        SEARCH_PAGE_LIMIT,
+        () => { if (requestedVersion === version && requestedNavVersion === navVersion) skipped.value++ },
+        navController.signal,
+      )
+      if (result.kind === 'stale' || requestedVersion !== version || requestedNavVersion !== navVersion) return
       if (result.kind === 'found') {
         setCurrent(result.index, result.detail, 0, true)
         return
@@ -227,34 +261,53 @@ export function usePawchiveSequence() {
       searchIndex = result.index
       error.value = `已跳过 ${skipped.value} 篇没有媒体的帖子，点击“下一项”继续查找。`
     } catch (cause) {
-      if (requestedVersion === version && !axios.isCancel(cause)) {
+      if (requestedVersion === version && requestedNavVersion === navVersion && !axios.isCancel(cause)) {
         searchIndex = searchIndex ?? start
         error.value = pawchiveError(cause)
       }
     } finally {
-      if (requestedVersion === version) busy.value = false
+      if (requestedVersion === version && requestedNavVersion === navVersion) {
+        busy.value = false
+        navController = null
+      }
     }
   }
 
   const previous = async () => {
-    if (!active.value || busy.value || !history.value.length) return
+    if (!active.value || !history.value.length) return
+    if (busy.value) abortNavigation()
+    const index = posts.value.findIndex(post => post.post_key === history.value[history.value.length - 1]!.postKey)
+    if (index < 0) return
+    const position = history.value[history.value.length - 1]!
+    const cached = detailCache.get(position.postKey)
+    if (cached && Date.now() - cached.at < DETAIL_MAX_AGE) {
+      const attachmentIndex = playable(cached.post).findIndex(item => item.attachment_key === position.attachmentKey)
+      if (attachmentIndex >= 0) {
+        history.value.pop()
+        setCurrent(index, cached.post, attachmentIndex, false)
+      }
+      return
+    }
+    navController?.abort()
+    navController = new AbortController()
     busy.value = true
     const requestedVersion = version
-    const position = history.value[history.value.length - 1]!
+    const requestedNavVersion = ++navVersion
     try {
-      const index = posts.value.findIndex(post => post.post_key === position.postKey)
-      if (index < 0) return
-      const detail = await detailAt(index)
-      if (requestedVersion !== version) return
+      const detail = await detailAt(index, false, navController.signal)
+      if (requestedVersion !== version || requestedNavVersion !== navVersion) return
       const attachmentIndex = playable(detail).findIndex(item => item.attachment_key === position.attachmentKey)
       if (attachmentIndex >= 0) {
         history.value.pop()
         setCurrent(index, detail, attachmentIndex, false)
       }
     } catch (cause) {
-      if (requestedVersion === version && !axios.isCancel(cause)) error.value = pawchiveError(cause)
+      if (requestedVersion === version && requestedNavVersion === navVersion && !axios.isCancel(cause)) error.value = pawchiveError(cause)
     } finally {
-      if (requestedVersion === version) busy.value = false
+      if (requestedVersion === version && requestedNavVersion === navVersion) {
+        busy.value = false
+        navController = null
+      }
     }
   }
 
@@ -293,10 +346,13 @@ export function usePawchiveSequence() {
 
   const close = () => {
     version++
+    navVersion++
     nextLookup++
     nextPost.value = null
     nextPostIndex = -1
     pagePromise = null
+    navController?.abort()
+    navController = null
     controller?.abort()
     controller = new AbortController()
     active.value = false

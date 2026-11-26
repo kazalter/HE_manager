@@ -64,6 +64,21 @@ class ProviderTests(unittest.TestCase):
         with self.assertRaises(client.PawchiveError):
             provider.list_posts(tag="tag")
 
+    def test_post_detail_uses_cached_creator_name_without_profile_request(self):
+        from app.services.external.pawchive import creators
+
+        calls = []
+
+        def fake_get(path, params=None):
+            calls.append(path)
+            return post(1)
+
+        with patch.object(client, "get_json", side_effect=fake_get), \
+                patch.object(creators, "cached_creator_name", return_value="Cached Artist"):
+            detail = provider.post_detail("fanbox", "456", "1")
+        self.assertEqual(detail["creator_name"], "Cached Artist")
+        self.assertEqual(calls, ["/api/v1/fanbox/user/456/post/1"])
+
 
 class RefSecretTests(unittest.TestCase):
     def test_generated_secret_survives_restart(self):
