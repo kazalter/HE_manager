@@ -8,7 +8,7 @@
     "dev": "vite",
     "dev:manager": "vite --base /l2d/",
     "build:manager": "vite build --base /l2d/ --outDir ../../frontend/public/l2d --emptyOutDir",
-    "test": "node tests/interaction.test.mjs && node --test tests/camera.test.mjs tests/wallpaper-pointer.test.mjs tests/motion-smoothness.test.mjs tests/models-sort.test.mjs"
+    "test": "node tests/interaction.test.mjs && node --test tests/camera.test.mjs tests/wallpaper-pointer.test.mjs tests/motion-smoothness.test.mjs tests/models-sort.test.mjs tests/dragmachine-parity.test.mjs"
   },
   "dependencies": {
     "@pixi/unsafe-eval": "6.5.10",

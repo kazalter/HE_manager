@@ -57,6 +57,8 @@ export function createActions(ctx) {
     orch?.resetAll()
     // 先清图跟踪（pending 归空）：stopAllMotions 引出的 motionFinish 会对空挂起做 applyEnd(null) 幂等空转，不会把旧动作的结束值写回复位后的节点
     ctx.runtime?.resetState()
+    ctx.runtime?.setFixedParam('Paramring', ctx.ring ? 1 : 0)
+    ctx.runtime?.setFixedParam('l2d_hx', ctx.isHx ? 1 : 0)
     // 基础参数缓动滑回默认/节点值，与重播 idle 的渐入同窗；重播的 motionStart 会再开一次同窗复位（from 取当前值，幂等）
     ctx.runtime?.beginSmoothReset(fade, clip)
     // 循环 idle 永不 finish、currentGroup 常驻，重播须先停掉在播动作才能过引擎 MotionState.reserve

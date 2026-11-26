@@ -79,6 +79,20 @@ export class DragMachine {
     this.ignoreAction = entry.ignore_action === 1
     this.dragDirect = entry.drag_direct || 0
     this.rangeAbs = entry.range_abs === 1
+    this.rangeOffset = (this.range[1] ?? 0) - (this.range[0] ?? 0)
+    this.reactX = entry.react_pos_x || 0
+    this.reactY = entry.react_pos_y || 0
+    const rc = entry.react_condition && typeof entry.react_condition === 'object' ? entry.react_condition : null
+    this.idleOn = Array.isArray(rc?.idle_on) ? rc.idle_on : []
+    this.idleOff = Array.isArray(rc?.idle_off) ? rc.idle_off : []
+    const oc = entry.offset_circle && typeof entry.offset_circle === 'object' ? entry.offset_circle : null
+    this.offsetCirclePos = Array.isArray(oc?.pos) ? oc.pos : null
+    this.offsetCircleStart = oc?.start ?? 0
+    this.gyro = entry.gyro === 1 || entry.gyro === true
+    this.gyroX = entry.gyro_x === 1
+    this.gyroY = entry.gyro_y === 1
+    this.gyroZ = entry.gyro_z === 1
+    this.gyroSensitive = entry.sensitive || 4
     this.partsData = Array.isArray(entry.parts_data?.parts) ? entry.parts_data.parts : null
     // parts_data.type：吸附方向（1/缺省=最近档位、2=只吸附 ≤ 当前值的档位、3=只吸附 ≥ 当前值的档位；充能机 type 2 配升序档位，松手落在已达档位）
     this.partsDataType = entry.parts_data?.type ?? null
@@ -88,11 +102,13 @@ export class DragMachine {
       : entry.revert_idle_index === true
         ? true
         : null
-    // relation_parameter 联动参数（游戏 _relationParameterList）：type 101/102 跟随拖动量、103 跟随连点下标查 relation_value、104 idle+计时（未实现），其余跟随机器参数目标值但 enable=false 恒不写。target 有值时直写不平滑；smooth/range/range_abs/drag_direct/mode 缺省回落机器自身配置
+    // relation_parameter 联动参数（游戏 _relationParameterList）：type 101/102 跟随拖动量、103 跟随连点下标查 relation_value、104 idle+计时，其余跟随机器参数目标值但 enable=false 恒不写。target 有值时直写不平滑；smooth/range/range_abs/drag_direct/mode 缺省回落机器自身配置
     this.relations = Array.isArray(entry.relation_parameter?.list)
       ? entry.relation_parameter.list.map((r) => ({
           type: r.type,
           name: r.name,
+          idle: r.idle,
+          time: r.time ?? 0,
           start: r.start,
           target: r.target,
           smooth: r.smooth != null ? r.smooth / 1000 : null,
@@ -101,10 +117,11 @@ export class DragMachine {
           dragDirect: r.drag_direct ?? null,
           mode: r.mode,
           relationValue: Array.isArray(r.relation_value) ? r.relation_value : null,
-          // 运行时：平滑输出值 / SmoothDamp 速度 / 本帧是否可写
+          // 运行时：平滑输出值 / SmoothDamp 速度 / 本帧是否可写 / 104 计时
           value: r.start ?? this.startValue,
           velocity: 0,
           enable: false,
+          elapsed: 0,
           warned: false,
         }))
       : []
@@ -124,15 +141,27 @@ export class DragMachine {
     this.parameterSmooth = 0
     this.parameterSmoothTime = this.smooth
     this.parameterToStart = null // 回弹倒计时（秒），null = 未启动
+    this.delayTargetTime = null // 延迟改值倒计时（秒），下棋 AI 用
     this._active = false
     this._downPos = { x: 0, y: 0 }
+    this._screenPos = { x: 0, y: 0 }
     this._downTime = 0
     this._upPos = { x: 0, y: 0 }
+    this._firstStop = false
     this.clickTriggerTime = null
     this.nextTriggerTime = 0 // 触发冷却
     this.isTriggerAtion = false // 动作已触发未播完标记（游戏 isTriggerAtion）
     this.extendActionFlag = false // type 12 扩展门置位（游戏 extendActionFlag）
     this.animationPlayApply = false // type 10 动作链单次闩锁（游戏 animationPlayApply）
+    this.parameterMoveTrigger = false // type 13 触发闩锁
+    this.moveCheckTimer = 0
+    this.parameterMove = null
+    this.lastParameterMove = null
+    this.dragMoveUp = false // type 14 active=1 触发闩锁
+    this.loadL2dStep = true // 首帧标记（relation 104 挂载对齐用）
+    this.relationActive = false
+    this.reactConditionFlag = false
+    this.updateReactCondition(orch?.idleIndex ?? 0)
     this.offsetDragX = this.startValue
     this.offsetDragY = this.startValue
     this.offsetDragTargetX = this.startValue
@@ -150,12 +179,31 @@ export class DragMachine {
     return this.orch.paramIndex(this.parameterName) >= 0
   }
 
-  /** 本机参数是否写模型（游戏 _parameterUpdateFlag）：类型白名单（2 点击 / 5 idle 跟随 / 7 监听 / 8 充能 / 10 动作链 / 13 参数移动 / 14 上下行 / 15 下棋）恒写；有拖拽量的机器经 updateDrag 置真。
-   * type 3/4/6/9/11/12 的参数只是内部记账（type 9 的点参判定读的就是模型实时值），写模型反而会把内部值漏到画面上。 */
+  /** 本机参数是否写模型（游戏 _parameterUpdateFlag）：类型白名单（2 点击 / 5 idle 跟随 / 7 监听 / 8 充能 / 10 动作链 / 13 参数移动 / 14 上下行 / 15 下棋）与拖拽/圆盘/视线/陀螺仪联动恒写 */
   writesParam() {
-    if (this.offsetX || this.offsetY) return true
+    if (this.offsetX || this.offsetY || this.offsetCirclePos || this.reactX || this.reactY || this.gyro) return true
     const t = this.actionTrigger?.type
     return t === 2 || t === 5 || t === 7 || t === 8 || t === 10 || t === 13 || t === 14 || t === 15
+  }
+
+  /** type 5 remove_com_list：播放指定动作时暂时摘除参数覆写，放行动作曲线驱动该参数（DD:634-649） */
+  paramActive() {
+    if (
+      this.actionTrigger?.type === 5 &&
+      this.l2dIsPlaying &&
+      Array.isArray(this.actionTrigger.remove_com_list) &&
+      this.actionTrigger.remove_com_list.includes(this.l2dPlayActionName)
+    ) {
+      return false
+    }
+    return true
+  }
+
+  updateReactCondition(idleIdx) {
+    let flag = false
+    if (this.idleOn.length) flag = !this.idleOn.includes(idleIdx)
+    if (this.idleOff.length) flag = this.idleOff.includes(idleIdx)
+    this.reactConditionFlag = flag
   }
 
   /** 触发冷却与单触发互斥（游戏 isActionTriggerAble） */
@@ -175,6 +223,10 @@ export class DragMachine {
     this.clickTriggerTime = null
     this.orch.pressLock(`点击确认 ${this.drawAbleName}`, false)
     const at = this.actionTrigger
+    if (at?.type === 15) {
+      this.orch.handleXiaQi(this)
+      return
+    }
     if (at?.type === 9) {
       const v = this.orch.readParameter(at.parameter ?? this.parameterName)
       if (v == null || Math.abs((at.num ?? 0) - v) > 0.05) {
@@ -352,7 +404,7 @@ export class DragMachine {
 
   // ---- 指针事件（游戏 startDrag / onDrag / stopDrag）----
 
-  onDown(pos, playing) {
+  onDown(pos, playing, screenPos = pos) {
     if (this.ignoreAction && playing) {
 // debug 读数：触发链关键步，debugHook 接线见 l2d/mount.js
       this.orch.debug?.(`${this.drawAbleName} 播放中拒按(ignore_action=1)`)
@@ -361,15 +413,19 @@ export class DragMachine {
     if (this._active) return
     this._active = true
     this._downPos = pos
+    this._screenPos = screenPos
     this._downTime = performance.now() / 1000
     this.triggerActionTime = 0
     // 连点下标只在 type 3（DRAG_DOWN_ACTION）按下时重置（游戏 startDrag 的 uv0 表只含该类型；type 6 的下标跨按压持续推进）
     if (this.actionTrigger?.type === 3) this.actionListIndex = 1
     this.parameterSmoothTime = this.smooth
     // 按压锁：原文只有无 down 配置的点击型在 checkClickAction firstActive 上锁（DD:1408-1410）；down 配置型按下即触发不上锁，type 3/8 的锁在各自 handler 分支里
-    // 锁时机比原文（下一帧 updateTrigger）提前到按下同步，语义等价——本移植 onDown 没有 updateTrigger 帧
     const atDown = this.actionTrigger
-    if (atDown && (atDown.type === 2 || atDown.type === 6 || atDown.type === 9 || atDown.type === 11) && !atDown.down) {
+    if (
+      atDown &&
+      (atDown.type === 2 || atDown.type === 6 || atDown.type === 9 || atDown.type === 11 || atDown.type === 15) &&
+      !atDown.down
+    ) {
       this.orch.pressLock(`按下 ${this.drawAbleName}`, true)
     }
     // down 型触发：按下即排程（游戏 checkClickAction 的 firstActive 分支）
@@ -378,8 +434,9 @@ export class DragMachine {
     }
   }
 
-  onMove(pos) {
+  onMove(pos, screenPos = pos) {
     if (!this._active) return
+    this._screenPos = screenPos
     // 只累加拖动量不落 target——落 target 在 step 每 tick 做（游戏 updateDrag 与 onDrag 分离）
     if (this.offsetX) {
       this.offsetDragX = this.offsetDragTargetX + (pos.x - this._downPos.x) / this.offsetX
@@ -399,6 +456,7 @@ export class DragMachine {
   onUp(pos) {
     if (!this._active) return
     this._active = false
+    this._firstStop = true
     // 回弹：revert>0 启动倒计时，平滑时间换 revert_smooth
     if (this.revert > 0) {
       this.parameterToStart = this.revert
@@ -410,8 +468,8 @@ export class DragMachine {
     const dy = Math.abs(pos.y - this._downPos.y) < CLICK_RADIUS
     const quick = now - this._downTime < CLICK_TIME
     const at = this.actionTrigger
-    // 走 checkClickAction 点击判定的类型（2 点击 / 6 连点 / 9 点参 / 11 点区间）；其余类型松手只收尾（游戏里它们的 updateTrigger 分支不调 checkClickAction）
-    const clickJudged = at?.type === 2 || at?.type === 6 || at?.type === 9 || at?.type === 11
+    // 走 checkClickAction 点击判定的类型（2 点击 / 6 连点 / 9 点参 / 11 点区间 / 15 下棋选格）；其余类型松手只收尾
+    const clickJudged = at?.type === 2 || at?.type === 6 || at?.type === 9 || at?.type === 11 || at?.type === 15
     // 反应动作播放中点击不触发；例外是 focus=1 且播的正是本机动作（游戏 checkClickAction：未播放恒可点，播放中仅上述例外）
     const clickAllowed = this.orch.isPlaying
       ? at?.focus === 1 && this.orch.playActionName === at.action
@@ -456,10 +514,10 @@ export class DragMachine {
     this.saveData()
   }
 
-  /** parts_data 档位吸附：松手时目标值贴到档位（游戏 updatePartsParameter）。只对有拖拽量（offset_x/y）或 type 8 充能的机器生效；type 决定候选档位方向：1/缺省=最近档位、2=只取 ≤ 当前值（充能落位）、3=只取 ≥ 当前值 */
+  /** parts_data 档位吸附：松手时目标值贴到档位（游戏 updatePartsParameter）。对有拖拽量（offset_x/y）、type 8 充能、或 offset_circle_pos 生效 */
   updatePartsSnap() {
     if (!this.partsData) return
-    if (!(this.offsetX || this.offsetY || this.actionTrigger?.type === 8)) return
+    if (!(this.offsetX || this.offsetY || this.actionTrigger?.type === 8 || this.offsetCirclePos)) return
     const value = this.parameterTargetValue
     let best = null
     let bestDist = null
@@ -497,9 +555,22 @@ export class DragMachine {
     if (this.orch) this._writeSeq = ++this.orch._writeCounter
   }
 
+  setTargetValueDelay(v, delaySec) {
+    this.setTargetValue(v)
+    this.delayTargetTime = delaySec > 0 ? delaySec : null
+  }
+
   setParameterValue(v) {
     this.parameterValue = v
     if (this.orch) this._writeSeq = ++this.orch._writeCounter
+  }
+
+  /** 圆盘跨零最短弧目标转换（DD:833-839） */
+  checkUpdateParameterNum(target, value) {
+    if (this.offsetCirclePos && this.rangeOffset > 0 && Math.abs(target - value) >= this.rangeOffset / 2) {
+      return value < target ? target - this.rangeOffset : target + this.rangeOffset
+    }
+    return target
   }
 
   /** 每帧步进（游戏 stepParameter 的 updateParameterValue + checkReset + 触发调度） */
@@ -507,6 +578,19 @@ export class DragMachine {
     this.l2dIsPlaying = playing
     this.l2dPlayActionName = playActionName
     if (this.isTriggerAtion && !playing) this.isTriggerAtion = false
+    const prevActionIndex = this.actionListIndex
+    if (
+      playing &&
+      playActionName &&
+      Array.isArray(this.actionTrigger?.reset_index_action) &&
+      this.actionTrigger.reset_index_action.includes(playActionName)
+    ) {
+      this.actionListIndex = 1
+    }
+    if (this.revertActionIndex && prevActionIndex !== this.actionListIndex) {
+      this.setTargetValue(this.startValue)
+    }
+    this.updateReactCondition(this.orch.idleIndex)
     const able = this.triggerAble(dt)
     // 点击确认窗口：到期且不在冷却中才触发，过窗（>0.1s）作废（游戏里 checkClickAction 在 updateTrigger 内、受 isActionTriggerAble 前置过滤）
     if (this.clickTriggerTime != null && now >= this.clickTriggerTime) {
@@ -549,32 +633,87 @@ export class DragMachine {
       if (this.offsetY) this.setTargetValue(this.fixTarget(this.offsetDragY))
       else this.setTargetValue(this.fixTarget(this.offsetDragX))
     }
-    // 平滑趋近目标（游戏 updateParameterValue + Live2DExtend.CustomSmoothValue）：进度按 SMOOTH_RATE×dt 推进，复刻 fixedDeltaTime×30Hz 的 1.67× 时长拉伸
-    if (this.parameterValue !== this.parameterTargetValue) {
-      const span = Math.abs((this.range[1] ?? 0) - (this.range[0] ?? 0))
+    // 圆形表盘拖拽（游戏 updateCircleDrag DD:714）：指针相对表盘中心的顺时针角度（从 12 点偏移 offsetCircleStart）映射到 [0, range[1]]
+    if (this._active && this.offsetCirclePos) {
+      const c = this.orch.getCircleCenter(this.offsetCirclePos, this.drawAbleName)
+      const p = this._screenPos
+      if (c && p) {
+        const rawDeg = (Math.atan2(p.x - c.x, c.y - p.y) * 180) / Math.PI + 360 - (this.offsetCircleStart || 0)
+        const deg = ((rawDeg % 360) + 360) % 360
+        const target = ((this.range[1] ?? 0) * deg) / 360
+        this.setTargetValue(this.fixTarget(target))
+      }
+    }
+    // 陀螺仪（游戏 updateGyro DD:737）：桌面默认禁用即回归 0；开启模拟或移动端传感器时映射至 [-0.5, 0.5] -> [range[0], range[1]]
+    if (this.gyro) {
+      const gyroInput = this.orch.gyroInput
+      if (!gyroInput?.enabled) {
+        this.setTargetValue(0)
+      } else {
+        const clampHalf = (v) => Math.max(-0.5, Math.min(0.5, v))
+        let att = 0
+        if (this.gyroX && Number.isFinite(gyroInput.y)) att = clampHalf(gyroInput.y * this.gyroSensitive)
+        else if (this.gyroY && Number.isFinite(gyroInput.x)) att = clampHalf(gyroInput.x * this.gyroSensitive)
+        else if (this.gyroZ && Number.isFinite(gyroInput.z)) att = clampHalf(gyroInput.z * this.gyroSensitive)
+        const lo = this.range[0] ?? 0
+        const hi = this.range[1] ?? 0
+        this.setTargetValue((att + 0.5) * (hi - lo) + lo)
+      }
+    }
+    // 视线直接联动参数（游戏 updateReactValue DD:778）：忽略视线期间冻结在当前目标值
+    if ((this.reactX || this.reactY) && !this.orch.shouldIgnoreGaze()) {
+      const rp = this.orch.readReactPos()
+      const raw = this.reactX ? rp.x * this.reactX : rp.y * this.reactY
+      this.setTargetValue(this.fixTarget(raw))
+    }
+    // 延迟目标更新倒计时（下棋 AI 落子用）
+    let delayBlocking = false
+    if (this.delayTargetTime != null && this.delayTargetTime > 0) {
+      this.delayTargetTime -= dt
+      if (this.delayTargetTime <= 0) this.delayTargetTime = null
+      else delayBlocking = true
+    }
+    // 平滑趋近目标（游戏 updateParameterValue + Live2DExtend.CustomSmoothValue）：进度按 SMOOTH_RATE×dt 推进
+    if (!delayBlocking && this.parameterValue !== this.parameterTargetValue) {
+      const effectiveTarget = this.checkUpdateParameterNum(this.parameterTargetValue, this.parameterStartValue)
+      const wrapped = effectiveTarget !== this.parameterTargetValue
+      const span = Math.abs(this.rangeOffset)
       const eps = Math.min(VALUE_EPS, Math.max(1e-4, span * 0.002))
-      if (Math.abs(this.parameterValue - this.parameterTargetValue) < eps) {
+      if (Math.abs(this.parameterTargetValue - this.parameterValue) < eps) {
         this.setParameterValue(this.parameterTargetValue)
       } else if (this.parameterSmoothTime > 0) {
         this.parameterSmooth = Math.min(this.parameterSmooth + SMOOTH_RATE * dt, this.parameterSmoothTime)
-        this.setParameterValue(
-          this.parameterStartValue +
-            (this.parameterTargetValue - this.parameterStartValue) *
-              (this.parameterSmooth / this.parameterSmoothTime),
-        )
+        const ratio = this.parameterSmooth / this.parameterSmoothTime
+        let nextVal = this.parameterStartValue + (effectiveTarget - this.parameterStartValue) * ratio
+        if (wrapped && this.rangeOffset > 0) {
+          const lo = this.range[0] ?? 0
+          nextVal = lo + (((nextVal - lo) % this.rangeOffset) + this.rangeOffset) % this.rangeOffset
+        }
+        this.setParameterValue(ratio >= 1 ? this.parameterTargetValue : nextVal)
       } else {
         this.setParameterValue(this.parameterTargetValue)
       }
     }
     this.updateRelations(dt)
+    this.loadL2dStep = false
+    this._firstStop = false
   }
 
-  /** relation 联动参数逐帧求值（游戏 updateRelationValue）：type 101/102 跟随拖动量 offsetDragX/Y（按下拖动才有新值，松手后保持最后落点）、103 跟随连点下标查 relation_value、其余类型跟随机器参数目标值但恒不可写。
-   * 目标值经 relation 自带修正项（缺省回落机器）钳制：有 target 直写；贴近（±0.01）直接吸附；否则 SmoothDamp 平滑（smooth 缺省回落机器 smooth）。 */
+  /** relation 联动参数逐帧求值（游戏 updateRelationValue）：type 101/102 跟随拖动量、103 跟随连点下标、104 idle+计时 */
   updateRelations(dt) {
+    if (!this.relations.length) return
+    if (this.l2dIsPlaying) {
+      if (this.l2dPlayActionName === this.actionTrigger?.action) {
+        this.relationActive = true
+      }
+    } else {
+      this.relationActive = false
+      for (const r of this.relations) r.elapsed = 0
+    }
     for (const r of this.relations) {
+      const wasEnable = r.enable
       let raw
-      let enable
+      let enable = false
       if (r.type === 101) {
         raw = this.offsetDragX ?? r.start ?? this.startValue
         enable = true
@@ -582,9 +721,17 @@ export class DragMachine {
         raw = this.offsetDragY ?? r.start ?? this.startValue
         enable = true
       } else if (r.type === 103) {
-        // 游戏是 Lua 1-based 表 relation_value[actionListIndex]（live2ddrag.lua updateRelationValue），JS 数组要 -1 对齐，否则初始就取到第二档、开关整体反相（shengluyisi_5 的 touch_drag20/21 图层开关）
+        // 游戏是 Lua 1-based 表 relation_value[actionListIndex]（live2ddrag.lua updateRelationValue），JS 数组要 -1 对齐
         raw = r.relationValue?.[this.actionListIndex - 1] ?? 0
         enable = true
+      } else if (r.type === 104) {
+        raw = r.target ?? this.parameterTargetValue
+        if (this.loadL2dStep && this.orch.idleIndex === r.idle) {
+          enable = true
+        } else if (this.relationActive && this.orch.idleIndex === r.idle) {
+          r.elapsed = (r.elapsed || 0) + dt
+          if (r.elapsed >= (r.time ?? 0)) enable = true
+        }
       } else {
         raw = this.parameterTargetValue
         enable = false
@@ -594,6 +741,9 @@ export class DragMachine {
         }
       }
       r.enable = enable
+      if (enable && !wasEnable && this.orch) {
+        this._writeSeq = ++this.orch._writeCounter
+      }
       if (!enable) continue
       const fixed = this.fixRelation(r, raw)
       if (r.target != null) {
@@ -608,8 +758,9 @@ export class DragMachine {
     }
   }
 
-  /** idle 变体切换回调（编排器 changeIdleIndex 里广播）：变体切到 revert_idle_index 名单内时参数与拖拽基准整体复位（游戏 updateStateData 的 revertIdleIndex 分支） */
+  /** idle 变体切换回调（编排器 changeIdleIndex 里广播）：变体切到 revert_idle_index 名单内时参数与拖拽基准整体复位，并更新 react_condition */
   onIdleChanged(n) {
+    this.updateReactCondition(n)
     const r = this.revertIdleIndex
     if (!(r === true || (Array.isArray(r) && r.includes(n)))) return
     this.setTargetValue(this.startValue)
@@ -627,24 +778,26 @@ export class DragMachine {
     }
   }
 
-  /** HUD 读数用：当前状态下命中本分区是否会有响应。纯查询（不推进冷却、不改状态），供交互点提示按真实路由着色——机器分区不走 interaction.json 的参数门控，红绿必须按机器自己的触发条件判定。
-   * 返回 true 可交互 / false 被冷却·单触发·播放中·重复 idle 豁免·点参档位挡下 / null 触发类型未实现。 */
+  /** HUD 读数用：当前状态下命中本分区是否会有响应 */
   interactable() {
     const at = this.actionTrigger
     if (!at?.type) return true // 纯拖拽机：按住即响应
-    // 按住型（1 拖拽邻域计时 / 3 长按播表 / 4 双轴邻域 / 8 充能）：不冷却不单触发滞留即可响应——type 1 的邻域门槛靠拖拽达成，按压本身恒可发起
-    if (at.type === 1 || at.type === 3 || at.type === 4 || at.type === 8) {
+    // 按住/运动/区间型（1 拖拽邻域计时 / 3 长按播表 / 4 双轴邻域 / 8 充能 / 14 上下行）
+    if (at.type === 1 || at.type === 3 || at.type === 4 || at.type === 8 || at.type === 14) {
       return !(this.nextTriggerTime > 0 || this.isTriggerAtion)
     }
-    if (at.type !== 2 && at.type !== 6 && at.type !== 9 && at.type !== 11) {
-      // type 10 动作链是纯自动触发（idle 变体过点联动播），不构成用户可点判定——按"被挡"参与分区聚合，不当未实现计橙
-      if (at.type === 10) return false
+    // 10 动作链、13 参数位移累计、16 对局结果均属被动联动触发，不作用户可点判定
+    if (at.type === 10 || at.type === 13 || at.type === 16) return false
+    if (at.type !== 2 && at.type !== 6 && at.type !== 9 && at.type !== 11 && at.type !== 15) {
       return null
     }
     if (this.nextTriggerTime > 0 || this.isTriggerAtion) return false
-    // 反应播放中仅 focus=1 且播的正是本机动作时可点（checkClickAction 语义，数组 action 与游戏一致按不等处理）
+    // 反应播放中仅 focus=1 且播的正是本机动作时可点
     if (this.orch.isPlaying && !(at.focus === 1 && this.orch.playActionName === at.action)) {
       return false
+    }
+    if (at.type === 15) {
+      return this.parameterTargetValue === 0 && this.orch.canXiaQiPlayerMove()
     }
     // type 9 点参：他参不贴近 num（±0.05）时白点（与 applyClickTrigger 同判据，读模型实时值）
     if (at.type === 9) {
@@ -685,11 +838,21 @@ export class DragMachine {
   /** 全量复位（游戏 clearData，对应"重置交互状态"） */
   reset() {
     this._active = false // 按压中的机器一并松开（编排器 resetAll 调用）
+    this._firstStop = false
     this.clickTriggerTime = null
     this.parameterToStart = null
+    this.delayTargetTime = null
     this.isTriggerAtion = false
     this.extendActionFlag = false
     this.animationPlayApply = false
+    this.parameterMoveTrigger = false
+    this.moveCheckTimer = 0
+    this.parameterMove = null
+    this.lastParameterMove = null
+    this.dragMoveUp = false
+    this.loadL2dStep = true
+    this.relationActive = false
+    this.updateReactCondition(0)
     this.nextTriggerTime = 0
     // 平滑状态一并归位：松手路径会把 parameterSmoothTime 留在 smoothRevert，复位后若不还原，下次触发用回弹时长插值（跨域残留）
     this.parameterSmoothTime = this.smooth
@@ -700,6 +863,7 @@ export class DragMachine {
       r.value = r.start ?? this.startValue
       r.velocity = 0
       r.enable = false
+      r.elapsed = 0
     }
     this.setParameterValue(this.startValue)
     this.setTargetValue(this.startValue)

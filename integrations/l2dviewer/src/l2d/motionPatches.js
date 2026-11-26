@@ -120,7 +120,9 @@ export function installMotionPatches(ctx) {
       this.vy = 0
       return
     }
-    return updateFocusCtrl.call(this, dt)
+    const damp = activeCtx?.orch?.dragRate?.[2]
+    const scaledDt = damp > 0 && damp !== 1 ? dt / Math.max(0.1, damp) : dt
+    return updateFocusCtrl.call(this, scaledDt)
   }
 
   // The library checks completion only BEFORE evaluating the queue. Drain a
@@ -234,12 +236,28 @@ export function installMotionPatches(ctx) {
   Cubism4InternalModel.prototype.updateFocus = function () {
     const x = this.focusController.x
     const y = this.focusController.y
-    this.coreModel.addParameterValueById(this.idParamEyeBallX, x)
-    this.coreModel.addParameterValueById(this.idParamEyeBallY, y)
-    this.coreModel.addParameterValueById(this.idParamAngleX, 30 * x)
-    this.coreModel.addParameterValueById(this.idParamAngleY, 30 * y)
-    this.coreModel.addParameterValueById('ParamBodyAngleY', 10 * y)
-    this.coreModel.addParameterValueById(this.idParamBodyAngleX, 10 * x)
+    const axes = [
+      [this.idParamEyeBallX, x],
+      [this.idParamEyeBallY, y],
+      [this.idParamAngleX, 30 * x],
+      [this.idParamAngleY, 30 * y],
+      ['ParamBodyAngleY', 10 * y],
+      [this.idParamBodyAngleX, 10 * x],
+    ]
+    const orch = activeCtx?.orch
+    const range = orch && (!orch.model?.internalModel || orch.model.internalModel === this) ? orch.paraRange : null
+    for (const [id, delta] of axes) {
+      this.coreModel.addParameterValueById(id, delta)
+      const bounds = range?.[id]
+      if (Array.isArray(bounds) && bounds.length >= 2) {
+        const idx = this.coreModel.getParameterIndex(id)
+        if (idx >= 0) {
+          const v = this.coreModel.getParameterValueByIndex(idx)
+          if (v < bounds[0]) this.coreModel.setParameterValueByIndex(idx, bounds[0])
+          else if (v > bounds[1]) this.coreModel.setParameterValueByIndex(idx, bounds[1])
+        }
+      }
+    }
   }
 
   /**

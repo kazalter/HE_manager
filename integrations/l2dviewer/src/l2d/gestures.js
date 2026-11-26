@@ -100,6 +100,11 @@ export function createGestures(ctx) {
       tx /= len
       ty /= len
     }
+    const rate = ctx.orch?.dragRate
+    if (rate) {
+      tx = Math.max(-1, Math.min(1, tx * (rate[0] ?? 1)))
+      ty = Math.max(-1, Math.min(1, ty * (rate[1] ?? 1)))
+    }
     fc.focus(tx, ty)
   }
 
@@ -115,6 +120,7 @@ export function createGestures(ctx) {
   function onPointerDown(e) {
     // 仅响应主按键/触控：右键菜单或侧键会吞掉 pointerup，导致机器按压锁滞留
     if (e.pointerType === 'mouse' && e.button !== 0) return
+    if (ctx.orch?.ignoreDrag) return
     if (pressing) onPointerCancel()
     const { x, y } = pointerPos(e)
     // 指针捕获：按下后无论在哪里松手（HUD 浮层上、画布外）pointerup 都保证送达画布。机器按压依赖 down/up 成对收尾（up 清 _active 与按压锁），鼠标没有隐式捕获，丢一次 up 会双滞留（按压锁与 _active 都不清）
@@ -139,22 +145,23 @@ export function createGestures(ctx) {
     }
     // `?.`：mountModel 在 await Live2DModel.from 前就置 ctx.orch = null，
     // machineConsumed 闭包跨 remount 存活，切皮肤窗口内按下会走到 null 上
-    if (zones.length) machineConsumed = ctx.orch?.onDown(zones[0], dragPos({ x, y })) ?? false
+    if (zones.length) machineConsumed = ctx.orch?.onDown(zones[0], dragPos({ x, y }), { x, y }) ?? false
   }
 
   function onPointerMove(e) {
     if (!pressing) return
     if (activePointerId !== null && e.pointerId !== undefined && e.pointerId !== activePointerId) return
+    if (ctx.orch?.ignoreDrag) return
     const { x, y } = pointerPos(e)
     maxDist = Math.max(maxDist, Math.hypot(x - downX, y - downY))
     if (!dragging && maxDist > GAZE_START_THRESHOLD) dragging = true
-    // 视线只在按住拖动后跟随，且持有 ignore_react=1 机器时不扭转头身
+    // 视线只在按住拖动后跟随，且持有 ignore_react=1 / react_condition 机器时不扭转头身
     if (dragging) {
       if (shouldIgnoreGaze()) resetGaze()
       else followGaze(x, y)
     }
     // 按住期间拖拽参数机持续驱动（游戏 onPointDrag 对全部机器广播）
-    ctx.orch?.onMove(dragPos({ x, y }))
+    ctx.orch?.onMove(dragPos({ x, y }), { x, y })
   }
 
   function onPointerUp(e) {
@@ -164,6 +171,7 @@ export function createGestures(ctx) {
     activePointerId = null
     // 松手视线回正：焦点归零，focusController 内部缓动过渡
     resetGaze()
+    if (ctx.orch?.ignoreDrag) return
     // 换模型窗口期 ctx.model 已指向未揭幕的新模型，不可交互
     if (!ctx.model?.visible) return
     const { x, y } = pointerPos(e)

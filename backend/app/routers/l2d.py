@@ -78,6 +78,14 @@ def import_model(skin_id: str, archive: UploadFile = File(...), _user=Depends(au
             raise HTTPException(400, f"Invalid model archive: {exc}") from None
         parent = root / character
         parent.mkdir(exist_ok=True)
+        if (os.name != "nt"):
+            os.chmod(parent, 0o755)
+            os.chmod(stage, 0o755)
+            for root_dir, dirs, files in os.walk(stage):
+                for d in dirs:
+                    os.chmod(Path(root_dir) / d, 0o755)
+                for fn in files:
+                    os.chmod(Path(root_dir) / fn, 0o644)
         target = parent / skin_id
         if target.exists():
             raise HTTPException(409, "Model already exists")

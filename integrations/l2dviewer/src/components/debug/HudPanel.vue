@@ -313,6 +313,37 @@ const emit = defineEmits(['toggle-hints', 'toggle-debug', 'toggle-ripple', 'togg
           <span v-if="hud.machine.playing" class="debug-pair warn">
             播放中:{{ hud.machine.playName }}
           </span>
+          <template v-if="hud.machine.hasGyro">
+            <label class="debug-pair inject-only">
+              <input
+                type="checkbox"
+                :checked="hud.machine.gyro?.enabled"
+                @change="hud.machine.setGyro($event.target.checked)"
+              >陀螺仪
+            </label>
+            <template v-if="hud.machine.gyro?.enabled">
+              <span class="debug-pair">X</span>
+              <input
+                class="inject-range"
+                type="range"
+                min="-0.15"
+                max="0.15"
+                step="0.01"
+                :value="hud.machine.gyro.x"
+                @input="hud.machine.setGyro(true, { x: +$event.target.value })"
+              >
+              <span class="debug-pair">Y</span>
+              <input
+                class="inject-range"
+                type="range"
+                min="-0.15"
+                max="0.15"
+                step="0.01"
+                :value="hud.machine.gyro.y"
+                @input="hud.machine.setGyro(true, { y: +$event.target.value })"
+              >
+            </template>
+          </template>
         </div>
       </div>
 

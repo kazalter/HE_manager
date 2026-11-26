@@ -28,7 +28,12 @@ def test_import_is_atomic_and_refuses_existing_or_unsafe_files(tmp_path, monkeyp
     assert post({**good, '../escape': 'bad'}).status_code == 400
     assert not (tmp_path / 'test').exists()
     assert post(good).status_code == 201
-    assert (tmp_path / 'test' / 'test_2' / 'test_2.moc3').read_text() == 'MOC3'
+    skin_dir = tmp_path / 'test' / 'test_2'
+    assert (skin_dir / 'test_2.moc3').read_text() == 'MOC3'
+    import os, stat
+    if os.name != 'nt':
+        assert stat.S_IMODE(skin_dir.stat().st_mode) == 0o755
+        assert stat.S_IMODE((skin_dir / 'test_2.moc3').stat().st_mode) == 0o644
     assert post(good).status_code == 409
     assert len(client.get('/l2d/models/manifest.json').json()) == 1
 

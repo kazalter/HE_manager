@@ -92,10 +92,13 @@ async function mountModelInner(ctx, url) {
     model.destroy()
     return
   }
+  ctx.isHx = /_hx(?:\.model3\.json)?$/i.test(url)
   ctx.runtime = new InteractionRuntime(model, interaction)
   // 动作边界预热：节点跟随每支动作实际驱动的状态/摆位参数（表外回零边补账）
   await ctx.runtime.attachMotions(url)
   if (stale()) { model.destroy(); return }
+  ctx.runtime.setFixedParam('Paramring', ctx.ring ? 1 : 0)
+  ctx.runtime.setFixedParam('l2d_hx', ctx.isHx ? 1 : 0)
   // 库的 idle 自启挂在 Ticker.shared（Live2DModel.from 的 init 即注册共享 ticker），首个 tick 早于本行——from 之后这里已串行 await 了氛围层/交互数据，auto idle 的 motionStart 已错过且无人监听；循环 idle 永不 motionFinish、重播同支又被 MotionState.reserve 拒绝，此后再无 motionStart
   // 向 state 的当前动作补一次起播结算（此刻 _clipFiles 已注入，表外边界补全一次到位）；reserve 已留位未 start 的场合（currentGroup 仍空）不补——随后的 motionStart 会落在已注册的监听器上
   const mountState = model.internalModel.motionManager.state

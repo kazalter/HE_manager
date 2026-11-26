@@ -1,6 +1,6 @@
 /** 触发类型 -> 处理器映射表（扩展点：往表里加条目即接入新类型）。处理器签名 (machine, now, dt) -> void，在 step 里每帧调用，自身负责触发条件判定（冷却由 triggerAble 统一前置过滤）。
- * type 2/6/9/11（点击/连点/点参/点区间）不在此表：它们的触发由松手判定 + clickTriggerTime 确认窗口驱动（见 onUp/applyClickTrigger），与游戏 checkClickAction 对四种类型共用的行为一致。
- * 后续按 live2ddrag.lua 的 updateTrigger 逐型补齐：14 区间上下行触发、15/16 下棋小游戏（参照 Live2DExtend：九宫格 3×3 连线判定、按 getParameterTarget() ±1 记子）等，等有实际皮肤再实测。
+ * 触发类型 2/6/9/11/15（点击/连点/点参/点区间/下棋选格）不在此表：它们的触发由松手判定 + clickTriggerTime 确认窗口驱动（见 onUp/applyClickTrigger），与游戏 checkClickAction 共用行为一致。
+ * 已补齐 live2ddrag.lua 全触发类型：13 参数变化触发、14 区间上下行触发、15/16 下棋小游戏（Live2DExtend 九宫格连线判定）。
  */
 export const TRIGGER_HANDLERS = {
   /** type 1 DRAG_TIME_ACTION（DD:1006-1021）：按住且参数现值进 num 邻域（|parameterValue-num| < |num|*0.25，用当前值、不做 fix）持续 time 秒触发；time/num 缺省回落 action_list 当前项（DD:992-1004，Lua 1-based 取 -1）。
@@ -102,6 +102,11 @@ export const TRIGGER_HANDLERS = {
       m.animationPlayApply = false
       return
     }
+    if (Array.isArray(at.parameter_range) && at.parameter_range.length >= 2) {
+      const [pName, bounds] = at.parameter_range
+      const v = m.orch.readParameter(pName)
+      if (v == null || !Array.isArray(bounds) || !(bounds[0] <= v && v < bounds[1])) return
+    }
     if (m.animationPlayApply) return
     const duration = m.orch.clipDurationOf?.(state)
     if (!duration) return
@@ -110,6 +115,77 @@ export const TRIGGER_HANDLERS = {
       m.applyTrigger()
       m.isTriggerAtion = false
       m.animationPlayApply = true
+    }
+  },
+  /** type 13 DRAG_WITH_PARAMETER_MOVE（DD:1179-1223）：每 10/30s 采样他参位移增量，按 rate 累加 target；进 num ±10% 邻域触发一次，离开邻域归零 */
+  13(m, _now, dt) {
+    if (m.l2dIsPlaying) return
+    const at = m.actionTrigger
+    const item = Array.isArray(at.action_list)
+      ? at.action_list[Math.min(Math.max(m.actionListIndex, 1), at.action_list.length) - 1]
+      : null
+    const num = at.num ?? item?.num
+    const near = num != null && Math.abs(m.parameterValue - num) <= Math.abs(num) * 0.1
+    if (near && !m.parameterMoveTrigger) {
+      m.parameterMoveTrigger = true
+      m.applyTrigger()
+      return
+    }
+    if (m.parameterMoveTrigger) {
+      m.parameterMoveTrigger = false
+      m.setParameterValue(m.startValue)
+      m.setTargetValue(m.startValue)
+    }
+    m.moveCheckTimer += dt
+    const STEP_INTERVAL = 10 / 30
+    while (m.moveCheckTimer >= STEP_INTERVAL) {
+      m.moveCheckTimer -= STEP_INTERVAL
+      m.lastParameterMove = m.parameterMove
+      m.parameterMove = m.orch.readParameter(at.parameter ?? m.parameterName)
+      if (m.lastParameterMove != null && m.parameterMove != null) {
+        const diff = Math.abs(m.parameterMove - m.lastParameterMove)
+        if (diff !== 0) {
+          m.setTargetValue(m.fixTarget(m.parameterTargetValue + diff * (at.rate || 0)))
+        }
+      }
+    }
+  },
+  /** type 14 DRAG_MOVE_DOWN_UP（DD:1224-1247）：active=1 按住期间进区间 (range[0], range[1]] 触发一次（松手清闩锁）；active=0 松手首帧读他参落入区间触发 */
+  14(m) {
+    const at = m.actionTrigger
+    const r = at.range
+    if (!Array.isArray(r) || r.length < 2) return
+    if (m._active && at.active === 1) {
+      if (!m.dragMoveUp && r[0] < m.parameterValue && m.parameterValue <= r[1]) {
+        m.dragMoveUp = true
+        m.applyTrigger()
+      }
+    } else if (m._firstStop && at.active === 0) {
+      const v = m.orch.readParameter(at.parameter ?? m.parameterName)
+      if (v != null && r[0] < v && v <= r[1]) {
+        m.applyTrigger()
+      }
+    } else if (!m._active && m.dragMoveUp) {
+      m.dragMoveUp = false
+    }
+  },
+  /** type 15 DRAG_GAME_XIAQI：同 2/6/9/11 走松手 checkClickAction（见 machine.js onUp / applyClickTrigger），此处留空占位免告警 */
+  15() {},
+  /** type 16 DRAG_GAME_XIAQI_RESULT（DD:1259-1266）：对局胜负/平局结果落账后触发对应收尾动作（win=1 胜/平，win=0 负） */
+  16(m) {
+    const commonData = m.orch.commonData
+    const res = commonData?.xiaqi_result
+    if (res == null) return
+    if (Boolean(m.actionTrigger.win === 1) === Boolean(res)) {
+      // 同步认领结果并保留引用守卫，防止 resetAll 后异步回填污染新局
+      commonData.xiaqi_result = null
+      m.applyTrigger().then((applied) => {
+        if (applied) {
+          m.isTriggerAtion = false
+        } else if (m.orch.commonData === commonData) {
+          commonData.xiaqi_result = res
+        }
+      })
     }
   },
 }

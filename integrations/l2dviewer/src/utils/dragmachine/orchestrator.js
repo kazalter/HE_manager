@@ -28,6 +28,9 @@ export class DragOrchestrator {
     this.model = model
     this.skinId = config.skin_id
     this.idleIndexMap = config.idle_index ?? {}
+    this.paraRange = config.l2d_para_range && typeof config.l2d_para_range === 'object' ? config.l2d_para_range : null
+    this.dragRate = Array.isArray(config.l2d_drag_rate) && config.l2d_drag_rate.length ? config.l2d_drag_rate : null
+    this.ignoreDrag = Boolean(config.l2d_ignore_drag)
     this.playAction = playAction
     this.idleIndex = 0 // 变体号不跨会话恢复，见 machines 读档处的注释
     this.enablePlayActions = []
@@ -39,7 +42,12 @@ export class DragOrchestrator {
     this.playStartAt = 0 // playingClip 的起播时刻（动画时钟，秒）——type 10 归一化播进度的起算点
     this.clipDurationOf = null // (clipName) => 秒 | undefined，查 clip 时长；mount/sim 从 interaction.json clips 表注入，type 10 用
     this._writeCounter = 0
-    this.machines = config.entries.map((e) => new DragMachine(e, this))
+    this.commonData = {}
+    this.xiaqiLimitTime = null
+    this._delayTimers = []
+    this.gyroInput = { enabled: false, x: 0, y: 0, z: 0 }
+    this.machines = (config.entries ?? []).map((e) => new DragMachine(e, this))
+    this.hasGyro = this.machines.some((m) => m.gyro)
     // 读档：只恢复机器拖拽参数值。idle 变体号/白名单不跨会话恢复——存档里只有变体号、没有交互图状态（菜单摊开与否），单独恢复变体号会造出"菜单没开但 touch_idle1 被重复 idle 豁免跳过"的自不一致死态；游戏里两者是配套恢复的，这里拿不到后者就干脆都从干净态起步
     for (const m of this.machines) {
       m.loadSaved(this.loadValue(String(m.id)))
@@ -124,17 +132,17 @@ export class DragOrchestrator {
 
   // ---- 指针事件分发（L2dStage 调用；返回是否被机器消费）----
 
-  /** 按下命中分区：startDrag 广播给该分区的**全部**机器（游戏 onPointDown 遍历 drags 匹配 drawAbleName，非只第一台）——wuzang_3 的 TouchDrag2 上充能、联动、长按三套机器共享分区，靠同时按压协同；各机器自己的 ignoreAction/已激活守卫在 machine.onDown 内 */
-  onDown(zoneName, pos) {
+  /** 按下命中分区：startDrag 广播给该分区的**全部**机器 */
+  onDown(zoneName, pos, screenPos = pos) {
     const ms = this.machinesForZone(zoneName)
     if (!ms.length) return false
-    for (const m of ms) m.onDown(pos, this.isPlaying)
+    for (const m of ms) m.onDown(pos, this.isPlaying, screenPos)
     return true
   }
 
-  onMove(pos) {
-    // 移动路由只按 _active（游戏 updateDrag DD:688+ 遍历按压中的机器）：machineAble 是播放闸不是移动闸——down 配置型/type4 按压期间原文不上锁，挪用锁当移动门会把它们的拖动整个掐掉
-    for (const m of this.machines) if (m._active) m.onMove(pos)
+  onMove(pos, screenPos = pos) {
+    // 移动路由只按 _active（游戏 updateDrag DD:688+ 遍历按压中的机器）
+    for (const m of this.machines) if (m._active) m.onMove(pos, screenPos)
   }
 
   /** @returns true 手势被机器消费（不再走 playHitMotion 旧路径） */
@@ -345,11 +353,111 @@ export class DragOrchestrator {
     return (Number.isFinite(this.model?.elapsedTime) ? this.model.elapsedTime : performance.now()) / 1000
   }
 
+  readReactPos() {
+    const fc = this.model?.internalModel?.focusController
+    return fc ? { x: fc.x || 0, y: fc.y || 0 } : { x: 0, y: 0 }
+  }
+
+  /** 将 Live2D 局部单位坐标 pos 换算为舞台 CSS 像素坐标（offset_circle 表盘中心） */
+  getCircleCenter(pos, _zoneName) {
+    const internal = this.model?.internalModel
+    if (!internal || !Array.isArray(pos) || pos.length < 2) return null
+    const info = internal.coreModel?.getModel?.()?.canvasinfo
+    const ppu = info?.PixelsPerUnit || internal.pixelsPerUnit
+    if (!ppu || !internal.width || !internal.height) return null
+    const local = {
+      x: internal.width / 2 + pos[0] * ppu,
+      y: internal.height / 2 - pos[1] * ppu,
+    }
+    return typeof this.model.toGlobal === 'function' ? this.model.toGlobal(local) : local
+  }
+
+  setGyro(enabled, attitude = {}) {
+    this.gyroInput = {
+      enabled: Boolean(enabled),
+      x: Number.isFinite(attitude.x) ? attitude.x : this.gyroInput.x,
+      y: Number.isFinite(attitude.y) ? attitude.y : this.gyroInput.y,
+      z: Number.isFinite(attitude.z) ? attitude.z : this.gyroInput.z,
+    }
+  }
+
+  /** Live2DExtend 井字棋（type 15/16，live2d.lua:359-396 + live2dextend.lua） */
+  _xiaqiDrags(targets = null) {
+    const out = []
+    for (const m of this.machines) {
+      if (m.actionTrigger?.type !== 15) continue
+      if (targets == null || targets.includes(m.parameterTargetValue)) out.push(m)
+    }
+    return out
+  }
+
+  _xiaqiCounts() {
+    let player = 0
+    let ai = 0
+    for (const m of this._xiaqiDrags()) {
+      const v = m.parameterTargetValue
+      if (v > 0) player++
+      else if (v < 0) ai++
+    }
+    return { player, ai }
+  }
+
+  canXiaQiPlayerMove() {
+    const drags = this._xiaqiDrags()
+    if (!drags.length) return false
+    const { player, ai } = this._xiaqiCounts()
+    return player <= ai
+  }
+
+  _checkXiaQiFinish() {
+    const WIN_LINES = [
+      [1, 2, 3], [4, 5, 6], [7, 8, 9],
+      [1, 4, 7], [2, 5, 8], [3, 6, 9],
+      [1, 5, 9], [3, 5, 7],
+    ]
+    const pIdx = new Set(this._xiaqiDrags([1]).map((m) => m.actionTrigger.index))
+    const aIdx = new Set(this._xiaqiDrags([-1]).map((m) => m.actionTrigger.index))
+    for (const line of WIN_LINES) {
+      if (line.every((i) => pIdx.has(i))) return [true, true]
+      if (line.every((i) => aIdx.has(i))) return [true, false]
+    }
+    if (pIdx.size + aIdx.size >= 9) return [true, true]
+    return [false, false]
+  }
+
+  handleXiaQi(machine) {
+    const now = this.animClockSeconds()
+    if (this.xiaqiLimitTime != null && now - this.xiaqiLimitTime <= 1) return
+    this.xiaqiLimitTime = now
+    if (this.canXiaQiPlayerMove() && machine.parameterValue === 0) {
+      machine.setTargetValue(1)
+    }
+    let [finished, playerWon] = this._checkXiaQiFinish()
+    if (finished) {
+      this._delayTimers.push({ remaining: 0.5, fn: () => { this.commonData.xiaqi_result = playerWon } })
+      return
+    }
+    const { player, ai } = this._xiaqiCounts()
+    if (player > ai) {
+      const free = this._xiaqiDrags([0])
+      if (free.length) {
+        const pick = free[Math.floor(Math.random() * free.length)]
+        pick.setTargetValueDelay(-1, 0.2)
+      }
+    }
+    ;[finished, playerWon] = this._checkXiaQiFinish()
+    if (finished) {
+      this._delayTimers.push({ remaining: 0.5, fn: () => { this.commonData.xiaqi_result = playerWon } })
+    }
+  }
+
   shouldIgnoreGaze() {
+    if (this.ignoreDrag) return true
     return this.machines.some(
       (m) =>
-        m.ignoreReact &&
-        (m._active || m.parameterValue !== m.parameterTargetValue || (m.parameterToStart != null && m.parameterToStart > 0)),
+        m.reactConditionFlag ||
+        (m.ignoreReact &&
+          (m._active || m.parameterValue !== m.parameterTargetValue || (m.parameterToStart != null && m.parameterToStart > 0))),
     )
   }
 
@@ -400,6 +508,14 @@ export class DragOrchestrator {
       this.noteMotionFinish()
     }
     const now = performance.now() / 1000
+    for (let i = this._delayTimers.length - 1; i >= 0; i--) {
+      const t = this._delayTimers[i]
+      t.remaining -= dt
+      if (t.remaining <= 0) {
+        this._delayTimers.splice(i, 1)
+        t.fn()
+      }
+    }
     for (const m of this.machines) m.step(dt, now, this.isPlaying, this.playActionName)
     if (this.machineAble && !this.machines.some((m) => m._active || m.clickTriggerTime != null)) {
       this.pressLock('无按压自愈解锁', false)
@@ -442,6 +558,7 @@ export class DragOrchestrator {
     const winners = new Map()
     for (const e of this.layerEntries()) {
       if (e.r && !e.r.enable) continue
+      if (!e.r && !e.m.paramActive()) continue
       const prev = winners.get(e.idx)
       if (!prev) {
         winners.set(e.idx, e)
@@ -489,6 +606,9 @@ export class DragOrchestrator {
   /** 全量复位（游戏 ClearLive2dSave）：清存档、机器回 startValue、idle 归零、白名单清空 */
   resetAll() {
     this._actionApplySeq = (this._actionApplySeq ?? 0) + 1
+    this.commonData = {}
+    this.xiaqiLimitTime = null
+    this._delayTimers = []
     for (const m of this.machines) {
       this.saveValue(String(m.id), null)
       this.saveValue(`${m.id}__listIndex`, null)
@@ -566,6 +686,9 @@ export class DragOrchestrator {
       playing: this.isPlaying,
       playName: this.playActionName,
       active: active ? active.drawAbleName : null,
+      hasGyro: this.hasGyro,
+      gyro: this.gyroInput,
+      setGyro: (enabled, attitude) => this.setGyro(enabled, attitude),
       machines,
       relations,
       gates: this.gateInfo(),

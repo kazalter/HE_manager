@@ -82,6 +82,17 @@ export class InteractionRuntime {
     }
   }
 
+  /** 写入并锁定初始化状态开关参数（如 Paramring / l2d_hx），防止被 smooth reset 回写默认 */
+  setFixedParam(pid, value) {
+    const core = this.model.internalModel.coreModel
+    const idx = core.getParameterIndex(pid)
+    if (idx < 0 || idx >= core.getParameterCount()) return
+    this.preservePids.add(pid)
+    this.preserveIdx.add(idx)
+    this.node.set(pid, value)
+    core.setParameterValueByIndex(idx, value)
+  }
+
   /** moc 默认值（按参数 id；模型里不存在的参数没有默认值，按 0 处理，与 paramValue 的虚拟下标行为一致） */
   paramDefault(pid) {
     const core = this.model.internalModel.coreModel
