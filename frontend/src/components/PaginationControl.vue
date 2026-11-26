@@ -387,7 +387,7 @@ onUnmounted(() => {
   .media-pagination__edge { display: none; }
   .media-pagination__icon { width: 44px; min-height: 44px; }
   .media-page-picker__trigger { min-width: 148px; min-height: 44px; }
-  .media-page-picker__panel { position: fixed; right: 12px; bottom: calc(var(--he-nav-height, 84px) + env(safe-area-inset-bottom) + 12px); left: 12px; width: auto; transform: none; }
+  .media-page-picker__panel { position: fixed; right: 12px; bottom: calc(var(--he-nav-clearance, calc(var(--he-nav-height, 80px) + var(--he-safe-bottom, env(safe-area-inset-bottom, 0px)))) + 12px); left: 12px; width: auto; transform: none; }
   .page-picker-enter-from,
   .page-picker-leave-to { transform: translateY(8px); }
   .media-page-picker__scroll { max-height: 42vh; }

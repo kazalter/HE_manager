@@ -890,7 +890,13 @@ dialog::backdrop {
 }
 
 /* Phone shell: floating pill navigation dock and dynamic Safari viewport. */
-:root { --he-nav-height: 84px; --he-app-height: 100vh; --he-safe-bottom: env(safe-area-inset-bottom, 0px); }
+:root {
+  --he-nav-height: 80px;
+  --he-app-height: 100vh;
+  --he-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --he-nav-bottom: max(12px, calc(var(--he-safe-bottom) - 6px));
+  --he-nav-clearance: calc(62px + var(--he-nav-bottom));
+}
 @supports (height: 100dvh) { :root { --he-app-height: 100dvh; } }
 /* Standard iOS standalone viewport excludes the opaque status bar; percentage height follows
  * the actual layout viewport, whereas 100vh still includes the excluded status bar. */
@@ -965,8 +971,7 @@ html.he-standalone.he-webtoon-document body,
   bottom: 0;
   inset-inline: 0;
   z-index: 40;
-  height: calc(var(--he-nav-height) + env(safe-area-inset-bottom));
-  padding: 6px max(12px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  padding: 6px max(12px, env(safe-area-inset-right)) var(--he-nav-bottom) max(12px, env(safe-area-inset-left));
   pointer-events: none;
 }
 .he-nav-surface {
@@ -1043,23 +1048,24 @@ html.he-standalone.he-webtoon-document body,
 }
 
 @media (max-width: 899px) {
-  /* Anchor installed navigation to the app's own full-height flex layout. */
+  /* Float installed navigation over the full-height shell so content reaches the bottom edge. */
   .he-standalone .he-compact-shell { flex-direction: column; }
-  .he-standalone .he-compact-shell > .main-scroll-container { height: auto; min-height: 0; padding-bottom: 0; }
-  .he-standalone .he-mobile-nav { position: relative; inset: auto; flex-shrink: 0; }
+  .he-standalone .he-compact-shell > .main-scroll-container { height: auto; min-height: 0; }
+  .he-standalone .he-mobile-nav { position: absolute; inset: auto 0 0; }
   .he-standalone .he-mobile-nav.is-retracted:not(:focus-within) { transform: none; }
   .he-standalone .he-back-top { position: absolute; }
   .he-standalone .he-audio-host, .he-standalone .he-mobile-filters, .he-standalone .he-update-notice { position: absolute; }
-  .he-standalone .he-has-mini.he-compact-shell > .main-scroll-container { padding-bottom: 96px; }
+  .he-standalone .he-has-mini.he-compact-shell > .main-scroll-container { padding-bottom: calc(var(--he-nav-clearance) + 96px); }
   .he-keyboard-open .he-mobile-nav, .he-keyboard-open .he-audio-host:not(.is-expanded) { display: none; }
-  .he-keyboard-open .he-has-mini.he-compact-shell > .main-scroll-container { padding-bottom: 0; }
+  .he-keyboard-open .he-compact-shell > .main-scroll-container,
+  html.he-standalone.he-keyboard-open .he-compact-shell > .main-scroll-container { padding-bottom: 0; }
   .he-compact-shell .main-scroll-container {
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
-    padding-bottom: calc(var(--he-nav-height) + env(safe-area-inset-bottom) + 12px);
-    scroll-padding-bottom: calc(var(--he-nav-height) + env(safe-area-inset-bottom) + 16px);
+    padding-bottom: calc(var(--he-nav-clearance) + 16px);
+    scroll-padding-bottom: calc(var(--he-nav-clearance) + 20px);
   }
-  .he-back-top { right: calc(16px + env(safe-area-inset-right)); bottom: calc(var(--he-nav-height) + env(safe-area-inset-bottom) + 14px); }
+  .he-back-top { right: calc(16px + env(safe-area-inset-right)); bottom: calc(var(--he-nav-clearance) + 14px); }
   .he-page-header { padding-top: calc(16px + env(safe-area-inset-top)); }
   .he-page-header.sticky { padding: calc(12px + env(safe-area-inset-top)) 16px 12px; }
   .he-page-header + main { padding-left: 16px; padding-right: 16px; }

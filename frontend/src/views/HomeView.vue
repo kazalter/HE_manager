@@ -1841,7 +1841,7 @@ onMounted(async () => {
     overscroll-behavior: contain;
     padding-left: max(16px, env(safe-area-inset-left));
     padding-right: max(16px, env(safe-area-inset-right));
-    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    padding-bottom: calc(16px + var(--he-safe-bottom, env(safe-area-inset-bottom, 0px)));
   }
 }
 

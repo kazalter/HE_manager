@@ -81,7 +81,7 @@ onBeforeUnmount(() => player.stop())
 <style>
 .he-audio-host { position: fixed; z-index: 65; bottom: 20px; left: 50%; transform: translateX(-50%); width: min(600px, calc(100% - 32px)); }
 .he-audio-host.is-mobile:not(.is-expanded) { left: calc(16px + env(safe-area-inset-left)); right: calc(16px + env(safe-area-inset-right)); width: auto; transform: none; }
-.he-audio-host.is-mobile:not(.is-expanded) { bottom: calc(var(--he-nav-height) + env(safe-area-inset-bottom) + 8px); }
+.he-audio-host.is-mobile:not(.is-expanded) { bottom: calc(var(--he-nav-clearance, calc(var(--he-nav-height) + var(--he-safe-bottom, env(safe-area-inset-bottom, 0px)))) + 8px); }
 .he-audio-host.is-expanded { inset: 0; width: 100%; transform: none; z-index: 210; }
 html.he-keyboard-open .he-audio-host.is-expanded { height: var(--he-app-height); }
 .he-audio-panel { height: 100%; padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
@@ -90,7 +90,7 @@ html.he-keyboard-open .he-audio-host.is-expanded { height: var(--he-app-height);
 .he-mini-progress { position: absolute; bottom: 0; left: 0; height: 2.5px; background: rgb(var(--color-accent)); }
 .he-has-mini .main-scroll-container { padding-bottom: 104px; }
 @media (max-width: 899px) {
-  .he-has-mini.he-compact-shell .main-scroll-container { padding-bottom: calc(var(--he-nav-height) + env(safe-area-inset-bottom) + 96px); }
-  .he-has-mini .he-back-top { bottom: calc(var(--he-nav-height) + env(safe-area-inset-bottom) + 90px); }
+  .he-has-mini.he-compact-shell .main-scroll-container { padding-bottom: calc(var(--he-nav-clearance, calc(var(--he-nav-height) + var(--he-safe-bottom, env(safe-area-inset-bottom, 0px)))) + 96px); }
+  .he-has-mini .he-back-top { bottom: calc(var(--he-nav-clearance, calc(var(--he-nav-height) + var(--he-safe-bottom, env(safe-area-inset-bottom, 0px)))) + 90px); }
 }
 </style>

@@ -9,10 +9,10 @@
     <meta name="apple-mobile-web-app-title" content="HE Manager" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="theme-color" content="#0a0a0d" />
+    <meta name="theme-color" content="#0f0f14" />
     <meta name="color-scheme" content="dark light" />
     <script src="/theme-init.js"></script>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HE Manager</title>
     <!-- iOS standalone compositor workaround; this empty layer adds no visible top spacer. -->
     <style>
@@ -23,7 +23,7 @@
           height: 11px;
           z-index: 2147483647;
           pointer-events: none;
-          background: rgb(var(--color-background, 10 10 13));
+          background: rgb(var(--color-background, 15 15 20));
           -webkit-background-clip: text;
           background-clip: text;
         }
@@ -32,10 +32,6 @@
         html.he-ios-standard-viewport {
           /* Standard viewport reports zero bottom inset; expose the home-indicator space globally. */
           --he-safe-bottom: 34px;
-        }
-        html.he-ios-standard-viewport .he-mobile-nav {
-          height: calc(var(--he-nav-height) + 34px);
-          padding-bottom: 42px;
         }
       }
     </style>

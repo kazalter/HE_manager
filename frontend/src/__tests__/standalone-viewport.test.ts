@@ -71,7 +71,11 @@ describe('installed app viewport', () => {
     const nativePages = fs.readFileSync(path.join(root, 'src/components/media-detail/NativeWebtoonPages.vue'), 'utf8')
 
     expect(indexHtml).toContain('--he-safe-bottom: 34px;')
+    expect(indexHtml).not.toContain('viewport-fit=cover')
+    expect(indexHtml).not.toContain('padding-bottom: 42px')
     expect(styleCss).toContain('--he-safe-bottom: env(safe-area-inset-bottom, 0px);')
+    expect(styleCss).toContain('.he-standalone .he-mobile-nav { position: absolute; inset: auto 0 0; }')
+    expect(styleCss).not.toContain('.he-standalone .he-mobile-nav { position: relative;')
     expect(styleCss).toContain('html.he-standalone.he-webtoon-document body')
     expect(mediaDetail).toContain('.he-media-overlay { padding-left:')
     expect(mediaDetail).not.toContain('100dvh')

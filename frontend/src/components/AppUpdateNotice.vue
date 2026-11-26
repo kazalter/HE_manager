@@ -59,5 +59,5 @@ onBeforeUnmount(() => {
 <style scoped>
 .he-update-notice { position: fixed; z-index: 260; right: 16px; bottom: 24px; width: min(360px, calc(100% - 32px)); box-shadow: var(--he-shadow-pop), inset 0 1px 0 var(--he-border-specular); }
 .he-connection-notice { position: fixed; inset: calc(8px + env(safe-area-inset-top)) 16px auto; z-index: 270; margin-inline: auto; max-width: 480px; border: 1px solid rgb(var(--color-warning) / 0.35); border-radius: 14px; box-shadow: var(--shadow-pop); padding: 10px 14px; text-align: center; color: rgb(var(--color-ink)); font-size: 0.8125rem; }
-@media (max-width: 899px) { .he-update-notice { bottom: calc(var(--he-nav-height) + env(safe-area-inset-bottom) + 92px); } }
+@media (max-width: 899px) { .he-update-notice { bottom: calc(var(--he-nav-clearance, calc(var(--he-nav-height) + var(--he-safe-bottom, env(safe-area-inset-bottom, 0px)))) + 92px); } }
 </style>
