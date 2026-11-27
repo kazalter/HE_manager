@@ -76,7 +76,16 @@ async function loadModelConfig() {
       modelConfig.value = value
       modelError.value = ''
     }
-  } catch { /* Optional until model switcher is opened or configured. */ }
+  } catch (e) {
+    if (!request.signal.aborted) {
+      modelError.value = assistantErrorText(e)
+    }
+  }
+}
+function ensureModelConfigLoaded() {
+  if (!modelConfig.value && !modelBusy.value) {
+    void loadModelConfig()
+  }
 }
 async function applyModelUpdate(payload: AssistantModelUpdateRequest) {
   if (modelBusy.value || !authIdentity() || !authState.user?.is_admin) return
@@ -135,6 +144,14 @@ watch(
     assistantPanelStore.state.pendingCount = pending
   },
   { immediate: true },
+)
+watch(
+  () => availability.value.enabled,
+  (enabled) => {
+    if (enabled && !modelConfig.value) {
+      void loadModelConfig()
+    }
+  },
 )
 
 const draft = ref(''),
@@ -553,6 +570,7 @@ onBeforeUnmount(() => {
                 :busy="modelBusy"
                 :disabled="active || sending"
                 :error="modelError"
+                @open="ensureModelConfigLoaded"
                 @select-preset="applyModelUpdate({ preset_id: $event })"
                 @delete-preset="applyModelUpdate({ delete_preset_id: $event })"
                 @save-custom="applyModelUpdate($event)"
@@ -882,6 +900,7 @@ onBeforeUnmount(() => {
                       :busy="modelBusy"
                       :disabled="active || sending"
                       :error="modelError"
+                      @open="ensureModelConfigLoaded"
                       @select-preset="applyModelUpdate({ preset_id: $event })"
                       @delete-preset="applyModelUpdate({ delete_preset_id: $event })"
                       @save-custom="applyModelUpdate($event)"

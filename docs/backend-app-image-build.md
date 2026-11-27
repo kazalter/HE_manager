@@ -15,7 +15,7 @@ as a base and build a small application layer:
 The script checks the current requirements against the base image and refuses
 if they differ. It builds without network access and does not restart services
 or retag the production image. Test the candidate, then tag it as
-`he-manager-backend:latest` and run `docker compose up -d --no-build backend`
+`he-manager-backend:latest` and run `docker compose -f docker-compose.yml -f docker-compose.assistant.yml up -d --no-build backend assistant-tools` (or `docker compose up -d --no-build backend` if assistant is not deployed)
 when appropriate. Keep the previous image under a separate rollback tag first.
 The script intentionally uses Docker's deprecated legacy builder because the
 current host's BuildKit/containerd snapshotter had to unpack large local image

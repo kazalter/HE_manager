@@ -188,4 +188,82 @@ describe('top-right clock/weather and right-side assistant sidebar', () => {
     await flushPromises()
     expect(trigger.attributes('aria-expanded')).toBe('false')
   })
+
+  it('shows assistant_disabled error and reloads model config when ModelSwitcher is reopened', async () => {
+    authState.token = 'admin-token'
+    authState.user = adminUser
+    let modelCalls = 0
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      const target = String(url)
+      if (target.endsWith('/status')) {
+        return new Response(JSON.stringify({ enabled: false, busy: false, active_run_id: null }))
+      }
+      if (target.endsWith('/assistant/model')) {
+        modelCalls += 1
+        if (modelCalls === 1) {
+          return new Response(JSON.stringify({ detail: 'assistant_disabled' }), { status: 503 })
+        }
+        return new Response(JSON.stringify({
+          model: 'deepseek-flash',
+          display_model: 'DeepSeek-V4.1-Flash',
+          base_url: 'https://api.deepseek.com/v1',
+          key_configured: true,
+          thinking_disabled: true,
+          presets: [
+            {
+              id: 'deepseek-flash',
+              label: 'DeepSeek-V4.1-Flash',
+              model: 'deepseek-flash',
+              base_url: 'https://api.deepseek.com/v1',
+              key_configured: true,
+              thinking_disabled: true,
+              custom: false,
+            },
+          ],
+        }))
+      }
+      return new Response(JSON.stringify({ items: [], total: 0, offset: 0, has_more: false, pending_count: 0 }))
+    }))
+
+    const wrapper = mount(AssistantSidebar, {
+      props: { open: true },
+      attachTo: document.body,
+    })
+    wrappers.push(wrapper)
+    await flushPromises()
+
+    const trigger = document.querySelector<HTMLButtonElement>('aside#he-assistant-sidebar button[aria-haspopup="dialog"]')!
+    expect(trigger.textContent).toContain('切换模型')
+
+    trigger.click()
+    await flushPromises()
+    expect(document.querySelector('#he-assistant-sidebar [role="dialog"]')?.textContent).toContain('DeepSeek-V4.1-Flash')
+  })
+
+  it('displays assistant_disabled message when model endpoint stays disabled', async () => {
+    authState.token = 'admin-token'
+    authState.user = adminUser
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      const target = String(url)
+      if (target.endsWith('/status')) {
+        return new Response(JSON.stringify({ enabled: false, busy: false, active_run_id: null }))
+      }
+      if (target.endsWith('/assistant/model')) {
+        return new Response(JSON.stringify({ detail: 'assistant_disabled' }), { status: 503 })
+      }
+      return new Response(JSON.stringify({ items: [], total: 0, offset: 0, has_more: false, pending_count: 0 }))
+    }))
+
+    const wrapper = mount(AssistantSidebar, {
+      props: { open: true },
+      attachTo: document.body,
+    })
+    wrappers.push(wrapper)
+    await flushPromises()
+
+    const trigger = document.querySelector<HTMLButtonElement>('aside#he-assistant-sidebar button[aria-haspopup="dialog"]')!
+    trigger.click()
+    await flushPromises()
+    expect(document.querySelector('#he-assistant-sidebar [role="dialog"]')?.textContent).toContain('媒体库管家尚未启用。')
+  })
 })

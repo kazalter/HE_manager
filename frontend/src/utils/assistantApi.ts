@@ -325,6 +325,7 @@ export const assistantErrors: Record<string, string> = {
   assistant_tag_exists: '目标标签已存在，请改用标签合并。',
   assistant_invalid_model: '模型配置无效，请确认模型名与 HTTPS 接口地址。',
   assistant_model_unconfigured: '媒体库管家模型尚未配置。',
+  assistant_disabled: '媒体库管家尚未启用。',
 }
 export function assistantErrorText(error: unknown) {
   return error instanceof AssistantApiError ? assistantErrors[error.code] || '操作暂不可用，请刷新后核实状态。' : '连接失败，请稍后重试。'

@@ -22,6 +22,7 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
+  open: []
   selectPreset: [presetId: string]
   deletePreset: [presetId: string]
   saveCustom: [payload: AssistantModelUpdateRequest]
@@ -71,6 +72,15 @@ function openCustomForm() {
     customBaseUrl.value = props.modelConfig.base_url
     customApiKey.value = ''
     customThinkingDisabled.value = props.modelConfig.thinking_disabled
+  }
+}
+
+function toggleMenu() {
+  menuOpen.value = !menuOpen.value
+  if (menuOpen.value) {
+    emit('open')
+  } else {
+    customOpen.value = false
   }
 }
 
@@ -151,7 +161,7 @@ onBeforeUnmount(() => {
       aria-haspopup="dialog"
       :title="`当前模型：${currentLabel}（点击切换）`"
       :disabled="busy"
-      @click="menuOpen = !menuOpen"
+      @click="toggleMenu"
     >
       <Cpu :size="13" class="shrink-0 text-accent" aria-hidden="true" />
       <span class="min-w-0 truncate">{{ currentLabel }}</span>
