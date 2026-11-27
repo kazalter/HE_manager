@@ -180,6 +180,19 @@ describe('NavigationRail layout navigation and role gating', () => {
 
     await memberWrapper.get('button[aria-label="打开命令面板搜索或跳转"]').trigger('click')
     expect(memberWrapper.emitted('openCommandPalette')).toHaveLength(1)
+
+    expect(memberWrapper.get('nav[aria-label="主导航"]').classes()).toContain('px-0.5')
+    expect(memberWrapper.get('nav[aria-label="主导航"]').classes()).toContain('custom-scrollbar')
+
+    const collapsedWrapper = mount(NavigationRail, {
+      props: { user: memberUser, collapsed: true },
+      global: { plugins: [testRouter] },
+    })
+    wrappers.push(collapsedWrapper)
+    const collapsedNav = collapsedWrapper.get('nav[aria-label="主导航"]')
+    expect(collapsedNav.classes()).toContain('scrollbar-none')
+    expect(collapsedNav.classes()).not.toContain('px-0.5')
+    expect(collapsedNav.classes()).not.toContain('pr-0.5')
   })
 })
 

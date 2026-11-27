@@ -205,8 +205,8 @@ onBeforeUnmount(() => window.clearTimeout(densityBadgeTimer))
     <!-- Scrollable Navigation Sections -->
     <nav
       aria-label="主导航"
-      class="custom-scrollbar mt-4 min-h-0 flex-1 overflow-y-auto overscroll-contain px-0.5"
-      :class="collapsed ? 'w-full space-y-3' : 'space-y-4'"
+      class="mt-4 min-h-0 flex-1 overflow-y-auto overscroll-contain"
+      :class="collapsed ? 'scrollbar-none w-full space-y-3' : 'custom-scrollbar space-y-4 px-0.5'"
     >
       <section v-for="section in navSections" :key="section.label" :aria-label="section.label">
         <p
