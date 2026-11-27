@@ -151,7 +151,7 @@ onBeforeUnmount(() => window.clearTimeout(densityBadgeTimer))
 <template>
   <aside
     aria-label="主导航栏"
-    class="he-nav-rail relative z-30 flex h-full min-h-0 flex-col border-r border-line/80 bg-sidebar/92 select-none"
+    class="he-nav-rail he-glass-sidebar relative z-30 flex h-full min-h-0 flex-col select-none"
     :class="collapsed ? 'items-center px-2 py-3' : 'px-3 py-3.5'"
   >
     <!-- Brand + Collapse Toggle -->
@@ -164,7 +164,7 @@ onBeforeUnmount(() => window.clearTimeout(densityBadgeTimer))
         class="group flex min-w-0 items-center gap-2.5 rounded-xl px-1 py-1 focus-ring"
         :title="collapsed ? 'HE Manager 首页' : undefined"
       >
-        <span class="grid size-9 shrink-0 place-items-center rounded-xl squircle bg-accent text-[13px] font-bold tracking-wider text-on-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.25),0_4px_12px_-3px_rgb(var(--color-accent)/0.55)] transition-transform duration-150 group-hover:scale-[1.03]">HE</span>
+        <span class="grid size-9 shrink-0 place-items-center rounded-xl squircle bg-gradient-to-br from-accent to-accent-glow text-[13px] font-bold tracking-wider text-on-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.3),0_6px_16px_-4px_rgb(var(--color-accent)/0.65)] transition-transform duration-150 group-hover:scale-[1.04]">HE</span>
         <span v-if="!collapsed" class="min-w-0">
           <span class="block truncate text-body font-semibold leading-tight tracking-tight text-ink">HE Manager</span>
           <span class="block truncate text-[11px] text-subtle">个人媒体中心</span>
@@ -173,7 +173,7 @@ onBeforeUnmount(() => window.clearTimeout(densityBadgeTimer))
 
       <button
         type="button"
-        class="grid size-8 shrink-0 place-items-center rounded-lg text-subtle transition-colors duration-150 hover:bg-surface-2 hover:text-ink focus-ring"
+        class="grid size-8 shrink-0 place-items-center rounded-lg text-subtle transition-colors duration-150 hover:bg-surface-2/70 hover:text-ink focus-ring"
         :title="collapsed ? '展开侧边导航 ([)' : '收起侧边导航 ([)'"
         :aria-label="collapsed ? '展开侧边导航' : '收起侧边导航'"
         :aria-expanded="!collapsed"
@@ -188,7 +188,7 @@ onBeforeUnmount(() => window.clearTimeout(densityBadgeTimer))
     <div class="mt-3 shrink-0" :class="collapsed ? 'w-full flex justify-center' : 'px-0.5'">
       <button
         type="button"
-        class="flex h-9 items-center rounded-xl border border-line bg-surface/80 text-meta text-subtle transition-colors duration-150 hover:border-line-strong hover:bg-surface-2 hover:text-ink focus-ring"
+        class="flex h-9 items-center rounded-xl border border-line/70 bg-surface/45 text-meta text-subtle shadow-[inset_0_1px_0_var(--he-border-specular)] transition-all duration-150 hover:border-line-strong hover:bg-surface-2/70 hover:text-ink focus-ring"
         :class="collapsed ? 'size-10 justify-center' : 'w-full justify-between gap-2 px-3'"
         aria-label="打开命令面板搜索或跳转"
         :title="collapsed ? '快速跳转与搜索 (Ctrl/⌘ K)' : undefined"
@@ -198,7 +198,7 @@ onBeforeUnmount(() => window.clearTimeout(densityBadgeTimer))
           <Search :size="15" class="shrink-0" aria-hidden="true" />
           <span v-if="!collapsed" class="truncate">快速跳转…</span>
         </span>
-        <kbd v-if="!collapsed" class="rounded border border-line-strong bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-subtle">⌘K</kbd>
+        <kbd v-if="!collapsed" class="rounded-md border border-line/80 bg-surface-2/70 px-1.5 py-0.5 font-mono text-[10px] text-subtle">⌘K</kbd>
       </button>
     </div>
 
@@ -228,13 +228,13 @@ onBeforeUnmount(() => window.clearTimeout(densityBadgeTimer))
               :class="[
                 collapsed ? 'size-10 justify-center' : 'gap-2.5 px-2.5 py-2',
                 isItemActive(item)
-                  ? 'bg-accent/15 text-ink ring-1 ring-inset ring-accent/32 shadow-[inset_0_1px_0_var(--he-border-specular)]'
-                  : 'text-muted hover:bg-surface-2/85 hover:text-ink',
+                  ? 'bg-accent/18 text-ink ring-1 ring-inset ring-accent/35 shadow-[inset_0_1px_0_rgb(255_255_255/0.14),0_4px_16px_-6px_rgb(var(--color-accent)/0.45)]'
+                  : 'text-muted hover:bg-surface-2/60 hover:text-ink',
               ]"
             >
               <span
                 v-if="isItemActive(item) && !collapsed"
-                class="absolute left-0.5 top-2 bottom-2 w-[3px] rounded-full bg-accent shadow-[0_0_8px_rgb(var(--color-accent)/0.65)]"
+                class="absolute left-0.5 top-2 bottom-2 w-[3px] rounded-full bg-accent shadow-[0_0_10px_rgb(var(--color-accent)/0.85)]"
                 aria-hidden="true"
               ></span>
               <component
@@ -256,14 +256,14 @@ onBeforeUnmount(() => window.clearTimeout(densityBadgeTimer))
               :class="[
                 collapsed ? 'size-10 justify-center' : 'gap-2.5 px-2.5 py-2',
                 isItemActive(item)
-                  ? 'bg-accent/15 text-ink ring-1 ring-inset ring-accent/32 shadow-[inset_0_1px_0_var(--he-border-specular)]'
-                  : 'text-muted hover:bg-surface-2/85 hover:text-ink',
+                  ? 'bg-accent/18 text-ink ring-1 ring-inset ring-accent/35 shadow-[inset_0_1px_0_rgb(255_255_255/0.14),0_4px_16px_-6px_rgb(var(--color-accent)/0.45)]'
+                  : 'text-muted hover:bg-surface-2/60 hover:text-ink',
               ]"
               @click="item.onClick?.()"
             >
               <span
                 v-if="isItemActive(item) && !collapsed"
-                class="absolute left-0.5 top-2 bottom-2 w-[3px] rounded-full bg-accent shadow-[0_0_8px_rgb(var(--color-accent)/0.65)]"
+                class="absolute left-0.5 top-2 bottom-2 w-[3px] rounded-full bg-accent shadow-[0_0_10px_rgb(var(--color-accent)/0.85)]"
                 aria-hidden="true"
               ></span>
               <component
@@ -277,7 +277,7 @@ onBeforeUnmount(() => window.clearTimeout(densityBadgeTimer))
               <span v-else class="sr-only">{{ item.label }}</span>
               <span
                 v-if="item.badgeDot && !collapsed"
-                class="size-2 shrink-0 rounded-full bg-accent"
+                class="size-2 shrink-0 rounded-full bg-accent shadow-[0_0_8px_rgb(var(--color-accent)/0.8)]"
                 aria-hidden="true"
               ></span>
             </button>
@@ -288,7 +288,7 @@ onBeforeUnmount(() => window.clearTimeout(densityBadgeTimer))
 
     <!-- Bottom Quiet Utility Dock -->
     <div
-      class="mt-3 shrink-0 border-t border-line/70 pt-3"
+      class="mt-3 shrink-0 border-t border-line/55 pt-3"
       :class="collapsed ? 'flex w-full flex-col items-center gap-2' : 'space-y-2.5'"
     >
 
@@ -314,7 +314,7 @@ onBeforeUnmount(() => window.clearTimeout(densityBadgeTimer))
         <div class="flex min-w-0 items-center gap-1.5">
           <div
             v-if="user && !collapsed"
-            class="flex min-w-0 items-center gap-1.5 rounded-xl border border-line/80 bg-surface/80 pl-1.5 pr-2 py-1"
+            class="flex min-w-0 items-center gap-1.5 rounded-xl border border-line/65 bg-surface/50 pl-1.5 pr-2 py-1 shadow-[inset_0_1px_0_var(--he-border-specular)]"
             :title="user.username"
           >
             <span class="grid size-5 shrink-0 place-items-center rounded-md bg-accent/20 text-[10px] font-semibold text-accent-glow" aria-hidden="true">{{ userInitial }}</span>

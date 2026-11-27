@@ -16,6 +16,7 @@ import AppUpdateNotice from './components/AppUpdateNotice.vue'
 import GlobalAudioPlayer from './components/GlobalAudioPlayer.vue'
 import { audioPlaybackStore } from './stores/audioPlaybackStore'
 import { assistantPanelStore } from './stores/assistantPanelStore'
+import { ambientCoverStore } from './stores/ambientCoverStore'
 import { useCompactViewport } from './composables/useCompactViewport'
 import { useDesktopRailViewport } from './composables/useDesktopRailViewport'
 import { useStandaloneViewport } from './composables/useStandaloneViewport'
@@ -45,6 +46,9 @@ watch(() => [authState.user?.id, authState.user?.is_admin], ([, isAdmin]) => {
 watch(() => route.path, path => {
   if (path === '/assistant' && assistantPanelStore.state.open) {
     assistantPanelStore.close()
+  }
+  if (path !== '/' && !path.startsWith('/type/')) {
+    ambientCoverStore.clearCover()
   }
 })
 const mainScrollRef = ref<HTMLElement | null>(null)
@@ -164,6 +168,18 @@ onBeforeUnmount(() => {
     ]"
   >
     <a href="#he-main-content" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-xl focus:bg-accent focus:px-4 focus:py-3 focus:text-on-accent">跳转到主要内容</a>
+    <div v-if="!isEmbed" class="he-ambient-stage" aria-hidden="true">
+      <Transition name="he-ambient-fade">
+        <img
+          v-if="ambientCoverStore.state.coverUrl"
+          :key="ambientCoverStore.state.coverUrl"
+          :src="ambientCoverStore.state.coverUrl"
+          alt=""
+          class="he-ambient-cover-img"
+        />
+      </Transition>
+      <div class="he-ambient-scrim"></div>
+    </div>
     <div v-if="!isEmbed" class="he-ambient" aria-hidden="true"></div>
     <NavigationRail
       v-if="showRail"
@@ -177,22 +193,22 @@ onBeforeUnmount(() => {
     <header
       v-if="showRail"
       aria-label="顶部工具栏"
-      class="he-shell-topbar relative z-30 flex h-12 shrink-0 items-center justify-end gap-2.5 border-b border-line/65 glass-surface px-5 lg:px-6"
+      class="he-shell-topbar he-glass-topbar relative z-30 flex h-12 shrink-0 items-center justify-end gap-2.5 px-5 lg:px-7"
     >
       <ClockWeather compact />
       <button
         v-if="authState.user?.is_admin"
         type="button"
-        class="relative inline-flex h-9 items-center gap-2 rounded-xl border px-3 text-meta font-medium transition-colors duration-150 focus-ring"
+        class="relative inline-flex h-8.5 items-center gap-2 rounded-full border px-3.5 text-meta font-medium transition-all duration-150 focus-ring"
         :class="assistantPanelStore.state.open
-          ? 'border-accent/45 bg-accent/15 text-ink ring-1 ring-inset ring-accent/30'
-          : 'border-line bg-surface-2/75 text-muted hover:border-line-strong hover:bg-surface-3 hover:text-ink'"
+          ? 'border-accent/50 bg-accent/18 text-ink ring-1 ring-inset ring-accent/35 shadow-[0_0_18px_-4px_rgb(var(--color-accent)/0.55)]'
+          : 'border-white/10 bg-surface/50 text-muted backdrop-blur-md hover:border-line-strong hover:bg-surface-2/75 hover:text-ink'"
         :aria-expanded="assistantPanelStore.state.open"
         aria-controls="he-assistant-sidebar"
         title="打开或收起媒体库管家右侧边栏"
         @click="assistantPanelStore.toggle()"
       >
-        <MessageSquare :size="15" :class="assistantPanelStore.state.open ? 'text-accent-glow' : 'text-subtle'" aria-hidden="true" />
+        <MessageSquare :size="14" :class="assistantPanelStore.state.open ? 'text-accent-glow' : 'text-subtle'" aria-hidden="true" />
         <span>媒体库管家</span>
         <span
           v-if="assistantPanelStore.state.pendingCount > 0"
@@ -240,7 +256,7 @@ onBeforeUnmount(() => {
 </template>
 <style>
 .he-studio-shell {
-  --he-rail-width: 236px;
+  --he-rail-width: 224px;
   display: grid;
   grid-template-areas:
     "rail topbar"
@@ -251,7 +267,7 @@ onBeforeUnmount(() => {
 }
 
 .he-studio-shell.is-rail-collapsed {
-  --he-rail-width: 72px;
+  --he-rail-width: 68px;
 }
 
 .he-shell-rail {

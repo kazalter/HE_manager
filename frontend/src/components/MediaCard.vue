@@ -155,33 +155,33 @@ const frameStyle = computed(() => {
         @error="onImageError"
       />
 
-      <!-- Bottom scrim keeps overlay badges readable on bright art. -->
-      <div class="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/55 via-black/15 to-transparent"></div>
-      <div class="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10 transition-colors duration-200 group-hover:ring-white/25"></div>
+      <!-- Subtle bottom vignette keeps duration and progress legible without dulling artwork. -->
+      <div class="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/62 via-black/14 to-transparent"></div>
+      <div class="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/12 transition-colors duration-200 group-hover:ring-accent/45"></div>
 
-      <div v-if="media.favorite" class="absolute left-2 top-2 grid size-6 place-items-center rounded-lg bg-black/72 text-star ring-1 ring-inset ring-white/15" title="已收藏">
-        <Star :size="13" fill="currentColor" aria-hidden="true" />
+      <div v-if="media.favorite" class="he-glass-pill absolute left-2 top-2 grid size-6 place-items-center rounded-full text-star shadow-[0_0_12px_rgb(var(--color-star)/0.38)]" title="已收藏">
+        <Star :size="12" fill="currentColor" aria-hidden="true" />
         <span class="sr-only">已收藏</span>
       </div>
 
-      <div v-if="showType" class="absolute right-2 top-2 inline-flex min-h-6 items-center gap-1 rounded-lg bg-black/72 px-1.5 py-0.5 text-caption font-medium text-white/95 ring-1 ring-inset ring-white/15">
-        <Film v-if="media.media_type === 'video'" :size="12" aria-hidden="true" />
-        <Book v-else-if="media.media_type === 'manga'" :size="12" aria-hidden="true" />
-        <Headphones v-else-if="media.media_type === 'audio'" :size="12" aria-hidden="true" />
-        <ImageIcon v-else :size="12" aria-hidden="true" />
+      <div v-if="showType" class="he-card-type-badge he-glass-pill absolute right-2 top-2 inline-flex min-h-6 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-white/92">
+        <Film v-if="media.media_type === 'video'" :size="11" aria-hidden="true" />
+        <Book v-else-if="media.media_type === 'manga'" :size="11" aria-hidden="true" />
+        <Headphones v-else-if="media.media_type === 'audio'" :size="11" aria-hidden="true" />
+        <ImageIcon v-else :size="11" aria-hidden="true" />
         <span>{{ typeLabel(media.media_type) }}</span>
       </div>
 
-      <div v-if="media.is_missing" class="he-badge-missing absolute bottom-2.5 left-2 inline-flex min-h-6 items-center rounded-lg bg-danger px-1.5 py-0.5 text-caption font-semibold text-black/85 shadow-sm">
+      <div v-if="media.is_missing" class="he-badge-missing absolute bottom-2.5 left-2 inline-flex min-h-6 items-center rounded-full bg-danger/90 px-2 py-0.5 text-[11px] font-semibold text-black/90 shadow-sm">
         文件丢失
       </div>
 
-      <span v-if="showDuration" class="he-card-duration absolute bottom-2.5 right-2 inline-flex min-h-6 items-center rounded-lg bg-black/75 px-1.5 py-0.5 text-caption font-medium tabular-nums text-white ring-1 ring-inset ring-white/12 transition-[bottom] duration-150">
+      <span v-if="showDuration" class="he-card-duration he-glass-pill absolute bottom-2.5 right-2 inline-flex min-h-5 items-center rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums text-white/95 transition-[bottom] duration-150">
         {{ formatDuration(media.duration!) }}
       </span>
 
-      <div v-if="percent > 0" class="absolute inset-x-0 bottom-0 h-[3px] bg-black/50" role="progressbar" :aria-valuenow="percent" aria-valuemin="0" aria-valuemax="100" :aria-label="`进度 ${percent}%`">
-        <div class="h-full bg-accent shadow-[0_0_8px_rgb(var(--color-accent)/0.8)]" :style="{ width: `${percent}%` }"></div>
+      <div v-if="percent > 0" class="absolute inset-x-0 bottom-0 h-[3px] bg-black/45" role="progressbar" :aria-valuenow="percent" aria-valuemin="0" aria-valuemax="100" :aria-label="`进度 ${percent}%`">
+        <div class="h-full bg-gradient-to-r from-accent to-accent-glow shadow-[0_0_10px_rgb(var(--color-accent)/0.9)]" :style="{ width: `${percent}%` }"></div>
       </div>
     </div>
 
@@ -190,7 +190,7 @@ const frameStyle = computed(() => {
         {{ media.title }}
       </h3>
       <div class="mt-1 flex min-w-0 items-center gap-1.5 text-caption text-subtle tabular-nums">
-        <span class="shrink-0 rounded bg-surface-2 px-1 py-px text-[11px] font-medium text-muted">{{ extension }}</span>
+        <span class="shrink-0 rounded-md border border-line/55 bg-surface-2/70 px-1.5 py-px text-[10.5px] font-medium text-muted">{{ extension }}</span>
         <span class="truncate">{{ formatMeta(media) }}</span>
 
         <span v-if="media.rating" class="ml-auto inline-flex shrink-0 items-center gap-0.5 font-medium text-star" :title="`评分: ${media.rating} 星`">
@@ -235,11 +235,11 @@ const frameStyle = computed(() => {
 @media (hover: hover) {
   .he-media-card:hover .he-media-card__frame {
     box-shadow: var(--he-shadow-card-hover);
-    translate: 0 -3px;
+    translate: 0 -4px;
   }
 
   .he-media-card:hover .he-media-card__art {
-    scale: 1.04;
+    scale: 1.045;
   }
 }
 

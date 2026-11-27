@@ -156,11 +156,11 @@
   --he-glass-bg: rgb(var(--color-surface) / 0.88);
   --he-glass-elevated: rgb(var(--color-surface-3) / 0.94);
   --he-border-specular: rgb(255 255 255 / 0.085);
-  --he-shadow-card: 0 1px 2px rgb(0 0 0 / 0.26), 0 8px 22px -12px rgb(0 0 0 / 0.45);
-  --he-shadow-card-hover: 0 0 0 1px rgb(var(--color-accent) / 0.32), 0 16px 34px -12px rgb(0 0 0 / 0.68), 0 6px 20px -10px rgb(var(--color-accent) / 0.18);
-  --he-shadow-pop: 0 0 0 1px rgb(255 255 255 / 0.07), 0 16px 38px -10px rgb(0 0 0 / 0.65);
-  --he-shadow-modal: 0 0 0 1px rgb(255 255 255 / 0.09), 0 32px 80px -18px rgb(0 0 0 / 0.82);
-  --he-shadow-dock: 0 0 0 1px rgb(255 255 255 / 0.09), 0 18px 44px -12px rgb(0 0 0 / 0.72);
+  --he-shadow-card: 0 2px 6px rgb(0 0 0 / 0.28), 0 10px 26px -12px rgb(0 0 0 / 0.52);
+  --he-shadow-card-hover: 0 0 0 1px rgb(var(--color-accent) / 0.42), 0 18px 38px -12px rgb(0 0 0 / 0.72), 0 8px 24px -8px rgb(var(--color-accent) / 0.28);
+  --he-shadow-pop: 0 0 0 1px rgb(255 255 255 / 0.08), 0 18px 42px -10px rgb(0 0 0 / 0.68);
+  --he-shadow-modal: 0 0 0 1px rgb(255 255 255 / 0.1), 0 32px 80px -18px rgb(0 0 0 / 0.84);
+  --he-shadow-dock: 0 0 0 1px rgb(255 255 255 / 0.1), 0 18px 44px -12px rgb(0 0 0 / 0.74);
   --color-success: 52 211 153;
   --color-warning: 251 191 36;
   --color-danger: 248 113 113;
@@ -202,9 +202,9 @@
 
 @supports (color: color-mix(in oklab, white, black)) {
   :root {
-    --he-glass-bg: color-mix(in oklab, rgb(var(--color-surface)) 80%, transparent);
-    --he-glass-elevated: color-mix(in oklab, rgb(var(--color-surface-3)) 88%, transparent);
-    --he-border-specular: color-mix(in oklab, rgb(var(--color-ink)) 11%, transparent);
+    --he-glass-bg: color-mix(in oklab, rgb(var(--color-surface)) 66%, transparent);
+    --he-glass-elevated: color-mix(in oklab, rgb(var(--color-surface-3)) 80%, transparent);
+    --he-border-specular: color-mix(in oklab, rgb(var(--color-ink)) 12%, transparent);
   }
 }
 
@@ -391,14 +391,121 @@ dialog::backdrop {
 /* Modern frosted studio surface. */
 @utility glass-surface {
   background: var(--he-glass-bg);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
 }
 
 @utility glass-elevated {
   background: var(--he-glass-elevated);
-  backdrop-filter: blur(22px) saturate(150%);
-  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  backdrop-filter: blur(26px) saturate(160%);
+  -webkit-backdrop-filter: blur(26px) saturate(160%);
+}
+
+/* Atmospheric ACG cover ambient stage & translucent frosted chrome */
+.he-ambient-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  contain: strict;
+}
+
+.he-ambient-cover-img {
+  position: absolute;
+  inset: -8%;
+  width: 116%;
+  height: 116%;
+  object-fit: cover;
+  filter: blur(76px) saturate(1.55) brightness(0.56);
+  opacity: 0.56;
+  transform: translateZ(0) scale(1.06);
+  will-change: opacity;
+}
+
+.he-ambient-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(1100px 620px at 62% 8% var(--in-oklab), rgb(var(--color-background) / 0.24), rgb(var(--color-background) / 0.78) 65%, rgb(var(--color-background) / 0.94) 100%),
+    linear-gradient(180deg, rgb(var(--color-background) / 0.32) 0%, rgb(var(--color-background) / 0.76) 48%, rgb(var(--color-background) / 0.96) 100%);
+}
+
+:root[data-color-mode="light"] .he-ambient-cover-img {
+  filter: blur(76px) saturate(1.35) brightness(1.08);
+  opacity: 0.24;
+}
+
+:root[data-color-mode="light"] .he-ambient-scrim {
+  background:
+    radial-gradient(1100px 620px at 62% 8% var(--in-oklab), rgb(var(--color-background) / 0.45), rgb(var(--color-background) / 0.84) 68%, rgb(var(--color-background) / 0.96) 100%),
+    linear-gradient(180deg, rgb(var(--color-background) / 0.5) 0%, rgb(var(--color-background) / 0.84) 50%, rgb(var(--color-background) / 0.97) 100%);
+}
+
+.he-ambient-fade-enter-active,
+.he-ambient-fade-leave-active {
+  transition: opacity 620ms var(--ease-out);
+}
+.he-ambient-fade-enter-from,
+.he-ambient-fade-leave-to {
+  opacity: 0;
+}
+
+.he-glass-sidebar {
+  background: rgb(var(--color-sidebar) / 0.68);
+  background: color-mix(in oklab, rgb(var(--color-sidebar)) 62%, transparent);
+  backdrop-filter: blur(28px) saturate(155%);
+  -webkit-backdrop-filter: blur(28px) saturate(155%);
+  border-right: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: inset -1px 0 0 rgb(255 255 255 / 0.03), 8px 0 32px -18px rgb(0 0 0 / 0.55);
+}
+
+:root[data-color-mode="light"] .he-glass-sidebar {
+  background: rgb(248 249 252 / 0.78);
+  border-right-color: rgb(var(--color-line) / 0.75);
+  box-shadow: 6px 0 24px -18px rgb(15 23 42 / 0.14);
+}
+
+.he-glass-topbar {
+  background: linear-gradient(180deg, rgb(var(--color-background) / 0.52) 0%, rgb(var(--color-background) / 0.14) 100%);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border-bottom: 1px solid rgb(255 255 255 / 0.05);
+}
+
+:root[data-color-mode="light"] .he-glass-topbar {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.72) 0%, rgb(255 255 255 / 0.42) 100%);
+  border-bottom-color: rgb(var(--color-line) / 0.55);
+}
+
+.he-glass-bar {
+  background: rgb(var(--color-surface) / 0.58);
+  background: color-mix(in oklab, rgb(var(--color-surface)) 58%, transparent);
+  backdrop-filter: blur(24px) saturate(155%);
+  -webkit-backdrop-filter: blur(24px) saturate(155%);
+  border: 1px solid rgb(255 255 255 / 0.09);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1), 0 14px 34px -16px rgb(0 0 0 / 0.6);
+}
+
+:root[data-color-mode="light"] .he-glass-bar {
+  background: rgb(255 255 255 / 0.8);
+  border-color: rgb(var(--color-line) / 0.85);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 10px 28px -14px rgb(15 23 42 / 0.14);
+}
+
+.he-glass-pill {
+  background: rgb(10 12 18 / 0.46);
+  backdrop-filter: blur(12px) saturate(145%);
+  -webkit-backdrop-filter: blur(12px) saturate(145%);
+  border: 1px solid rgb(255 255 255 / 0.15);
+}
+
+.he-glass-capsule {
+  background: rgb(10 12 18 / 0.62);
+  backdrop-filter: blur(16px) saturate(155%);
+  -webkit-backdrop-filter: blur(16px) saturate(155%);
+  border: 1px solid rgb(255 255 255 / 0.18);
+  box-shadow: 0 8px 22px -6px rgb(0 0 0 / 0.68), inset 0 1px 0 rgb(255 255 255 / 0.14);
 }
 
 /* Progressive squircle corners where supported. */
@@ -1074,24 +1181,43 @@ html.he-standalone.he-webtoon-document body,
   .he-page-header.sticky { padding: calc(12px + env(safe-area-inset-top)) 16px 12px; }
   .he-page-header + main { padding-left: 16px; padding-right: 16px; }
   input, textarea, select { font-size: max(16px, 1em); }
-  .he-ambient { display: none; }
+  .he-ambient,
+  .he-ambient-stage { display: none; }
   .masonry-grid { column-gap: 12px; }
   .masonry-grid-item { margin-bottom: 12px; }
 }
 
-/* Cover actions stay available on touch devices and reveal on keyboard focus. */
-.he-media-delete {
-  transition: opacity 160ms ease, background-color 160ms ease, color 160ms ease;
+@media (prefers-reduced-motion: reduce) {
+  .he-ambient-fade-enter-active,
+  .he-ambient-fade-leave-active {
+    transition: none;
+  }
+}
+
+/* Cover actions stay available on touch devices and reveal cleanly on desktop hover/focus. */
+.he-media-delete,
+.he-card-quick-actions,
+.he-card-type-badge {
+  transition: opacity 160ms ease, transform 160ms var(--ease-snappy), background-color 160ms ease, color 160ms ease;
 }
 @media (hover: hover) and (pointer: fine) {
-  .he-media-actions .he-media-delete {
+  .he-media-actions .he-media-delete,
+  .he-media-actions .he-card-quick-actions {
     opacity: 0;
     pointer-events: none;
+    transform: translateY(-2px) scale(0.96);
   }
   .he-media-actions:hover .he-media-delete,
-  .he-media-actions:focus-within .he-media-delete {
+  .he-media-actions:focus-within .he-media-delete,
+  .he-media-actions:hover .he-card-quick-actions,
+  .he-media-actions:focus-within .he-card-quick-actions {
     opacity: 1;
     pointer-events: auto;
+    transform: translateY(0) scale(1);
+  }
+  .he-media-actions:hover .he-card-type-badge,
+  .he-media-actions:focus-within .he-card-type-badge {
+    opacity: 0;
   }
 }
 

@@ -14,9 +14,10 @@ import MediaCard from '../components/MediaCard.vue'
 import MediaViewCard from '../components/MediaViewCard.vue'
 import { AsyncMediaDetail as MediaDetail } from '../components/asyncComponents'
 import PaginationControl from '../components/PaginationControl.vue'
-import { EmptyState, PageHeader, SectionHeader, UiButton, UiIconButton, UiInput, UiSegmented, UiSkeleton, UiToast, buttonClass, controlClass, iconButtonClass, menuItemClass, popoverClass, type SegmentedOption } from '../components/ui'
+import { EmptyState, PageHeader, UiButton, UiIconButton, UiInput, UiSegmented, UiSkeleton, UiToast, buttonClass, controlClass, iconButtonClass, menuItemClass, popoverClass, type SegmentedOption } from '../components/ui'
 import { useCompactViewport } from '../composables/useCompactViewport'
 import { applyDensity, DENSITY_OPTIONS, densityState, type VisualDensity } from '../density'
+import { ambientCoverStore } from '../stores/ambientCoverStore'
 const compact = useCompactViewport()
 const filterPanelRef = ref<HTMLElement | null>(null)
 const filterTriggerRef = ref<HTMLButtonElement | null>(null)
@@ -339,6 +340,44 @@ const recentlyOpened = computed(() => {
 
 const featuredContinue = computed(() => recentlyOpened.value[0] ?? null)
 const otherContinueItems = computed(() => recentlyOpened.value.slice(1))
+const showHeroSpotlight = computed(() =>
+  !displayedType.value && !favoriteOnly.value && Boolean(featuredContinue.value) && !searchQuery.value && !hasTagFilter.value,
+)
+const hoveredAmbientCover = ref<string | null>(null)
+const activeAmbientCoverUrl = computed(() => {
+  const path = hoveredAmbientCover.value
+    ?? (showHeroSpotlight.value ? featuredContinue.value?.cover_path : null)
+    ?? mediaList.value[0]?.cover_path
+    ?? null
+  return path ? thumbnailUrl(path) : ''
+})
+watch(activeAmbientCoverUrl, (url) => {
+  ambientCoverStore.setCover(url)
+}, { immediate: true })
+
+const favoritingIds = ref<Set<number>>(new Set())
+const quickToggleFavorite = async (item: Media) => {
+  if (favoritingIds.value.has(item.id)) return
+  const nextFavorite = !item.favorite
+  favoritingIds.value = new Set([...favoritingIds.value, item.id])
+  const optimistic = { ...item, favorite: nextFavorite }
+  updateMediaInList(optimistic)
+  try {
+    const res = await axios.patch<Media>(
+      `${API_BASE_URL}/media/${item.id}`,
+      { favorite: nextFavorite },
+      { headers: authHeaders() },
+    )
+    if (!disposed) updateMediaInList(res.data)
+  } catch (err) {
+    console.error('Failed to toggle favorite:', err)
+    if (!disposed) updateMediaInList(item)
+  } finally {
+    const next = new Set(favoritingIds.value)
+    next.delete(item.id)
+    favoritingIds.value = next
+  }
+}
 
 const drawerDragY = ref(0)
 let drawerTouchStartY = 0
@@ -999,6 +1038,7 @@ const onGlobalHomeKeydown = (event: KeyboardEvent) => {
   }
 }
 onUnmounted(() => {
+  ambientCoverStore.clearCover()
   window.clearTimeout(loadingNoticeTimer)
   disposed = true; ++mediaRequestId; ++detailRequestId; ++viewerPageRequestId
   for (const controller of controllers.values()) controller.abort()
@@ -1044,22 +1084,22 @@ onMounted(async () => {
 
 <template>
   <div class="relative z-10 min-h-full">
-    <PageHeader class="border-b border-line/80" :title="pageTitle" :count="loading && !totalItems ? undefined : `${totalItems.toLocaleString()} 项`">
+    <PageHeader :title="pageTitle" :count="loading && !totalItems ? undefined : `${totalItems.toLocaleString()} 项`">
       <template #actions>
         <div role="status" class="min-h-5 w-28 text-right text-meta text-subtle"><span v-if="delayedLoading">正在加载媒体…</span></div>
       </template>
-      <p v-if="discardNotice" role="alert" class="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-warning/30 bg-warning/10 px-3.5 py-2.5 text-meta text-warning">
+      <p v-if="discardNotice" role="alert" class="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-warning/30 bg-warning/10 px-3.5 py-2.5 text-meta text-warning backdrop-blur-md">
         <span>文件清理未完成：{{ discardNotice }}</span>
         <router-link to="/discarded" class="font-medium text-accent-glow underline">查看丢弃记录</router-link>
         <button type="button" class="ml-auto underline focus-ring" @click="discardNotice = ''">关闭提示</button>
       </p>
-      <p v-if="authState.user?.is_admin && hiddenDuplicatesCount > 0 && !hiddenDupNoticeDismissed" class="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface-2/80 px-3.5 py-2 text-meta text-subtle">
+      <p v-if="authState.user?.is_admin && hiddenDuplicatesCount > 0 && !hiddenDupNoticeDismissed" class="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line/70 bg-surface/60 px-3.5 py-2 text-meta text-subtle backdrop-blur-md">
         <span>有 {{ hiddenDuplicatesCount }} 项媒体因待检或疑似重复暂未展示</span>
         <router-link to="/dedup" class="font-medium text-accent-glow underline">前往重复管理</router-link>
         <button type="button" class="ml-auto underline focus-ring" @click="hiddenDupNoticeDismissed = true">知道了</button>
       </p>
 
-      <div class="he-filter-bar squircle flex flex-wrap items-center gap-2 rounded-2xl border border-line/85 bg-surface/80 p-2 shadow-[inset_0_1px_0_var(--he-border-specular)]">
+      <div class="he-filter-bar he-glass-bar squircle flex flex-wrap items-center gap-2 rounded-2xl p-2">
         <div class="he-home-search flex min-w-0 flex-1 items-center gap-2" :class="compact ? 'w-full' : 'sm:max-w-lg'">
           <UiInput
             ref="searchInputRef"
@@ -1585,117 +1625,155 @@ onMounted(async () => {
       </TransitionGroup>
     </PageHeader>
 
-    <section v-if="featuredContinue && !searchQuery && !hasTagFilter" class="page-gutter mt-6" aria-label="今晚继续">
+    <section v-if="showHeroSpotlight && featuredContinue" class="page-gutter mt-3" aria-label="今晚继续">
       <div class="page-container">
-        <div class="he-hero-spotlight relative overflow-hidden rounded-3xl border border-line bg-surface shadow-[var(--he-shadow-card),inset_0_1px_0_var(--he-border-specular)]">
+        <div class="he-hero-spotlight relative overflow-hidden rounded-3xl squircle border border-white/12 shadow-[0_24px_56px_-20px_rgb(0_0_0/0.72),inset_0_1px_0_rgb(255_255_255/0.14)]">
           <img
             v-if="featuredContinue.cover_path"
             :src="thumbnailUrl(featuredContinue.cover_path)"
             alt=""
             aria-hidden="true"
-            class="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-20 blur-xl"
+            class="pointer-events-none absolute inset-0 h-full w-full scale-115 object-cover opacity-50 blur-2xl saturate-150"
           />
           <div class="he-hero-scrim pointer-events-none absolute inset-0"></div>
 
           <div class="he-hero-inner relative z-10 grid">
-            <button type="button" class="he-hero-media group relative min-h-48 overflow-hidden bg-surface-2 text-left focus-ring" :aria-label="`打开媒体：${featuredContinue.title}`" @click="openMedia(featuredContinue)">
-              <img :src="featuredContinue.cover_path ? thumbnailUrl(featuredContinue.cover_path) : mediaPlaceholderUrl" :alt="featuredContinue.title" fetchpriority="high" loading="eager" class="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-              <span class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></span>
-              <span class="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-black/75 px-3 py-1.5 text-caption font-medium text-white ring-1 ring-inset ring-white/15"><Play :size="13" fill="currentColor" aria-hidden="true" />继续</span>
-            </button>
+            <div class="he-hero-media-wrap flex items-center justify-center p-4 sm:p-5">
+              <button
+                type="button"
+                class="he-hero-media group relative w-full overflow-hidden rounded-2xl bg-surface-2 text-left ring-1 ring-inset ring-white/18 shadow-[0_18px_42px_-12px_rgb(0_0_0/0.78)] transition-transform duration-200 hover:-translate-y-0.5 focus-ring"
+                :aria-label="`打开媒体：${featuredContinue.title}`"
+                @click="openMedia(featuredContinue)"
+              >
+                <img
+                  :src="featuredContinue.cover_path ? thumbnailUrl(featuredContinue.cover_path) : mediaPlaceholderUrl"
+                  :alt="featuredContinue.title"
+                  fetchpriority="high"
+                  loading="eager"
+                  class="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                />
+                <span class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></span>
+                <span class="he-glass-pill absolute bottom-2.5 left-2.5 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-caption font-medium text-white">
+                  <Play :size="12" fill="currentColor" aria-hidden="true" />继续
+                </span>
+              </button>
+            </div>
             <div class="he-hero-body flex min-w-0 flex-col justify-center gap-3">
-              <p class="inline-flex w-fit items-center gap-1.5 rounded-full border border-accent/30 bg-accent/12 px-2.5 py-0.5 text-[11px] font-medium tracking-wide text-accent-glow">
+              <p class="inline-flex w-fit items-center gap-1.5 rounded-full border border-accent/35 bg-accent/18 px-3 py-0.5 text-[11px] font-medium tracking-wide text-accent-glow backdrop-blur-md">
                 今晚继续 · {{ continueTitle }}
               </p>
               <h2 class="he-hero-title line-clamp-2 font-semibold leading-tight text-ink">{{ featuredContinue.title }}</h2>
-              <p class="flex min-h-5 min-w-0 flex-wrap items-center gap-2 text-meta text-subtle tabular-nums">
-                <span class="rounded-md bg-surface-2 px-2 py-0.5 text-caption font-medium text-muted">{{ typeLabel(featuredContinue.media_type) }}</span>
+              <p class="flex min-h-5 min-w-0 flex-wrap items-center gap-2 text-meta text-muted tabular-nums">
+                <span class="rounded-full border border-line/65 bg-surface/55 px-2.5 py-0.5 text-caption font-medium text-ink backdrop-blur-md">{{ typeLabel(featuredContinue.media_type) }}</span>
                 <span v-if="continueMeta(featuredContinue)">{{ continueMeta(featuredContinue) }}</span>
                 <span v-if="featuredContinue.rating" class="text-star">★ {{ featuredContinue.rating }}</span>
-                <span v-if="featuredContinue.tags?.length" class="truncate text-muted">{{ featuredContinue.tags.slice(0, 3).map(tag => tag.name).join(' · ') }}</span>
+                <span v-if="featuredContinue.tags?.length" class="truncate text-subtle">{{ featuredContinue.tags.slice(0, 3).map(tag => tag.name).join(' · ') }}</span>
               </p>
-              <div :class="{ invisible: progressPercent(featuredContinue) === 0 }" :aria-hidden="progressPercent(featuredContinue) === 0" class="h-1.5 w-full max-w-md overflow-hidden rounded-full bg-surface-3" role="progressbar" :aria-label="`${featuredContinue.title}观看进度`" :aria-valuenow="progressPercent(featuredContinue)" aria-valuemin="0" aria-valuemax="100">
-                <div class="h-full rounded-full bg-accent shadow-[0_0_10px_rgb(var(--color-accent)/0.7)]" :style="{ width: `${progressPercent(featuredContinue)}%` }"></div>
+              <div :class="{ invisible: progressPercent(featuredContinue) === 0 }" :aria-hidden="progressPercent(featuredContinue) === 0" class="h-1.5 w-full max-w-md overflow-hidden rounded-full bg-white/12" role="progressbar" :aria-label="`${featuredContinue.title}观看进度`" :aria-valuenow="progressPercent(featuredContinue)" aria-valuemin="0" aria-valuemax="100">
+                <div class="h-full rounded-full bg-gradient-to-r from-accent to-accent-glow shadow-[0_0_12px_rgb(var(--color-accent)/0.85)]" :style="{ width: `${progressPercent(featuredContinue)}%` }"></div>
               </div>
-              <div class="flex flex-wrap gap-2.5 pt-1">
+              <div class="flex flex-wrap items-center gap-2.5 pt-1">
                 <UiButton variant="primary" @click="openMedia(featuredContinue)"><template #icon><Play :size="15" fill="currentColor" aria-hidden="true" /></template>继续{{ featuredContinue.media_type === 'manga' ? '阅读' : featuredContinue.media_type === 'audio' ? '收听' : '观看' }}</UiButton>
-                <UiButton v-if="recentlyOpened.length > 1" variant="secondary" @click="showOtherContinueItems">看看其他继续项</UiButton>
+                <UiButton v-if="recentlyOpened.length > 1" variant="secondary" class="!border-line/70 !bg-surface/55 backdrop-blur-md hover:!bg-surface-2/80" @click="showOtherContinueItems">看看其他继续项</UiButton>
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </section>
 
-    <section v-if="otherContinueItems.length > 0 && !searchQuery && !hasTagFilter" ref="continueSectionRef" class="page-gutter mt-6 select-none" aria-label="继续观看">
-      <div class="page-container">
-        <SectionHeader :title="continueTitle">
-          <template #actions>
-            <UiButton variant="ghost" size="sm" :title="continueCollapsed ? '展开继续观看' : '收起继续观看'" :aria-expanded="!continueCollapsed" @click="continueCollapsed = !continueCollapsed">
-              {{ continueCollapsed ? '展开' : '收起' }}
-              <template #trailing><ChevronDown :size="14" class="transition-transform duration-150" :class="{ '-rotate-90': continueCollapsed }" aria-hidden="true" /></template>
-            </UiButton>
-            <span v-if="!compact" class="flex items-center gap-2 transition-opacity duration-150" :class="continueCollapsed ? 'invisible pointer-events-none opacity-0' : 'opacity-100'" :inert="continueCollapsed" :aria-hidden="continueCollapsed">
-              <UiIconButton label="向左滚动" variant="secondary" size="sm" @click="scrollContinue(-1)"><ChevronLeft :size="16" aria-hidden="true" /></UiIconButton>
-              <UiIconButton label="向右滚动" variant="secondary" size="sm" @click="scrollContinue(1)"><ChevronRight :size="16" aria-hidden="true" /></UiIconButton>
-            </span>
-          </template>
-        </SectionHeader>
-        <div class="he-continue-reveal" :class="{ 'is-expanded': !continueCollapsed }" :inert="continueCollapsed" :aria-hidden="continueCollapsed">
-        <div class="he-continue-reveal-clip">
-        <div ref="continueScrollRef" class="he-scroll-fade-x -mx-4 flex gap-3 overflow-x-auto px-4 scrollbar-none sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0" :class="continueDragging ? 'cursor-grabbing' : 'cursor-grab'" @pointerdown="startContinueDrag" @pointermove="moveContinueDrag" @pointerup="endContinueDrag" @pointercancel="endContinueDrag" @lostpointercapture="endContinueDrag" @click.capture="preventDraggedClick" @dragstart.prevent>
-          <div
-            v-for="item in otherContinueItems"
-            :key="item.id"
-            class="group relative flex w-72 shrink-0 items-center gap-3 rounded-2xl squircle border border-line bg-surface p-2.5 shadow-[inset_0_1px_0_var(--he-border-specular)] transition-[background-color,border-color,translate] duration-150 ease-out hover:-translate-y-0.5 hover:border-line-strong hover:bg-surface-2"
+          <!-- Integrated Frosted Continue Watching Dock inside the Hero stage -->
+          <section
+            v-if="otherContinueItems.length > 0"
+            ref="continueSectionRef"
+            class="he-hero-dock relative z-10 select-none border-t border-white/10 px-4 py-3 sm:px-6"
+            aria-label="继续观看"
           >
-            <button
-              type="button"
-              class="absolute inset-0 z-10 rounded-2xl focus-ring"
-              :aria-label="`打开媒体：${item.title}`"
-              @click="openMedia(item)"
-            ></button>
-            <div class="relative h-16 shrink-0 overflow-hidden rounded-xl bg-surface-2 ring-1 ring-inset ring-white/8" :class="continueThumbClass(item)">
-              <img :src="item.cover_path ? thumbnailUrl(item.cover_path) : mediaPlaceholderUrl" alt="" class="h-full w-full object-cover" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <h3 class="line-clamp-2 pr-6 text-meta font-medium leading-snug text-ink pointer-coarse:pr-8" :title="item.title">{{ item.title }}</h3>
-              <p class="mt-1 flex min-w-0 items-center gap-1.5 text-caption text-subtle tabular-nums">
-                <span class="shrink-0">{{ typeLabel(item.media_type) }}</span>
-                <template v-if="continueMeta(item)">
-                  <span class="text-faint" aria-hidden="true">·</span>
-                  <span class="truncate">{{ continueMeta(item) }}</span>
-                </template>
-              </p>
-              <div
-                v-if="progressPercent(item) > 0"
-                class="mt-2 h-1 overflow-hidden rounded-sm bg-surface-3"
-                role="progressbar"
-                :aria-label="`${item.title}观看进度`"
-                :aria-valuenow="progressPercent(item)"
-                aria-valuemin="0"
-                aria-valuemax="100"
-              >
-                <div class="h-full rounded-sm bg-accent" :style="{ width: `${progressPercent(item)}%` }"></div>
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-2 text-caption font-medium text-muted">
+                <span>{{ continueTitle }}</span>
+                <span class="rounded-full bg-surface-2/70 px-2 py-0.5 text-[11px] tabular-nums text-subtle">{{ otherContinueItems.length }}</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <UiButton variant="ghost" size="sm" :title="continueCollapsed ? '展开继续观看' : '收起继续观看'" :aria-expanded="!continueCollapsed" @click="continueCollapsed = !continueCollapsed">
+                  {{ continueCollapsed ? '展开' : '收起' }}
+                  <template #trailing><ChevronDown :size="14" class="transition-transform duration-150" :class="{ '-rotate-90': continueCollapsed }" aria-hidden="true" /></template>
+                </UiButton>
+                <span v-if="!compact" class="flex items-center gap-1.5 transition-opacity duration-150" :class="continueCollapsed ? 'invisible pointer-events-none opacity-0' : 'opacity-100'" :inert="continueCollapsed" :aria-hidden="continueCollapsed">
+                  <UiIconButton label="向左滚动" variant="secondary" size="sm" @click="scrollContinue(-1)"><ChevronLeft :size="15" aria-hidden="true" /></UiIconButton>
+                  <UiIconButton label="向右滚动" variant="secondary" size="sm" @click="scrollContinue(1)"><ChevronRight :size="15" aria-hidden="true" /></UiIconButton>
+                </span>
               </div>
             </div>
-            <button
-              type="button"
-              class="he-continue-dismiss absolute right-1 top-1 z-20 grid size-7 place-items-center rounded-lg text-subtle transition-colors duration-150 hover:bg-surface-3 hover:text-ink focus-ring pointer-coarse:size-10"
-              title="从列表中移除"
-              :aria-label="`从继续观看中移除：${item.title}`"
-              @click="dismissContinueItem(item.id, $event)"
-            >
-              <X :size="14" aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-        </div>
+            <div class="he-continue-reveal" :class="{ 'is-expanded': !continueCollapsed }" :inert="continueCollapsed" :aria-hidden="continueCollapsed">
+              <div class="he-continue-reveal-clip">
+                <div
+                  ref="continueScrollRef"
+                  class="he-scroll-fade-x mt-2.5 flex gap-2.5 overflow-x-auto pb-0.5 scrollbar-none"
+                  :class="continueDragging ? 'cursor-grabbing' : 'cursor-grab'"
+                  @pointerdown="startContinueDrag"
+                  @pointermove="moveContinueDrag"
+                  @pointerup="endContinueDrag"
+                  @pointercancel="endContinueDrag"
+                  @lostpointercapture="endContinueDrag"
+                  @click.capture="preventDraggedClick"
+                  @dragstart.prevent
+                  @mouseleave="hoveredAmbientCover = null"
+                >
+                  <div
+                    v-for="item in otherContinueItems"
+                    :key="item.id"
+                    class="he-dock-item group relative flex w-64 shrink-0 items-center gap-2.5 rounded-2xl squircle border border-line/65 bg-surface/52 p-2 backdrop-blur-md transition-[background-color,border-color,translate] duration-150 ease-out hover:-translate-y-0.5 hover:border-accent/40 hover:bg-surface-2/75"
+                    @mouseenter="hoveredAmbientCover = item.cover_path"
+                  >
+                    <button
+                      type="button"
+                      class="absolute inset-0 z-10 rounded-2xl focus-ring"
+                      :aria-label="`打开媒体：${item.title}`"
+                      @click="openMedia(item)"
+                      @focus="hoveredAmbientCover = item.cover_path"
+                      @blur="hoveredAmbientCover = null"
+                    ></button>
+                    <div class="relative h-14 shrink-0 overflow-hidden rounded-xl bg-surface-2 ring-1 ring-inset ring-white/10" :class="continueThumbClass(item)">
+                      <img :src="item.cover_path ? thumbnailUrl(item.cover_path) : mediaPlaceholderUrl" alt="" class="h-full w-full object-cover" />
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <h3 class="line-clamp-2 pr-6 text-caption font-medium leading-snug text-ink pointer-coarse:pr-8" :title="item.title">{{ item.title }}</h3>
+                      <p class="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-subtle tabular-nums">
+                        <span class="shrink-0">{{ typeLabel(item.media_type) }}</span>
+                        <template v-if="continueMeta(item)">
+                          <span class="text-faint" aria-hidden="true">·</span>
+                          <span class="truncate">{{ continueMeta(item) }}</span>
+                        </template>
+                      </p>
+                      <div
+                        v-if="progressPercent(item) > 0"
+                        class="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-3/80"
+                        role="progressbar"
+                        :aria-label="`${item.title}观看进度`"
+                        :aria-valuenow="progressPercent(item)"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                      >
+                        <div class="h-full rounded-full bg-accent" :style="{ width: `${progressPercent(item)}%` }"></div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      class="he-continue-dismiss absolute right-1 top-1 z-20 grid size-6 place-items-center rounded-lg text-subtle transition-colors duration-150 hover:bg-surface-3 hover:text-ink focus-ring pointer-coarse:size-9"
+                      title="从列表中移除"
+                      :aria-label="`从继续观看中移除：${item.title}`"
+                      @click="dismissContinueItem(item.id, $event)"
+                    >
+                      <X :size="13" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     </section>
 
-    <div ref="containerRef" class="page-gutter pb-12" :class="(featuredContinue || otherContinueItems.length > 0) && !searchQuery && !hasTagFilter ? 'mt-7' : 'mt-6'">
+    <div ref="containerRef" class="page-gutter pb-12" :class="showHeroSpotlight ? 'mt-7' : 'mt-4'">
       <div class="page-container">
         <div v-if="loading && !mediaList.length" data-media-grid :class="viewMode === 'list' ? 'flex flex-col gap-2' : viewMode === 'wide' ? 'grid grid-cols-1 gap-x-5 gap-y-7 md:grid-cols-2 xl:grid-cols-3' : viewMode === 'poster' ? posterGridClass : 'poster-grid'">
           <template v-if="viewMode === 'list'">
@@ -1722,13 +1800,63 @@ onMounted(async () => {
               class="he-media-actions relative min-w-0"
             >
               <MediaCard :media="item" :index="index" :shape="cardShape" :show-type="!displayedType" @click="openMedia(item)" />
-              <button v-if="authState.user?.is_admin" type="button" class="he-media-delete absolute right-2 z-10 grid size-9 pointer-coarse:size-11 place-items-center rounded-xl bg-black/78 text-white/90 ring-1 ring-inset ring-white/15 transition-colors hover:bg-danger hover:text-white focus-ring" :class="!displayedType ? 'top-10' : 'top-2'" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="16" aria-hidden="true" /></button>
+              <div class="he-card-quick-actions he-glass-capsule absolute right-2 top-2 z-20 flex items-center gap-0.5 rounded-full p-0.5">
+                <button
+                  type="button"
+                  class="grid size-7 pointer-coarse:size-9 place-items-center rounded-full transition-colors focus-ring"
+                  :class="item.favorite ? 'text-star hover:bg-white/15' : 'text-white/90 hover:bg-white/15 hover:text-star'"
+                  :aria-label="item.favorite ? `取消收藏 ${item.title}` : `收藏 ${item.title}`"
+                  :title="item.favorite ? '取消收藏' : '收藏'"
+                  @click.stop="quickToggleFavorite(item)"
+                >
+                  <Star :size="14" :fill="item.favorite ? 'currentColor' : 'none'" aria-hidden="true" />
+                </button>
+                <button
+                  v-if="authState.user?.is_admin"
+                  type="button"
+                  class="he-media-delete grid size-7 pointer-coarse:size-9 place-items-center rounded-full text-white/90 transition-colors hover:bg-danger hover:text-white focus-ring"
+                  :aria-label="`删除并丢弃 ${item.title}`"
+                  title="删除并丢弃"
+                  @click.stop="discardTarget = { kind: 'media', target_id: item.id }"
+                >
+                  <Trash2 :size="14" aria-hidden="true" />
+                </button>
+              </div>
             </div>
           </div>
           <div v-else data-media-grid :class="displayedView === 'masonry' ? 'masonry-grid' : displayedView === 'wide' ? 'he-wide-grid he-stagger-grid' : 'he-stagger-list flex flex-col gap-2.5'">
             <div v-for="item in mediaList" :key="item.id" class="he-media-actions relative min-w-0" :class="displayedView === 'masonry' ? 'masonry-grid-item' : displayedView === 'list' ? 'flex items-center gap-2' : ''">
               <MediaViewCard :media="item" :mode="displayedView" :class="displayedView === 'list' ? 'min-w-0 flex-1' : ''" @click="openMedia(item)" />
-              <button v-if="authState.user?.is_admin" type="button" class="he-media-delete grid size-9 pointer-coarse:size-11 shrink-0 place-items-center rounded-xl transition-colors hover:bg-danger hover:text-white focus-ring" :class="displayedView === 'list' ? 'bg-surface text-subtle' : ['absolute right-2 z-10 bg-black/78 text-white/90 ring-1 ring-inset ring-white/15', displayedView === 'masonry' ? 'top-10' : 'top-2']" :aria-label="`删除并丢弃 ${item.title}`" title="删除并丢弃" @click.stop="discardTarget = { kind: 'media', target_id: item.id }"><Trash2 :size="16" aria-hidden="true" /></button>
+              <div
+                class="flex shrink-0 items-center gap-0.5 rounded-full p-0.5"
+                :class="displayedView === 'list'
+                  ? 'border border-line/70 bg-surface/65 backdrop-blur-md'
+                  : 'he-card-quick-actions he-glass-capsule absolute right-2 top-2 z-20'"
+              >
+                <button
+                  type="button"
+                  class="grid size-7 pointer-coarse:size-9 place-items-center rounded-full transition-colors focus-ring"
+                  :class="displayedView === 'list'
+                    ? (item.favorite ? 'text-star hover:bg-surface-2' : 'text-subtle hover:bg-surface-2 hover:text-star')
+                    : (item.favorite ? 'text-star hover:bg-white/15' : 'text-white/90 hover:bg-white/15 hover:text-star')"
+                  :aria-label="item.favorite ? `取消收藏 ${item.title}` : `收藏 ${item.title}`"
+                  :title="item.favorite ? '取消收藏' : '收藏'"
+                  @click.stop="quickToggleFavorite(item)"
+                >
+                  <Star :size="14" :fill="item.favorite ? 'currentColor' : 'none'" aria-hidden="true" />
+                </button>
+                <button
+                  v-if="authState.user?.is_admin"
+                  type="button"
+                  class="he-media-delete grid size-7 pointer-coarse:size-9 place-items-center rounded-full transition-colors hover:bg-danger hover:text-white focus-ring"
+                  :class="displayedView === 'list' ? 'text-subtle' : 'text-white/90'"
+                  :aria-label="`删除并丢弃 ${item.title}`"
+                  title="删除并丢弃"
+                  @click.stop="discardTarget = { kind: 'media', target_id: item.id }"
+                >
+                  <Trash2 :size="14" aria-hidden="true" />
+                </button>
+              </div>
             </div>
           </div>
           </div>
@@ -1775,42 +1903,75 @@ onMounted(async () => {
 .he-hero-spotlight {
   container: hero / inline-size;
   contain: layout paint;
+  background: color-mix(in oklab, rgb(var(--color-surface)) 54%, transparent);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
 }
 
 .he-hero-inner {
   grid-template-columns: 1fr;
 }
 
+.he-hero-media {
+  aspect-ratio: 16 / 10;
+  min-height: 168px;
+}
+
 .he-hero-body {
-  padding: 20px;
+  padding: 0 20px 20px;
 }
 
 .he-hero-title {
-  font-size: clamp(1.125rem, 1rem + 1vw, 1.5625rem);
+  font-size: clamp(1.15rem, 1rem + 1vw, 1.625rem);
 }
 
 @supports (font-size: 1cqi) {
   .he-hero-title {
-    font-size: clamp(1.125rem, 0.9rem + 1.5cqi, 1.5625rem);
-  }
-  .he-hero-body {
-    padding: clamp(18px, 3cqi, 28px);
+    font-size: clamp(1.15rem, 0.92rem + 1.55cqi, 1.625rem);
   }
 }
 
 @container hero (min-width: 580px) {
   .he-hero-inner {
-    grid-template-columns: 240px 1fr;
-    grid-template-columns: clamp(200px, 25cqi, 280px) minmax(0, 1fr);
-    min-height: 172px;
+    grid-template-columns: clamp(220px, 26cqi, 300px) minmax(0, 1fr);
+    min-height: 204px;
   }
   .he-hero-media {
-    min-height: 100%;
+    height: 100%;
+    min-height: 184px;
+    aspect-ratio: auto;
+  }
+  .he-hero-body {
+    padding: clamp(20px, 2.8cqi, 28px) clamp(20px, 3cqi, 32px) clamp(20px, 2.8cqi, 28px) 4px;
   }
 }
 
 .he-hero-scrim {
-  background: linear-gradient(120deg var(--in-oklab), rgb(var(--color-surface) / 0.88) 0%, rgb(var(--color-surface) / 0.94) 55%, rgb(var(--color-surface) / 0.98) 100%);
+  background:
+    radial-gradient(640px 420px at 14% 28% var(--in-oklab), rgb(var(--color-accent) / 0.14), transparent 70%),
+    linear-gradient(112deg var(--in-oklab), rgb(var(--color-background) / 0.54) 0%, rgb(var(--color-surface) / 0.72) 48%, rgb(var(--color-surface) / 0.86) 100%);
+}
+
+.he-hero-dock {
+  background: rgb(var(--color-background) / 0.34);
+  backdrop-filter: blur(18px) saturate(145%);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+}
+
+:global(:root[data-color-mode="light"]) .he-hero-spotlight {
+  border-color: rgb(var(--color-line) / 0.85);
+  box-shadow: 0 18px 44px -20px rgb(15 23 42 / 0.16), inset 0 1px 0 rgb(255 255 255 / 0.9);
+}
+
+:global(:root[data-color-mode="light"]) .he-hero-scrim {
+  background:
+    radial-gradient(640px 420px at 14% 28% var(--in-oklab), rgb(var(--color-accent) / 0.08), transparent 70%),
+    linear-gradient(112deg var(--in-oklab), rgb(255 255 255 / 0.68) 0%, rgb(255 255 255 / 0.82) 52%, rgb(255 255 255 / 0.92) 100%);
+}
+
+:global(:root[data-color-mode="light"]) .he-hero-dock {
+  background: rgb(255 255 255 / 0.56);
+  border-top-color: rgb(var(--color-line) / 0.65);
 }
 
 /* Animate the space around the row, keeping cards at their intrinsic height.
