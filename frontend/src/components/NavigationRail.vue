@@ -205,7 +205,7 @@ onBeforeUnmount(() => window.clearTimeout(densityBadgeTimer))
     <!-- Scrollable Navigation Sections -->
     <nav
       aria-label="主导航"
-      class="custom-scrollbar mt-4 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5"
+      class="custom-scrollbar mt-4 min-h-0 flex-1 overflow-y-auto overscroll-contain px-0.5"
       :class="collapsed ? 'w-full space-y-3' : 'space-y-4'"
     >
       <section v-for="section in navSections" :key="section.label" :aria-label="section.label">
@@ -234,7 +234,7 @@ onBeforeUnmount(() => window.clearTimeout(densityBadgeTimer))
             >
               <span
                 v-if="isItemActive(item) && !collapsed"
-                class="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-accent shadow-[0_0_8px_rgb(var(--color-accent)/0.65)]"
+                class="absolute left-0.5 top-2 bottom-2 w-[3px] rounded-full bg-accent shadow-[0_0_8px_rgb(var(--color-accent)/0.65)]"
                 aria-hidden="true"
               ></span>
               <component
@@ -263,7 +263,7 @@ onBeforeUnmount(() => window.clearTimeout(densityBadgeTimer))
             >
               <span
                 v-if="isItemActive(item) && !collapsed"
-                class="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-accent shadow-[0_0_8px_rgb(var(--color-accent)/0.65)]"
+                class="absolute left-0.5 top-2 bottom-2 w-[3px] rounded-full bg-accent shadow-[0_0_8px_rgb(var(--color-accent)/0.65)]"
                 aria-hidden="true"
               ></span>
               <component
@@ -311,18 +311,18 @@ onBeforeUnmount(() => window.clearTimeout(densityBadgeTimer))
           </button>
         </div>
 
-        <div class="flex items-center gap-1.5">
+        <div class="flex min-w-0 items-center gap-1.5">
           <div
             v-if="user && !collapsed"
-            class="flex items-center gap-1.5 rounded-xl border border-line/80 bg-surface/80 pl-1.5 pr-2 py-1"
+            class="flex min-w-0 items-center gap-1.5 rounded-xl border border-line/80 bg-surface/80 pl-1.5 pr-2 py-1"
             :title="user.username"
           >
-            <span class="grid size-5 place-items-center rounded-md bg-accent/20 text-[10px] font-semibold text-accent-glow" aria-hidden="true">{{ userInitial }}</span>
+            <span class="grid size-5 shrink-0 place-items-center rounded-md bg-accent/20 text-[10px] font-semibold text-accent-glow" aria-hidden="true">{{ userInitial }}</span>
             <span class="max-w-20 truncate text-caption font-medium text-muted">{{ user.username }}</span>
           </div>
           <button
             type="button"
-            class="grid size-9 place-items-center rounded-xl text-subtle transition-colors hover:bg-danger/12 hover:text-danger focus-ring"
+            class="grid size-9 shrink-0 place-items-center rounded-xl text-subtle transition-colors hover:bg-danger/12 hover:text-danger focus-ring"
             title="退出登录"
             aria-label="退出登录"
             @click="logoutConfirmOpen = true"
