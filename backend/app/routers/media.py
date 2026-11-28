@@ -334,17 +334,11 @@ def list_media(
     if duplicate_status:
         query = query.filter(models.Media.duplicate_status == duplicate_status)
     elif not include_hidden_duplicates:
-        hidden_duplicates_count = (
-            query.filter(
-                models.Media.duplicate_status.in_(
-                    ["checking", "strong_duplicate", "suspected_duplicate"]
-                )
-            )
-            .order_by(None)
-            .count()
-        )
         query = query.filter(
-            models.Media.duplicate_status.notin_(["checking", "strong_duplicate", "suspected_duplicate", "dedup_excluded"])
+            or_(
+                models.Media.duplicate_status.is_(None),
+                models.Media.duplicate_status != "dedup_excluded",
+            )
         )
 
     # Preserve the array response for existing clients while exposing the
@@ -415,7 +409,12 @@ def list_mobile_media(
     query = (
         db.query(models.Media)
         .filter(models.Media.is_missing == False)
-        .filter(models.Media.duplicate_status.notin_(["checking", "strong_duplicate", "suspected_duplicate", "dedup_excluded"]))
+        .filter(
+            or_(
+                models.Media.duplicate_status.is_(None),
+                models.Media.duplicate_status != "dedup_excluded",
+            )
+        )
         .options(selectinload(models.Media.tags))
     )
     if media_type:

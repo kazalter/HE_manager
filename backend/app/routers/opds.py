@@ -31,7 +31,7 @@ DCTERMS_NS = "http://purl.org/dc/terms/"
 PSE_NS = "http://vaemalkin.org/opds/pse"
 OPENSEARCH_NS = "http://a9.com/-/spec/opensearch/1.1/"
 
-HIDDEN_DUP_STATUSES = ("checking", "strong_duplicate", "suspected_duplicate", "dedup_excluded")
+HIDDEN_DUP_STATUSES = ("dedup_excluded",)
 
 ET.register_namespace("", ATOM_NS)
 ET.register_namespace("opds", OPDS_NS)

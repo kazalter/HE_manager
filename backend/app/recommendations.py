@@ -11,7 +11,7 @@ from . import metadata_enrichment, zh_conv, ai_config, manga_retrievers, manga_s
 
 log = logging.getLogger(__name__)
 
-HIDDEN_DUPLICATE_STATUSES = {"checking", "strong_duplicate", "suspected_duplicate", "dedup_excluded"}
+HIDDEN_DUPLICATE_STATUSES = {"dedup_excluded"}
 
 # (removed — personal media library, no content restrictions)
 

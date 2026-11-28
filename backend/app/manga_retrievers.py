@@ -35,7 +35,7 @@ from . import manga_search, manga_vector, metadata_enrichment, models, zh_conv
 
 log = logging.getLogger(__name__)
 
-HIDDEN_DUPLICATE_STATUSES = {"checking", "strong_duplicate", "suspected_duplicate", "dedup_excluded"}
+HIDDEN_DUPLICATE_STATUSES = {"dedup_excluded"}
 
 VECTOR_POOL = 60
 VECTOR_MIN_SIMILARITY = 0.30

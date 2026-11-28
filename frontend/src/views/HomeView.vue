@@ -38,8 +38,6 @@ let loadingNoticeTimer: number | undefined
 const mediaError = ref(''), openingMedia = ref(false), openingError = ref('')
 const discardTarget = ref<DiscardTarget | null>(null)
 const discardNotice = ref('')
-const hiddenDuplicatesCount = ref(0)
-const hiddenDupNoticeDismissed = ref(false)
 const afterDiscard = async (record: DiscardRecord) => {
   discardNotice.value = record.cleanup_error || ''
   closeMedia(); await fetchMedia(); await fetchContinueMedia()
@@ -710,8 +708,6 @@ const fetchMedia = async (scrollBehavior: ScrollBehavior = 'auto') => {
     totalItems.value = Number.isSafeInteger(headerTotal) && headerTotal >= 0
       ? headerTotal
       : (currentPage.value - 1) * pageSize.value + res.data.length
-    const headerHiddenDup = Number(res.headers['x-hidden-duplicates-count'])
-    hiddenDuplicatesCount.value = Number.isSafeInteger(headerHiddenDup) && headerHiddenDup >= 0 ? headerHiddenDup : 0
 
     const lastPage = Math.max(1, Math.ceil(totalItems.value / pageSize.value))
     if (currentPage.value > lastPage) {
@@ -1092,11 +1088,6 @@ onMounted(async () => {
         <span>文件清理未完成：{{ discardNotice }}</span>
         <router-link to="/discarded" class="font-medium text-accent-glow underline">查看丢弃记录</router-link>
         <button type="button" class="ml-auto underline focus-ring" @click="discardNotice = ''">关闭提示</button>
-      </p>
-      <p v-if="authState.user?.is_admin && hiddenDuplicatesCount > 0 && !hiddenDupNoticeDismissed" class="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line/70 bg-surface/60 px-3.5 py-2 text-meta text-subtle backdrop-blur-md">
-        <span>有 {{ hiddenDuplicatesCount }} 项媒体因待检或疑似重复暂未展示</span>
-        <router-link to="/dedup" class="font-medium text-accent-glow underline">前往重复管理</router-link>
-        <button type="button" class="ml-auto underline focus-ring" @click="hiddenDupNoticeDismissed = true">知道了</button>
       </p>
 
       <div class="he-filter-bar he-glass-bar squircle flex flex-wrap items-center gap-2 rounded-2xl p-2">

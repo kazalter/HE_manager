@@ -92,7 +92,7 @@ def assistant_fixture(test):
                 title="Hidden duplicate",
                 absolute_path="/private/hidden.png",
                 media_type="image",
-                duplicate_status="strong_duplicate",
+                duplicate_status="dedup_excluded",
                 tags=[warm],
             ),
             models.Media(

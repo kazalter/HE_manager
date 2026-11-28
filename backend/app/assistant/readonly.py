@@ -19,7 +19,7 @@ READ_TOOLS = frozenset(
         "list_folders",
     }
 )
-HIDDEN = ("checking", "strong_duplicate", "suspected_duplicate", "dedup_excluded")
+HIDDEN = ("dedup_excluded",)
 
 
 class DetailQuery(schemas.ScopeQuery):

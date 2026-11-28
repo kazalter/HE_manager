@@ -104,6 +104,55 @@ class MediaCoreTest(unittest.TestCase):
         finally:
             db.close()
 
+    def test_pending_and_suspected_duplicates_remain_visible_while_excluded_stays_hidden(self):
+        db = self.Session()
+        try:
+            folder = models.Folder(path="D:\\Library", scan_mode="image")
+            db.add(folder)
+            statuses = [
+                "unique",
+                "checking",
+                "dedup_pending",
+                "strong_duplicate",
+                "suspected_duplicate",
+                "weak_suspected",
+                "dedup_excluded",
+            ]
+            for index, status in enumerate(statuses):
+                db.add(models.Media(
+                    folder=folder,
+                    title=f"dup-{status}",
+                    relative_path=f"dup-{index}.jpg",
+                    absolute_path=f"D:\\Library\\dup-{index}.jpg",
+                    media_type="image",
+                    extension=".jpg",
+                    file_size=100 + index,
+                    is_missing=False,
+                    duplicate_status=status,
+                ))
+            db.commit()
+
+            response = Response()
+            items = media_routes.list_media(response=response, db=db)
+            returned_statuses = {item.duplicate_status for item in items}
+            self.assertEqual(
+                returned_statuses,
+                {"unique", "checking", "dedup_pending", "strong_duplicate", "suspected_duplicate", "weak_suspected"},
+            )
+            self.assertEqual(response.headers["x-total-count"], "6")
+            self.assertEqual(response.headers["x-hidden-duplicates-count"], "0")
+
+            mobile_response = Response()
+            mobile_items = media_routes.list_mobile_media(response=mobile_response, _=None, db=db)
+            self.assertEqual(len(mobile_items), 6)
+            self.assertNotIn("dedup_excluded", {item.duplicate_status for item in mobile_items})
+
+            all_response = Response()
+            all_items = media_routes.list_media(response=all_response, include_hidden_duplicates=True, db=db)
+            self.assertEqual(len(all_items), 7)
+        finally:
+            db.close()
+
     def test_mobile_media_pagination_preserves_legacy_full_array(self):
         db = self.Session()
         try:

@@ -27,7 +27,7 @@ router = APIRouter(tags=["webdav"])
 DAV_NS = "DAV:"
 ET.register_namespace("D", DAV_NS)
 
-HIDDEN_DUP_STATUSES = ("checking", "strong_duplicate", "suspected_duplicate", "dedup_excluded")
+HIDDEN_DUP_STATUSES = ("dedup_excluded",)
 _COLLECTIONS: dict[str, Optional[str]] = {
     "Videos": "video",
     "Manga": "manga",
